@@ -1,0 +1,198 @@
+/* App.css */
+
+/* 主应用容器 */
+.app {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: #000;
+  position: relative;
+}
+
+/* Live2D 相关样式 */
+.app .live2d-main {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app .live2d-main .live2d-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
+/* 字幕区域样式 */
+.app .live2d-main .subtitles {
+  position: fixed;
+  left: 50%;
+  bottom: 250px;
+  transform: translateX(-50%);
+  width: 80%;
+  text-align: center;
+  z-index: 1000;
+}
+
+.app .live2d-main .subtitles .subtitle-text {
+  display: inline-block;
+  color: white;
+  padding: 12px 24px;
+  font-size: 64px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  animation: fadeIn 0.3s ease-in-out, bounce 0.5s ease-in-out;
+  
+  /* 移除原有的描边和发光效果 */
+  -webkit-text-stroke: none;
+  text-stroke: none;
+  text-shadow: none;
+  
+  /* 添加新的描边效果 */
+  -webkit-text-stroke: 2px #2FA4E7;
+  text-stroke: 2px #2FA4E7;
+  
+  /* 重新设计文字阴影效果，让它更清晰 */
+  text-shadow: 
+    /* 内层描边 */
+    -1px -1px 0 #4a9dcd,
+    1px -1px 0 #2FA4E7,
+    -1px 1px 0 #2FA4E7,
+    1px 1px 0 #2FA4E7,
+    
+    /* 外层发光效果 */
+    0 0 10px rgba(47, 164, 231, 0.8),
+    0 0 20px rgba(47, 164, 231, 0.4);
+    
+  /* 减小倾斜角度 */
+  transform: skew(-3deg);
+  
+  /* 保持原有的动画效果 */
+  animation: fadeIn 0.3s ease-in-out, bounce 0.5s ease-in-out;
+  font-family: "Comic Sans MS", "ZCOOL KuaiLe", "Varela Round", "Rubik", system-ui;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 添加弹性动画 */
+@keyframes bounce {
+  0%, 100% { transform: skew(-5deg) scale(1); }
+  50% { transform: skew(-5deg) scale(1.05); }
+}
+
+/* 聊天界面样式 */
+.app .chat-container {
+  height: 400px;
+  overflow-y: auto;
+  border: 1px solid #646cff;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 20px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.app .chat-container .chat-message {
+  margin: 10px 0;
+  padding: 10px;
+  border-radius: 8px;
+  max-width: 80%;
+}
+
+.app .chat-container .chat-message.user {
+  background: rgba(100, 108, 255, 0.1);
+  margin-left: auto;
+  border: 1px solid rgba(100, 108, 255, 0.2);
+}
+
+.app .chat-container .chat-message.assistant {
+  background: rgba(255, 255, 255, 0.05);
+  margin-right: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 输入区域样式 */
+.app .chat-input-container {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 20px;
+  display: flex;
+  padding: 15px;
+  z-index: 1000;
+  width: 90%;
+  max-width: 800px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app .chat-input-container .chat-input {
+  flex: 1;
+  padding: 10px 15px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 16px;
+}
+
+.app .chat-input-container .chat-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app .chat-input-container .chat-submit-button {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  background: #646cff;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.app .chat-input-container .chat-submit-button:hover {
+  background: #535bf2;
+  transform: translateY(-2px);
+}
+
+.app .live2d-main .subtitles .subtitle-text.loading {
+  color: #2FA4E7;
+  font-size: 48px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.loading-dots {
+  display: inline-block;
+  min-width: 30px;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; transform: scale(0.95) skew(-3deg); }
+  50% { opacity: 1; transform: scale(1.05) skew(-3deg); }
+  100% { opacity: 0.5; transform: scale(0.95) skew(-3deg); }
+}
+

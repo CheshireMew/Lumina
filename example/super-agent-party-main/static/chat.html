@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Agent party</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/transition.css">
+  <!-- GitHub Markdown CSS for styling -->
+  <link rel="stylesheet" href="css/github-markdown.min.css">
+  <!-- Highlight.js CSS for code highlighting -->
+  <link rel="stylesheet" href="css/github.min.css">
+  <script src="libs/clipboard.min.js"></script>
+  <!--引入html2canvas-->
+  <script src="libs/html2canvas.min.js"></script>
+  <!-- 引入Element Plus样式 -->
+  <link rel="stylesheet" href="libs/element-plus.css">
+  <link rel="stylesheet" href="fontawesome/css/all.min.css">
+  <link rel="icon" href="source/icon.png" type="image/png">
+  <!-- Voice Activation Detection -->
+  <script src="libs/ort.js"></script>
+  <script src="libs/bundle.min.js"></script>
+  <script src="libs/qrcode.min.js"></script>
+  <script src="libs/driver.js"></script>
+  <link rel="stylesheet" href="libs/driver.css">
+  <script src="libs/exceljs.min.js"></script>
+  <script>
+    console.log(`
+     _       ____   _____   _   _   _____ 
+    / \\     / ___| | ____| | \\ | | |_   _|
+   / _ \\   | |  _  |  _|   |  \\| |   | |  
+  / ___ \\  | |_| | | |___  | |\\  |   | |  
+ /_/   \\_\\  \\____| |_____| |_| \\_|   |_|  
+                                          
+  ____       _      ____    _____  __   __
+ |  _ \\     / \\    |  _ \\  |_   _| \\ \\ / /
+ | |_) |   / _ \\   | |_) |   | |    \\ V / 
+ |  __/   / ___ \\  |  _ <    | |     | |  
+ |_|     /_/   \\_\\ |_| \\_\\   |_|     |_|  
+       
+ github repo: https://github.com/heshengtao/super-agent-party
+`);
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => {
+        console.log('SW registered: ', registration);
+      })
+      .catch(registrationError => {
+        console.log('SW registration failed: ', registrationError);
+      });
+  });
+}
+  </script>
+  <!-- Include markdown-it and highlight.js scripts -->
+  <script src="libs/markdown-it.min.js"></script>
+  <script src="libs/markdown-it-task-lists.min.js"></script>
+  <script src="libs/highlight.min.js"></script>
+  <script src="js/locales.js"></script>
+  <script src="libs/mermaid.min.js"></script>
+  <script src="libs/uuid.min.js"></script>
+  <script>
+    mermaid.initialize({ 
+      startOnLoad: false,
+      securityLevel: 'loose',
+      theme: 'default',
+    });
+  </script>
+  <!--  MathJax 配置  -->
+  <script>
+    window.MathJax = {
+      options: {
+        ignoreHtmlClass: 'user-message-content'  // 匹配用户消息容器类名
+      },
+      tex: {
+        inlineMath: [
+          ['$', '$']       // 常见的行内公式定界符
+        ],
+        displayMath: [
+          ['$$', '$$']     // 常见的行间公式定界符
+        ],
+      },
+      svg: {
+        fontCache: 'global' // 使用全局字体缓存
+      },
+      startup: {
+        pageReady: () => {
+          // 可选：页面加载完成后执行一些操作
+          console.log("MathJax is ready!");
+        }
+      }
+    };
+  </script>
+  <script id="MathJax-script" async src="libs/tex-svg.js"></script>
+</head>
+<body>
+  <div id="app">
+
+    <!-- 主容器 -->
+    <el-container class="main-container">
+      <el-dialog
+        v-model="showModelDialog"
+        :title="t('mainModel')"
+        width="600px">
+        <div class="knowledge-dialog-content">
+          <!-- 服务器列表 -->
+          <div
+            v-for="provider in modelProviders"
+            :key="provider.id"
+            class="knowledge-item"
+            :class="{ active: settings.selectedProvider === provider.id }"
+            @click="
+              settings.selectedProvider = provider.id;
+              selectMainProvider(provider.id);
+              showModelDialog = false;
+            "
+          >
+            <img
+              :src="getVendorLogo(provider.vendor)"
+              class="mini-vendor-logo"
+            />
+            <span>{{ provider.modelId }}</span>
+          </div>
+          <div v-if="Object.keys(modelProviders).length === 0" class="empty-tip">
+              {{ t('firstTimeUse') }}
+              <el-link
+                type="primary"
+                :underline="false"
+                class="font-medium"
+                @click="switchToApiBox"
+              >
+                <el-icon class="mr-1">
+                  <i class="fa-solid fa-key"></i>
+                </el-icon>{{ t('keyBoxInterface') }}
+              </el-link>
+              {{ t('addProviderReturnSelect') }}
+              {{ t('mainmodelnotice') }}
+          </div>
+        </div>
+      </el-dialog> 
+      <el-dialog
+        v-model="showLogoDialog"
+        :title="t('logoPage')"
+        width="90%">
+        <!-- logo页面 -->
+          <div class="license-notice">
+            <h1>Super Agent Party v0.3.5</h1>
+            <h3>开源协议声明 / Open Source License</h3>
+            <div class="notice-section">
+              <p>❗ 注意！本项目是基于AGPL协议开源的，请遵守AGPL协议，以避免不必要的法律问题！</p>
+              <p>❗ Attention! This project is open source based on the AGPL agreement, please abide by the AGPL agreement to avoid unnecessary legal problems!</p>
+            </div>
+
+            <div class="contact-section">
+              <h3>联系我们 / Contact</h3>
+              <div class="contact-card">
+                <p>商业授权咨询：
+                  <a href="mailto:hst97@qq.com" class="contact-link">hst97@qq.com</a>
+                </p>
+                <p>Commercial License：
+                  <a href="mailto:hst97@qq.com" class="contact-link">hst97@qq.com</a>
+                </p>
+              </div>
+            </div>
+
+            <div class="social-links">
+              <div class="link-item">
+                <el-icon class="logo-icon">
+                  <i class="fa-solid fa-pager"></i>
+                </el-icon>
+                <span>Official Website：</span>
+                <a href="https://super-agent-party.github.io/" 
+                  target="_blank" 
+                  class="social-link">
+                  super-agent-party.github.io
+                </a>
+              </div>
+
+              <div class="link-item">
+                <el-icon class="logo-icon">
+                  <i class="fa-brands fa-github"></i>
+                </el-icon>
+                <span>GitHub：</span>
+                <a href="https://github.com/heshengtao/super-agent-party" 
+                  target="_blank" 
+                  class="social-link">
+                  heshengtao/super-agent-party
+                </a>
+              </div>
+              
+              <div class="link-item">
+                <el-icon class="logo-icon">
+                  <i class="fa-brands fa-gitter"></i>
+                </el-icon>
+                <span>Gitee：</span>
+                <a href="https://gitee.com/heshengtao/super-agent-party" 
+                  target="_blank" 
+                  class="social-link">
+                  heshengtao/super-agent-party
+                </a>
+              </div>
+
+              <div class="link-item">
+                <el-icon>
+                  <i class="fa-brands fa-bilibili"></i>
+                </el-icon>
+                <span>Bilibili：</span>
+                <a href="https://space.bilibili.com/26978344" 
+                  target="_blank" 
+                  class="social-link">
+                  @派酱llm-party
+                </a>
+              </div>
+
+              <div class="link-item">
+                <el-icon>
+                  <i class="fa-brands fa-youtube"></i>
+                </el-icon>
+                <span>Youtube：</span>
+                <a href="https://www.youtube.com/@agentParty" 
+                  target="_blank" 
+                  class="social-link">
+                  @agentParty
+                </a>
+              </div>
+
+              <div class="link-item">
+                <el-icon>
+                  <i class="fa-brands fa-discord"></i>
+                </el-icon>
+                <span>discord：</span>
+                <a href="https://discord.com/invite/f2dsAKKr2V" 
+                  target="_blank" 
+                  class="social-link">
+                  @llm-party
+                </a>
+              </div>
+
+              <div class="link-item">
+                <el-icon>
+                  <i class="fa-brands fa-qq"></i>
+                </el-icon>
+                <span>QQ交流群：</span>
+                <span class="qq-group">931057213</span>
+              </div>
+
+              <div class="link-item">
+                <el-icon>
+                  <i class="fa-solid fa-file"></i>
+                </el-icon>
+                <span>中文文档：</span>
+                <a href="https://gcnij7egmcww.feishu.cn/wiki/DPRKwdetCiYBhPkPpXWcugujnRc" 
+                  target="_blank" 
+                  class="social-link">
+                  点击访问
+                </a>
+              </div>
+
+              <div class="link-item">
+                <el-icon>
+                  <i class="fa-solid fa-file"></i>
+                </el-icon>
+                <span>English Doc：</span>
+                <a href="https://temporal-lantern-7e8.notion.site/super-agent-party-211b2b2cb6f180c899d1c27a98c4965d" 
+                  target="_blank" 
+                  class="social-link">
+                  Click to access
+                </a>
+              </div>
+            </div>
+
+            <div class="agreement-section">
+              <p>{{t('agplNotice')}}
+                <a href="https://www.gnu.org/licenses/agpl-3.0.html" 
+                  target="_blank" 
+                  class="agreement-link">
+                  GNU Affero General Public License v3.0
+                </a>
+              </p>
+              <p>{{t('thirdPartyNotice')}}
+                <a href="https://github.com/heshengtao/super-agent-party/tree/main/LICENSE-third-party" class="agreement-link">LICENSE-third-party</a>
+              </p>
+            </div>
+          </div>
+      </el-dialog>  
+      <!-- 扩展选择对话框 -->
+      <el-dialog
+        :title="t('switchExtension')"
+        v-model="showExtensionsDialog"
+        width="60%"
+        :close-on-click-modal="false">
+        <div class="extensions-list">
+          <!-- 默认视图选项 -->
+          <el-card 
+            class="extension-card default-view-card"
+            :class="{ active: currentExtension === null }"
+            @click="resetToDefaultView()">
+            <div class="extension-info">
+              <h3>{{ t('defaultView') }}</h3>
+              <p>{{ t('defaultViewDescription') }}</p>
+            </div>
+          </el-card>
+          
+          <!-- 分隔线 -->
+          <div class="extensions-divider" v-if="extensions.length > 0">
+            <span>
+              {{ t('availableExtensions') }}
+              <el-link
+                type="primary"
+                :underline="false"
+                href="#" 
+                @click.stop.prevent="switchToExtensionPage();showExtensionsDialog = false" 
+              >
+                <el-icon class="mr-1">
+                  <i class="fa-solid fa-puzzle-piece"></i>
+                </el-icon>{{ t('goToExtensionPage') }}
+              </el-link>
+            </span>
+          </div>
+          <!-- 扩展列表 -->
+          <el-empty v-if="extensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
+            <el-card
+              v-for="ext in extensions"
+              :key="ext.id"
+              class="extension-card"
+              :class="{ active: currentExtension && currentExtension.id === ext.id }"
+              @click="switchExtension(ext)">
+              
+              <!-- 右上角按钮组 -->
+              <div class="btn-top-right">
+                <!-- 浏览器打开按钮 -->
+                <el-button
+                  type="default"
+                  circle
+                  size="small"
+                  @click.stop="openExtension(ext);switchExtension(ext)">
+                  <i class="fa-solid fa-external-link"></i>
+                </el-button>
+                
+                <!-- 独立窗口打开按钮（仅在Electron环境下显示） -->
+                <el-button
+                  v-if="isElectron"
+                  type="primary"
+                  circle
+                  size="small"
+                  @click.stop="openExtensionInWindow(ext)"
+                  style="margin-left: 8px;">
+                  <i class="fa-solid fa-window-restore"></i>
+                </el-button>
+              </div>
+
+              <div class="extension-info">
+                <h3>{{ ext.name }}</h3>
+                <p>{{ ext.description }}</p>
+                <div class="extension-meta">
+                  <span>v{{ ext.version }}</span>
+                  <span>{{ ext.author }}</span>
+                </div>
+              </div>
+            </el-card>
+        </div>
+        <template #footer>
+          <div class="dialog-footer">
+            <el-button @click="showExtensionsDialog = false">{{ t('cancel') }}</el-button>
+          </div>
+        </template>
+      </el-dialog>
+      <!-- 内容区 -->
+      <el-main class="content">
+        <!-- 聊天界面保持不变 -->
+        <div v-show="activeMenu === 'home'" class="page chat-container">
+        <!-- 最外层 wrapper，负责整体左右布局 -->
+        <div class="chat-wrapper" 
+            ref="chatWrapperRef"
+            :class="{ 
+              'collapsed-right': !sidePanelOpen, 
+              'collapsed-left': !chatAreaOpen,
+              'resizing': isResizing
+            }">
+          
+          <!-- 添加拖拽遮罩层 -->
+          <div v-if="isResizing" class="resize-overlay"></div>
+            <!-- 聊天消息列表 -->
+            <div class="chat-area" 
+                ref="chatAreaRef"
+                :class="{ collapsed: !chatAreaOpen }" 
+                v-show="chatAreaOpen">
+              <div class="messages-container" ref="messagesContainer"   v-if="!isCapsuleMode">
+                <div v-for="(message, index) in messages" :key="index" class="message" :class="message.role">
+                  <div v-if="ttsSettings.enabled && message.role === 'assistant'" class="tts-controls">
+                    <el-tooltip :content="message.isPlaying || false ? t('pause') : t('play')">
+                      <el-button 
+                        @click="toggleTTS(message)"
+                        circle 
+                        size="small"
+                      >
+                        <i v-if="!message.isPlaying" class="fa-solid fa-play"></i>
+                        <i v-else class="fa-solid fa-pause"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip :content="t('backward')">
+                      <el-button 
+                        @click="backwardTTS(message)"
+                        circle 
+                        size="small"
+                      >
+                        <i class="fa-solid fa-backward"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip :content="t('forward')">
+                      <el-button 
+                        @click="forwardTTS(message)"
+                        circle 
+                        size="small"
+                      >
+                        <i class="fa-solid fa-forward"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <span class="tts-status" v-if="message.ttsChunks">
+                      {{ (message.currentChunk || 0) + 1 }}/{{ message.ttsChunks.length }}
+                    </span>
+                    <span class="tts-status" v-else>
+                      {{ t('initializing') }}
+                    </span>
+                    <span class="tts-status" v-if="message.role === 'assistant' && !isMobile">
+                      {{ t('first_sentence_latency')+': '+message?.first_sentence_latency +'ms,    '+ t('TTSelapsedTime')+': '+message?.TTSelapsedTime + 's'}}
+                    </span>
+                  </div>
+                  <div class="message-content" :class="{ typing: message.role === 'assistant' && isTyping && index === messages.length - 1 }">
+                    <!-- 用户消息内容 -->
+                    <div v-if="message.role === 'user'" class="user-content" data-mjx-disabled="true">
+                      <div v-html="message.content" class = "user-msg"></div>
+                      <!-- 文件链接展示 -->
+                      <div v-if="message.fileLinks?.length" class="file-links">
+                        <a v-for="(link, linkIndex) in message.fileLinks" :key="linkIndex" :href="formatFileUrl(link.path)" target="_blank" class="file-link">
+                          @{{ link.name }}
+                        </a>
+                      </div>
+                      <!-- 图片展示 -->
+                      <div v-if="message.imageLinks?.length" class="image-links">
+                        <img v-for="(link, linkIndex) in message.imageLinks" :key="linkIndex" :src="formatFileUrl(link.path)" class="image-link"/>
+                      </div>
+                    </div>
+                    <!-- AI回复内容 -->
+                    <div v-else-if="message.role === 'assistant'" class="markdown-body">
+                        <!-- 如果开启了 Briefly 模式 -->
+                        <div v-if="message.briefly" v-html="formatMessage(message.pure_content??message.content, index)"></div>
+                        
+                        <!-- 正常模式：混合渲染 -->
+                        <div v-else>
+                            <template v-for="(segment, segIndex) in splitMessageContent(message.content)" :key="segIndex">
+                                <!-- 文本段：使用你原有的 formatMessage 处理 markdown/latex -->
+                                <div 
+                                    v-if="segment.type === 'text'" 
+                                    v-html="formatMessage(segment.content, index)"
+                                    style="display: inline;"
+                                ></div>
+
+                                <!-- UI段：渲染组件 -->
+                                <a2-u-i-renderer 
+                                    v-else-if="segment.type === 'ui'"
+                                    :config="segment.content"
+                                    @action="handleA2UIAction"
+                                ></a2-u-i-renderer>
+                            </template>
+                            
+                            <!-- 思考中 loading (保持原样) -->
+                            <div v-if="isTyping && index === messages.length - 1 && !message.content">
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 系统消息内容 -->
+                    <div v-else class="system-content" data-mjx-disabled="true" >
+                      <div v-html="index===0 ? (t('system_prompt') + message.content):message.content" 
+                      :style="{ 'max-height' : index===0 ? '200px' : 'none','overflow-y' : index===0 ? 'auto' : 'hidden'}"
+                       @click="openEditDialog(message.role, message.content,index)">
+                      </div>
+                    </div>
+                  </div>
+                  <!-- 添加复制按钮 -->
+                  <div class="message-actions">
+                    <el-tooltip v-if="mainAgent === 'super-model' || message.role !== 'system'" :content="t('edit')" placement="bottom">
+                      <el-button @click="openEditDialog(message.role, message.content,index)" circle size="small">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip v-if="message.role === 'assistant'" :content="t('briefly')" placement="bottom">
+                      <el-button 
+                        class="briefly-btn" 
+                        @click="toggleBriefly(index)"
+                        circle 
+                        size="small">
+                        <i class="fa-solid fa-asterisk"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip v-if="message.role === 'assistant'" :content="t('rewrite')" placement="bottom">
+                      <el-button 
+                        class="rewrite-btn" 
+                        @click="rewrite(index)"
+                        circle 
+                        size="small">
+                        <i class="fa-solid fa-rotate"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip :content="t('copy')" placement="bottom">
+                      <el-button 
+                        class="copy-btn" 
+                        @click="copyMessageContent(message)"
+                        circle 
+                        size="small">
+                        <i class="fa-solid fa-copy"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip  :content="t('translateAndMark')" placement="bottom">
+                      <el-button @click="translateMessage(index)" circle size="small">
+                        <i class="fa-solid fa-language"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip v-if="index !== 0" :content="t('delete')" placement="bottom">
+                      <el-button @click="deleteMessage(index)" circle size="small">
+                        <i class="fa-solid fa-trash-can"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip v-if="index == 0" :content="t('reset')" placement="bottom">
+                      <el-button @click="resetMessage(index)" circle size="small">
+                        <i class="fa-solid fa-rotate"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip v-if="message.role === 'system'" :content="t('oneClickExpand')" placement="bottom">
+                      <el-button 
+                        class="Gen-btn" 
+                        @click="toggleQuickGen(index)"
+                        :disabled="isQuickGenerating"
+                        circle 
+                        size="small">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip v-if="message.role === 'system'" :content="t('save')" placement="bottom">
+                      <el-button 
+                        class="Gen-btn" 
+                        @click="saveSystemPrompt(index)"
+                        :disabled="isQuickGenerating"
+                        circle 
+                        size="small">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                      </el-button>
+                    </el-tooltip>
+                    <span class="msg-status" v-if="message.role === 'assistant' && !isMobile">
+                      {{ t('total_tokens')+': '+message?.total_tokens +',    '+ t('first_token_latency')+': '+message?.first_token_latency +'ms,    '+ t('elapsedTime')+': '+message?.elapsedTime + 's'}}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="button-group">
+
+                <el-tooltip :content="ASRrunning?t('listening'):isTyping?t('typing'):TTSrunning?t('speaking'):t('idle')" placement="top">
+                  <el-button
+                    v-if="isCapsuleMode"
+                    class="icon-btn status-btn"
+                    :type="ASRrunning||TTSrunning||isTyping ?  'primary':'default' "
+                    circle>
+                    <i v-if="ASRrunning" class="fa-solid fa-ear-listen"></i>
+                    <i v-else-if="isTyping" class="fa-solid fa-feather-pointed"></i>
+                    <i v-else-if="TTSrunning" class="fa-solid fa-head-side-cough"></i>
+                    <i v-else class="fa-solid fa-heart"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('clearChat')" placement="top">
+                  <el-button
+                    v-if="!isCapsuleMode"
+                    @click="clearMessages"
+                    class="icon-btn clear-btn"
+                    type="danger"
+                    circle>
+                    <i class="fa-solid fa-trash"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('mainModel')" placement="top">
+                  <el-button
+                    v-if="!isCapsuleMode"
+                    plain
+                    circle
+                    class="icon-btn model-btn"
+                    @click="showModelDialog = true"
+                  >
+                    <template #icon>
+                      <img
+                        :src="getVendorLogo(selectedVendor?.vendor || 'unknown')"
+                        class="model-vendor-logo"
+                        draggable="false"
+                      />
+                    </template>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('chatHistory')" placement="top">
+                  <el-button
+                    v-if="!isCapsuleMode"
+                    @click="showHistoryDialog = true"
+                    class="icon-btn history-btn"
+                    :type="conversations.length === 0 ? 'default' : 'primary'"
+                    circle>
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('extension')" placement="top">
+                  <el-button
+                    v-if="!isCapsuleMode&&!isAssistantMode"
+                    @click="openExtensionsDialog"
+                    class="icon-btn history-btn"
+                    :type="!sidePanelURL ? 'default' : 'primary'"
+                    circle>
+                    <i class="fa-solid fa-puzzle-piece"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="allBriefly ? t('allNoBriefly'):t('allBriefly')" placement="top">
+                  <el-button
+                    @click="handleAllBriefly"
+                    class="icon-btn history-btn"
+                    v-if="MoreButtonDict.find(b => b.name === 'brieflyButton')?.enabled&&!isCapsuleMode"
+                    :type="allBriefly ? 'primary' : 'default'"
+                    circle>
+                    <i class="fa-solid fa-asterisk"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="isInputExpanded ? t('collapseInput') : t('expandInput')" placement="top">
+                    <el-button 
+                        @click="toggleInputExpand"
+                        class="icon-btn expand-btn"
+                        v-if="MoreButtonDict.find(b => b.name === 'expandButton')?.enabled&&!isCapsuleMode"
+                        :type="isInputExpanded ? 'primary' : 'default'"
+                        circle>
+                        <i :class="isInputExpanded ? 'fa-solid fa-down-left-and-up-right-to-center' : 'fa-solid fa-up-right-and-down-left-from-center'"></i>
+                    </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('uploadFile')" placement="top">
+                  <el-button
+                    @click="sendFiles"
+                    class="icon-btn file-btn"
+                    :type="hasFiles ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'fileButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-paperclip"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('uploadImage')" placement="top">
+                  <el-button
+                    @click="sendImages"
+                    class="icon-btn image-btn"
+                    :type="hasImages ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'imageButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-image"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('deepThinking')" placement="top">
+                  <el-button
+                    @click="reasonerSettings.enabled = !reasonerSettings.enabled; autoSaveSettings()"
+                    class="icon-btn deep-think-btn"
+                    :type="reasonerSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'reasonerButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-atom"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('deepResearch')" placement="top">
+                  <el-button
+                    @click="toolsSettings.deepsearch.enabled = !toolsSettings.deepsearch.enabled; autoSaveSettings()"
+                    class="icon-btn deep-search-btn"
+                    :type="toolsSettings.deepsearch.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'deepSearchButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-flask"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('vision')" placement="top">
+                  <el-button
+                    @click="visionSettings.enabled = !visionSettings.enabled; autoSaveSettings()"
+                    class="icon-btn vision-btn"
+                    :type="visionSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'visionButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-camera"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('desktopVisionButton')" placement="top">
+                  <el-button
+                    @click="visionSettings.desktopVision = !visionSettings.desktopVision; autoSaveSettings()"
+                    class="icon-btn vision-btn"
+                    :type="visionSettings.desktopVision ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'desktopVisionButton')?.enabled||isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-eye"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('screenshot')" placement="top">
+                  <el-button
+                    @click="toggleScreenshot"
+                    class="icon-btn vision-btn"
+                    type="default"
+                    v-if="MoreButtonDict.find(b => b.name === 'screenshotButton')?.enabled||isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-scissors"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('text2img')" placement="top">
+                  <el-button
+                    @click="text2imgSettings.enabled = !text2imgSettings.enabled; autoSaveSettings()"
+                    class="icon-btn text2img-btn"
+                    :type="text2imgSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'text2imgButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-pencil"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('asr')" placement="top">
+                  <el-button
+                    @click="toggleASR"
+                    class="icon-btn asr-btn"
+                    :type="asrSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'asrButton')?.enabled||isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-microphone"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('tts')" placement="top">
+                  <el-button
+                    @click="ttsSettings.enabled=!ttsSettings.enabled;changeTTSstatus();"
+                    class="icon-btn asr-btn"
+                    :type="ttsSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'ttsButton')?.enabled||isCapsuleMode"
+                    circle>
+                    <i v-if="ttsSettings.enabled" class="fa-solid fa-volume-high"></i>
+                    <i v-else class="fa-solid fa-volume-xmark"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('knowledgeBase')" placement="top">
+                  <el-button
+                    @click="showKnowledgeDialog = true"
+                    class="icon-btn knowledge-base-btn"
+                    :type="hasEnabledKnowledgeBases ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'knowledgeBaseButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-book"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('webSearch')" placement="top">
+                  <el-button
+                    @click="webSearchSettings.enabled = !webSearchSettings.enabled; autoSaveSettings()"
+                    class="icon-btn web-search-btn"
+                    :type="webSearchSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'webSearchButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-globe"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('memory')" placement="top">
+                  <el-button
+                    @click="showMemoryDialog = true"
+                    class="icon-btn web-search-btn"
+                    :type="memorySettings.is_memory ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'memoryButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-brain"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('interpreter')" placement="top">
+                  <el-button
+                    @click="codeSettings.enabled = !codeSettings.enabled; autoSaveSettings()"
+                    class="icon-btn web-search-btn"
+                    :type="codeSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'codeButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-code"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('CLItool')" placement="top">
+                  <el-button
+                    :disabled="!isElectron"
+                    @click="CLISettings.enabled = !CLISettings.enabled; autoSaveSettings()"
+                    class="icon-btn web-search-btn"
+                    :type="CLISettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'CLIButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-terminal"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('sticker')" placement="top">
+                  <el-button
+                    @click="showStickerPacksDialog = true"
+                    class="icon-btn sticker-btn"
+                    :type="hasEnabledStickerPacks ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'stickerButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-face-smile"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('homeAssistant')" placement="top">
+                  <el-button
+                    @click="HASettings.enabled = !HASettings.enabled; changeHAEnabled();"
+                    class="icon-btn homeAssistant-btn"
+                    :type="HASettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'haButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-house"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('browserControl')" placement="top">
+                  <el-button
+                    @click="chromeMCPSettings.enabled = !chromeMCPSettings.enabled; changeChromeMCPEnabled();"
+                    class="icon-btn browserControl-btn"
+                    :type="chromeMCPSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'chromeButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-brands fa-chrome"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('sqlControl')" placement="top">
+                  <el-button
+                    @click="sqlSettings.enabled = !sqlSettings.enabled; changeSqlEnabled();"
+                    class="icon-btn sqlControl-btn"
+                    :type="sqlSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'sqlButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-database"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('agentSnapshot')" placement="top">
+                  <el-button
+                    @click="showAgentDialog = true"
+                    class="icon-btn agent-btn"
+                    :type="hasAgentChanges ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'agentButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-robot"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('llmTools')" placement="top">
+                  <el-button
+                    @click="showLLMToolsDialog = true"
+                    class="icon-btn llm-tool-btn"
+                    :type="hasEnabledLLMTools ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'llmButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-cube"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('mcpServers')" placement="top">
+                  <el-button
+                    @click="showMCPServerDialog = true"
+                    class="icon-btn mcp-btn"
+                    :type="hasEnabledMCPServers ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'mcpButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-server"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('a2aServers')" placement="top">
+                  <el-button
+                    @click="this.showA2AServerDialog = true"
+                    class="icon-btn a2a-btn"
+                    :type="hasEnabledA2AServers ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'a2aButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-network-wired"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('customHttpTool')" placement="top">
+                  <el-button
+                    @click="this.showHttpToolDialog = true"
+                    class="icon-btn http-btn"
+                    :type="hasEnabledHttpTools ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'httpButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-wifi"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('ComfyUI')" placement="top">
+                  <el-button
+                    @click="this.showComfyUIDialog = true"
+                    class="icon-btn comfyui-btn"
+                    :type="hasEnabledComfyUI ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'comfyuiButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-palette"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('tablePet')" placement="top">
+                  <el-button
+                    @click="startVRM"
+                    class="icon-btn vrm-btn"
+                    :type="'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'vrmButton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i :class='isVRMStarting? "fa-solid fa-spinner fa-spin" : "fa-solid fa-user-ninja"'></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="t('enableAutoBehavior')" placement="top">
+                  <el-button
+                    @click="behaviorSettings.enabled=!behaviorSettings.enabled; autoSaveSettings();"
+                    class="icon-btn behavior-btn"
+                    :type="behaviorSettings.enabled ? 'primary' : 'default'"
+                    v-if="MoreButtonDict.find(b => b.name === 'behaviorBotton')?.enabled&&!isCapsuleMode"
+                    circle>
+                    <i class="fa-solid fa-person-running"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip :content="isSending ? t('stopGenerating') : t('sendMessage')" placement="top">
+                  <el-button
+                    v-if="!isCapsuleMode"
+                    @click="isSending ? stopGenerate() : sendMessage()"
+                    :type="isSending ? 'danger' : 'primary'"
+                    class="icon-btn send-btn"
+                    circle>
+                    <i :class="isSending ? 'fa-solid fa-stop' : 'fa-solid fa-paper-plane'" aria-hidden="true"></i>
+                  </el-button>
+                </el-tooltip>
+                <!--展开收起按钮-->
+                <el-tooltip :content="t('moreButton')" placement="top">
+                  <el-button v-if="!isCapsuleMode" @click="showMoreButtonDialog = true" class="icon-btn collapse-btn" circle>
+                    <i class="fa-solid fa-ellipsis"></i>
+                  </el-button>
+                </el-tooltip>
+
+
+                <el-tooltip :content="t('logoPage')" placement="top">
+                  <el-button
+                    plain
+                    class="icon-btn party-btn"
+                    style="border-radius: 24px;"
+                    @click="showLogoDialog = true"
+                  >
+                    <span>Super Agent Party</span>
+                  </el-button>
+                </el-tooltip>
+              </div>
+              <div class="input-container"  v-if="!isCapsuleMode">
+                <!-- 紧凑型文件列表 -->
+                <div class="compact-file-list" v-if="allItems.length">
+                  <div v-for="(item, index) in allItems" :key="index" class="compact-file-item">
+                    <span class="file-name">@{{ item.name }}</span>
+                    <el-button
+                      @click.stop="removeItem(index, item.type)"
+                      class="delete-icon"
+                      circle
+                    >
+                      <i class="fa-solid fa-trash"></i>
+                    </el-button>
+                  </div>
+                </div>
+                <el-input
+                    v-model="userInput"
+                    type="textarea"
+                    :rows="isMobile?(isInputExpanded ? 8 : 3):(isInputExpanded ? 16 : 4)"
+                    :placeholder="t('inputMessage')"
+                    resize="none"
+                    @keydown="isInputting=true;handleKeyDown()"
+                    @keyup="isInputting=false"
+                    class="input-box">
+                </el-input>
+              </div>
+            </div>
+            <!-- 可拖拽的分割条 -->
+            <div
+              v-if="!isCapsuleMode && !isAssistantMode && !isMobile"
+              class="resizer"
+              ref="resizerRef"
+              :class="{ 
+                'resizer-collapsed-right': !sidePanelOpen,
+                'resizer-collapsed-left': !chatAreaOpen
+              }"
+              @mousedown="startResize"
+              @click="handleResizerClick"
+            >
+              <div class="resizer-handle">
+                <div class="resizer-dots">
+                  <div class="dot"></div>
+                  <div class="dot"></div>
+                  <div class="dot"></div>
+                </div>
+                <!-- 展开按钮（当对话区收起时显示） -->
+                <div v-if="!chatAreaOpen" class="expand-chat-btn" @click.stop="expandChatArea">
+                  <i class="fa-solid fa-chevron-right"></i>
+                </div>
+                <!-- 展开按钮（当侧边栏收起时显示） -->
+                <div v-if="!sidePanelOpen" class="expand-side-btn" @click.stop="expandSidePanel">
+                  <i class="fa-solid fa-chevron-left"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- 侧边栏区域 -->
+            <div class="side-panel" 
+                ref="sidePanelRef"
+                :class="{ collapsed: !sidePanelOpen }" 
+                v-show="sidePanelOpen">
+              <div class="side-panel-scroll" ref="messagesPanel" :style="{ overflow: 'hidden' }">
+                <iframe class="side-panel-iframe" 
+                        v-if="sidePanelURL" 
+                        :src="sidePanelURL" 
+                        frameborder="0" 
+                        allowfullscreen 
+                        style="width: 100%; height: 100%;">
+                </iframe>
+                <div v-else-if="currentExtension" class="loading-container">
+                  <div class="loading-content">
+                    <i class="fa-solid fa-spinner fa-spin loading-icon"></i>
+                    <p class="loading-text">{{t('waitForLoadingExt')}}</p>
+                  </div>
+                </div>
+                <div v-else class="extensions-list" style="margin: 10px;height: 100%;">
+                  <!-- 默认视图选项 -->
+                  <el-card 
+                    class="extension-card default-view-card"
+                    :class="{ active: currentExtension === null }"
+                    @click="resetToDefaultView()">
+                    <div class="extension-info">
+                      <h3>{{ t('defaultView') }}</h3>
+                      <p>{{ t('defaultViewDescription') }}</p>
+                    </div>
+                  </el-card>
+                  
+                  <!-- 分隔线 -->
+                  <div class="extensions-divider" v-if="extensions.length > 0">
+                    <span>
+                      {{ t('availableExtensions') }}
+                      <el-link
+                        type="primary"
+                        :underline="false"
+                        href="#" 
+                        @click.stop.prevent="switchToExtensionPage" 
+                      >
+                        <el-icon class="mr-1">
+                          <i class="fa-solid fa-puzzle-piece"></i>
+                        </el-icon>{{ t('goToExtensionPage') }}
+                      </el-link>
+                    </span>
+                  </div>
+                  <!-- 扩展列表 -->
+                  <el-empty v-if="extensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
+                    <el-card
+                      v-for="ext in extensions"
+                      :key="ext.id"
+                      class="extension-card"
+                      :class="{ active: currentExtension && currentExtension.id === ext.id }"
+                      @click="switchExtension(ext)">
+                      
+                      <!-- 右上角图标 -->
+                      <div class="btn-top-right">
+                        <el-button
+                          type="primary"
+                          circle
+                          @click.stop="openExtension(ext);switchExtension(ext)">
+                          <i class="fa-solid fa-external-link"></i>
+                        </el-button>
+                      </div>
+
+                      <div class="extension-info">
+                        <h3>{{ ext.name }}</h3>
+                        <p>{{ ext.description }}</p>
+                        <div class="extension-meta">
+                          <span>v{{ ext.version }}</span>
+                          <span>{{ ext.author }}</span>
+                        </div>
+                      </div>
+                    </el-card>
+                </div>
+              </div>
+            </div>
+          </div>
+          <el-dialog
+            v-model="showEditDialog"
+            :title="editType === 'system' ? t('editSystemPrompt') : t('editMessage')"
+            width="600px">
+            <el-form-item v-if="editType === 'system'" :label="t('selectSystemPrompt')" class="form-item-align" label-position="left">
+              <el-select 
+                v-model="selectSystemPromptId" 
+                :placeholder="t('selectSystemPromptPlaceholder')"
+                class="full-width-input"
+                @change="changeSystemPrompt"
+                >
+                <el-option
+                  v-for="prompt in SystemPromptsList"
+                  :key="prompt.id"
+                  :label="prompt.name"
+                  :value="prompt.id"
+                />
+              </el-select>
+            </el-form-item>
+            <el-input
+              v-model="editContent"
+              type="textarea"
+              :rows="18"
+              :placeholder="t('enterContent')"
+            ></el-input>
+            <template #footer>
+              <el-button @click="showEditDialog = false">{{ t('cancel') }}</el-button>
+              <el-button @click="switchToSystemPrompts" v-if="editType === 'system'">{{ t('addSystemPrompt') }}</el-button>
+              <el-button type="primary" @click="saveEdit">{{ editType === 'user' ? t('modifyAndSend'):t('save') }}</el-button>
+            </template>
+          </el-dialog>
+            <!-- 文件上传对话框 -->
+            <el-dialog
+              v-model="showUploadDialog"
+              :title="currentUploadType==='file' ? t('uploadFile') : t('uploadImage')"
+              width="600px"
+              :before-close="() => showUploadDialog = false">
+
+              <div class="upload-container">
+                <!-- 可点击的拖拽区域 -->
+                <div
+                  class="drop-zone"
+                  @dragover.prevent
+                  @drop.prevent="handleDrop"
+                  @click="browseFiles"
+                >
+                  <el-icon :size="50"><upload /></el-icon>
+                  <p>{{ t('clickOrDrop') }}</p>
+                </div>
+              </div>
+            </el-dialog>
+            <el-dialog
+              v-model="showKnowledgeDialog"
+              :title="t('knowledgeBaseSelection')"
+              width="600px">
+              <div class="knowledge-dialog-content">
+                <div v-for="kb in knowledgeBases" :key="kb.id" class="knowledge-item">
+                  <el-switch v-model="kb.enabled" @change="autoSaveSettings"></el-switch>
+                  <div class="knowledge-info">
+                    <div class="knowledge-name">{{ kb.name }}</div>
+                    <div class="knowledge-desc">{{ kb.introduction || t('noDescription') }}</div>
+                  </div>
+                </div>
+                <div v-if="knowledgeBases.length === 0" class="empty-tip">
+                  {{ t('noKnowledgeBase') }}
+                  <a href="#" @click.stop.prevent="switchToKnowledgePage">{{ t('goToKnowledgeBase') }}</a>
+                  {{ t('add') }}
+                </div>
+              </div>
+            </el-dialog>
+          <el-dialog
+            v-model="showMemoryDialog"
+            :title="t('memory')"
+            width="600px">
+            <div class="knowledge-dialog-content">
+              <el-form-item :label="t('memoryEnable')" class="form-item-align" label-position="left">
+                <el-switch
+                  v-model="memorySettings.is_memory"
+                  @change="changeMemory"
+                ></el-switch>
+              </el-form-item>
+              <el-form-item :label="t('resultCount')" class="form-item-align">
+                <el-slider
+                  v-model="memorySettings.memoryLimit"
+                  :min="1"
+                  :max="20"
+                  :step="1"
+                  @input="autoSaveSettings"
+                />
+              </el-form-item>
+              <el-form-item :label="t('selectMemory')">
+                <el-select 
+                  v-model="memorySettings.selectedMemory" 
+                  :placeholder="t('selectMemoryPlaceholder')"
+                  class="full-width-input"
+                  @change="changeMemory"
+                  >
+                  <el-option
+                    v-for="memory in memories"
+                    :key="memory.id"
+                    :label="memory.name"
+                    :value="memory.id"
+                  />
+                </el-select>
+              </el-form-item>
+            </div>
+          </el-dialog>
+          <el-dialog
+            v-model="showAgentDialog"
+            :title="t('agentSettings')"
+            width="600px">
+            <div class="agent-dialog-content">
+              <!-- 主智能体选择 -->
+              <div class="agent-section">
+                <h3>{{ t('mainAgent') }}</h3>
+                <el-select 
+                  v-model="mainAgent"
+                  @change="changeMainAgent">
+                  <el-option
+                    :label="t('defaultAgent')"
+                    value="super-model"
+                  >
+                  </el-option>
+                  <el-option
+                    v-for="(agent, id) in agents"
+                    :key="id"
+                    :label="agent.name"
+                    :value="id"
+                  >
+                  </el-option>
+                </el-select>
+              </div>
+              <!-- 工具智能体选择 -->
+              <div class="agent-section">
+                <h3>{{ t('toolAgents') }}</h3>
+                <div 
+                  v-for="(agent, id) in agents" 
+                  :key="id"
+                  class="knowledge-item">
+                  <el-switch 
+                    v-model="agent.enabled"
+                    @change="autoSaveSettings">
+                  </el-switch>
+                  <div class="knowledge-info">
+                    <div class="knowledge-name">{{ agent.name }}</div>
+                  </div>
+                </div>
+                <div v-if="Object.keys(agents).length === 0" class="empty-tip">
+                  {{ t('noagents') }}
+                  <a href="#" @click.stop.prevent="switchToagents">{{ t('goToagents') }}</a>
+                  {{ t('add') }}
+                </div>
+              </div>
+            </div>
+          </el-dialog>
+          <el-dialog
+            v-model="showMCPServerDialog"
+            :title="t('mcpServersManagement')"
+            width="600px">
+            <div class="knowledge-dialog-content">
+              <!-- 服务器列表 -->
+              <div v-for="(server, name) in mcpServers" :key="name" class="knowledge-item">
+                <el-switch 
+                  :active-value="false"  
+                  :inactive-value="true" 
+                  v-model="server.disabled" 
+                  :disabled="server.processingStatus === 'server_error'"
+                  @change="autoSaveSettings">
+                </el-switch>
+                <div class="knowledge-info">
+                  <div class="knowledge-name">{{ name }}</div>
+                </div>
+              </div>
+              <div v-if="Object.keys(mcpServers).length === 0" class="empty-tip">
+                {{ t('nomcpServers') }}
+                <a href="#" @click.stop.prevent="switchTomcpServers">{{ t('goTomcpServers') }}</a>
+                {{ t('add') }}
+              </div>
+            </div>
+          </el-dialog>
+          <el-dialog
+            v-model="showA2AServerDialog"
+            :title="t('a2aServersManagement')"
+            width="600px">
+            <div class="knowledge-dialog-content">
+              <div v-for="(server, url) in a2aServers" :key="url" class="knowledge-item">
+                <el-switch v-model="server.enabled" @change="autoSaveSettings"></el-switch>
+                <div class="knowledge-info">
+                  <div class="knowledge-name">{{ server.name }}</div>
+                  <div class="knowledge-desc">{{ server.description }}</div>
+                </div>
+              </div>
+              <div v-if="Object.keys(a2aServers).length === 0" class="empty-tip">
+                {{ t('noA2AServers') }}
+                <a href="#" @click.stop.prevent="switchToa2aServers">{{ t('addA2AServer') }}</a>
+                {{ t('add') }}
+              </div>
+            </div>
+          </el-dialog>
+          <el-dialog
+            v-model="showLLMToolsDialog"
+            :title="t('llmToolsManagement')"
+            width="600px">
+            <div class="knowledge-dialog-content">
+              <div v-for="(tool, index) in llmTools" :key="index" class="knowledge-item">
+                <el-switch v-model="tool.enabled" @change="autoSaveSettings"></el-switch>
+                <div class="knowledge-info">
+                  <div class="knowledge-name">{{ tool.name }}</div>
+                  <div class="knowledge-desc">{{ tool.description || t('noDescription') }}</div>
+                </div>
+                <el-button 
+                  @click="removeLLMTool(index)" 
+                  type="danger" 
+                  circle 
+                  size="small">
+                  <i class="fa-solid fa-trash"></i>
+                </el-button>
+              </div>
+              <div v-if="llmTools.length === 0" class="empty-tip">
+                {{ t('noLLMTools') }}
+                <a href="#" @click.stop.prevent="switchTollmTools">{{ t('gollmTools') }}</a>
+                {{ t('add') }}
+              </div>
+            </div>
+          </el-dialog>
+          <el-dialog
+            v-model="showComfyUIDialog"
+            :title="t('ComfyUIManagement')"
+            width="600px">
+            <div class="knowledge-dialog-content">
+              <div v-for="(tool, index) in workflows" :key="index" class="knowledge-item">
+                <el-switch v-model="tool.enabled" @change="autoSaveSettings"></el-switch>
+                <div class="knowledge-info">
+                  <div class="knowledge-name">{{ tool.original_filename }}</div>
+                  <div class="knowledge-desc">{{ tool.description || t('noDescription') }}</div>
+                </div>
+                <el-button 
+                  @click="deleteWorkflow(tool.unique_filename)" 
+                  type="danger" 
+                  circle 
+                  size="small">
+                  <i class="fa-solid fa-trash"></i>
+                </el-button>
+              </div>
+              <div v-if="workflows.length === 0" class="empty-tip">
+                {{ t('noWorkflows') }}
+                <a href="#" @click.stop.prevent="switchToComfyui">{{ t('goComfyui') }}</a>
+                {{ t('add') }}
+              </div>
+            </div>
+          </el-dialog>
+          <el-dialog
+            v-model="showStickerPacksDialog"
+            :title="t('StickerPackManagement')"
+            width="600px">
+            <div class="knowledge-dialog-content">
+              <div v-for="(pack, index) in stickerPacks" :key="index" class="knowledge-item">
+                <el-switch v-model="pack.enabled" @change="autoSaveSettings"></el-switch>
+                <div class="knowledge-info">
+                  <div class="knowledge-name">{{ pack.name }}</div>
+                </div>
+                <el-button 
+                  @click="deleteStickerPack(pack)" 
+                  type="danger" 
+                  circle 
+                  size="small">
+                  <i class="fa-solid fa-trash"></i>
+                </el-button>
+              </div>
+              <div v-if="stickerPacks.length === 0" class="empty-tip">
+                {{ t('noStickerPack') }}
+                <a href="#" @click.stop.prevent="switchToStickerPacks">{{ t('goStickerPack') }}</a>
+                {{ t('add') }}
+              </div>
+            </div>
+          </el-dialog>
+          <el-dialog
+            v-model="showMoreButtonDialog"
+            :title="t('showMoreButton')"
+            width="600px">
+            <div class="knowledge-dialog-content">
+              <div v-for="(config, index) in MoreButtonDict" :key="index" class="knowledge-item">
+                <el-switch v-model="config.enabled" @change="autoSaveSettings"></el-switch>
+                <div class="knowledge-info">
+                  <div class="knowledge-name">{{ t(config.name) }}</div>
+                </div>
+              </div>
+            </div>
+          </el-dialog>
+
+          <el-dialog
+            v-model="showHistoryDialog"
+            :title="t('chatHistory')"
+            width="600px">
+            <div class="knowledge-dialog-content">
+              <!-- 搜索框与操作按钮行 -->
+              <div class="search-action-row">
+                <el-input
+                  v-model="searchKeyword"
+                  :placeholder="t('searchChatHistoryPlaceholder')"
+                  clearable
+                  class="search-input"
+                  style="flex:1">
+                  <template #prefix>
+                    <el-icon><i class="fa-solid fa-magnifying-glass"></i></el-icon>
+                  </template>
+                </el-input>
+
+                <div class="action-buttons">
+                  <el-tooltip 
+                    :content="t('keepLastWeek')" 
+                    placement="top"
+                    :disabled="conversations.length === 0">
+                    <el-button 
+                      type="info"
+                      circle 
+                      size="small"
+                      @click="keepLastWeek"
+                      :disabled="conversations.length === 0">
+                      <i class="fa-solid fa-calendar-week"></i>
+                    </el-button>
+                  </el-tooltip>
+
+                  <el-tooltip 
+                    :content="t('clearAllHistory')" 
+                    placement="top"
+                    :disabled="conversations.length === 0">
+                    <el-button 
+                      type="danger"
+                      circle 
+                      size="small"
+                      @click="confirmClearAll"
+                      :disabled="conversations.length === 0">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+              </div>
+
+              <!-- 对话记录列表 -->
+              <div v-for="conv in filteredConversations" 
+                  :key="conv.id" 
+                  class="knowledge-item"
+                  @click="loadConversation(conv.id)">
+                <el-button 
+                  @click.stop="confirmDeleteConversation(conv.id)"
+                  type="danger" 
+                  circle 
+                  size="small">
+                  <i class="fa-solid fa-trash"></i>
+                </el-button>
+                <div class="knowledge-info">
+                  <h3 class="knowledge-name">{{ conv.title || t('untitled') }}</h3>
+                  <div class="knowledge-desc">
+                    <el-icon class="meta-icon"><i class="fa-solid fa-message"></i></el-icon>
+                    <span>{{ conv.messages?.length || 0 }} {{ t('messages') }}</span><br>
+                    <el-icon class="meta-icon"><i class="fa-solid fa-clock"></i></el-icon>
+                    <span>{{ formatDate(conv.timestamp) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 空状态提示 -->
+              <div v-if="filteredConversations.length === 0" class="empty-tip">
+                {{ searchKeyword ? t('noResults') : t('noChatHistory') }}
+              </div>
+            </div>
+          </el-dialog>
+        </div>
+      </el-main>
+    </el-container>
+  </div>
+  <!-- 引入Vue和Element Plus -->
+  <script src="libs/vue.global.prod.js"></script>
+  <script src="libs/element-plus.js"></script>
+  <script src="libs/element-plus-icons.js"></script>
+  <script src="js/vue_data.js"></script>
+  <script src="js/vue_methods.js"></script>
+  <script src="js/renderer.js"></script>
+</body>
+</html>
