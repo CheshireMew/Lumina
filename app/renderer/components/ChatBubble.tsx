@@ -59,7 +59,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false })
             border: '1px solid rgba(255,255,255,0.5)',
             animation: 'fadeIn 0.3s ease-out'
         }}>
-            {displayedText}
+            {displayedText.replace(/\[[^\]]+\]/g, '').replace(/[\(（][^)）]+[\)）]/g, '')}
         </div>
     );
 };

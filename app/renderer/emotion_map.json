@@ -1,0 +1,174 @@
+{
+    "happy": {
+        "group": "Idle",
+        "index": 4
+    },
+    "joy": {
+        "group": "Idle",
+        "index": 4
+    },
+    "smile": {
+        "group": "Idle",
+        "index": 4
+    },
+    "laugh": {
+        "group": "Idle",
+        "index": 4
+    },
+    "sad": {
+        "group": "Idle",
+        "index": 0
+    },
+    "cry": {
+        "group": "Idle",
+        "index": 0
+    },
+    "depressed": {
+        "group": "Idle",
+        "index": 0
+    },
+    "angry": {
+        "group": "Idle",
+        "index": 7
+    },
+    "mad": {
+        "group": "Idle",
+        "index": 7
+    },
+    "annoyed": {
+        "group": "Idle",
+        "index": 7
+    },
+    "surprised": {
+        "group": "Idle",
+        "index": 5
+    },
+    "shocked": {
+        "group": "Idle",
+        "index": 5
+    },
+    "shy": {
+        "group": "Idle",
+        "index": 2
+    },
+    "blush": {
+        "group": "Idle",
+        "index": 2
+    },
+    "love": {
+        "group": "Idle",
+        "index": 6
+    },
+    "like": {
+        "group": "Idle",
+        "index": 6
+    },
+    "thinking": {
+        "group": "Idle",
+        "index": 1
+    },
+    "confused": {
+        "group": "Idle",
+        "index": 1
+    },
+    "sleepy": {
+        "group": "Idle",
+        "index": 8
+    },
+    "tired": {
+        "group": "Idle",
+        "index": 8
+    },
+    "reset": {
+        "group": "Idle",
+        "index": 0
+    },
+    "neutral": {
+        "group": "Idle",
+        "index": 0
+    },
+    "idle": {
+        "group": "Idle",
+        "index": 0
+    },
+    "开心": {
+        "group": "Idle",
+        "index": 4
+    },
+    "快乐": {
+        "group": "Idle",
+        "index": 4
+    },
+    "高兴": {
+        "group": "Idle",
+        "index": 4
+    },
+    "笑": {
+        "group": "Idle",
+        "index": 4
+    },
+    "悲伤": {
+        "group": "Idle",
+        "index": 0
+    },
+    "难过": {
+        "group": "Idle",
+        "index": 0
+    },
+    "哭": {
+        "group": "Idle",
+        "index": 0
+    },
+    "生气": {
+        "group": "Idle",
+        "index": 7
+    },
+    "愤怒": {
+        "group": "Idle",
+        "index": 7
+    },
+    "惊讶": {
+        "group": "Idle",
+        "index": 5
+    },
+    "震惊": {
+        "group": "Idle",
+        "index": 5
+    },
+    "害羞": {
+        "group": "Idle",
+        "index": 2
+    },
+    "脸红": {
+        "group": "Idle",
+        "index": 2
+    },
+    "喜欢": {
+        "group": "Idle",
+        "index": 6
+    },
+    "爱": {
+        "group": "Idle",
+        "index": 6
+    },
+    "思考": {
+        "group": "Idle",
+        "index": 1
+    },
+    "困惑": {
+        "group": "Idle",
+        "index": 1
+    },
+    "疑问": {
+        "group": "Idle",
+        "index": 1
+    },
+    "困": {
+        "group": "Idle",
+        "index": 8
+    },
+    "累": {
+        "group": "Idle",
+        "index": 8
+    }
+}

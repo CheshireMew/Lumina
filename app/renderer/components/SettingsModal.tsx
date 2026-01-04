@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CharacterProfile, DEFAULT_CHARACTERS } from '@core/llm/types';
+import { ttsService } from '@core/voice/tts_service';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -9,6 +10,7 @@ interface SettingsModalProps {
     onLLMSettingsChange?: (apiKey: string, baseUrl: string, model: string) => void;
     onCharactersUpdated?: (characters: CharacterProfile[], activeId: string) => void;
     onUserNameUpdated?: (newName: string) => void;
+    onLive2DHighDpiChange?: (enabled: boolean) => void;
 }
 
 interface WhisperModelInfo {
@@ -20,7 +22,7 @@ interface WhisperModelInfo {
 type Tab = 'general' | 'voice' | 'memory' | 'characters';
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
-    isOpen, onClose, onClearHistory, onContextWindowChange, onLLMSettingsChange, onCharactersUpdated, onUserNameUpdated
+    isOpen, onClose, onClearHistory, onContextWindowChange, onLLMSettingsChange, onCharactersUpdated, onUserNameUpdated, onLive2DHighDpiChange
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('general');
 
@@ -28,6 +30,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [apiKey, setApiKey] = useState('');
     const [apiBaseUrl, setApiBaseUrl] = useState('https://api.deepseek.com/v1');
     const [modelName, setModelName] = useState('deepseek-chat');
+
+    // Visual Settings
+    const [highDpiEnabled, setHighDpiEnabled] = useState(false);
 
     // User Settings
     const [userName, setUserName] = useState('Master');
@@ -57,6 +62,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 setModelName(await settings.get('modelName') || 'deepseek-chat');
                 setUserName(await settings.get('userName') || 'Master');
 
+                // Visual
+                setHighDpiEnabled(await settings.get('live2d_high_dpi') || false);
+
                 // Memory
                 setContextWindow(await settings.get('contextWindow') || 15);
 
@@ -66,12 +74,34 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 if (loadedChars) setCharacters(loadedChars);
                 if (loadedActiveId) setActiveCharacterId(loadedActiveId);
 
-                // Whisper
+                // Whisper & TTS Voices
                 fetchModels();
+                fetchTTSVoices();
             };
             loadSettings();
         }
     }, [isOpen]);
+
+    // TTS Voices Fetching
+    const [availableVoices, setAvailableVoices] = useState<{ name: string, gender: string }[]>([]);
+
+    const fetchTTSVoices = async () => {
+        try {
+            // We can access ttsService globally as imported
+            // Ideally import { ttsService } from '@core/voice/tts_service';
+            // But since it's not imported here yet, let's just fetch directly or assumes it's available via window or import.
+            // Let's import it at top of file essentially, or use fetch directly against port 8766 
+            // to avoid adding imports blindly. Port is 8766.
+            const res = await fetch('http://127.0.0.1:8766/tts/voices');
+            if (res.ok) {
+                const data = await res.json();
+                const allVoices = [...(data.chinese || []), ...(data.english || [])];
+                setAvailableVoices(allVoices);
+            }
+        } catch (e) {
+            console.error("Failed to fetch TTS voices", e);
+        }
+    };
 
     // Poll status for Whisper models
     useEffect(() => {
@@ -119,11 +149,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         await settings.set('contextWindow', contextWindow);
         await settings.set('characters', characters);
         await settings.set('activeCharacterId', activeCharacterId);
+        await settings.set('live2d_high_dpi', highDpiEnabled);
 
         if (onContextWindowChange) onContextWindowChange(contextWindow);
         if (onLLMSettingsChange) onLLMSettingsChange(apiKey, apiBaseUrl, modelName);
         if (onCharactersUpdated) onCharactersUpdated(characters, activeCharacterId);
         if (onUserNameUpdated) onUserNameUpdated(userName);
+        if (onLive2DHighDpiChange) onLive2DHighDpiChange(highDpiEnabled);
 
         onClose();
     };
@@ -182,6 +214,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             }
             return c;
         }));
+
+        // Immediately apply voice change if this is the active character and voiceId is being changed
+        if (field === 'voiceId' && id === activeCharacterId) {
+            console.log(`[SettingsModal] Immediately switching TTS voice to: ${value}`);
+            ttsService.setDefaultVoice(value);
+        }
     };
 
     if (!isOpen) return null;
@@ -275,6 +313,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                             style={inputStyle}
                                             placeholder="deepseek-chat"
                                         />
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>Visual Settings</h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '12px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={highDpiEnabled}
+                                        onChange={(e) => setHighDpiEnabled(e.target.checked)}
+                                        style={{ height: '16px', width: '16px', cursor: 'pointer' }}
+                                    />
+                                    <div>
+                                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>Enable High-DPI (Retina) Rendering</div>
+                                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Significantly improves quality on high-res screens but increases GPU usage.</div>
                                     </div>
                                 </div>
                             </section>
@@ -415,12 +469,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                     <div style={{ marginBottom: '15px' }}>
                                                         <label style={labelStyle}>Voice Config (Edge TTS)</label>
                                                         <div style={{ display: 'flex', gap: '10px' }}>
-                                                            <input
+                                                            <select
                                                                 value={char.voiceConfig.voiceId}
                                                                 onChange={(e) => handleVoiceConfigChange(char.id, 'voiceId', e.target.value)}
                                                                 style={{ ...inputStyle, flex: 2 }}
-                                                                placeholder="zh-CN-XiaoxiaoNeural"
-                                                            />
+                                                            >
+                                                                {availableVoices.length > 0 ? (
+                                                                    <>
+                                                                        <optgroup label="中文 (Chinese)">
+                                                                            {availableVoices
+                                                                                .filter(v => v.name.includes('zh-'))
+                                                                                .map(v => (
+                                                                                    <option key={v.name} value={v.name}>
+                                                                                        {v.name.replace('zh-CN-', '').replace('Neural', '')} ({v.gender})
+                                                                                    </option>
+                                                                                ))
+                                                                            }
+                                                                        </optgroup>
+                                                                        <optgroup label="English">
+                                                                            {availableVoices
+                                                                                .filter(v => v.name.includes('en-'))
+                                                                                .map(v => (
+                                                                                    <option key={v.name} value={v.name}>
+                                                                                        {v.name.replace('en-US-', '').replace('Neural', '')} ({v.gender})
+                                                                                    </option>
+                                                                                ))
+                                                                            }
+                                                                        </optgroup>
+                                                                    </>
+                                                                ) : (
+                                                                    <option>Loading voices...</option>
+                                                                )}
+                                                            </select>
                                                             <input
                                                                 value={char.voiceConfig.rate}
                                                                 onChange={(e) => handleVoiceConfigChange(char.id, 'rate', e.target.value)}
@@ -469,7 +549,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
                 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
             `}</style>
-        </div>
+        </div >
     );
 };
 
