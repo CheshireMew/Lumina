@@ -84,3 +84,8 @@ Thumbs.db
 dist/
 dist-electron/
 release/
+
+# Test and reference directories
+Repositories/
+example/
+test/
