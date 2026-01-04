@@ -4,6 +4,7 @@ import { useMicVAD } from '@ricky0123/vad-react';
 interface VoiceInputProps {
     onSend: (message: string) => void;
     disabled?: boolean;
+    onSpeechStart?: () => void; // 用户开始说话时的回调（用于中断 TTS）
 }
 
 // 辅助函数：Float32Array -> Int16Array
@@ -16,12 +17,18 @@ const floatTo16BitPCM = (input: Float32Array) => {
     return output;
 };
 
-const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled }) => {
+const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart }) => {
     const [transcribing, setTranscribing] = useState(false);
     const [error, setError] = useState<string>('');
     const [transcript, setTranscript] = useState<string>('');
 
     const wsRef = useRef<WebSocket | null>(null);
+    const onSendRef = useRef(onSend);
+
+    // Keep onSendRef current
+    useEffect(() => {
+        onSendRef.current = onSend;
+    }, [onSend]);
 
     useEffect(() => {
         let ws: WebSocket | null = null;
@@ -38,13 +45,24 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled }) => {
 
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data);
-                    if (data.type === 'transcript') {
-                        console.log('Transcript:', data.text);
+
+                    // 处理流式 STT 的部分结果
+                    if (data.type === 'partial') {
+                        // 实时显示部分转录结果
+                        console.log('[STT] Partial:', data.segment);
+                        setTranscript(data.text);
+                        // 不设置 transcribing=false，继续等待最终结果
+
+                    } else if (data.type === 'transcript' || data.type === 'transcription') {
+                        // 兼容旧格式和新格式
+                        console.log('[STT] Final:', data.text);
                         setTranscribing(false);
+
                         if (data.text.trim()) {
                             setTranscript(data.text);
                             setTimeout(() => {
-                                onSend(data.text);
+                                // Use ref here
+                                onSendRef.current(data.text);
                                 setTranscript('');
                             }, 500);
                         }
@@ -73,7 +91,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled }) => {
         return () => {
             if (ws) ws.close();
         };
-    }, [onSend]);
+    }, []); // Empty dependency array = connect once
 
     const vad = useMicVAD({
         startOnLoad: true,
@@ -91,6 +109,10 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled }) => {
         onSpeechStart: () => {
             console.log('Speech started');
             setTranscript('');
+            // 触发中断 TTS 的回调
+            if (onSpeechStart) {
+                onSpeechStart();
+            }
         },
         onSpeechEnd: (audio: Float32Array) => {
             console.log('Speech ended, sending audio...', audio.length);
@@ -138,13 +160,13 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled }) => {
                 width: '60px',
                 height: '60px',
                 borderRadius: '50%',
-                border: `3px solid ${getIconColor()}`,
+                border: `3px solid ${getIconColor()} `,
                 backgroundColor: 'rgba(0,0,0,0.7)',
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
                 fontSize: '28px',
-                boxShadow: vad.userSpeaking ? `0 0 20px ${getIconColor()}` : '0 4px 10px rgba(0,0,0,0.3)',
+                boxShadow: vad.userSpeaking ? `0 0 20px ${getIconColor()} ` : '0 4px 10px rgba(0,0,0,0.3)',
                 transition: 'all 0.2s ease',
                 transform: vad.userSpeaking ? 'scale(1.1)' : 'scale(1)',
             }}>

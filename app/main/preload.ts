@@ -23,6 +23,17 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 // LLM API
 contextBridge.exposeInMainWorld('llm', {
     chat: (message: string) => ipcRenderer.invoke('llm:chat', message),
+    chatStream: (message: string) => ipcRenderer.send('llm:chatStream', message),
+    onStreamToken: (callback: (token: string) => void) => {
+        ipcRenderer.on('llm:streamToken', (_event, token) => callback(token));
+    },
+    onStreamEnd: (callback: () => void) => {
+        ipcRenderer.on('llm:streamEnd', () => callback());
+    },
+    removeStreamListeners: () => {
+        ipcRenderer.removeAllListeners('llm:streamToken');
+        ipcRenderer.removeAllListeners('llm:streamEnd');
+    }
 })
 
 // Settings API

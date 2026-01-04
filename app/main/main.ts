@@ -41,6 +41,16 @@ function createWindow() {
         return await llmService.chat(message);
     });
 
+    // 流式聊天 IPC Handler
+    ipcMain.on('llm:chatStream', async (event, message: string) => {
+        await llmService.chatStream(message, (token: string) => {
+            // 每收到一个 token，就通过事件发送给渲染进程
+            event.sender.send('llm:streamToken', token);
+        });
+        // 流结束后发送完成信号
+        event.sender.send('llm:streamEnd');
+    });
+
     ipcMain.handle('settings:get', (_event, key) => {
         return store.get(key);
     });

@@ -89,3 +89,6 @@ release/
 Repositories/
 example/
 test/
+# Memory System
+lite_memory_db/
+memory_backups/
