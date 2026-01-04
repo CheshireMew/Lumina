@@ -4,6 +4,7 @@ import ChatBubble from './components/ChatBubble'
 import InputBox from './components/InputBox'
 import VoiceInput from './components/VoiceInput'
 import SettingsModal from './components/SettingsModal'
+import MotionTester from './components/MotionTester'
 import { ttsService } from '@core/voice/tts_service'
 import { SentenceSplitter } from '@core/voice/sentence_splitter'
 import { AudioQueue } from '@core/voice/audio_queue'
@@ -15,10 +16,11 @@ import emotionMapRaw from './emotion_map.json';
 
 const emotionMap: Record<string, { group: string, index: number }> = emotionMapRaw;
 
-// Helper to clean text for TTS (remove emojis and parenthesized text)
+// Helper to clean text for TTS (remove emojis and [emotion] tags)
 const cleanTextForTTS = (text: string): string => {
     return text
-        .replace(/\([^)]*\)/g, '') // Remove (text)
+        .replace(/\[[^\]]*\]/g, '') // Remove [text]
+        .replace(/[\(（][^)）]*[\)）]/g, '') // Also remove (text) / （text） just in case
         .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '') // Remove emojis
         .trim();
 };
@@ -27,6 +29,7 @@ function App() {
     const [currentMessage, setCurrentMessage] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isMotionTesterOpen, setIsMotionTesterOpen] = useState(false);
     const [chatMode, setChatMode] = useState<'text' | 'voice'>('text');
     const [isStreaming, setIsStreaming] = useState(false);
     const [isTTSEnabled, setIsTTSEnabled] = useState(true); // TTS 开关
@@ -42,28 +45,43 @@ function App() {
     const [conversationSummary, setConversationSummary] = useState<string>(''); // 历史摘要
     const [contextWindow, setContextWindow] = useState(15); // 默认保留15轮
     const [autoSummarizationEnabled, setAutoSummarizationEnabled] = useState(true);
+    const [live2dHighDpi, setLive2dHighDpi] = useState(false);
 
     // TTS 模块引用
     const audioQueueRef = useRef<AudioQueue>(new AudioQueue());
     const sentenceSplitterRef = useRef<SentenceSplitter | null>(null);
     const synthPromisesRef = useRef<Promise<void>[]>([]); // Promise 队列维持顺序
-    const emotionBufferRef = useRef<string>(''); // Buffer for detecting (emotion) tags in stream
+    const emotionBufferRef = useRef<string>(''); // Buffer for detecting tags in stream
 
     // Function to process emotion tags from accumulated text
     const processEmotions = (text: string) => {
-        // Regex to find all (emotion) tags
-        const matches = text.matchAll(/\(([^)]+)\)/g);
-        for (const match of matches) {
-            const emotionContent = match[1].toLowerCase();
+        console.log('[App] processEmotions called with text:', text);
+        // Regex to find all [emotion] tags (and fallback to parens)
+        const matches = text.matchAll(/(?:\[([^\]]+)\])|(?:[\(（]([^)）]+)[\)）])/g);
+        const matchesArray = Array.from(matches);
+        console.log('[App] Found emotion tag matches:', matchesArray.length);
+
+        for (const match of matchesArray) {
+            // match[1] is [content], match[2] is (content)
+            const emotionContent = (match[1] || match[2] || '').trim().toLowerCase();
+            console.log('[App] Processing emotion content:', emotionContent);
+
             // Check if we have a mapping for any word in the content
+            let emotionFound = false;
             for (const [key, motion] of Object.entries(emotionMap)) {
                 if (emotionContent.includes(key)) {
-                    console.log(`[App] Triggering emotion: ${key} -> Motion: ${motion.group} index ${motion.index}`);
+                    console.log(`[App] ✅ Triggering emotion: "${key}" -> Motion: ${motion.group} index ${motion.index}`);
                     if (live2dRef.current) {
                         live2dRef.current.motion(motion.group, motion.index);
+                    } else {
+                        console.warn('[App] ⚠️ live2dRef.current is null!');
                     }
+                    emotionFound = true;
                     break; // Trigger only one emotion per tag
                 }
+            }
+            if (!emotionFound) {
+                console.log(`[App] ❌ No emotion mapping found for: "${emotionContent}"`);
             }
         }
     };
@@ -94,17 +112,29 @@ function App() {
     };
 
     // Helper: Apply Active Character
+    // Helper: Apply Active Character
     const applyCharacter = (character: CharacterProfile, uName: string) => {
         // 1. Render Prompt Template
-        const renderedPrompt = character.systemPromptTemplate
+        let renderedPrompt = character.systemPromptTemplate
             .replace(/{char}/g, character.name)
             .replace(/{user}/g, uName);
+
+        // 2. Append Standardized Emotion Instructions (Invisible to user setup, but active for AI)
+        const emotionInstructions = `\n\n[SYSTEM INSTRUCTION: EMOTIONAL EXPRESSION]\nExpress your emotions using [emotion] tags at the start of sentences. Valid tags: [happy], [sad], [angry], [surprised], [shy], [love], [thinking], [sleepy].\nExample: [happy] Hello! I'm so glad to see you! [shy] You make me blush.`;
+
+        // Append only if not already present (to avoid duplication if user manually added it)
+        if (!renderedPrompt.includes('[SYSTEM INSTRUCTION: EMOTIONAL EXPRESSION]')) {
+            renderedPrompt += emotionInstructions;
+        }
 
         console.log(`[App] Applying character: ${character.name} for user: ${uName}`);
         llmService.setSystemPrompt(renderedPrompt);
 
-        // 2. Update TTS Voice (Future: bind voice config to ttsService)
-        // ttsService.setVoice(character.voiceConfig.voiceId);
+        // 3. Update TTS Voice
+        if (character.voiceConfig?.voiceId) {
+            console.log(`[App] Switching TTS Voice to: ${character.voiceConfig.voiceId}`);
+            ttsService.setDefaultVoice(character.voiceConfig.voiceId);
+        }
     };
 
     // Load all settings on mount
@@ -155,6 +185,11 @@ function App() {
                 // Memory Settings
                 const windowSize = await settings.get('contextWindow');
                 setContextWindow(windowSize || 15);
+
+                // Live2D Settings
+                const highDpi = await settings.get('live2d_high_dpi');
+                setLive2dHighDpi(highDpi || false);
+
             } catch (error) {
                 console.error('[App] Failed to load settings:', error);
             }
@@ -215,6 +250,11 @@ function App() {
         }
     };
 
+    const handleLive2DHighDpiChange = (enabled: boolean) => {
+        console.log(`[App] Live2D High DPI changed to: ${enabled}`);
+        setLive2dHighDpi(enabled);
+    };
+
     const handleSend = async (text: string) => {
         setIsProcessing(true);
         setIsStreaming(true);
@@ -267,21 +307,25 @@ function App() {
                 text,
                 contextWindow,
                 (token: string) => {
-                    console.log('[LLM Token]:', JSON.stringify(token));
+                    // 减少 token 日志的输出频率,避免刷屏
+                    // console.log('[LLM Token]:', JSON.stringify(token));
                     fullRawResponse += token;
                     emotionBufferRef.current += token;
 
-                    // 1. Check for complete (emotion) tags to trigger Live2D
-                    if (token.includes(')')) {
+                    // 1. Check for complete (emotion) tags or [emotion] tags to trigger Live2D
+                    if (token.includes(')') || token.includes(']') || token.includes('）')) {
+                        console.log('[App] Emotion tag delimiter detected, buffer:', emotionBufferRef.current);
                         processEmotions(emotionBufferRef.current);
                         emotionBufferRef.current = ''; // Reset buffer
                     }
 
                     // 2. Filter for Display
-                    // Remove complete tags (..) and trailing incomplete tag (..
+                    // Remove complete tags (..) and [..] and trailing incomplete tag (.. or [..
                     const displayUpdate = fullRawResponse
-                        .replace(/\([^)]*\)/g, '')   // Remove complete
-                        .replace(/\([^)]*$/, '');    // Remove incomplete trailing
+                        .replace(/\[[^\]]*\]/g, '')  // Remove complete [tag]
+                        .replace(/\([^)]*\)/g, '')   // Remove complete (paren)
+                        .replace(/\[[^\]]*$/, '')    // Remove incomplete trailing [
+                        .replace(/\([^)]*$/, '');    // Remove incomplete trailing (
 
                     setCurrentMessage(displayUpdate);
 
@@ -318,7 +362,8 @@ function App() {
             setConversationHistory(prev => [...prev, assistantMessage]);
 
             // --- Async: Add to Long-Term Memory (L3) ---
-            memoryService.add([userMessage, assistantMessage])
+            const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
+            memoryService.add([userMessage, assistantMessage], userName, activeChar.name)
                 .catch(err => console.error('[Memory] Failed to store interaction:', err));
 
             // --- 自动摘要逻辑 (L2) ---
@@ -376,6 +421,7 @@ function App() {
             <Live2DViewer
                 ref={live2dRef}
                 modelPath="/live2d/Hiyori/Hiyori.model3.json"
+                highDpi={live2dHighDpi}
             />
 
             {/* UI Layer */}
@@ -427,6 +473,24 @@ function App() {
                 >
                     ⚙️ Settings
                 </button>
+
+                {/* Motion Tester Button */}
+                <button
+                    onClick={() => setIsMotionTesterOpen(true)}
+                    style={{
+                        padding: '12px 20px',
+                        fontSize: '16px',
+                        backgroundColor: '#9C27B0',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '25px',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+                        transition: 'all 0.3s ease'
+                    }}
+                >
+                    🎭 测试动作
+                </button>
             </div>
 
             {/* Settings Modal */}
@@ -438,9 +502,23 @@ function App() {
                 onLLMSettingsChange={handleLLMSettingsChange}
                 onCharactersUpdated={handleCharactersUpdated}
                 onUserNameUpdated={handleUserNameUpdated}
+                onLive2DHighDpiChange={handleLive2DHighDpiChange}
+            />
+
+            {/* Motion Tester */}
+            <MotionTester
+                isOpen={isMotionTesterOpen}
+                onClose={() => setIsMotionTesterOpen(false)}
+                onTriggerMotion={(group, index) => {
+                    if (live2dRef.current) {
+                        console.log(`[App] Motion Tester triggered: ${group} ${index}`);
+                        live2dRef.current.motion(group, index);
+                    }
+                }}
             />
         </div>
     );
+
 }
 
 export default App;
