@@ -64,6 +64,7 @@ class VoiceprintManager:
         )
         self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(config)
         self.user_embedding = None
+        self.loaded_profile_name = None  # Track which profile is loaded
         
         logger.info(f"声纹识别模型已加载: {model_path}")
     
@@ -137,10 +138,12 @@ class VoiceprintManager:
         load_path = self.profiles_dir / f"{profile_name}.npy"
         if load_path.exists():
             self.user_embedding = np.load(load_path)
+            self.loaded_profile_name = profile_name  # Track loaded profile
             logger.info(f"声纹已加载: {profile_name}")
             return True
         else:
             logger.warning(f"声纹Profile不存在: {profile_name}")
+            self.loaded_profile_name = None
             return False
     
     def verify(

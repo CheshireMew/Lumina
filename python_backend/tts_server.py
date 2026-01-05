@@ -63,10 +63,18 @@ class TTSRequest(BaseModel):
     rate: str = "+0%"
     pitch: str = "+0Hz"
 
+
+# 全局 HTTP 客户端 (连接复用)
+http_client: Optional[httpx.AsyncClient] = None
+
 @app.on_event("startup")
 async def startup_event():
-    global edge_tts_engine, gpt_sovits_engine, emotion_style_map
+    global edge_tts_engine, gpt_sovits_engine, emotion_style_map, http_client
     
+    # 初始化 HTTP 客户端
+    http_client = httpx.AsyncClient(timeout=None) # 保持长连接
+    logger.info("Shared HTTP client initialized")
+
     logger.info("Initializing Edge TTS...")
     try:
         import edge_tts
@@ -91,6 +99,14 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to load emotion map: {e}")
         emotion_style_map = {}
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global http_client
+    if http_client:
+        await http_client.aclose()
+        logger.info("Shared HTTP client closed")
+    # Clean up subprocesses if any (handled by their own logic usually)
 
 def parse_emotion_tags(text: str):
     match = re.search(r"^\[([a-zA-Z]+)\]", text.strip())
@@ -176,7 +192,7 @@ async def transcode_to_aac(pcm_iterator: AsyncGenerator[bytes, None], sample_rat
     try:
         # 持续读取直到 stderr 提示结束或 stdout 关闭
         while True:
-            # 每次读取 4KB
+            # 每次读取 4KB (AAC frame size usually smaller, but buffer safe)
             chunk = await loop.run_in_executor(None, process.stdout.read, 4096)
             if not chunk:
                 break
@@ -213,6 +229,7 @@ async def synthesize_speech(request: TTSRequest):
                  raise Exception("Reference audio lookup failed")
 
             # ⚡ 关键改动: 请求 RAW (PCM) 格式，避免 Server 端 FFmpeg 低效
+            # ⭐ 优化: 添加 text_split_method='cut5' (按标点切分) 加速首字生成
             params = {
                 "text": clean_text,
                 "text_lang": text_lang,
@@ -220,36 +237,54 @@ async def synthesize_speech(request: TTSRequest):
                 "prompt_text": ref_text,
                 "prompt_lang": ref_lang,
                 "media_type": "raw", # 请求 PCM Raw Data
-                "streaming_mode": "true"
+                "streaming_mode": "true",
+                "text_split_method": "cut5", # 优化: 标点符号切分
+                "batch_size": 1,             # 优化: 强制 batch_size=1
+                "parallel_infer": True       # 优化: 尝试开启并行推理
             }
             
             target_url = f"{gpt_sovits_engine.api_url}/tts"
 
             async def raw_stream_generator():
-                async with httpx.AsyncClient() as client:
-                    start_time = time.time()
-                    logger.info(f"[TTS] Upstream Request: {target_url} (RAW)")
-                    
-                    try:
-                        async with client.stream("GET", target_url, params=params, timeout=60.0) as response:
-                            if response.status_code != 200:
-                                error_text = await response.aread()
-                                logger.error(f"GPT-SoVITS API Error: {response.status_code} {error_text}")
-                                return
+                # 复用全局 http_client
+                client = http_client
+                if not client:
+                    logger.warning("[TTS] Global HTTP client not available, ensuring fallback??")
+                    # Should not facilitate fallback here, startup should guarantee it.
+                    # Creating temporary for safety if logic fails but ideally shouldn't happen.
+                    async with httpx.AsyncClient() as temp_client:
+                         async for chunk in stream_request(temp_client, target_url, params):
+                             yield chunk
+                    return
+
+                async for chunk in stream_request(client, target_url, params):
+                    yield chunk
+
+            async def stream_request(client, url, params):
+                start_time = time.time()
+                logger.info(f"[TTS] Upstream Request: {url} (RAW) | Split: cut5")
+                
+                try:
+                    # 使用 client.stream 保持连接复用
+                    async with client.stream("GET", url, params=params, timeout=60.0) as response:
+                        if response.status_code != 200:
+                            error_text = await response.aread()
+                            logger.error(f"GPT-SoVITS API Error: {response.status_code} {error_text}")
+                            return
+                        
+                        first_byte_time = 0
+                        chunk_count = 0
+                        
+                        async for chunk in response.aiter_bytes(chunk_size=4096):
+                            cur_time = time.time()
+                            if chunk_count == 0:
+                                first_byte_time = cur_time
+                                logger.info(f"[TTS-RAW] 🟢 First Byte: {first_byte_time - start_time:.4f}s")
+                            yield chunk
+                            chunk_count += 1
                             
-                            first_byte_time = 0
-                            chunk_count = 0
-                            
-                            async for chunk in response.aiter_bytes(chunk_size=4096):
-                                cur_time = time.time()
-                                if chunk_count == 0:
-                                    first_byte_time = cur_time
-                                    logger.info(f"[TTS-RAW] 🟢 First Byte: {first_byte_time - start_time:.4f}s")
-                                yield chunk
-                                chunk_count += 1
-                                
-                    except Exception as e:
-                        logger.error(f"[TTS] Upstream connection failed: {e}")
+                except Exception as e:
+                    logger.error(f"[TTS] Upstream connection failed: {e}")
             
             # 使用本地 FFmpeg 转码为 AAC
             # 注意: GPT-SoVITS v2 默认采样率可能是 32000，需确认
