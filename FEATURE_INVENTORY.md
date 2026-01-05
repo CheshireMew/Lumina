@@ -19,7 +19,10 @@
 - **Status**: ✅ Operational
 - **Components**:
   - `stt_server.py`: Speech-to-Text (FunASR/SenseVoice).
-  - `tts_server.py`: Text-to-Speech (CosyVoice).
+  - `tts_server.py`: Text-to-Speech (CosyVoice & GPT-SoVITS).
+    - **Optimization**: Implemented "Raw Stream Pipe" architecture. Requests PCM Stream from GPT-SoVITS and transcodes to AAC via local FFmpeg pipe for zero-latency MSE compatibility.
+    - **Performance**: Added TTFB (Time To First Byte) & Chunk monitoring logs.
+    - **Emotion Control**: Edge TTS 不支持情感样式（代码中 SSML 逻辑为接口预留）；GPT-SoVITS 通过参考音频（`assets/emotion_audio/`）实现情感克隆。
   - `tts_service.ts` & `audio_queue.ts`: Frontend TTS Streaming Layer (Added dynamic chunk buffering and low-latency playback).
 
 ## 🎨 Live2D / Character System
@@ -43,3 +46,8 @@
 ## 📝 Documentation
 - `MEM0_ANALYSIS.md`: Detailed analysis of `mem0` library and persistence issues.
 - `MEMORY_RESEARCH_REPORT.md`: In-depth research on 4 similar projects (Lunasia, Live2D, NagaAgent, MoeChat) comparing their memory architectures.
+
+- **Voice Input**: Updated microphone icon to circular design with visual states (Ready/Listening/Thinking).
+- **UI Design**: Applied flat layered design to Voice Input icon (Outer Ring + Inner Circle).
+- **UI Design**: Simplified Voice Input icon to pure Glyph style (No background ring/circle).
+- **UI Design**: Added Frosted Glass effect background to Voice Input icon.
