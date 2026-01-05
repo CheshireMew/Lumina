@@ -5,3 +5,4 @@ faster-whisper>=1.0.0
 webrtcvad>=2.0.10
 numpy>=1.26.0
 edge-tts>=6.1.0
+sounddevice>=0.5.0

@@ -10,6 +10,7 @@ from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from sentence_transformers import SentenceTransformer
+from huggingface_hub import snapshot_download
 from queue import Queue
 from threading import Thread
 
@@ -56,18 +57,53 @@ class LiteMemory:
         
         print(f"[LiteMemory] === Dual-Layer Memory Architecture ===")
         print(f"[LiteMemory] Character: {character_id}")
-        print(f"[LiteMemory] User Collection: {self.user_collection_name} (shared)")
-        print(f"[LiteMemory] Character Collection: {self.character_collection_name} (isolated)")
-        print(f"[LiteMemory] User Backup: {self.user_backup_file}")
-        print(f"[LiteMemory] Character Backup: {self.character_backup_file}")
         
         # 1. Initialize Qdrant (Local persistent)
         self.client = QdrantClient(path=config.get("qdrant_path", "./lite_memory_db"))
         
-        # 2. Initialize Embedder (Local)
-        embedder_path = config.get("embedder_model")
-        print(f"[LiteMemory] Loading embedder: {embedder_path} ...")
-        self.encoder = SentenceTransformer(embedder_path)
+        # 2. Initialize Embedder (Local with Auto-Download)
+        embedder_path_name = config.get("embedder_model")
+        
+        # Resolve Repo ID for download (snapshot_download needs full ID, but config might be short alias)
+        repo_id = embedder_path_name
+        if repo_id == "paraphrase-multilingual-MiniLM-L12-v2":
+            repo_id = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        elif "/" not in repo_id:
+             # Heuristic: If complex enough model, default to sentence-transformers? 
+             # Or just hope user provides full ID for others.
+             # For now, we only explicit fix the default.
+             pass
+
+        # Local folder name: Use the basename (e.g. "paraphrase-multilingual-MiniLM-L12-v2")
+        # cleanly handled in models/ directory without organization prefix
+        model_folder_name = repo_id.split("/")[-1]
+
+        # Determine base path of this script
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        # Go up one level to project root, then into 'models'
+        local_embedder_path = os.path.abspath(os.path.join(base_dir, "..", "models", model_folder_name))
+        
+        print(f"[LiteMemory] Local model path target: {local_embedder_path}")
+
+        if os.path.exists(local_embedder_path) and os.listdir(local_embedder_path):
+             print(f"[LiteMemory] ✅ Found existing local embedder model.")
+        else:
+             print(f"[LiteMemory] ⬇️ Local embedder not found. Downloading to {local_embedder_path}...")
+             try:
+                 snapshot_download(repo_id=repo_id, local_dir=local_embedder_path)
+                 print(f"[LiteMemory] Download complete.")
+             except Exception as e:
+                 print(f"[LiteMemory] ⚠️ Download failed: {e}. Attempting fallback load from cache/hub...")
+                 pass
+
+        # If download succeeded or files existed, use local path. Otherwise fallback to ID
+        if os.path.exists(local_embedder_path) and os.listdir(local_embedder_path):
+            target_path = local_embedder_path
+        else:
+            target_path = embedder_path_name
+
+        print(f"[LiteMemory] Loading embedder from: {target_path} ...")
+        self.encoder = SentenceTransformer(target_path)
         self.embedding_size = self.encoder.get_sentence_embedding_dimension()
         print(f"[LiteMemory] Embedder loaded. Dim: {self.embedding_size}")
         
