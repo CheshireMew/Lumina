@@ -136,6 +136,23 @@ export class AudioQueue {
      */
     private playMSE(stream: ReadableStream<Uint8Array>, contentType: string): Promise<void> {
         return new Promise((resolve, reject) => {
+            // ⚡ 关键修复：创建新 MediaSource 前，清理旧的
+            if (this.mediaSource) {
+                try {
+                    if (this.mediaSource.readyState === 'open') {
+                        this.mediaSource.endOfStream();
+                    }
+                } catch (e) {
+                    console.warn('[AudioQueue] Failed to cleanup old MediaSource:', e);
+                }
+            }
+            if (this.currentAudio) {
+                this.currentAudio.pause();
+                if (this.currentAudio.src) {
+                    URL.revokeObjectURL(this.currentAudio.src);
+                }
+            }
+
             const mediaSource = new MediaSource();
             const audio = new Audio();
             audio.src = URL.createObjectURL(mediaSource);
@@ -174,17 +191,26 @@ export class AudioQueue {
                     const queue: Uint8Array[] = [];
                     let isUpdating = false;
 
-                    const processQueue = () => {
-                        if (queue.length > 0 && !sourceBuffer.updating) {
+                    const processQueue = async () => {
+                        while (queue.length > 0 && !sourceBuffer.updating) {
+                            // 检查 sourceBuffer 是否仍然有效
+                            if (!mediaSource.sourceBuffers || !mediaSource.sourceBuffers.length) {
+                                console.warn('[AudioQueue] SourceBuffer removed, stopping queue processing');
+                                return;
+                            }
+
+                            const chunk = queue.shift()!;
                             try {
-                                const chunk = queue.shift()!;
                                 sourceBuffer.appendBuffer(chunk as BufferSource);
                             } catch (e) {
                                 console.error('[AudioQueue] SourceBuffer append error:', e);
+                                // 如果 append 失败，清空队列避免累积
+                                // Note: This clears the local `queue` for the current stream, not `this.queue`.
+                                queue.length = 0; // Clear the local queue
+                                return;
                             }
                         }
                     };
-
                     sourceBuffer.addEventListener('updateend', () => {
                         processQueue();
                         if (queue.length === 0 && isUpdating === false && mediaSource.readyState === 'open') {
@@ -232,15 +258,29 @@ export class AudioQueue {
         if (this.currentAudio) {
             this.currentAudio.pause();
             this.currentAudio.currentTime = 0;
+
+            // ⚡ 关键修复：撤销 ObjectURL
+            if (this.currentAudio.src) {
+                URL.revokeObjectURL(this.currentAudio.src);
+            }
             this.currentAudio = null;
         }
 
-        if (this.mediaSource && this.mediaSource.readyState === 'open') {
+        // ⚡ 关键修复：正确关闭 MediaSource 并移除 SourceBuffer
+        if (this.mediaSource) {
             try {
-                // this.mediaSource.endOfStream(); 
-            } catch (e) { }
+                if (this.mediaSource.readyState === 'open') {
+                    // 移除所有 SourceBuffer
+                    while (this.mediaSource.sourceBuffers.length > 0) {
+                        this.mediaSource.removeSourceBuffer(this.mediaSource.sourceBuffers[0]);
+                    }
+                    this.mediaSource.endOfStream();
+                }
+            } catch (e) {
+                console.warn('[AudioQueue] Failed to cleanup MediaSource:', e);
+            }
+            this.mediaSource = null;
         }
-        this.mediaSource = null;
 
         this.isPlaying = false;
     }

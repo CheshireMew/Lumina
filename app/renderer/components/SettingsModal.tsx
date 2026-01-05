@@ -50,6 +50,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [audioDevices, setAudioDevices] = useState<{ index: number, name: string, channels: number }[]>([]);
     const [currentAudioDevice, setCurrentAudioDevice] = useState<string | null>(null);
 
+    // Voiceprint Settings
+    const [voiceprintEnabled, setVoiceprintEnabled] = useState(false);
+    const [voiceprintThreshold, setVoiceprintThreshold] = useState(0.6);
+    const [voiceprintProfile, setVoiceprintProfile] = useState('default');
+    const [voiceprintStatus, setVoiceprintStatus] = useState<string>('');
+
     // Character Settings
     const [characters, setCharacters] = useState<CharacterProfile[]>([]);
     const [activeCharacterId, setActiveCharacterId] = useState<string>('');
@@ -78,10 +84,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 if (loadedChars) setCharacters(loadedChars);
                 if (loadedActiveId) setActiveCharacterId(loadedActiveId);
 
-                // Whisper & TTS Voices & Audio Devices
+                // Whisper & TTS Voices & Audio Devices & Voiceprint
                 fetchModels();
                 fetchTTSVoices();
                 fetchAudioDevices();
+                fetchVoiceprintConfig();
             };
             loadSettings();
         }
@@ -151,6 +158,62 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
+    // Voiceprint Functions
+    const fetchVoiceprintConfig = async () => {
+        try {
+            const res = await fetch(`${sttServerUrl}/voiceprint/status`);
+            if (res.ok) {
+                const data = await res.json();
+                setVoiceprintEnabled(data.enabled || false);
+                setVoiceprintThreshold(data.threshold || 0.6);
+                setVoiceprintProfile(data.profile || 'default');
+                setVoiceprintStatus(data.profile_loaded ? '✓ 已加载声纹' : '⚠️ 未注册声纹');
+            }
+        } catch (e) {
+            console.warn('Failed to fetch voiceprint config', e);
+        }
+    };
+
+    const handleVoiceprintToggle = async (enabled: boolean) => {
+        try {
+            const res = await fetch(`${sttServerUrl}/audio/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_name: currentAudioDevice,
+                    enable_voiceprint_filter: enabled,
+                    voiceprint_threshold: voiceprintThreshold,
+                    voiceprint_profile: voiceprintProfile
+                })
+            });
+            if (res.ok) {
+                setVoiceprintEnabled(enabled);
+                alert(`声纹验证已${enabled ? '启用' : '禁用'}\n请重启 stt_server.py 使配置生效`);
+            }
+        } catch (e) {
+            console.error('Failed to toggle voiceprint', e);
+            alert('无法连接到STT服务器');
+        }
+    };
+
+    const handleVoiceprintThresholdChange = async (threshold: number) => {
+        setVoiceprintThreshold(threshold);
+        try {
+            await fetch(`${sttServerUrl}/audio/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_name: currentAudioDevice,
+                    enable_voiceprint_filter: voiceprintEnabled,
+                    voiceprint_threshold: threshold,
+                    voiceprint_profile: voiceprintProfile
+                })
+            });
+        } catch (e) {
+            console.warn('Failed to update threshold', e);
+        }
+    };
+
     // Poll status for Whisper models
     useEffect(() => {
         let interval: NodeJS.Timeout;
@@ -198,6 +261,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         await settings.set('characters', characters);
         await settings.set('activeCharacterId', activeCharacterId);
         await settings.set('live2d_high_dpi', highDpiEnabled);
+
+        // 保存声纹配置并应用到后端
+        if (voiceprintEnabled || voiceprintThreshold !== 0.6 || voiceprintProfile !== 'default') {
+            try {
+                await fetch(`${sttServerUrl}/audio/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device_name: currentAudioDevice,
+                        enable_voiceprint_filter: voiceprintEnabled,
+                        voiceprint_threshold: voiceprintThreshold,
+                        voiceprint_profile: voiceprintProfile
+                    })
+                });
+
+                if (voiceprintEnabled) {
+                    alert('声纹配置已保存！\n请重启 stt_server.py 使配置生效。');
+                }
+            } catch (e) {
+                console.error('Failed to save voiceprint config', e);
+            }
+        }
 
         if (onContextWindowChange) onContextWindowChange(contextWindow);
         if (onLLMSettingsChange) onLLMSettingsChange(apiKey, apiBaseUrl, modelName);
@@ -426,6 +511,80 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         )) : <option>Connecting...</option>}
                                     </select>
                                     {loadingStatus === 'loading' && <div style={{ fontSize: '12px', color: '#2563eb', marginTop: '5px' }}>Loading/Downloading model...</div>}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>声纹过滤 (Voiceprint Filter)</h3>
+                                <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                    {/* Enable Toggle */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={voiceprintEnabled}
+                                            onChange={(e) => handleVoiceprintToggle(e.target.checked)}
+                                            style={{ height: '16px', width: '16px', cursor: 'pointer' }}
+                                        />
+                                        <div>
+                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>启用声纹验证</div>
+                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>只接受你的声音，过滤环境噪声和他人语音</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Threshold Slider */}
+                                    <div style={{ marginBottom: '15px' }}>
+                                        <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '6px' }}>
+                                            相似度阈值: <strong style={{ color: '#1f2937' }}>{voiceprintThreshold.toFixed(2)}</strong>
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="0.5"
+                                            max="0.8"
+                                            step="0.05"
+                                            value={voiceprintThreshold}
+                                            onChange={(e) => handleVoiceprintThresholdChange(Number(e.target.value))}
+                                            disabled={!voiceprintEnabled}
+                                            style={{ width: '100%', accentColor: '#4f46e5' }}
+                                        />
+                                        <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                                            低阈值=容易通过 | 高阈值=严格过滤
+                                        </div>
+                                    </div>
+
+                                    {/* Profile Name */}
+                                    <div style={{ marginBottom: '15px' }}>
+                                        <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Profile 名称</label>
+                                        <input
+                                            type="text"
+                                            value={voiceprintProfile}
+                                            onChange={(e) => setVoiceprintProfile(e.target.value)}
+                                            style={inputStyle}
+                                            placeholder="default"
+                                        />
+                                    </div>
+
+                                    {/* Status */}
+                                    {voiceprintStatus && (
+                                        <div style={{
+                                            fontSize: '12px',
+                                            padding: '8px',
+                                            borderRadius: '6px',
+                                            backgroundColor: voiceprintStatus.includes('✓') ? '#d1fae5' : '#fef3c7',
+                                            color: voiceprintStatus.includes('✓') ? '#065f46' : '#92400e',
+                                            textAlign: 'center',
+                                            marginBottom: '10px'
+                                        }}>
+                                            {voiceprintStatus}
+                                        </div>
+                                    )}
+
+                                    <div style={{ fontSize: '11px', color: '#9ca3af', lineHeight: '1.4' }}>
+                                        💡 <strong>使用提示：</strong><br />
+                                        1. 运行 <code>python python_backend/register_voiceprint.py</code><br />
+                                        2. 启用声纹验证开关<br />
+                                        3. 调整阈值以达到最佳效果<br />
+                                        4. 重启 stt_server.py 使配置生效
+                                    </div>
                                 </div>
                             </div>
                         </div>
