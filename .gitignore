@@ -93,20 +93,7 @@ test/
 lite_memory_db/
 memory_backups/
 
+
 # Local TTS Models
 GPT-SoVITS/
 models/
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-# Testing & Debug files
-test_*.py
-test_*.mp3
-verify_*.py
-debug_gpt_internal.py
-audio_manager.py
