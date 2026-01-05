@@ -15,7 +15,9 @@ interface SettingsModalProps {
 
 interface WhisperModelInfo {
     name: string;
-    size: string;
+    desc?: string; // Updated from 'size'
+    size?: string;
+    engine?: string; // Newly added
     download_status: 'idle' | 'downloading' | 'completed' | 'failed';
 }
 
@@ -176,14 +178,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
     const handleVoiceprintToggle = async (enabled: boolean) => {
         try {
+            // Always use current state values, never hardcoded defaults
             const res = await fetch(`${sttServerUrl}/audio/config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     device_name: currentAudioDevice,
                     enable_voiceprint_filter: enabled,
-                    voiceprint_threshold: voiceprintThreshold,
-                    voiceprint_profile: voiceprintProfile
+                    voiceprint_threshold: voiceprintThreshold, // Use current state
+                    voiceprint_profile: voiceprintProfile // Use current state (NOT "default"!)
                 })
             });
             if (res.ok) {
@@ -206,7 +209,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     device_name: currentAudioDevice,
                     enable_voiceprint_filter: voiceprintEnabled,
                     voiceprint_threshold: threshold,
-                    voiceprint_profile: voiceprintProfile
+                    voiceprint_profile: voiceprintProfile // Preserve profile from state!
                 })
             });
         } catch (e) {
@@ -214,14 +217,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
-    // Poll status for Whisper models
+    // Poll status for STT models
     useEffect(() => {
         let interval: NodeJS.Timeout;
         if (isOpen && activeTab === 'voice') {
+            fetchModels(); // Fetch immediately
             interval = setInterval(fetchModels, 2000);
         }
         return () => clearInterval(interval);
     }, [isOpen, activeTab]);
+
+    const [sttEngineType, setSttEngineType] = useState<string>('faster_whisper');
 
     const fetchModels = async () => {
         try {
@@ -230,14 +236,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 const data = await res.json();
                 setWhisperModels(data.models);
                 setCurrentWhisperModel(data.current_model);
+                setSttEngineType(data.engine_type || 'faster_whisper');
                 setLoadingStatus(data.loading_status);
             }
         } catch (err) {
-            console.error("Failed to fetch Whisper models", err);
+            console.error("Failed to fetch STT models", err);
         }
     };
 
-    const handleWhisperModelChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleSttModelChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+        // This handles both Engine switching (to sense-voice) and Model switching (within Whisper)
         const newModel = e.target.value;
         try {
             await fetch(`${sttServerUrl}/models/switch`, {
@@ -245,9 +253,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ model_name: newModel })
             });
+            setLoadingStatus('loading'); // Optimistic update
             fetchModels();
         } catch (err) {
-            alert("Failed to connect to STT server");
+            alert("Failed to confirm model switch");
         }
     };
 
@@ -495,22 +504,67 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <div>
                                 <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>Voice Recognition (STT)</h3>
                                 <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Whisper Model</label>
-                                    <select
-                                        value={currentWhisperModel}
-                                        onChange={handleWhisperModelChange}
-                                        disabled={loadingStatus === 'loading'}
-                                        style={inputStyle}
-                                    >
-                                        {whisperModels.length > 0 ? whisperModels.map(m => (
-                                            <option key={m.name} value={m.name}>
-                                                {m.name.toUpperCase()} ({m.size})
-                                                {m.download_status === 'downloading' ? ' [Downloading...]' : ''}
-                                                {m.download_status === 'completed' || (m.download_status === 'idle' && m.name === currentWhisperModel) ? ' [Ready]' : ''}
-                                            </option>
-                                        )) : <option>Connecting...</option>}
-                                    </select>
-                                    {loadingStatus === 'loading' && <div style={{ fontSize: '12px', color: '#2563eb', marginTop: '5px' }}>Loading/Downloading model...</div>}
+                                    {/* Dropdown 1: STT Engine Selection */}
+                                    <div style={{ marginBottom: '10px' }}>
+                                        <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>STT Engine (方案)</label>
+                                        <select
+                                            value={sttEngineType}
+                                            onChange={(e) => {
+                                                const newEngine = e.target.value;
+                                                setSttEngineType(newEngine);
+                                                // Auto-switch logic
+                                                if (newEngine === 'sense_voice') {
+                                                    handleSttModelChange({ target: { value: 'sense-voice' } } as any);
+                                                } else if (newEngine === 'paraformer_zh') {
+                                                    handleSttModelChange({ target: { value: 'paraformer-zh' } } as any);
+                                                } else if (newEngine === 'paraformer_en') {
+                                                    handleSttModelChange({ target: { value: 'paraformer-en' } } as any);
+                                                } else {
+                                                    handleSttModelChange({ target: { value: 'base' } } as any);
+                                                }
+                                            }}
+                                            style={inputStyle}
+                                        >
+                                            <option value="sense_voice">SenseVoice (推荐 - 多语言/情感)</option>
+                                            <option value="paraformer_zh">Paraformer (中文专用/会议级)</option>
+                                            <option value="paraformer_en">Paraformer (English Only)</option>
+                                            <option value="faster_whisper">Faster-Whisper (通用 - 可选大小)</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Dropdown 2: Model Selection (Dynamic based on Engine) */}
+                                    <div style={{ marginBottom: '5px' }}>
+                                        <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Model (模型)</label>
+                                        <select
+                                            value={currentWhisperModel}
+                                            onChange={handleSttModelChange}
+                                            disabled={loadingStatus === 'loading'}
+                                            style={inputStyle}
+                                        >
+                                            {/* Show models relevant to the selected engine */}
+                                            {whisperModels.filter(m => {
+                                                if (sttEngineType === 'faster_whisper') return m.engine === 'faster_whisper';
+                                                if (sttEngineType === 'sense_voice') return m.name === 'sense-voice';
+                                                if (sttEngineType === 'paraformer_zh') return m.name === 'paraformer-zh';
+                                                if (sttEngineType === 'paraformer_en') return m.name === 'paraformer-en';
+                                                return false;
+                                            }).map(m => (
+                                                <option key={m.name} value={m.name}>
+                                                    {m.name} ({m.desc})
+                                                    {m.download_status === 'downloading' ? ' [Downloading...]' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {loadingStatus === 'loading' && <div style={{ 
+                                        fontSize: '12px', color: '#2563eb', marginTop: '8px', 
+                                        backgroundColor: '#eff6ff', padding: '8px', borderRadius: '6px',
+                                        display: 'flex', alignItems: 'center', gap: '6px'
+                                    }}>
+                                        <span className="spinner">⏳</span> 
+                                        <span>正在切换/下载模型，请留意控制台日志...</span>
+                                    </div>}
                                 </div>
                             </div>
 
@@ -538,8 +592,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         </label>
                                         <input
                                             type="range"
-                                            min="0.5"
-                                            max="0.8"
+                                            min="0.1"
+                                            max="0.9"
                                             step="0.05"
                                             value={voiceprintThreshold}
                                             onChange={(e) => handleVoiceprintThresholdChange(Number(e.target.value))}

@@ -135,7 +135,7 @@ Your goal is to clean, merge, and resolve conflicts in the provided chronologica
 
 **OUTPUT FORMAT**:
 JSON List of strings.
-Example: ["{user_name} likes Summer", "{user_name} loves coding"]
+Example: ["{user_name} likes Summer", "鲁迅原名周树人", "徐悲鸿是中国人"]
 """
         try:
             payload = {

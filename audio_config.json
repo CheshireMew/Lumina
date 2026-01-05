@@ -1,6 +1,6 @@
 {
   "device_name": "麦克风阵列 (Realtek(R) Audio)",
   "enable_voiceprint_filter": true,
-  "voiceprint_threshold": 0.5,
+  "voiceprint_threshold": 0.4,
   "voiceprint_profile": "Cheshire"
 }

@@ -3,6 +3,7 @@ import requests
 import logging
 import json
 from typing import Optional
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -61,13 +62,26 @@ class GPTSoVITSEngine:
             logger.error(f"Failed to list GPT-SoVITS voices: {e}")
         return voices
 
+
+
+    @lru_cache(maxsize=128)
     def detect_language(self, text: str) -> str:
-        """简单语言检测: 包含中文字符视为中文(zh)，否则视为英文(en)"""
+        """多语言检测: 日语(ja) -> 中文(zh) -> 英文(en)"""
+        # 1. 检测日文假名 (平假名 \u3040-\u309f, 片假名 \u30a0-\u30ff)
+        for char in text:
+            if "\u3040" <= char <= "\u30ff":
+                return "ja"
+        
+        # 2. 检测中文字符 (CJK Unified Ideographs)
+        # 注意：日语汉字也会落入此范围，所以必须先检测假名
         for char in text:
             if "\u4e00" <= char <= "\u9fff":
                 return "zh"
+                
+        # 3. 默认英文
         return "en"
 
+    @lru_cache(maxsize=32)
     def get_ref_audio(self, voice: str, emotion: str) -> tuple[str, str, str]:
         """
         根据音色和情感获取参考音频

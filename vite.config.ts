@@ -3,6 +3,9 @@ import path from 'node:path'
 import electron from 'vite-plugin-electron/simple'
 import react from '@vitejs/plugin-react'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -13,6 +16,25 @@ export default defineConfig({
             main: {
                 // Shortcut of `build.lib.entry`.
                 entry: 'app/main/main.ts',
+                vite: {
+                    build: {
+                        // Use esbuild instead of rollup for MUCH faster builds (10-100x speedup)
+                        minify: false, // Disable minification in dev
+                        sourcemap: false, // Disable sourcemaps in dev for speed
+                        rollupOptions: {
+                            // Strategy: Externalize EVERYTHING except packages that MUST be bundled
+                            // This gives us the fastest possible builds
+                            external: Object.keys(require('./package.json').dependencies).filter(dep => {
+                                // ONLY bundle these packages (ESM-only or have special requirements)
+                                const mustBundle = [
+                                    'electron-store',        // ESM-only
+                                ];
+                                // Externalize everything else (including LangChain, axios, etc.)
+                                return !mustBundle.includes(dep);
+                            }), 
+                        },
+                    },
+                },
             },
             preload: {
                 // Shortcut of `build.rollupOptions.input`.
@@ -26,6 +48,18 @@ export default defineConfig({
     ],
     optimizeDeps: {
         entries: ['index.html', 'app/**/*.{ts,tsx}'],
+        // Explicitly include heavy packages that should be pre-bundled
+        include: [
+            'react',
+            'react-dom',
+            '@langchain/core',
+            '@langchain/openai',
+            'axios',
+        ],
+        // Exclude packages that don't work well with pre-bundling
+        exclude: [
+            'electron',
+        ],
     },
     resolve: {
         alias: {
