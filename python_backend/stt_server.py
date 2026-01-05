@@ -28,6 +28,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Back
 from pydantic import BaseModel
 from faster_whisper import WhisperModel, download_model
 from audio_manager import AudioManager
+from voiceprint_manager import VoiceprintManager  # 新增：声纹识别
 import queue
 
 # 配置日志
@@ -208,6 +209,35 @@ async def startup_event():
     # 加载 Whisper 模型（在新线程中加载，避免阻塞启动）
     threading.Thread(target=model_manager.load_model, args=(model_manager.current_model_name,)).start()
     
+    # 读取音频配置
+    config_path = Path("audio_config.json")
+    config = {}
+    if config_path.exists():
+        with open(config_path, encoding='utf-8-sig') as f:
+            config = json.load(f)
+    
+    enable_voiceprint = config.get("enable_voiceprint_filter", False)
+    voiceprint_threshold = config.get("voiceprint_threshold", 0.6)
+    voiceprint_profile = config.get("voiceprint_profile", "default")
+    
+    # 初始化声纹管理器
+    voiceprint_mgr = None
+    if enable_voiceprint:
+        try:
+            voiceprint_mgr = VoiceprintManager()
+            if voiceprint_mgr.load_voiceprint(voiceprint_profile):
+                logger.info(f"✓ 声纹验证已启用，Profile: {voiceprint_profile}")
+            else:
+                logger.warning(f"⚠️ 声纹Profile未找到: {voiceprint_profile}，声纹验证将被禁用")
+                voiceprint_mgr = None
+                enable_voiceprint = False
+        except Exception as e:
+            logger.error(f"声纹管理器初始化失败: {e}，声纹验证将被禁用")
+            voiceprint_mgr = None
+            enable_voiceprint = False
+    else:
+        logger.info("声纹验证未启用")
+    
     # 初始化 AudioManager - 使用消息队列进行线程间通信
     def on_speech_start():
         """语音开始回调"""
@@ -271,12 +301,19 @@ async def startup_event():
     
     def on_vad_status_change(status: str):
         """VAD状态变化回调"""
-        logger.debug(f"[AudioManager] VAD status: {status}")
+        # logger.debug(f"[AudioManager] VAD status: {status}")
+        # 将状态推送到队列（如 listening 或 idle）
+        message_queue.put({"type": "vad_status", "status": status})
     
     audio_manager = AudioManager(
         on_speech_start=on_speech_start,
         on_speech_end=on_speech_end,
-        on_vad_status_change=on_vad_status_change
+        on_vad_status_change=on_vad_status_change,
+        voiceprint_manager=voiceprint_mgr,
+        enable_voiceprint=enable_voiceprint,
+        voiceprint_threshold=voiceprint_threshold,
+        # 动态调整VAD灵敏度: 开启声纹时更灵敏(1), 关闭时更严格(3)
+        aggressiveness=1 if enable_voiceprint else 3
     )
     
     # 启动音频捕获
@@ -318,6 +355,73 @@ async def list_audio_devices():
     return {
         "devices": devices,
         "current": current_name
+    }
+
+# API Request Models
+class AudioConfigRequest(BaseModel):
+    device_name: Optional[str] = None
+    # 声纹配置参数
+    enable_voiceprint_filter: Optional[bool] = None
+    voiceprint_threshold: Optional[float] = None
+    voiceprint_profile: Optional[str] = None
+
+@app.post("/audio/config")
+async def update_audio_config(request: AudioConfigRequest):
+    """更新音频配置（设备、声纹验证等）"""
+    global audio_manager
+    
+    config_path = Path("audio_config.json")
+    config = {}
+    if config_path.exists():
+        with open(config_path, encoding='utf-8-sig') as f:
+            config = json.load(f)
+    
+    # 更新配置
+    if request.device_name is not None:
+        config["device_name"] = request.device_name
+    if request.enable_voiceprint_filter is not None:
+        config["enable_voiceprint_filter"] = request.enable_voiceprint_filter
+    if request.voiceprint_threshold is not None:
+        config["voiceprint_threshold"] = request.voiceprint_threshold
+    if request.voiceprint_profile is not None:
+        config["voiceprint_profile"] = request.voiceprint_profile
+    
+    # 保存配置
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+    
+    # 如果修改了设备，更新AudioManager
+    if request.device_name and audio_manager:
+        audio_manager.set_device_by_name(request.device_name)
+    
+    # 声纹配置需要重启stt_server才能生效
+    if request.enable_voiceprint_filter is not None or request.voiceprint_threshold is not None:
+        logger.warning("⚠️ 声纹配置已更新，请重启 stt_server.py 使配置生效")
+    
+    return {"status": "ok", "config": config}
+
+@app.get("/voiceprint/status")
+async def get_voiceprint_status():
+    """获取声纹配置状态"""
+    config_path = Path("audio_config.json")
+    config = {}
+    if config_path.exists():
+        with open(config_path, encoding='utf-8-sig') as f:
+            config = json.load(f)
+    
+    enabled = config.get("enable_voiceprint_filter", False)
+    threshold = config.get("voiceprint_threshold", 0.6)
+    profile = config.get("voiceprint_profile", "default")
+    
+    # 检查profile是否存在
+    profile_path = Path(f"voiceprint_profiles/{profile}.npy")
+    profile_loaded = profile_path.exists()
+    
+    return {
+        "enabled": enabled,
+        "threshold": threshold,
+        "profile": profile,
+        "profile_loaded": profile_loaded
     }
 
 class AudioDeviceRequest(BaseModel):
