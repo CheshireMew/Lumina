@@ -8,14 +8,19 @@ export interface ITTSProvider {
      * 合成语音
      * @param text 要合成的文本
      * @param voice 音色ID（可选）
-     * @returns 音频数据 (ArrayBuffer)
+     * @returns 音频流及类型
      */
-    synthesize(text: string, voice?: string): Promise<ReadableStream<Uint8Array> | null>;
+    synthesize(text: string, voice?: string): Promise<AudioResponse | null>;
 
     /**
      * 获取可用音色列表
      */
     listVoices?(): Promise<VoiceInfo[]>;
+}
+
+export interface AudioResponse {
+    stream: ReadableStream<Uint8Array>;
+    contentType: string;
 }
 
 export interface VoiceInfo {

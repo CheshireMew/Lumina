@@ -1,5 +1,12 @@
+import { AudioResponse } from './types';
+
+interface QueueItem {
+    stream: ReadableStream<Uint8Array>;
+    contentType: string;
+}
+
 export class AudioQueue {
-    private queue: ReadableStream<Uint8Array>[] = [];
+    private queue: QueueItem[] = [];
     private isPlaying: boolean = false;
     private currentAudio: HTMLAudioElement | null = null;
     private mediaSource: MediaSource | null = null;
@@ -7,9 +14,9 @@ export class AudioQueue {
     /**
      * 添加音频流到队列
      */
-    enqueue(stream: ReadableStream<Uint8Array>) {
-        this.queue.push(stream);
-        console.log(`[AudioQueue] Enqueued stream, queue length: ${this.queue.length}`);
+    enqueue(item: QueueItem) {
+        this.queue.push(item);
+        console.log(`[AudioQueue] Enqueued stream (${item.contentType}), queue length: ${this.queue.length}`);
 
         if (!this.isPlaying) {
             this.playNext();
@@ -27,10 +34,10 @@ export class AudioQueue {
         }
 
         this.isPlaying = true;
-        const stream = this.queue.shift()!;
+        const item = this.queue.shift()!;
 
         try {
-            await this.playStream(stream);
+            await this.playStream(item);
         } catch (error) {
             console.error('[AudioQueue] Playback error:', error);
         }
@@ -40,9 +47,94 @@ export class AudioQueue {
     }
 
     /**
+     * 播放流 (WAV uses Blob, others use MSE)
+     */
+    private playStream(item: QueueItem): Promise<void> {
+        const { stream, contentType } = item;
+
+        console.log(`[AudioQueue] playStream called for ${contentType}`, stream);
+
+        if (!stream) {
+            console.error('[AudioQueue] Stream is null');
+            return Promise.reject(new Error('Stream is null'));
+        }
+
+        if (typeof stream.getReader !== 'function') {
+            console.error('[AudioQueue] stream.getReader is not a function!', stream);
+            return Promise.reject(new Error('Stream does not have getReader method'));
+        }
+
+        // WAV does not support MSE, use Blob
+        if (contentType.includes('wav') || contentType.includes('x-wav') || contentType.includes('audio/wav')) {
+            return this.playBlob(stream, contentType);
+        }
+
+        // Try MSE for supported types (MP3, OGG, etc)
+        if (MediaSource.isTypeSupported(contentType)) {
+            return this.playMSE(stream, contentType);
+        }
+
+        // Specific checks for common types if generic check fails (e.g. missing codecs param)
+        // OGG often needs codecs="opus" or "vorbis" to be explicitly supported in some browsers
+        if (contentType.includes('ogg') && MediaSource.isTypeSupported('audio/ogg; codecs="opus"')) {
+            return this.playMSE(stream, 'audio/ogg; codecs="opus"');
+        }
+
+        console.warn(`[AudioQueue] MSE does not support ${contentType}, falling back to Blob.`);
+        return this.playBlob(stream, contentType);
+    }
+
+    /**
+     * 使用 Blob 播放 (非流式，需下载完)
+     */
+    private async playBlob(stream: ReadableStream<Uint8Array>, contentType: string): Promise<void> {
+        return new Promise(async (resolve, reject) => {
+            console.log(`[AudioQueue] Playing via Blob (Type: ${contentType})`);
+            const audio = new Audio();
+            this.currentAudio = audio;
+
+            const cleanup = () => {
+                if (audio.src) URL.revokeObjectURL(audio.src);
+                this.currentAudio = null;
+            };
+
+            audio.onended = () => {
+                console.log('[AudioQueue] Blob playback finished');
+                cleanup();
+                resolve();
+            };
+
+            audio.onerror = (e) => {
+                console.error('[AudioQueue] Audio error:', e);
+                cleanup();
+                reject(e);
+            };
+
+            try {
+                // Read stream to array buffer
+                const reader = stream.getReader();
+                const chunks: any[] = [];
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    if (value) chunks.push(value);
+                }
+
+                const blob = new Blob(chunks, { type: contentType });
+                audio.src = URL.createObjectURL(blob);
+                await audio.play();
+            } catch (err) {
+                console.error('[AudioQueue] Blob processing failed:', err);
+                cleanup();
+                reject(err);
+            }
+        });
+    }
+
+    /**
      * 使用 MediaSource 播放流
      */
-    private playStream(stream: ReadableStream<Uint8Array>): Promise<void> {
+    private playMSE(stream: ReadableStream<Uint8Array>, contentType: string): Promise<void> {
         return new Promise((resolve, reject) => {
             const mediaSource = new MediaSource();
             const audio = new Audio();
@@ -71,26 +163,21 @@ export class AudioQueue {
             };
 
             mediaSource.addEventListener('sourceopen', async () => {
-                console.log('[AudioQueue] MediaSource opened');
+                console.log(`[AudioQueue] MediaSource opened for ${contentType}`);
                 try {
-                    // Create SourceBuffer for MP3
-                    // Note: 'audio/mpeg' support varies, but is standard in modern browsers.
-                    // If fails, might need 'audio/mp3' or codec check.
-                    if (!MediaSource.isTypeSupported('audio/mpeg')) {
-                        throw new Error('Browser does not support audio/mpeg MediaSource');
+                    if (!MediaSource.isTypeSupported(contentType)) {
+                        throw new Error(`Browser does not support ${contentType} MediaSource`);
                     }
 
-                    const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+                    const sourceBuffer = mediaSource.addSourceBuffer(contentType);
                     const reader = stream.getReader();
                     const queue: Uint8Array[] = [];
                     let isUpdating = false;
 
-                    // Function to process the buffer queue with SourceBuffer
                     const processQueue = () => {
                         if (queue.length > 0 && !sourceBuffer.updating) {
                             try {
                                 const chunk = queue.shift()!;
-                                console.log(`[AudioQueue] Appending buffer of size: ${chunk.byteLength}`);
                                 sourceBuffer.appendBuffer(chunk as BufferSource);
                             } catch (e) {
                                 console.error('[AudioQueue] SourceBuffer append error:', e);
@@ -102,28 +189,18 @@ export class AudioQueue {
                         processQueue();
                         if (queue.length === 0 && isUpdating === false && mediaSource.readyState === 'open') {
                             try {
-                                console.log('[AudioQueue] End of stream signaled');
                                 mediaSource.endOfStream();
-                            } catch (e) {
-                                // Sometimes endOfStream fails if called too early or late, usually safe to ignore if playback is fine
-                                // console.warn('[AudioQueue] endOfStream warning', e);
-                            }
+                            } catch (e) { }
                         }
                     });
 
-                    // Start playing as soon as we have data?
-                    // Audio usually waits for enough buffer.
                     audio.play().catch(e => console.warn('[AudioQueue] Auto-play failed:', e));
 
-                    // Pump the stream
                     while (true) {
                         isUpdating = true;
                         const { done, value } = await reader.read();
                         if (done) {
-                            console.log('[AudioQueue] Stream reader done');
                             isUpdating = false;
-                            // If buffer is not updating, we can end. 
-                            // If it IS updating, 'updateend' will trigger endOfStream logic.
                             if (!sourceBuffer.updating && mediaSource.readyState === 'open') {
                                 mediaSource.endOfStream();
                             }
@@ -131,7 +208,6 @@ export class AudioQueue {
                         }
 
                         if (value) {
-                            console.log(`[AudioQueue] Received chunk of size: ${value.byteLength}`);
                             queue.push(value);
                             processQueue();
                         }
@@ -139,9 +215,6 @@ export class AudioQueue {
 
                 } catch (err) {
                     console.error('[AudioQueue] Stream processing error:', err);
-                    // Ensure we reject to move to next item
-                    // But if audio is playing, maybe wait? 
-                    // Usually err here means streaming failed.
                     cleanup();
                     reject(err);
                 }
@@ -162,10 +235,9 @@ export class AudioQueue {
             this.currentAudio = null;
         }
 
-        // Also cleanup MediaSource if active
         if (this.mediaSource && this.mediaSource.readyState === 'open') {
             try {
-                // this.mediaSource.endOfStream(); // Not needed if pausing audio
+                // this.mediaSource.endOfStream(); 
             } catch (e) { }
         }
         this.mediaSource = null;

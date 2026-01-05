@@ -1,36 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useMicVAD } from '@ricky0123/vad-react';
 
 interface VoiceInputProps {
     onSend: (message: string) => void;
     disabled?: boolean;
-    onSpeechStart?: () => void; // 用户开始说话时的回调（用于中断 TTS）
+    onSpeechStart?: () => void;
 }
 
-// 辅助函数：Float32Array -> Int16Array
-const floatTo16BitPCM = (input: Float32Array) => {
-    const output = new Int16Array(input.length);
-    for (let i = 0; i < input.length; i++) {
-        const s = Math.max(-1, Math.min(1, input[i]));
-        output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-    return output;
-};
-
 const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart }) => {
-    const [transcribing, setTranscribing] = useState(false);
+    const [vadStatus, setVadStatus] = useState<'idle' | 'listening' | 'thinking'>('idle');
     const [error, setError] = useState<string>('');
     const [transcript, setTranscript] = useState<string>('');
+    const [enabled, setEnabled] = useState<boolean>(true);
 
     const wsRef = useRef<WebSocket | null>(null);
     const onSendRef = useRef(onSend);
+    const onSpeechStartRef = useRef(onSpeechStart);
 
-    // Keep onSendRef current
     useEffect(() => {
         onSendRef.current = onSend;
-    }, [onSend]);
+        onSpeechStartRef.current = onSpeechStart;
+    }, [onSend, onSpeechStart]);
 
     useEffect(() => {
+        if (!enabled) return;
+
         let ws: WebSocket | null = null;
         const connectWS = async () => {
             try {
@@ -46,29 +39,32 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data);
 
-                    // 处理流式 STT 的部分结果
-                    if (data.type === 'partial') {
-                        // 实时显示部分转录结果
+                    if (data.type === 'vad_status') {
+                        console.log('[VAD Status]', data.status);
+                        setVadStatus(data.status);
+
+                        if (data.status === 'listening' && onSpeechStartRef.current) {
+                            onSpeechStartRef.current();
+                        }
+                    }
+                    else if (data.type === 'partial') {
                         console.log('[STT] Partial:', data.segment);
                         setTranscript(data.text);
-                        // 不设置 transcribing=false，继续等待最终结果
-
-                    } else if (data.type === 'transcript' || data.type === 'transcription') {
-                        // 兼容旧格式和新格式
+                    }
+                    else if (data.type === 'transcript' || data.type === 'transcription') {
                         console.log('[STT] Final:', data.text);
-                        setTranscribing(false);
 
                         if (data.text.trim()) {
                             setTranscript(data.text);
                             setTimeout(() => {
-                                // Use ref here
                                 onSendRef.current(data.text);
                                 setTranscript('');
                             }, 500);
                         }
-                    } else if (data.type === 'error') {
+                    }
+                    else if (data.type === 'error') {
                         setError(data.message);
-                        setTranscribing(false);
+                        setVadStatus('idle');
                     }
                 };
 
@@ -91,57 +87,30 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
         return () => {
             if (ws) ws.close();
         };
-    }, []); // Empty dependency array = connect once
-
-    const vad = useMicVAD({
-        startOnLoad: true,
-        positiveSpeechThreshold: 0.8,
-        // minSpeechFrames 已过时，移除或使用 minSpeechMs (如果不确定属性名，直接用默认值即可)
-        // 根据报错提示，可能是 minSpeechMs，但为了安全起见，我们先省略，使用默认值
-
-        workletURL: "/vad.worklet.bundle.min.js",
-        modelURL: "/silero_vad_v5.onnx",
-        ortConfig(ort: any) {
-            ort.env.wasm.wasmPaths = "/";
-            ort.env.wasm.numThreads = 1;
-            ort.env.wasm.proxy = false;
-        },
-        onSpeechStart: () => {
-            console.log('Speech started');
-            setTranscript('');
-            // 触发中断 TTS 的回调
-            if (onSpeechStart) {
-                onSpeechStart();
-            }
-        },
-        onSpeechEnd: (audio: Float32Array) => {
-            console.log('Speech ended, sending audio...', audio.length);
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                setTranscribing(true);
-                // 使用自定义转换函数
-                const pcm16 = floatTo16BitPCM(audio);
-                wsRef.current.send(pcm16.buffer);
-            }
-        },
-        onVADMismatch: () => {
-            console.warn('VAD Mismatch');
-        }
-    } as any);
+    }, [enabled]);
 
     const getStatusText = () => {
-        if (vad.loading) return 'Loading VAD...';
-        if (vad.errored) return 'VAD Error';
+        if (!enabled) return 'Mic Disabled';
         if (error) return error;
-        if (transcribing) return 'Thinking...';
-        if (vad.userSpeaking) return 'Listening...';
+        if (vadStatus === 'thinking') return 'Thinking...';
+        if (vadStatus === 'listening') return 'Listening...';
         return 'Ready';
     };
 
     const getIconColor = () => {
-        if (error || vad.errored) return '#ff6b6b';
-        if (transcribing) return '#ffa502';
-        if (vad.userSpeaking) return '#ff4757';
+        if (!enabled) return '#666666';
+        if (error) return '#ff6b6b';
+        if (vadStatus === 'thinking') return '#ffa502';
+        if (vadStatus === 'listening') return '#ff4757';
         return 'rgba(255,255,255,0.6)';
+    };
+
+    const toggleMic = () => {
+        setEnabled(!enabled);
+        if (enabled) {
+            setVadStatus('idle');
+            setTranscript('');
+        }
     };
 
     return (
@@ -156,22 +125,20 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
             alignItems: 'center',
             gap: 10
         }}>
-            <div style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                border: `3px solid ${getIconColor()} `,
-                backgroundColor: 'rgba(0,0,0,0.7)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                fontSize: '28px',
-                boxShadow: vad.userSpeaking ? `0 0 20px ${getIconColor()} ` : '0 4px 10px rgba(0,0,0,0.3)',
-                transition: 'all 0.2s ease',
-                transform: vad.userSpeaking ? 'scale(1.1)' : 'scale(1)',
-            }}>
-                {transcribing ? '⏳' : vad.userSpeaking ? '🎤' : '⚪'}
-            </div>
+            {transcript && enabled && (
+                <div style={{
+                    maxWidth: '300px',
+                    padding: '10px 16px',
+                    backgroundColor: 'rgba(0,0,0,0.75)',
+                    borderRadius: '12px',
+                    color: 'white',
+                    fontSize: '13px',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                }}>
+                    {transcript}
+                </div>
+            )}
 
             <div style={{
                 color: 'white',
@@ -183,19 +150,65 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
                 {getStatusText()}
             </div>
 
-            {transcript && (
-                <div style={{
-                    maxWidth: '300px',
-                    padding: '8px 12px',
-                    backgroundColor: 'rgba(0,0,0,0.7)',
-                    borderRadius: '8px',
-                    color: 'white',
-                    fontSize: '12px',
-                    marginTop: '5px'
+            <div
+                onClick={toggleMic}
+                style={{
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    transform: vadStatus === 'listening' && enabled ? 'scale(1.1)' : 'scale(1)',
+                    opacity: enabled ? 1 : 0.6,
+                    // 磨砂效果 (Frosted Glass)
+                    backgroundColor: 'rgba(128, 128, 128, 0.2)', // 灰色半透明
+                    backdropFilter: 'blur(12px)', // 磨砂模糊
+                    border: '1px solid rgba(255, 255, 255, 0.15)', // 微妙边框
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', // 柔和阴影
+                    // 聆听时增强光晕
+                    filter: vadStatus === 'listening' ? `drop-shadow(0 0 8px ${getIconColor()})` : 'none'
                 }}>
-                    {transcript}
-                </div>
-            )}
+                {/* 
+                   纯麦克风图标 (Pure Mic Icon Style)
+                   无背景圆，仅保留线条/形状
+                */}
+                {!enabled ? (
+                    // Disabled State
+                    <svg width="42" height="42" viewBox="0 0 24 24" fill="none">
+                        <rect x="9" y="4" width="6" height="11" rx="3" fill="#888" />
+                        <path d="M5 11v1a7 7 0 0 0 14 0v-1" stroke="#888" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="12" y1="19" x2="12" y2="22" stroke="#888" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="8" y1="22" x2="16" y2="22" stroke="#888" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                ) : vadStatus === 'listening' ? (
+                    // Listening State (Red active)
+                    <svg width="42" height="42" viewBox="0 0 24 24" fill="none">
+                        <rect x="9" y="4" width="6" height="11" rx="3" fill="#ff4444" />
+                        <path d="M5 11v1a7 7 0 0 0 14 0v-1" stroke="#ff4444" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="12" y1="19" x2="12" y2="22" stroke="#ff4444" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="8" y1="22" x2="16" y2="22" stroke="#ff4444" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                ) : vadStatus === 'thinking' ? (
+                    // Thinking State (Mic shape with loading accent)
+                    <svg width="42" height="42" viewBox="0 0 24 24" fill="none">
+                        <rect x="9" y="4" width="6" height="11" rx="3" fill="#ccc" opacity="0.5" />
+                        <path d="M12 2 a 10 10 0 0 1 10 10" stroke="#fff" strokeWidth="2" strokeLinecap="round" fill="none">
+                            <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite" />
+                        </path>
+                    </svg>
+                ) : (
+                    // Ready State (White)
+                    <svg width="42" height="42" viewBox="0 0 24 24" fill="none">
+                        <rect x="9" y="4" width="6" height="11" rx="3" fill="white" />
+                        <path d="M5 11v1a7 7 0 0 0 14 0v-1" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="12" y1="19" x2="12" y2="22" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="8" y1="22" x2="16" y2="22" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                )}
+            </div>
         </div>
     );
 };

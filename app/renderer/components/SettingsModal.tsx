@@ -46,6 +46,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [loadingStatus, setLoadingStatus] = useState('idle');
     const [sttServerUrl] = useState('http://127.0.0.1:8765');
 
+    // Audio Device Settings
+    const [audioDevices, setAudioDevices] = useState<{ index: number, name: string, channels: number }[]>([]);
+    const [currentAudioDevice, setCurrentAudioDevice] = useState<string | null>(null);
+
     // Character Settings
     const [characters, setCharacters] = useState<CharacterProfile[]>([]);
     const [activeCharacterId, setActiveCharacterId] = useState<string>('');
@@ -74,32 +78,76 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 if (loadedChars) setCharacters(loadedChars);
                 if (loadedActiveId) setActiveCharacterId(loadedActiveId);
 
-                // Whisper & TTS Voices
+                // Whisper & TTS Voices & Audio Devices
                 fetchModels();
                 fetchTTSVoices();
+                fetchAudioDevices();
             };
             loadSettings();
         }
     }, [isOpen]);
 
     // TTS Voices Fetching
-    const [availableVoices, setAvailableVoices] = useState<{ name: string, gender: string }[]>([]);
+    const [edgeVoices, setEdgeVoices] = useState<{ name: string, gender: string }[]>([]);
+    const [gptVoices, setGptVoices] = useState<{ name: string, gender: string }[]>([]);
 
     const fetchTTSVoices = async () => {
         try {
-            // We can access ttsService globally as imported
-            // Ideally import { ttsService } from '@core/voice/tts_service';
-            // But since it's not imported here yet, let's just fetch directly or assumes it's available via window or import.
-            // Let's import it at top of file essentially, or use fetch directly against port 8766 
-            // to avoid adding imports blindly. Port is 8766.
-            const res = await fetch('http://127.0.0.1:8766/tts/voices');
-            if (res.ok) {
-                const data = await res.json();
-                const allVoices = [...(data.chinese || []), ...(data.english || [])];
-                setAvailableVoices(allVoices);
-            }
+            // Fetch Edge TTS Voices
+            try {
+                const res = await fetch('http://127.0.0.1:8766/tts/voices?engine=edge-tts');
+                if (res.ok) {
+                    const data = await res.json();
+                    const allVoices = [...(data.chinese || []), ...(data.english || [])];
+                    setEdgeVoices(allVoices);
+                }
+            } catch (e) { console.warn("Failed to fetch Edge voices", e); }
+
+            // Fetch GPT-SoVITS Voices
+            try {
+                const res = await fetch('http://127.0.0.1:8766/tts/voices?engine=gpt-sovits');
+                if (res.ok) {
+                    const data = await res.json();
+                    setGptVoices(data.voices || []);
+                }
+            } catch (e) { console.warn("Failed to fetch GPT-SoVITS voices", e); }
+
         } catch (e) {
             console.error("Failed to fetch TTS voices", e);
+        }
+    };
+
+    // Audio Devices Fetching
+    const fetchAudioDevices = async () => {
+        try {
+            const res = await fetch(`${sttServerUrl}/audio/devices`);
+            if (res.ok) {
+                const data = await res.json();
+                setAudioDevices(data.devices || []);
+                setCurrentAudioDevice(data.current || null);
+            }
+        } catch (e) {
+            console.error("Failed to fetch audio devices", e);
+        }
+    };
+
+    const handleAudioDeviceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const deviceName = e.target.value;
+        try {
+            const res = await fetch(`${sttServerUrl}/audio/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_name: deviceName })
+            });
+            if (res.ok) {
+                setCurrentAudioDevice(deviceName);
+                console.log(`Audio device switched to: ${deviceName}`);
+            } else {
+                alert("Failed to switch audio device");
+            }
+        } catch (err) {
+            console.error("Failed to set audio device", err);
+            alert("Failed to connect to STT server");
         }
     };
 
@@ -337,25 +385,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     {/* Voice Tab */}
                     {activeTab === 'voice' && (
-                        <div>
-                            <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>Voice Recognition (STT)</h3>
-                            <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                                <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Whisper Model</label>
-                                <select
-                                    value={currentWhisperModel}
-                                    onChange={handleWhisperModelChange}
-                                    disabled={loadingStatus === 'loading'}
-                                    style={inputStyle}
-                                >
-                                    {whisperModels.length > 0 ? whisperModels.map(m => (
-                                        <option key={m.name} value={m.name}>
-                                            {m.name.toUpperCase()} ({m.size})
-                                            {m.download_status === 'downloading' ? ' [Downloading...]' : ''}
-                                            {m.download_status === 'completed' || (m.download_status === 'idle' && m.name === currentWhisperModel) ? ' [Ready]' : ''}
-                                        </option>
-                                    )) : <option>Connecting...</option>}
-                                </select>
-                                {loadingStatus === 'loading' && <div style={{ fontSize: '12px', color: '#2563eb', marginTop: '5px' }}>Loading/Downloading model...</div>}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <div>
+                                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>Audio Input Device</h3>
+                                <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Microphone</label>
+                                    <select
+                                        value={currentAudioDevice || ''}
+                                        onChange={handleAudioDeviceChange}
+                                        style={inputStyle}
+                                    >
+                                        {audioDevices.length > 0 ? audioDevices.map(dev => (
+                                            <option key={dev.index} value={dev.name}>
+                                                {dev.name} ({dev.channels} ch)
+                                            </option>
+                                        )) : <option>No devices found</option>}
+                                    </select>
+                                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                                        💡 Select your physical microphone to avoid system audio loopback
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>Voice Recognition (STT)</h3>
+                                <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Whisper Model</label>
+                                    <select
+                                        value={currentWhisperModel}
+                                        onChange={handleWhisperModelChange}
+                                        disabled={loadingStatus === 'loading'}
+                                        style={inputStyle}
+                                    >
+                                        {whisperModels.length > 0 ? whisperModels.map(m => (
+                                            <option key={m.name} value={m.name}>
+                                                {m.name.toUpperCase()} ({m.size})
+                                                {m.download_status === 'downloading' ? ' [Downloading...]' : ''}
+                                                {m.download_status === 'completed' || (m.download_status === 'idle' && m.name === currentWhisperModel) ? ' [Ready]' : ''}
+                                            </option>
+                                        )) : <option>Connecting...</option>}
+                                    </select>
+                                    {loadingStatus === 'loading' && <div style={{ fontSize: '12px', color: '#2563eb', marginTop: '5px' }}>Loading/Downloading model...</div>}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -467,47 +538,83 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                     </div>
 
                                                     <div style={{ marginBottom: '15px' }}>
-                                                        <label style={labelStyle}>Voice Config (Edge TTS)</label>
+                                                        <label style={labelStyle}>Voice Configuration</label>
+
+                                                        {/* Service Selection */}
+                                                        <div style={{ marginBottom: '8px' }}>
+                                                            <select
+                                                                value={char.voiceConfig.service || 'edge-tts'}
+                                                                onChange={(e) => handleVoiceConfigChange(char.id, 'service', e.target.value)}
+                                                                style={{ ...inputStyle, marginBottom: '5px' }}
+                                                            >
+                                                                <option value="edge-tts">Edge TTS (Cloud / Free)</option>
+                                                                <option value="gpt-sovits">GPT-SoVITS (Local / Emotional)</option>
+                                                            </select>
+                                                        </div>
+
+                                                        {/* Voice Selection */}
                                                         <div style={{ display: 'flex', gap: '10px' }}>
                                                             <select
                                                                 value={char.voiceConfig.voiceId}
                                                                 onChange={(e) => handleVoiceConfigChange(char.id, 'voiceId', e.target.value)}
                                                                 style={{ ...inputStyle, flex: 2 }}
                                                             >
-                                                                {availableVoices.length > 0 ? (
-                                                                    <>
-                                                                        <optgroup label="中文 (Chinese)">
-                                                                            {availableVoices
-                                                                                .filter(v => v.name.includes('zh-'))
-                                                                                .map(v => (
-                                                                                    <option key={v.name} value={v.name}>
-                                                                                        {v.name.replace('zh-CN-', '').replace('Neural', '')} ({v.gender})
-                                                                                    </option>
-                                                                                ))
-                                                                            }
-                                                                        </optgroup>
-                                                                        <optgroup label="English">
-                                                                            {availableVoices
-                                                                                .filter(v => v.name.includes('en-'))
-                                                                                .map(v => (
-                                                                                    <option key={v.name} value={v.name}>
-                                                                                        {v.name.replace('en-US-', '').replace('Neural', '')} ({v.gender})
-                                                                                    </option>
-                                                                                ))
-                                                                            }
-                                                                        </optgroup>
-                                                                    </>
+                                                                {char.voiceConfig.service === 'gpt-sovits' ? (
+                                                                    // List GPT-SoVITS Voices
+                                                                    gptVoices.length > 0 ? (
+                                                                        gptVoices.map(v => (
+                                                                            <option key={v.name} value={v.name}>
+                                                                                {v.name} (Local Ref)
+                                                                            </option>
+                                                                        ))
+                                                                    ) : <option disabled>No local voices found (Default only)</option>
                                                                 ) : (
-                                                                    <option>Loading voices...</option>
+                                                                    // List Edge TTS Voices
+                                                                    edgeVoices.length > 0 ? (
+                                                                        <>
+                                                                            <optgroup label="中文 (Chinese)">
+                                                                                {edgeVoices
+                                                                                    .filter(v => v.name.includes('zh-'))
+                                                                                    .map(v => (
+                                                                                        <option key={v.name} value={v.name}>
+                                                                                            {v.name.replace('zh-CN-', '').replace('Neural', '')} ({v.gender})
+                                                                                        </option>
+                                                                                    ))
+                                                                                }
+                                                                            </optgroup>
+                                                                            <optgroup label="English">
+                                                                                {edgeVoices
+                                                                                    .filter(v => v.name.includes('en-'))
+                                                                                    .map(v => (
+                                                                                        <option key={v.name} value={v.name}>
+                                                                                            {v.name.replace('en-US-', '').replace('Neural', '')} ({v.gender})
+                                                                                        </option>
+                                                                                    ))
+                                                                                }
+                                                                            </optgroup>
+                                                                        </>
+                                                                    ) : (
+                                                                        <option>Loading voices...</option>
+                                                                    )
                                                                 )}
                                                             </select>
-                                                            <input
-                                                                value={char.voiceConfig.rate}
-                                                                onChange={(e) => handleVoiceConfigChange(char.id, 'rate', e.target.value)}
-                                                                style={{ ...inputStyle, flex: 1 }}
-                                                                placeholder="+0%"
-                                                            />
+
+                                                            {/* Rate control - only for Edge for now? or both? GPT-SoVITS params might differ */}
+                                                            {char.voiceConfig.service !== 'gpt-sovits' && (
+                                                                <input
+                                                                    value={char.voiceConfig.rate}
+                                                                    onChange={(e) => handleVoiceConfigChange(char.id, 'rate', e.target.value)}
+                                                                    style={{ ...inputStyle, flex: 1 }}
+                                                                    placeholder="+0%"
+                                                                    title="Speed (e.g., +20%, -10%)"
+                                                                />
+                                                            )}
                                                         </div>
+                                                        {char.voiceConfig.service === 'gpt-sovits' && (
+                                                            <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                                                                ℹ️ Place reference audio in assets/emotion_audio/{char.voiceConfig.voiceId || 'default_voice'}
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #f3f4f6' }}>

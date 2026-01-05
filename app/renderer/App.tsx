@@ -91,17 +91,17 @@ function App() {
         const synthPromise = (async () => {
             console.log(`[TTS] Starting synthesis ${index}:`, sentence);
             try {
-                const audioStream = await ttsService.synthesize(sentence);
+                const audioResponse = await ttsService.synthesize(sentence);
 
                 // 等待前面的句子完成（维持顺序）
                 if (index > 0) {
                     await synthPromisesRef.current[index - 1]; // Wait for previous Promise to resolve (enqueued)
                 }
 
-                if (audioStream) {
+                if (audioResponse) {
                     // 按顺序入队播放
-                    audioQueueRef.current.enqueue(audioStream);
-                    console.log(`[TTS] Enqueued stream for sentence ${index}`);
+                    audioQueueRef.current.enqueue(audioResponse);
+                    console.log(`[TTS] Enqueued stream for sentence ${index} (Type: ${audioResponse.contentType})`);
                 }
             } catch (error) {
                 console.error(`[TTS] Synthesis failed for ${index}:`, error);
@@ -132,8 +132,10 @@ function App() {
 
         // 3. Update TTS Voice
         if (character.voiceConfig?.voiceId) {
-            console.log(`[App] Switching TTS Voice to: ${character.voiceConfig.voiceId}`);
+            const engine = character.voiceConfig.service || 'edge-tts';
+            console.log(`[App] Switching TTS Voice to: ${character.voiceConfig.voiceId} (Engine: ${engine})`);
             ttsService.setDefaultVoice(character.voiceConfig.voiceId);
+            ttsService.setEngine(engine);
         }
     };
 
