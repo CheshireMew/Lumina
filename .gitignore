@@ -92,8 +92,17 @@ test/
 # Memory System
 lite_memory_db/
 memory_backups/
+memory_db/
+
+# Security: Config files with API keys
+python_backend/memory_config.json
+
 
 
 # Local TTS Models
 GPT-SoVITS/
 models/
+
+# Live2D Models
+public/live2d/*
+!public/live2d/Hiyori/

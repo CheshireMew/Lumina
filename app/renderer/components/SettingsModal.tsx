@@ -23,6 +23,17 @@ interface WhisperModelInfo {
 
 type Tab = 'general' | 'voice' | 'memory' | 'characters';
 
+const AVAILABLE_MODELS = [
+    { name: 'Hiyori (Default)', path: '/live2d/Hiyori/Hiyori.model3.json' },
+    { name: 'Laffey II (拉菲)', path: '/live2d/imported/Laffey_II/Laffey Ⅱ.model3.json' },
+    { name: 'PinkFox', path: '/live2d/imported/PinkFox/PinkFox.model3.json' },
+    { name: 'Kasane Teto (重音テト)', path: '/live2d/imported/KasaneTeto/重音テト.model3.json' },
+    { name: 'Haru', path: '/live2d/imported/Haru/Haru.model3.json' },
+    { name: 'MaoPro', path: '/live2d/imported/MaoPro/mao_pro.model3.json' },
+    { name: 'MemuCat', path: '/live2d/imported/MemuCat/memu_cat.model3.json' },
+    { name: 'Hiyori (Mic Ver)', path: '/live2d/imported/Hiyori_Mic/hiyori_pro_mic.model3.json' },
+];
+
 const SettingsModal: React.FC<SettingsModalProps> = ({
     isOpen, onClose, onClearHistory, onContextWindowChange, onLLMSettingsChange, onCharactersUpdated, onUserNameUpdated, onLive2DHighDpiChange
 }) => {
@@ -176,6 +187,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
+    // Migration: Initialize systemPrompt from description if missing (for legacy characters)
+    useEffect(() => {
+        let changed = false;
+        const migratedCharacters = characters.map(char => {
+            if (char.systemPrompt === undefined) {
+                changed = true;
+                return {
+                    ...char,
+                    systemPrompt: char.description // Copy legacy description to systemPrompt
+                };
+            }
+            return char;
+        });
+
+        if (changed) {
+            console.log('[Settings] Migrated legacy characters: separated description and systemPrompt');
+            setCharacters(migratedCharacters);
+        }
+    }, [characters]); // Run whenever characters list updates (safe due to undefined check)
+
     const handleVoiceprintToggle = async (enabled: boolean) => {
         try {
             // Always use current state values, never hardcoded defaults
@@ -285,12 +316,49 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     })
                 });
 
+                // Removed alert - check console logs for voiceprint config status
                 if (voiceprintEnabled) {
-                    alert('声纹配置已保存！\n请重启 stt_server.py 使配置生效。');
+                    console.log('[Settings] Voiceprint configuration saved. Please restart stt_server.py for changes to take effect.');
                 }
             } catch (e) {
                 console.error('Failed to save voiceprint config', e);
             }
+        }
+
+        // 同步配置到后端 core_profile.json
+        try {
+            // 同步 user_name
+            await fetch('http://localhost:8001/soul/update_user_name', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_name: userName })
+            });
+
+            // 同步当前活跃角色的 identity (name, description)
+            const activeChar = characters.find(c => c.id === activeCharacterId);
+            if (activeChar) {
+                const payload = {
+                    name: activeChar.name,
+                    description: activeChar.systemPrompt || activeChar.description
+                };
+                console.log('[Settings] 📤 Sending to backend:', payload);
+                console.log('[Settings] Description length:', payload.description.length, 'chars');
+                
+                const response = await fetch('http://localhost:8001/soul/update_identity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('[Settings] ✅ Backend confirmed:', result);
+                } else {
+                    console.error('[Settings] ❌ API Error:', response.status, await response.text());
+                }
+            }
+        } catch (e) {
+            console.error('[Settings] Failed to sync to backend:', e);
         }
 
         if (onContextWindowChange) onContextWindowChange(contextWindow);
@@ -314,11 +382,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         const newChar: CharacterProfile = {
             id: `char_${Date.now()}`,
             name: 'New Character',
-            description: 'A new AI personality',
-            systemPromptTemplate: 'You are {char}, a helpful assistant.',
+            description: 'A brief description',
+            systemPrompt: 'An 18 years cute human girl with a distinct personality.',
             voiceConfig: {
-                service: 'edge-tts',
-                voiceId: 'zh-CN-XiaoxiaoNeural',
+                service: 'gpt-sovits',
+                voiceId: 'default_voice',
                 rate: '+0%',
                 pitch: '+0Hz'
             }
@@ -729,25 +797,40 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                             />
                                                         </div>
                                                         <div>
-                                                            <label style={labelStyle}>Description</label>
+                                                            <label style={labelStyle}>Brief Description (Card Preview)</label>
                                                             <input
                                                                 value={char.description}
                                                                 onChange={(e) => handleUpdateCharacter(char.id, { description: e.target.value })}
                                                                 style={inputStyle}
+                                                                placeholder="一名18岁的活泼可爱的女孩子"
                                                             />
                                                         </div>
                                                     </div>
 
                                                     <div style={{ marginBottom: '10px' }}>
                                                         <label style={labelStyle}>
-                                                            System Prompt Template
-                                                            <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: '5px' }}>(Optional: Use {'{char}'} for Name, {'{user}'} for User Name)</span>
+                                                            System Prompt (AI Identity)
+                                                            <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: '5px' }}>(Full instructions for AI behavior)</span>
                                                         </label>
                                                         <textarea
-                                                            value={char.systemPromptTemplate}
-                                                            onChange={(e) => handleUpdateCharacter(char.id, { systemPromptTemplate: e.target.value })}
-                                                            style={{ ...inputStyle, minHeight: '80px', fontFamily: 'monospace', fontSize: '12px' }}
+                                                            value={char.systemPrompt || ''}
+                                                            onChange={(e) => handleUpdateCharacter(char.id, { systemPrompt: e.target.value })}
+                                                            style={{ ...inputStyle, minHeight: '100px', fontFamily: 'inherit', fontSize: '13px' }}
+                                                            placeholder="你是一个18岁的活泼可爱的女孩子，你正在你的恋人聊天。\n对话一定要使用英语，除非对方问某个东西是什么或者某个单词什么意思。"
                                                         />
+                                                    </div>
+
+                                                    <div style={{ marginBottom: '15px' }}>
+                                                        <label style={labelStyle}>Live2D Model</label>
+                                                        <select
+                                                            value={char.modelPath || '/live2d/Hiyori/Hiyori.model3.json'}
+                                                            onChange={(e) => handleUpdateCharacter(char.id, { modelPath: e.target.value })}
+                                                            style={inputStyle}
+                                                        >
+                                                            {AVAILABLE_MODELS.map(m => (
+                                                                <option key={m.path} value={m.path}>{m.name}</option>
+                                                            ))}
+                                                        </select>
                                                     </div>
 
                                                     <div style={{ marginBottom: '15px' }}>

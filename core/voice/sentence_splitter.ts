@@ -30,11 +30,11 @@ export class SentenceSplitter {
             clearTimeout(this.timeoutId);
         }
 
-        // 检测句子结束
+        // Check for sentence end
         const trimmedBuffer = this.buffer.trim();
         if (this.sentenceEndRegex.test(trimmedBuffer)) {
-            // 确保句子不为空且有实际内容
-            if (trimmedBuffer.length >= this.minLength) {
+            // Ensure non-empty and brackets are balanced (don't split inside [emotion, tag])
+            if (trimmedBuffer.length >= this.minLength && this.isBalanced(trimmedBuffer)) {
                 this.emit(trimmedBuffer);
                 this.buffer = '';
                 return;
@@ -84,5 +84,21 @@ export class SentenceSplitter {
             console.log(`[SentenceSplitter] Emitting sentence: "${sentence}"`);
             this.onSentenceCallback(sentence);
         }
+    }
+
+    /**
+     * Check if brackets [], () are balanced.
+     * Prevents splitting inside tags like [sad, crying].
+     */
+    private isBalanced(text: string): boolean {
+        let openSquare = 0;
+        let openParen = 0;
+        for (const char of text) {
+            if (char === '[') openSquare++;
+            else if (char === ']') openSquare--;
+            else if (char === '(' || char === '（') openParen++;
+            else if (char === ')' || char === '）') openParen--;
+        }
+        return openSquare === 0 && openParen === 0;
     }
 }

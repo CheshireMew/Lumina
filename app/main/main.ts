@@ -51,6 +51,35 @@ function createWindow() {
         event.sender.send('llm:streamEnd');
     });
 
+    // Advanced Chat Stream with History
+    ipcMain.on('llm:chatStreamWithHistory', async (event, args) => {
+        const { history, userMessage, contextWindow, summary, longTermMemory, userName, charName } = args;
+        await llmService.chatStreamWithHistory(
+            history,
+            userMessage,
+            contextWindow,
+            (token: string) => {
+                event.sender.send('llm:streamToken', token);
+            },
+            summary,
+            longTermMemory,
+            userName,
+            charName
+        );
+        event.sender.send('llm:streamEnd');
+    });
+
+    // Summarization IPC
+    ipcMain.handle('llm:updateSummary', async (_event, args) => {
+        const { currentSummary, newMessages } = args;
+        return await llmService.updateSummary(currentSummary, newMessages);
+    });
+
+    // System Prompt IPC
+    ipcMain.on('llm:setSystemPrompt', (_event, prompt: string) => {
+        llmService.setSystemPrompt(prompt);
+    });
+
     ipcMain.handle('settings:get', (_event, key) => {
         return store.get(key);
     });

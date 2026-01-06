@@ -104,7 +104,9 @@ export class LLMService {
         contextWindow: number,
         onToken: (token: string) => void,
         summary?: string,
-        longTermMemory?: string
+        longTermMemory?: string,
+        userName: string = 'User',
+        charName: string = 'Assistant'
     ): Promise<string> {
         if (!this.chatModel) {
             throw new Error("Chat model not initialized");
@@ -114,7 +116,7 @@ export class LLMService {
             // 1. 构建消息数组
             const messages: BaseMessage[] = [];
 
-            // 2. 添加系统提示
+            // 2. 添加系统提示 (Static Prefix for Caching)
             messages.push(new SystemMessage(this.systemPrompt));
 
             // 3. Long-term Memory Injection
@@ -133,18 +135,43 @@ export class LLMService {
             const maxHistoryMessages = contextWindow * 2;
             const recentHistory = conversationHistory.slice(-maxHistoryMessages);
 
-            // 5. 将历史转换为 LangChain 消息
+            // 4. 将历史转换为 LangChain 消息 (Static Prefix for Caching)
             for (const msg of recentHistory) {
                 if (msg.role === 'user') {
-                    messages.push(new HumanMessage(msg.content));
+                    // Use 'name' field to explicitly identify the speaker
+                    messages.push(new HumanMessage({ content: msg.content, name: userName }));
                 } else if (msg.role === 'assistant') {
-                    messages.push(new AIMessage(msg.content));
+                    messages.push(new AIMessage({ content: msg.content, name: charName }));
                 }
-                // 忽略 'system' 类型的历史消息
+            }
+
+            // 5. 构建包含上下文的最终用户消息
+            let finalUserMessage = userMessage;
+            let contextParts = [];
+
+            // 注入记忆 (Dynamic Context)
+            if (longTermMemory) {
+                contextParts.push(`\nRELEVANT MEMORIES:\n${longTermMemory}`);
+            }
+
+            // 注入摘要 (Dynamic Context)
+            if (summary) {
+                contextParts.push(`\nPREVIOUS SUMMARY:\n${summary}`);
+            }
+
+            // 如果有上下文，附加到用户消息末尾
+            if (contextParts.length > 0) {
+                finalUserMessage += `\n\n--- Context Information ---\n${contextParts.join('\n')}\n\n(Use this context to answer, but do not explicitly mention you were given context unless necessary.)`;
             }
 
             // 6. 添加当前用户消息
-            messages.push(new HumanMessage(userMessage));
+            messages.push(new HumanMessage(finalUserMessage));
+
+            // [DEBUG] Log Request content for transparency
+            console.log(`\n--- [LLM Input] (${messages.length} msgs) ---`);
+            // Log the FINAL message which contains the context injection
+            console.log(`[User Final]: ${finalUserMessage.substring(0, 800)}${finalUserMessage.length > 800 ? '...' : ''}`);
+            console.log('-------------------------------------------\n');
 
             console.log(`[LLMService] Sending ${messages.length} messages (context window: ${contextWindow} turns)`);
 
@@ -159,6 +186,11 @@ export class LLMService {
                     onToken(content);
                 }
             }
+
+            // [DEBUG] Log Response content
+            console.log(`\n--- [LLM Output] ---`);
+            console.log(fullResponse.substring(0, 500) + (fullResponse.length > 500 ? '...' : ''));
+            console.log('--------------------\n');
 
             return fullResponse;
         } catch (error) {

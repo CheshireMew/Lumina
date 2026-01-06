@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import path from 'node:path'
 import electron from 'vite-plugin-electron/simple'
 import react from '@vitejs/plugin-react'
-import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
@@ -10,7 +9,7 @@ const require = createRequire(import.meta.url)
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [
-        nodePolyfills(),
+        // nodePolyfills(), // Removed: Renderer should be pure web now
         react(),
         electron({
             main: {
@@ -22,28 +21,36 @@ export default defineConfig({
                         minify: false, // Disable minification in dev
                         sourcemap: false, // Disable sourcemaps in dev for speed
                         rollupOptions: {
-                            // Strategy: Externalize EVERYTHING except packages that MUST be bundled
-                            // This gives us the fastest possible builds
-                            external: Object.keys(require('./package.json').dependencies).filter(dep => {
-                                // ONLY bundle these packages (ESM-only or have special requirements)
-                                const mustBundle = [
-                                    'electron-store',        // ESM-only
+                            // Strategy: Externalize explicitly listed dependencies.
+                            external: (id) => {
+                                const dependencies = Object.keys(require('./package.json').dependencies);
+                                const mustBundle: string[] = [
+                                    // 'electron-store',
                                 ];
-                                // Externalize everything else (including LangChain, axios, etc.)
-                                return !mustBundle.includes(dep);
-                            }), 
+
+                                // 1. Always bundle local imports
+                                if (id.startsWith('.') || id.startsWith('/') || path.isAbsolute(id)) {
+                                    return false;
+                                }
+
+                                // 2. Bundle specific whitelisted packages
+                                if (mustBundle.includes(id)) {
+                                    return false;
+                                }
+
+                                // 3. Externalize known dependencies
+                                return dependencies.some(dep => id === dep || id.startsWith(`${dep}/`));
+                            }, 
                         },
                     },
                 },
             },
             preload: {
                 // Shortcut of `build.rollupOptions.input`.
-                // Preload scripts may be needed later for IPC
                 input: 'app/main/preload.ts',
             },
             // Ployfill the Electron and Node.js built-in modules for Renderer process.
-            // See 👉 https://github.com/electron-vite/vite-plugin-electron-renderer
-            renderer: {},
+            // renderer: {}, // Disabled: We use contextBridge, so we don't need node polyfills in renderer
         }),
     ],
     optimizeDeps: {
@@ -52,9 +59,8 @@ export default defineConfig({
         include: [
             'react',
             'react-dom',
-            '@langchain/core',
-            '@langchain/openai',
-            'axios',
+            // LangChain removed
+            'axios', 
         ],
         // Exclude packages that don't work well with pre-bundling
         exclude: [
@@ -66,11 +72,6 @@ export default defineConfig({
             '@core': path.resolve(__dirname, 'core'),
             '@app': path.resolve(__dirname, 'app'),
             '@assets': path.resolve(__dirname, 'assets'),
-            // Map web requests for ONNX Runtime .mjs files to node_modules
-            '/ort-wasm-simd-threaded.mjs': path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs'),
-            '/ort-wasm-simd.mjs': path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd.mjs'),
-            '/ort-wasm.mjs': path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm.mjs'),
-            '/ort-wasm-threaded.mjs': path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-threaded.mjs'),
         },
     },
 })
