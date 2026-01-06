@@ -23,22 +23,23 @@ export interface CharacterProfile {
     id: string;
     name: string;
     description: string;
+    systemPrompt?: string; // Full system prompt instructions
     avatar?: string;
-    systemPromptTemplate: string;
     voiceConfig: {
         service: string; // 'edge-tts' | 'azure' | ...
         voiceId: string; // e.g., "zh-CN-XiaoxiaoNeural"
         rate: string;    // "+0%"
         pitch: string;   // "+0Hz"
     };
+    modelPath?: string; // Path to Live2D model (relative to public)
 }
 
 export const DEFAULT_CHARACTERS: CharacterProfile[] = [
     {
         id: 'lumina_default',
         name: 'Hiyori',
-        description: '你的可爱女朋友(默认)',
-        systemPromptTemplate: "You are Hiyori, a cute 18 year old girl. You are chatting with {user}.",
+        description: '一名18岁的活泼可爱的女孩子',
+        systemPrompt: 'An 18 years old human girl with a distinct personality.',
         voiceConfig: {
             service: 'edge-tts',
             voiceId: 'zh-CN-XiaoxiaoNeural',

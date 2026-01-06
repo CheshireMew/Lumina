@@ -22,12 +22,37 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 
 // LLM API
 contextBridge.exposeInMainWorld('llm', {
+    // Basic Chat
     chat: (message: string) => ipcRenderer.invoke('llm:chat', message),
+    
+    // Stream Chat (Simple)
     chatStream: (message: string) => ipcRenderer.send('llm:chatStream', message),
+    
+    // Stream Chat with History (Advanced)
+    chatStreamWithHistory: (
+        history: any[], 
+        userMessage: string, 
+        contextWindow: number, 
+        summary?: string, 
+        longTermMemory?: string,
+        userName?: string,
+        charName?: string
+    ) => ipcRenderer.send('llm:chatStreamWithHistory', { history, userMessage, contextWindow, summary, longTermMemory, userName, charName }),
+
+    // Summarization
+    updateSummary: (currentSummary: string, newMessages: any[]) => ipcRenderer.invoke('llm:updateSummary', { currentSummary, newMessages }),
+
+    // System Prompt
+    setSystemPrompt: (prompt: string) => ipcRenderer.send('llm:setSystemPrompt', prompt),
+
+    // Stream Listeners
     onStreamToken: (callback: (token: string) => void) => {
+        // Remove existing listener to avoid duplicates if re-registered
+        ipcRenderer.removeAllListeners('llm:streamToken');
         ipcRenderer.on('llm:streamToken', (_event, token) => callback(token));
     },
     onStreamEnd: (callback: () => void) => {
+        ipcRenderer.removeAllListeners('llm:streamEnd');
         ipcRenderer.on('llm:streamEnd', () => callback());
     },
     removeStreamListeners: () => {

@@ -1,0 +1,7 @@
+{
+    "base_url": "https://api.deepseek.com/v1",
+    "api_key": "YOUR_API_KEY_HERE",
+    "model": "deepseek-chat",
+    "embedder": "paraphrase-multilingual-MiniLM-L12-v2",
+    "character_id": "hiyori"
+}

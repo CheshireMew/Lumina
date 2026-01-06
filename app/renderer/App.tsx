@@ -5,11 +5,11 @@ import InputBox from './components/InputBox'
 import VoiceInput from './components/VoiceInput'
 import SettingsModal from './components/SettingsModal'
 import MotionTester from './components/MotionTester'
+import GalGameHud from './components/GalGameHud' // Integrated Soul HUD
 import { ttsService } from '@core/voice/tts_service'
 import { SentenceSplitter } from '@core/voice/sentence_splitter'
 import { AudioQueue } from '@core/voice/audio_queue'
 import { Message, CharacterProfile, DEFAULT_CHARACTERS } from '@core/llm/types'
-import { llmService } from '@core/llm/llm_service'
 import { memoryService } from '@core/memory/memory_service'
 
 import emotionMapRaw from './emotion_map.json';
@@ -22,6 +22,8 @@ const cleanTextForTTS = (text: string): string => {
         .replace(/\[[^\]]*\]/g, '') // Remove [text]
         .replace(/[\(（][^)）]*[\)）]/g, '') // Also remove (text) / （text） just in case
         .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '') // Remove emojis
+        // 修复全大写英文单词（避免 TTS 逐字母朗读）- 转为首字母大写
+        .replace(/\b([A-Z]{2,})\b/g, (match) => match.charAt(0) + match.slice(1).toLowerCase())
         .trim();
 };
 
@@ -68,6 +70,32 @@ function App() {
 
             // Check if we have a mapping for any word in the content
             let emotionFound = false;
+
+            // Define mutation effects
+            // [sad]/[angry] -> Energy -5
+            // [happy]/[love] -> Intimacy +1
+            // [shy]/[hopeful] -> Intimacy +0.5
+            let d_energy = 0;
+            let d_intimacy = 0;
+            
+            if (emotionContent.includes('sad') || emotionContent.includes('angry') || emotionContent.includes('depress') || emotionContent.includes('cry')) {
+                 d_energy = -5;
+                 d_intimacy = -2; // Negative emotions decrease intimacy
+            } else if (emotionContent.includes('happy') || emotionContent.includes('love') || emotionContent.includes('joy') || emotionContent.includes('excite')) {
+                 d_intimacy = 1;
+            } else if (emotionContent.includes('shy') || emotionContent.includes('hope')) {
+                 d_intimacy = 1;
+            }
+    
+            // Call Backend Mutation API if there is a change
+            if (d_energy !== 0 || d_intimacy !== 0) {
+                console.log(`[App] 🧬 Mutating Soul: Energy ${d_energy}, Intimacy ${d_intimacy}`);
+                // Fire and forget, don't block UI
+                fetch(`http://localhost:8001/soul/mutate?pleasure=0&arousal=0&dominance=0&intimacy=${d_intimacy}&energy=${d_energy}`, { 
+                    method: 'POST' 
+                }).catch(e => console.error("[App] Failed to mutate soul:", e));
+            }
+
             for (const [key, motion] of Object.entries(emotionMap)) {
                 if (emotionContent.includes(key)) {
                     console.log(`[App] ✅ Triggering emotion: "${key}" -> Motion: ${motion.group} index ${motion.index}`);
@@ -112,25 +140,36 @@ function App() {
     };
 
     // Helper: Apply Active Character
-    // Helper: Apply Active Character
-    const applyCharacter = (character: CharacterProfile, uName: string) => {
-        // 1. Render Prompt Template
-        let renderedPrompt = character.systemPromptTemplate
-            .replace(/{char}/g, character.name)
-            .replace(/{user}/g, uName);
-
-        // 2. Append Standardized Emotion Instructions (Invisible to user setup, but active for AI)
-        const emotionInstructions = `\n\n[SYSTEM INSTRUCTION: EMOTIONAL EXPRESSION]\nExpress your emotions using [emotion] tags at the start of sentences. Valid tags: [happy], [sad], [angry], [surprised], [shy], [love], [thinking], [sleepy].\nExample: [happy] Hello! I'm so glad to see you! [shy] You make me blush.`;
-
-        // Append only if not already present (to avoid duplication if user manually added it)
-        if (!renderedPrompt.includes('[SYSTEM INSTRUCTION: EMOTIONAL EXPRESSION]')) {
-            renderedPrompt += emotionInstructions;
+    const applyCharacter = async (character: CharacterProfile, uName: string) => {
+        console.log(`[App] Applying character: ${character.name} for user: ${uName}`);
+        
+        // 1. Fetch Dynamic System Prompt from Backend (Soul Manager)
+        let dynamicPrompt = '';
+        try {
+            const res = await fetch('http://localhost:8001/soul');
+            if (res.ok) {
+                const soul = await res.json();
+                dynamicPrompt = soul.system_prompt || '';
+                console.log('[App] Fetched Dynamic System Prompt from Backend');
+            }
+        } catch (e) {
+            console.error('[App] Failed to fetch soul for prompt:', e);
         }
 
-        console.log(`[App] Applying character: ${character.name} for user: ${uName}`);
-        llmService.setSystemPrompt(renderedPrompt);
+        // 2. Get User-Configured Prompt (Identity Override)
+        const userCustomPrompt = character.systemPrompt || '';
 
-        // 3. Update TTS Voice
+        // 3. Merge Prompts
+        // Base: Dynamic Prompt (includes State, Memories, Output Format)
+        // Override: User Custom Prompt
+        const finalPrompt = userCustomPrompt.trim() !== '' 
+            ? `${dynamicPrompt}\n\n## 用户设定 (Identity Override)\n${userCustomPrompt}`
+            : dynamicPrompt;
+
+        console.log(`[App] Setting System Prompt (Length: ${finalPrompt.length})`);
+        (window as any).llm.setSystemPrompt(finalPrompt);
+        
+        // Update TTS Voice Configuration
         if (character.voiceConfig?.voiceId) {
             const engine = character.voiceConfig.service || 'edge-tts';
             console.log(`[App] Switching TTS Voice to: ${character.voiceConfig.voiceId} (Engine: ${engine})`);
@@ -171,7 +210,7 @@ function App() {
 
                 if (apiKey) {
                     console.log('[App] Initializing LLM Service with loaded settings');
-                    llmService.init(apiKey, baseUrl, model);
+                    // llmService.init(apiKey, baseUrl, model); -> Handled in Main Process on settings:set
 
                     // Initialize Memory Service
                     console.log('[App] Initializing Memory Service');
@@ -186,7 +225,7 @@ function App() {
 
                 // Memory Settings
                 const windowSize = await settings.get('contextWindow');
-                setContextWindow(windowSize || 15);
+                setContextWindow(windowSize || 50);
 
                 // Live2D Settings
                 const highDpi = await settings.get('live2d_high_dpi');
@@ -197,7 +236,57 @@ function App() {
             }
         };
         loadSettings();
+        
+        // [Startup] Trigger Dreaming Cycle on App Launch
+        // "Recall the past when waking up"
+        setTimeout(() => {
+            console.log('[App] 🌅 Startup Dreaming Cycle Initiated...');
+            fetch('http://localhost:8001/dream/wake_up', { method: 'POST' })
+                .catch(e => console.warn("[App] Startup Dreaming failed:", e));
+        }, 5000); // Wait 5s for backend to be fully ready
     }, []);
+    const lastActivityTime = useRef<number>(Date.now());
+    const currentSystemPromptRef = useRef<string>(''); // Track System Prompt
+    const isDreamingRef = useRef<boolean>(false); // Track dreaming state
+    const IDLE_THRESHOLD_MS = 15 * 60 * 1000; // 15 Minutes
+    
+    // Heartbeat to check idle status
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const inactiveDuration = now - lastActivityTime.current;
+            const inactiveMinutes = (inactiveDuration / 60000).toFixed(1);
+
+            if (inactiveDuration > IDLE_THRESHOLD_MS) {
+                if (!isDreamingRef.current) {
+                    console.log(`[Dreaming] 🌙 User has been idle for ${inactiveMinutes} mins. Triggering Dreaming...`);
+                    isDreamingRef.current = true; // Prevent multiple triggers
+                    
+                    // Trigger Backend Dreaming
+                    fetch('http://localhost:8001/dream/wake_up', { method: 'POST' })
+                        .then(res => res.json())
+                        .then(data => console.log("[Dreaming] Trigger response:", data))
+                        .catch(err => console.error("[Dreaming] Trigger failed:", err));
+                }
+            } else {
+                // Verbose Log for user verification
+                if (Math.floor(inactiveDuration / 1000) % 60 === 0) { // Log every minute
+                     console.log(`[Dreaming] ⏱️ User inactive for ${inactiveMinutes} min. Waiting for ${IDLE_THRESHOLD_MS/60000} min...`);
+                }
+            }
+        }, 10000); // Check every 10 seconds
+
+        return () => clearInterval(interval);
+    }, [activeCharacterId, userName]);
+
+    // Reset Idle Timer on Interaction
+    const resetIdleTimer = () => {
+        lastActivityTime.current = Date.now();
+        if (isDreamingRef.current) {
+            console.log('[Dreaming] Activity detected. Waking up from dreaming state.');
+            isDreamingRef.current = false;
+        }
+    };
 
     // Handlers for SettingsModal callbacks
     const handleClearHistory = () => {
@@ -214,7 +303,7 @@ function App() {
     // Callback when LLM settings change in SettingsModal
     const handleLLMSettingsChange = (apiKey: string, baseUrl: string, model: string) => {
         console.log('[App] Re-initializing LLM Service with new settings');
-        llmService.init(apiKey, baseUrl, model);
+        // llmService.init(apiKey, baseUrl, model); -> Main Process auto-updates
         memoryService.configure(apiKey, baseUrl, model);
     };
 
@@ -258,28 +347,33 @@ function App() {
     };
 
     const handleSend = async (text: string) => {
+        resetIdleTimer();
         setIsProcessing(true);
         setIsStreaming(true);
         setCurrentMessage(''); // 清空旧消息
         synthPromisesRef.current = []; // 清空 Promise 队列
         let sentenceIndex = 0;
 
-        // 添加用户消息到历史
-        const userMessage: Message = {
-            role: 'user',
-            content: text,
-            timestamp: Date.now()
-        };
-        setConversationHistory(prev => [...prev, userMessage]);
+        // 添加用户消息到历史 (Skip for System Instructions)
+        let userMessage: Message | null = null;
+        if (!text.startsWith('(Private System Instruction)')) {
+            userMessage = {
+                role: 'user',
+                content: text,
+                timestamp: Date.now()
+            };
+            setConversationHistory(prev => [...prev, userMessage!]);
+        }
 
         try {
             // 1. Retrieve Relevant Memories (Hybrid Memory L3)
             let relevantMemories = '';
             try {
-                // Only search if not empty
-                if (text.trim().length > 2) {
+                // Only search if not empty AND not a system instruction (which handles its own inspiration)
+                if (text.trim().length > 2 && !text.startsWith('(Private System Instruction)')) {
                     console.log('[Memory] Searching for relevant memories...');
-                    relevantMemories = await memoryService.search(text);
+                    const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
+                    relevantMemories = await memoryService.search(text, 10, userName, activeChar.name);
                     if (relevantMemories) {
                         console.log('[Memory] Found related memories:', relevantMemories);
                     }
@@ -300,102 +394,129 @@ function App() {
                 });
             }
 
-            let fullRawResponse = '';
+            // 使用 Ref 来存储累积的响应，防止闭包过时问题
+            // Use Ref for accumulated response to prevent staleness
+            // 使用 Ref 来存储累积的响应，防止闭包过时问题
+            // Use Ref for accumulated response to prevent staleness
+            const fullRawResponseRef = { current: '' }; 
             emotionBufferRef.current = '';
+            
+            const onToken = (token: string) => {
+                // Accumulate in Ref
+                fullRawResponseRef.current += token;
+                emotionBufferRef.current += token;
 
-            // 使用带历史的流式聊天
-            await llmService.chatStreamWithHistory(
+                // 1. Check for complete (emotion) tags or [emotion] tags to trigger Live2D
+                if (token.includes(')') || token.includes(']') || token.includes('）')) {
+                    console.log('[App] Emotion tag delimiter detected, buffer:', emotionBufferRef.current);
+                    processEmotions(emotionBufferRef.current);
+                    emotionBufferRef.current = ''; // Reset buffer
+                }
+
+                // 2. Filter for Display
+                // Improved Logic: 
+                // - Only verify balanced brackets if possible, otherwise be lenient.
+                // - Handle nested brackets by strictly matching innermost or just ignoring nesting for now.
+                // - Stop stripping incomplete tags at the end to prevent "flickering" or data loss if tag is malformed? 
+                //   Actually hiding incomplete tags is good UX, but let's be safer.
+                
+                let displayUpdate = fullRawResponseRef.current;
+                
+                // Remove complete [tag] and (tag) - Non-greedy
+                displayUpdate = displayUpdate.replace(/\[.*?\]/g, ''); 
+                displayUpdate = displayUpdate.replace(/\(.*?\)/g, '');
+                
+                // Remove incomplete trailing tags (Visual polish, but risky if stream pauses)
+                // Only remove if it looks like a started tag (short length)
+                displayUpdate = displayUpdate.replace(/\[[^\]]{0,20}$/, '');
+                displayUpdate = displayUpdate.replace(/\([^)]{0,20}$/, '');
+
+                setCurrentMessage(displayUpdate);
+
+                // 3. Feed RAW token to splitter 
+                if (isTTSEnabled && sentenceSplitterRef.current) {
+                    sentenceSplitterRef.current.feedToken(token);
+                }
+            };
+
+            const onEnd = () => {
+                console.log('[App] Stream ended');
+                // 流结束后的处理
+                setIsStreaming(false);
+                setIsProcessing(false);
+
+                // 刷新句子分割器
+                if (isTTSEnabled && sentenceSplitterRef.current) {
+                    sentenceSplitterRef.current.flush();
+                }
+
+                // 添加助手回复到历史 (Cleaned)
+                const finalCleanContent = fullRawResponseRef.current.replace(/\([^)]*\)/g, '').trim();
+                const assistantMessage: Message = {
+                    role: 'assistant',
+                    content: finalCleanContent,
+                    timestamp: Date.now()
+                };
+
+                // 使用临时变量，因为 state 更新是异步的
+                setConversationHistory(prev => {
+                     const updatedHistory = [...prev, assistantMessage];
+                     
+                     // --- Smart Pruning / Smart Archive Logic (L3) ---
+                     // DeepSeek Cache Strategy: Keep distinct prefix as long as possible.
+                     // Don't prune 1-by-1. Prune in bulk when limit reached.
+                     
+                     // Limit: 200 turns = 400 messages (Soft Limit)
+                     const PRUNING_THRESHOLD = 400; 
+
+                     if (updatedHistory.length > PRUNING_THRESHOLD) {
+                        console.log(`[Memory] History length (${updatedHistory.length}) exceeded threshold (${PRUNING_THRESHOLD}). Triggering Smart Pruning...`);
+                        
+                        // Strategy: Archive oldest 70%, Keep recent 30%
+                        const keepRatio = 0.3;
+                        const keepCount = Math.floor(PRUNING_THRESHOLD * keepRatio); // ~120 msgs
+                        const archiveCount = updatedHistory.length - keepCount;      // ~280+ msgs
+                        
+                        const messagesToArchive = updatedHistory.slice(0, archiveCount);
+                        const messagesToKeep = updatedHistory.slice(archiveCount);
+                        
+                        console.log(`[Memory] Archiving ${messagesToArchive.length} messages, Keeping ${messagesToKeep.length}.`);
+
+                        // 1. Send to Backend for Consolidation (Dreaming/VectorDB)
+                        const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
+                        memoryService.consolidateHistory(messagesToArchive, userName, activeChar.name);
+
+                        // 2. Update Frontend State (The "Cache Break" happens here once)
+                        return messagesToKeep;
+                     }
+
+                     return updatedHistory;
+                });
+
+                // --- Async: Add to Long-Term Memory (L3) --- (Need activeChar and userName)
+                // Note: activeCharacterId, characters, userName are closure vars.
+                const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
+                const messagesToStore = userMessage ? [userMessage, assistantMessage] : [assistantMessage];
+                
+                memoryService.add(messagesToStore, userName, activeChar.name)
+                    .catch(err => console.error('[Memory] Failed to store interaction:', err));
+                
+                // Cleanup
+                (window as any).llm.removeStreamListeners();
+            };
+
+            // Setup Listeners BEFORE sending request
+            (window as any).llm.onStreamToken(onToken);
+            (window as any).llm.onStreamEnd(onEnd); // This will handle cleanup too via our wrapper logic if we want, but let's be explicit
+
+             // Send Request via IPC
+            (window as any).llm.chatStreamWithHistory(
                 conversationHistory,
                 text,
                 contextWindow,
-                (token: string) => {
-                    // 减少 token 日志的输出频率,避免刷屏
-                    // console.log('[LLM Token]:', JSON.stringify(token));
-                    fullRawResponse += token;
-                    emotionBufferRef.current += token;
-
-                    // 1. Check for complete (emotion) tags or [emotion] tags to trigger Live2D
-                    if (token.includes(')') || token.includes(']') || token.includes('）')) {
-                        console.log('[App] Emotion tag delimiter detected, buffer:', emotionBufferRef.current);
-                        processEmotions(emotionBufferRef.current);
-                        emotionBufferRef.current = ''; // Reset buffer
-                    }
-
-                    // 2. Filter for Display
-                    // Remove complete tags (..) and [..] and trailing incomplete tag (.. or [..
-                    const displayUpdate = fullRawResponse
-                        .replace(/\[[^\]]*\]/g, '')  // Remove complete [tag]
-                        .replace(/\([^)]*\)/g, '')   // Remove complete (paren)
-                        .replace(/\[[^\]]*$/, '')    // Remove incomplete trailing [
-                        .replace(/\([^)]*$/, '');    // Remove incomplete trailing (
-
-                    setCurrentMessage(displayUpdate);
-
-                    // 3. Feed RAW token to splitter 
-                    // (Splitter needs punctuation to decide when to split. 
-                    // We clean the *result* sentence in the callback above.)
-                    if (isTTSEnabled && sentenceSplitterRef.current) {
-                        sentenceSplitterRef.current.feedToken(token);
-                    }
-                },
-                conversationSummary, // 传递当前摘要
-                relevantMemories     // 传递长期记忆
+                conversationSummary,
+                relevantMemories
             );
-
-            // 流结束后的处理
-            setIsStreaming(false);
-            setIsProcessing(false);
-
-            // 刷新句子分割器
-            if (isTTSEnabled && sentenceSplitterRef.current) {
-                sentenceSplitterRef.current.flush();
-            }
-
-            // 添加助手回复到历史 (Cleaned)
-            const finalCleanContent = fullRawResponse.replace(/\([^)]*\)/g, '').trim();
-            const assistantMessage: Message = {
-                role: 'assistant',
-                content: finalCleanContent,
-                timestamp: Date.now()
-            };
-
-            // 使用临时变量，因为 state 更新是异步的
-            const updatedHistory = [...conversationHistory, userMessage, assistantMessage];
-            setConversationHistory(prev => [...prev, assistantMessage]);
-
-            // --- Async: Add to Long-Term Memory (L3) ---
-            const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
-            memoryService.add([userMessage, assistantMessage], userName, activeChar.name)
-                .catch(err => console.error('[Memory] Failed to store interaction:', err));
-
-            // --- 自动摘要逻辑 (L2) ---
-            if (autoSummarizationEnabled) {
-                // 如果历史记录超过 contextWindow 的 2.5倍 (留有余量)，触发压缩
-                const maxHistoryLength = contextWindow * 2.5;
-                if (updatedHistory.length > maxHistoryLength) {
-                    console.log('[Memory] History too long, triggering summarization...');
-
-                    // 1. 计算需要移除的消息数量 (保留最近的 contextWindow * 2)
-                    // 这样我们既有摘要，又有最近的完整对话
-                    const keepCount = contextWindow * 2;
-                    const removeCount = updatedHistory.length - keepCount;
-
-                    if (removeCount > 0) {
-                        // 2. 提取要总结的消息
-                        const messagesToSummarize = updatedHistory.slice(0, removeCount);
-                        const keptMessages = updatedHistory.slice(removeCount);
-
-                        // 3. 调用 API 生成摘要
-                        llmService.updateSummary(conversationSummary, messagesToSummarize)
-                            .then(newSummary => {
-                                console.log('[Memory] New Summary:', newSummary);
-                                setConversationSummary(newSummary);
-                                setConversationHistory(keptMessages);
-                            })
-                            .catch(err => console.error('[Memory] Summarization failed:', err));
-                    }
-                }
-            }
 
             // Trigger Live2D Motion
             if (live2dRef.current) {
@@ -416,15 +537,106 @@ function App() {
         audioQueueRef.current.clear();
     };
 
+    // Proactive Interaction Loop
+    const handleSendRef = React.useRef(handleSend);
+    const isProcessingRef = React.useRef(isProcessing); // Add Ref for state
+    
+    useEffect(() => {
+        handleSendRef.current = handleSend;
+        isProcessingRef.current = isProcessing; // Sync Ref
+    });
+
+    useEffect(() => {
+        const timer = setInterval(async () => {
+             if (isProcessingRef.current) return;
+             try {
+                 const res = await fetch('http://localhost:8001/soul');
+                 if (!res.ok) return;
+                 const soul = await res.json();
+                 
+                 // Dynamic System Prompt Update
+                 // Only update if content changed significantly to avoid jitter
+                 if (soul.system_prompt && soul.system_prompt !== currentSystemPromptRef.current) {
+                     console.log('[App] 🧠 System Prompt Dynamically Updated from Backend');
+                     (window as any).llm.setSystemPrompt(soul.system_prompt);
+                     currentSystemPromptRef.current = soul.system_prompt;
+                 }
+
+                 if (soul.state?.pending_interaction) {
+                     console.log("[App] ⚡ Proactive Interaction Detected!");
+                     const { level, current_stage_label } = soul.relationship || { level: 0, current_stage_label: 'Stranger' };
+                     
+                     // 1. Fetch Inspiration (Random Facts/Memories)
+                     let inspirationText = "";
+                     try {
+                         // TODO: Use activeCharacterId from ref or state if possible, currently hardcoded to default or handled by backend default
+                         // Actually backend default is 'hiyori', which is fine for now.
+                         const inspRes = await fetch('http://localhost:8001/memory/inspiration?limit=2');
+                         if (inspRes.ok) {
+                             const memories = await inspRes.json();
+                             if (Array.isArray(memories) && memories.length > 0) {
+                                 // Clean up UUID and timestamp prefixes from content
+                                 const cleanMemories = memories.map((m: any) => {
+                                     const cleanContent = m.content.replace(/^\([a-fA-F0-9-]+\)\s*\[[^\]]+\]\s*/, '').trim();
+                                     return cleanContent;
+                                 });
+                                 inspirationText = "\n[Random Memory Fragments]:\n" + 
+                                     cleanMemories.map((c: string) => `- ${c}`).join("\n");
+                             }
+                         }
+                     } catch (err) {
+                         console.warn("[App] Failed to fetch inspiration:", err);
+                     }
+
+                     const nowStr = new Date().toLocaleString();
+
+                     const instruction = `(Private System Instruction)
+[SYSTEM NOTICE]
+Current Time: ${nowStr}
+Relationship: Lv.${level} (${current_stage_label})
+Task: Continue a conversation naturally.
+
+${inspirationText}
+
+GUIDELINES:
+- Use the [Random Memory Fragments] as a topic starter IF they seem interesting, or just continue the history conversation.
+- Keep it natural, casual, and brief.
+- Context: You are ${soul.identity?.name}. Don't mention you are an AI.`;
+                     
+                     handleSendRef.current(instruction);
+                 }
+             } catch (e) { }
+        }, 5000);
+        return () => clearInterval(timer);
+    }, []);
+
     return (
-        <div style={{ width: '100vw', height: '100vh', backgroundColor: 'transparent', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ 
+            width: '100vw', 
+            height: '100vh', 
+            backgroundImage: 'url(/bg.png)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            position: 'relative', 
+            overflow: 'hidden' 
+        }}>
 
             {/* Live2D Layer */}
-            <Live2DViewer
-                ref={live2dRef}
-                modelPath="/live2d/Hiyori/Hiyori.model3.json"
-                highDpi={live2dHighDpi}
-            />
+            {(() => {
+                const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
+                const modelPath = activeChar?.modelPath || "/live2d/Hiyori/Hiyori.model3.json";
+                return (
+                    <Live2DViewer
+                        key={modelPath} // Force remount on model change
+                        ref={live2dRef}
+                        modelPath={modelPath}
+                        highDpi={live2dHighDpi}
+                    />
+                );
+            })()}
+
+            {/* GalGame Mode HUD */}
+            <GalGameHud />
 
             {/* UI Layer */}
             <ChatBubble message={currentMessage} isStreaming={isStreaming} />

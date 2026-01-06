@@ -8,15 +8,15 @@ interface MotionTesterProps {
 
 const MotionTester: React.FC<MotionTesterProps> = ({ onTriggerMotion, isOpen, onClose }) => {
     const idleMotions = [
-        { index: 0, label: '默认/悲伤', emotion: 'neutral/sad' },
-        { index: 1, label: '动作1 (思考)', emotion: 'thinking/思考' },
-        { index: 2, label: '动作2 (可能是害羞)', emotion: 'shy?' },
-        { index: 3, label: '动作3 (未知)', emotion: 'unknown' },
-        { index: 4, label: '动作4 (开心)', emotion: 'happy/开心' },
-        { index: 5, label: '动作5 (惊讶)', emotion: 'surprised/惊讶' },
-        { index: 6, label: '动作6 (喜欢)', emotion: 'love/喜欢' },
-        { index: 7, label: '动作7 (生气)', emotion: 'angry/生气' },
-        { index: 8, label: '动作8 (困)', emotion: 'sleepy/困' },
+        { index: 0, label: 'Standard/Relaxed', emotion: 'neutral' },
+        { index: 1, label: 'Smile/Thinking', emotion: 'happy/thinking' },
+        { index: 2, label: 'Shy/Blush', emotion: 'shy' },
+        { index: 3, label: 'Serious/Concerned', emotion: 'serious' },
+        { index: 4, label: 'Happy/Excited', emotion: 'happy' },
+        { index: 5, label: 'Surprised/Shocked', emotion: 'surprised' },
+        { index: 6, label: 'Love/Affection', emotion: 'love' },
+        { index: 7, label: 'Angry/Annoyed', emotion: 'angry' },
+        { index: 8, label: 'Sleepy/Tired', emotion: 'sleepy' },
     ];
 
     return (

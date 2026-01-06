@@ -72,7 +72,7 @@ export class MemoryService {
     /**
      * Search for relevant memories based on query
      */
-    public async search(query: string, limit: number = 5): Promise<string> {
+    public async search(query: string, limit: number = 10, userName: string = 'User', charName: string = 'AI'): Promise<string> {
         if (!this.isConfigured) {
             console.warn('[MemoryService] Search skipped: Not configured.');
             return '';
@@ -82,7 +82,7 @@ export class MemoryService {
         try {
             const payload = {
                 user_id: "user",
-                character_id: this.currentCharacterId,  // 添加这行
+                character_id: this.currentCharacterId,
                 query: query,
                 limit: limit
             };
@@ -107,12 +107,30 @@ export class MemoryService {
 
                 console.log(`[MemoryService] Parsed ${results.length} memories.`);
 
-                // Format results into a string
+                // Format results into a string with full metadata
                 if (results.length > 0) {
                     const formatted = results.map((res: any) => {
-                        const dateStr = res.timestamp ? new Date(res.timestamp).toISOString().split('T')[0] : 'Unknown Date';
+                        // Basic info
+                        let dateStr = 'Unknown';
+                        if (res.timestamp) {
+                            const date = new Date(res.timestamp);
+                            if (!isNaN(date.getTime())) {
+                                dateStr = date.toISOString().split('T')[0];
+                            }
+                        }
                         const scoreStr = res.score ? res.score.toFixed(2) : '0.00';
-                        return `- [${dateStr} | Score: ${scoreStr}] ${res.text}`;
+                        
+                        // Extract metadata from payload
+                        const payload = res.payload || {};
+                        const emotion = payload.emotion || 'neutral';
+                        const importance = payload.importance || 1;
+                        
+                        // Determine memory owner using current session names
+                        const source = payload.source || 'unknown';
+                        const memoryOwner = source === 'user' ? userName : charName;
+                        
+                        // Format: [Date | Relevance | Owner | Emotion | Importance] Content
+                        return `- [${dateStr} | Relevance:${scoreStr} | ${memoryOwner} | Emotion:${emotion} | Importance:${importance}] ${res.text}`;
                     }).join('\n');
                     console.log('[MemoryService] Formatted Memory Context:', formatted);
                     return formatted;
@@ -157,6 +175,35 @@ export class MemoryService {
     }
 
     /**
+     * Archive/Consolidate a batch of history messages.
+     * Use this when pruning old conversation history.
+     */
+    public async consolidateHistory(messages: Message[], userName: string, charName: string): Promise<void> {
+        if (!this.isConfigured || messages.length === 0) return;
+
+        try {
+            console.log(`[MemoryService] Consolidating ${messages.length} messages...`);
+            const payload = {
+                user_id: "user",
+                character_id: this.currentCharacterId,
+                user_name: userName,
+                char_name: charName,
+                messages: messages
+            };
+
+            // Using a new endpoint for bulk consolidation/archiving
+            await fetch(`${MEMORY_SERVER_URL}/consolidate_history`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            console.log('[MemoryService] Consolidation request sent.');
+        } catch (error) {
+            console.error('[MemoryService] Consolidation error:', error);
+        }
+    }
+
+    /**
      * Reset memory
      */
     public async reset(): Promise<void> {
@@ -168,6 +215,34 @@ export class MemoryService {
             console.log('[MemoryService] Memory reset successfully.');
         } catch (error) {
             console.error('[MemoryService] Reset error:', error);
+        }
+    }
+
+
+
+    /**
+     * Trigger Deep Dreaming (Level 2 Consolidation) on Idle.
+     */
+    public async triggerDeepDreaming(userName: string, charName: string): Promise<void> {
+        if (!this.isConfigured) return;
+
+        try {
+            console.log(`[MemoryService] 🌙 Triggering Deep Dreaming for ${charName}...`);
+            const payload = {
+                user_id: "user",
+                character_id: this.currentCharacterId,
+                user_name: userName,
+                char_name: charName
+            };
+
+            await fetch(`${MEMORY_SERVER_URL}/dream_on_idle`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            console.log('[MemoryService] Dream request sent.');
+        } catch (error) {
+            console.error('[MemoryService] Dream trigger error:', error);
         }
     }
 

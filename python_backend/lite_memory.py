@@ -23,7 +23,9 @@ logger = logging.getLogger("LiteMemory")
 from fact_extractor import FactExtractor
 
 
+
 from memory_consolidator import MemoryConsolidator
+from time_indexed_memory import TimeIndexedMemory
 
 class LiteMemory:
     def __init__(self, config: Dict, character_id: str = "hiyori"):
@@ -34,6 +36,7 @@ class LiteMemory:
         
         config: {
             "qdrant_path": "./lite_memory_db", 
+            "sqlite_path": "./memory_db/lumina_memory.db",
             "openai_base_url": "...",
             "api_key": "...",
             "embedder_model": "sangmini/msmarco-cotmae-MiniLM-L12_en-ko-ja"
@@ -42,6 +45,10 @@ class LiteMemory:
         """
         self.config = config
         self.character_id = character_id
+        
+        # Thresholds (Configurable)
+        self.batch_threshold = config.get("batch_threshold", 5) # Default 5 (was 20)
+        self.consolidation_threshold = config.get("consolidation_threshold", 2) # Default 2 (was 10)
         
         # Dual collection names
         self.user_collection_name = "memory_user"  # Shared across all characters
@@ -58,66 +65,221 @@ class LiteMemory:
         print(f"[LiteMemory] === Dual-Layer Memory Architecture ===")
         print(f"[LiteMemory] Character: {character_id}")
         
+        # 0. Initialize SQLite Time-Indexed Memory (SQL Layer)
+        sqlite_path = config.get("sqlite_path", "./memory_db/lumina_memory.db")
+        self.sql_db = TimeIndexedMemory(sqlite_path)
+        print(f"[LiteMemory] SQLite initialized at: {sqlite_path}")
+
         # 1. Initialize Qdrant (Local persistent)
         self.client = QdrantClient(path=config.get("qdrant_path", "./lite_memory_db"))
         
         # 2. Initialize Embedder (Local with Auto-Download)
-        embedder_path_name = config.get("embedder_model")
+        embedder_path_name = config.get("embedder_model") or config.get("embedder")
         
-        # Resolve Repo ID for download (snapshot_download needs full ID, but config might be short alias)
+        # Resolve Repo ID for download
         repo_id = embedder_path_name
+        if not repo_id:
+             repo_id = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        
         if repo_id == "paraphrase-multilingual-MiniLM-L12-v2":
             repo_id = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-        elif "/" not in repo_id:
-             # Heuristic: If complex enough model, default to sentence-transformers? 
-             # Or just hope user provides full ID for others.
-             # For now, we only explicit fix the default.
-             pass
 
-        # Local folder name: Use the basename (e.g. "paraphrase-multilingual-MiniLM-L12-v2")
-        # cleanly handled in models/ directory without organization prefix
+        # Local folder name logic
         model_folder_name = repo_id.split("/")[-1]
-
-        # Determine base path of this script
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up one level to project root, then into 'models'
         local_embedder_path = os.path.abspath(os.path.join(base_dir, "..", "models", model_folder_name))
         
-        print(f"[LiteMemory] Local model path target: {local_embedder_path}")
-
+        # Determine target path
         if os.path.exists(local_embedder_path) and os.listdir(local_embedder_path):
-             print(f"[LiteMemory] ✅ Found existing local embedder model.")
+             print(f"[LiteMemory] ✅ Found existing local embedder: {local_embedder_path}")
+             target_path = local_embedder_path
         else:
-             print(f"[LiteMemory] ⬇️ Local embedder not found. Downloading to {local_embedder_path}...")
+             print(f"[LiteMemory] ⬇️ Local embedder not found. Downloading...")
              try:
                  snapshot_download(repo_id=repo_id, local_dir=local_embedder_path)
-                 print(f"[LiteMemory] Download complete.")
-             except Exception as e:
-                 print(f"[LiteMemory] ⚠️ Download failed: {e}. Attempting fallback load from cache/hub...")
-                 pass
+                 target_path = local_embedder_path
+             except Exception:
+                 target_path = embedder_path_name or repo_id # Fallback
 
-        # If download succeeded or files existed, use local path. Otherwise fallback to ID
-        if os.path.exists(local_embedder_path) and os.listdir(local_embedder_path):
-            target_path = local_embedder_path
+        # --- MODEL CACHING LOGIC ---
+        if not hasattr(LiteMemory, "_encoder_cache"):
+            LiteMemory._encoder_cache = {}
+
+        if target_path in LiteMemory._encoder_cache:
+            print(f"[LiteMemory] ⚡ Using CACHED embedder from: {target_path}")
+            self.encoder = LiteMemory._encoder_cache[target_path]
         else:
-            target_path = embedder_path_name
-
-        print(f"[LiteMemory] Loading embedder from: {target_path} ...")
-        self.encoder = SentenceTransformer(target_path)
+            print(f"[LiteMemory] 🐢 Loading embedder from disk: {target_path} ...")
+            self.encoder = SentenceTransformer(target_path)
+            LiteMemory._encoder_cache[target_path] = self.encoder
+            
         self.embedding_size = self.encoder.get_sentence_embedding_dimension()
         print(f"[LiteMemory] Embedder loaded. Dim: {self.embedding_size}")
         
         # 3. Initialize Fact Extractor
+        base_url = config.get("openai_base_url") or config.get("base_url")
         self.fact_extractor = FactExtractor(
-            api_key=config["api_key"],
-            base_url=config["openai_base_url"]
+            api_key=config.get("api_key"),
+            base_url=base_url
         )
         
         # 4. Initialize Consolidator
         self.consolidator = MemoryConsolidator(self.client, config)
 
         # 5. Background Queue
-        # 5. Background Queue
+        self.queue = Queue()
+        self.running = True
+        self.worker_thread = Thread(target=self._worker_loop, daemon=True)
+        self.worker_thread.start()
+        
+        # 6. Startup Recovery Check
+        self._startup_recovery()
+
+    def search_hybrid(self, query: str, limit: int = 10, empower_factor: float = 0.5) -> List[Dict]:
+        """
+        Hybrid Search: Vector (Semantic) + SQLite FTS (Keyword)
+        Combined using Reciprocal Rank Fusion (RRF).
+        
+        Args:
+            query: User's search query.
+            limit: Number of results to return.
+            empower_factor: (Unused for simple RRF, but kept for future weighting)
+            
+        Returns:
+            List of memory objects sorted by hybrid score.
+        """
+        print(f"[LiteMemory] Hybrid Search for: '{query}'")
+        
+        # 1. Vector Search (Qdrant) - Semantic Recall
+        # Search both Character and User collections
+        vector_results = []
+        try:
+            query_vector = self.encoder.encode(query).tolist()
+            for col in [self.character_collection_name, self.user_collection_name]:
+                res = self.client.query_points(
+                    collection_name=col,
+                    query=query_vector,
+                    limit=limit * 2, # Fetch more for re-ranking
+                    with_payload=True
+                ).points
+                vector_results.extend(res)
+        except Exception as e:
+            print(f"[LiteMemory] Vector search failed: {e}")
+
+        # 2. Keyword Search (SQLite FTS) - Precision Recall
+        keyword_results = []
+        try:
+            # Search specific character + user ('user' char_id in sqlite)
+            # We search ONE time per character ID?
+            # SQLite 'character_id' field stores 'hiyori' or 'user'.
+            # We want both.
+            # TODO: Update TimeIndexedMemory to support multiple char_ids OR call twice.
+            # Calling twice is easier.
+            
+            keyword_results.extend(self.sql_db.get_memories_by_keyword(self.character_id, query, limit * 2))
+            keyword_results.extend(self.sql_db.get_memories_by_keyword("user", query, limit * 2))
+            
+        except Exception as e:
+            print(f"[LiteMemory] Keyword search failed: {e}")
+
+        # 3. Reciprocal Rank Fusion (RRF)
+        # RRF Score = 1 / (k + rank)
+        k = 60
+        scores = {} # id -> score
+        memory_map = {} # id -> memory_obj
+        
+        # Process Vector Results
+        for rank, item in enumerate(vector_results):
+            mem_id = item.id
+            if mem_id not in scores:
+                scores[mem_id] = 0.0
+                # Normalize Qdrant/SQLite format differences
+                memory_map[mem_id] = {
+                    "id": mem_id,
+                    "text": item.payload.get("text"),
+                    "timestamp": item.payload.get("timestamp"),
+                    "score": item.score, # Original vector score
+                    "source": "vector",
+                    "payload": item.payload
+                }
+            
+            scores[mem_id] += 1.0 / (k + rank + 1)
+
+        # Process Keyword Results
+        for rank, item in enumerate(keyword_results):
+            mem_id = item["id"]
+            if mem_id not in scores:
+                scores[mem_id] = 0.0
+                memory_map[mem_id] = {
+                    "id": mem_id,
+                    "text": item["content"],
+                    "timestamp": item["created_at"],
+                    "score": 0.0, # Will be RRF score
+                    "source": "keyword",
+                    "payload": json.loads(item["metadata"]) if isinstance(item["metadata"], str) else item["metadata"]
+                }
+            
+            scores[mem_id] += 1.0 / (k + rank + 1)
+
+        # 4. Sort & Format
+        combined = []
+        for mem_id, score in scores.items():
+            mem = memory_map[mem_id]
+            mem["hybrid_score"] = score
+            combined.append(mem)
+        
+        # Sort by RRF score descending
+        combined.sort(key=lambda x: x["hybrid_score"], reverse=True)
+        
+        # Return top N
+        final_results = combined[:limit]
+        print(f"[LiteMemory] Hybrid Search merged {len(vector_results)} vector + {len(keyword_results)} keyword -> {len(final_results)} results.")
+        return final_results
+
+    def get_random_inspiration(self, limit: int = 3):
+        """
+        Returns random facts from consolidated memories to inspire AI's proactive conversation.
+        Uses SQL RANDOM() to avoid expensive vector search.
+        """
+        try:
+            # Use proper connection method
+            with self.sql_db._get_connection() as conn:
+                # Query random consolidated facts from both channels
+                query = """
+                    SELECT text, emotion, importance, created_at, channel, source_name
+                    FROM facts_staging
+                    WHERE consolidated = 1
+                    ORDER BY RANDOM()
+                    LIMIT ?
+                """
+                cursor = conn.execute(query, (limit,))
+                rows = cursor.fetchall()
+                
+                results = []
+                for row in rows:
+                    results.append({
+                        "content": row[0],
+                        "emotion": row[1],
+                        "importance": row[2],
+                        "timestamp": row[3],
+                        "channel": row[4],
+                        "source": row[5] if row[5] else "Unknown"
+                    })
+                
+                print(f"[LiteMemory] 🎲 Random Inspiration: Fetched {len(results)} facts")
+                return results
+                
+        except Exception as e:
+            print(f"[LiteMemory] Error fetching random inspiration: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def close(self):
+        """Cleanup resources"""
+        self.running = False
+        # self.worker_thread.join() # Don't block exit
+        pass
         self.queue = Queue()
         self.running = True
         self.worker_thread = Thread(target=self._worker_loop, daemon=True)
@@ -127,6 +289,19 @@ class LiteMemory:
         self._init_dual_collections()
         
         print(f"[LiteMemory] Initialization complete.")
+
+    # === Graph / Event Sourcing Wrappers ===
+    def add_event_log(self, content: str, event_type: str = "interaction") -> str:
+        """Log an event to the immutable Event Store."""
+        return self.sql_db.add_event(content, event_type)
+
+    def add_knowledge_edge(self, source: str, target: str, relation: str, weight: float = 1.0):
+        """Add a directed edge to the Knowledge Graph."""
+        self.sql_db.add_graph_edge(source, target, relation, weight)
+
+    def get_knowledge_context(self, memory_ids: List[str], hops: int = 1) -> List[Dict]:
+        """Retrieve 1-hop graph context for given memories."""
+        return self.sql_db.get_graph_context(memory_ids, hops)
 
     def _init_dual_collections(self):
         """Initialize both user and character collections and backup files"""
@@ -331,19 +506,17 @@ class LiteMemory:
             print(f"[LiteMemory] Error searching {collection_name}: {e}")
             return []
 
-    def add_memory_async(self, user_input: str, ai_response: str, user_name: str = "User", char_name: str = "AI"):
+    def add_memory_async(self, task: Dict):
         """
         Fire-and-forget: Add task to queue
+        task dict should contain: user_input, ai_response, user_name, char_name, timestamp (optional)
         """
-        print(f"[LiteMemory] Enqueuing memory task. Input len: {len(user_input)} User: {user_name} Char: {char_name}")
-        task = {
-            "type": "add",
-            "user_input": user_input,
-            "ai_response": ai_response,
-            "user_name": user_name,
-            "char_name": char_name,
-            "timestamp": datetime.now().isoformat()
-        }
+        if "type" not in task:
+            task["type"] = "add"
+        if "timestamp" not in task:
+            task["timestamp"] = datetime.now().isoformat()
+            
+        print(f"[LiteMemory] Enqueuing memory add task.")
         self.queue.put(task)
         print(f"[LiteMemory] Task queued. Queue Size: {self.queue.qsize()}")
 
@@ -360,6 +533,16 @@ class LiteMemory:
             try:
                 if task["type"] == "add":
                     self._process_add_task(task)
+                elif task["type"] == "recover_extraction":
+                    self._extract_facts_batch()
+                elif task["type"] == "recover_consolidation":
+                    # Use generic names for recovery actions if not provided
+                    u_name = task.get("user_name", "User")
+                    c_name = task.get("char_name", "AI")
+                    # Determine collection
+                    col = self.user_collection_name if task["channel"] == "user" else self.character_collection_name
+                    self._handle_consolidation(col, task["channel"], u_name, c_name)
+                    
             except Exception as e:
                 print(f"[LiteMemory] Worker error: {e}")
                 import traceback
@@ -367,117 +550,338 @@ class LiteMemory:
             finally:
                 self.queue.task_done()
 
+    def _startup_recovery(self):
+        """Check for backlog and enqueue recovery tasks."""
+        print("[LiteMemory] 🔍 Checking for recovery tasks...")
+        
+        # Check Buffer
+        try:
+            count = self.sql_db.get_conversations_count(processed=False)
+            if count >= self.batch_threshold:
+                 print(f"[LiteMemory] ⚠️ Found {count} buffered conversations. Triggering extraction recovery.")
+                 self.queue.put({"type": "recover_extraction", "timestamp": str(time.time())})
+        except Exception as e:
+            print(f"[LiteMemory] Recovery check failed (Buffer): {e}")
+
+        # Check Staging
+        try:
+            for ch in ["user", "character"]:
+                 c = self.sql_db.get_facts_count(channel=ch, consolidated=False)
+                 if c >= self.consolidation_threshold:
+                      print(f"[LiteMemory] ⚠️ Found {c} unconsolidated {ch} facts. Triggering consolidation recovery.")
+                      self.queue.put({
+                          "type": "recover_consolidation", 
+                          "channel": ch, 
+                          "timestamp": str(time.time()),
+                          # Use config names if possible? But self.config might not have specific names. 
+                          # Just use defaults.
+                      })
+        except Exception as e:
+            print(f"[LiteMemory] Recovery check failed (Staging): {e}")
+
+    
+    def _save_fact_to_storage(self, fact: Dict, channel: str, collection_name: str, source_name: str):
+        """Helper to save a newly extracted fact to Qdrant and Staging Table."""
+        text = fact.get("text", "")
+        if not text: return
+        
+        vector_id = str(uuid.uuid4())
+        # Generate embedding
+        vector = self.encoder.encode(text).tolist()
+        
+        # 1. Upsert to Qdrant
+        self.client.upsert(
+            collection_name=collection_name,
+            points=[models.PointStruct(
+                id=vector_id,
+                vector=vector,
+                payload=fact
+            )]
+        )
+        
+        # 2. Add to Staging
+        # fact_id for staging table
+        f_staging_id = str(uuid.uuid4())
+        self.sql_db.add_fact_staging(
+            fact_id=f_staging_id, 
+            text=text,
+            emotion=fact.get("emotion", "neutral"),
+            importance=fact.get("importance", 1),
+            timestamp=fact.get("timestamp", datetime.now().isoformat()),
+            channel=channel,
+            source_name=source_name,
+            vector_id=vector_id
+        )
+
+    def _extract_facts_batch(self):
+        """
+        Phase 2 Logic: Batch Fact Extraction
+        Triggered when unprocessed conversations >= 20.
+        """
+        try:
+            # 1. Check Count
+            unprocessed_count = self.sql_db.get_conversations_count(processed=False)
+            if unprocessed_count < self.batch_threshold: 
+                return
+
+            print(f"[LiteMemory] Triggering Batch Extraction (Backlog: {unprocessed_count})...")
+            
+            # 2. Fetch limit 20
+            conversations = self.sql_db.get_unprocessed_conversations(limit=20)
+            if not conversations:
+                return
+                
+            # Assume single user/char context for now (or taking from first item)
+            user_name = conversations[0]['user_name']
+            char_name = conversations[0]['char_name']
+            
+            # 3. Channel 1: User Facts (Concat all user inputs)
+            batch_context_user = "\n".join([
+                f"[{c['timestamp']}] {c['user_name']}: {c['user_input']}" 
+                for c in conversations
+            ])
+            
+            print("[LiteMemory] [Channel 1] Batch extracting USER facts...")
+            user_facts = self.fact_extractor.extract_batch(batch_context_user, focus="user", person_name=user_name)
+            
+            # Save to Qdrant + Staging
+            for fact in user_facts:
+                self._save_fact_to_storage(fact, "user", self.user_collection_name, user_name)
+
+            # 4. Channel 2: Conversation Facts (Topics)
+            batch_context_conv = "\n".join([
+                f"[{c['timestamp']}] {c['user_name']}: {c['user_input']}\n{c['char_name']}: {c['ai_response']}"
+                for c in conversations
+            ])
+            
+            print("[LiteMemory] [Channel 2] Batch extracting CONVERSATION topics...")
+            conv_facts = self.fact_extractor.extract_batch(batch_context_conv, focus="conversation", person_name=char_name)
+            
+            # Save to Qdrant + Staging
+            for fact in conv_facts:
+                self._save_fact_to_storage(fact, "character", self.character_collection_name, char_name)
+                
+            # 5. Mark as Processed
+            batch_id = str(uuid.uuid4())
+            conv_ids = [c['id'] for c in conversations]
+            self.sql_db.mark_conversations_processed(conv_ids, batch_id)
+            print(f"[LiteMemory] Batch {batch_id} processed ({len(conv_ids)} conversations).")
+            
+            # 6. Trigger Consolidation Check
+            self._handle_consolidation(self.user_collection_name, "user", user_name, char_name)
+            self._handle_consolidation(self.character_collection_name, "character", user_name, char_name)
+            
+        except Exception as e:
+            print(f"[LiteMemory] Batch extraction error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _handle_consolidation(self, collection_name: str, channel: str, user_name: str, char_name: str):
+        """Phase 3: Trigger Incremental Consolidation"""
+        # (This replaces the old method signature, so we need to be careful with callers if any exist besides _process)
+        try:
+            # Check staging count
+            count = self.sql_db.get_facts_count(channel=channel, consolidated=False)
+            if count < self.consolidation_threshold:
+                return
+
+            print(f"[LiteMemory] Triggering Consolidation for '{channel}' (Backlog: {count})...")
+            
+            # 1. Fetch new facts from Staging
+            new_facts_rows = self.sql_db.get_unconsolidated_facts(channel, limit=10) # Process 10 at a time
+            
+            # Convert to list of dicts and ADD VECTORS (needed for search)
+            new_facts = []
+            for row in new_facts_rows:
+                fact_dict = dict(row)
+                fact_dict["vector"] = self.encoder.encode(fact_dict["text"]).tolist()
+                new_facts.append(fact_dict)
+
+            # 2. Call Consolidator
+            # Note: Consolidator methods were updated to accept new signature
+            result = self.consolidator.consolidate_incrementally(new_facts, collection_name, user_name, char_name)
+            
+            if not result:
+                return
+
+            # 3. Process Actions
+            
+            # A. Mark Staging as Consolidated
+            processed_staging_ids = result.get("processed_ids", [])
+            if processed_staging_ids:
+                self.sql_db.mark_facts_consolidated(processed_staging_ids)
+
+            # B. Delete Old Vectors from Qdrant
+            delete_qdrant_ids = result.get("qdrant_delete_ids", [])
+            if delete_qdrant_ids:
+                self.client.delete(
+                    collection_name=collection_name,
+                    points_selector=models.PointIdsList(points=delete_qdrant_ids)
+                )
+                print(f"[LiteMemory] Removed {len(delete_qdrant_ids)} obsolete vectors.")
+
+            # C. Insert New Merged Facts
+            new_facts_to_add = result.get("new_facts", [])
+            for nf in new_facts_to_add:
+                # We add them to Qdrant AND Staging (marked as consolidated)
+                nv_id = str(uuid.uuid4())
+                nv_vec = self.encoder.encode(nf["text"]).tolist()
+                
+                self.client.upsert(
+                    collection_name=collection_name,
+                    points=[models.PointStruct(
+                        id=nv_id,
+                        vector=nv_vec,
+                        payload=nf
+                    )]
+                )
+                
+                # Add to staging but mark as consolidated immediately
+                f_id = str(uuid.uuid4())
+                self.sql_db.add_fact_staging(
+                    fact_id=f_id,
+                    text=nf["text"],
+                    emotion=nf.get("emotion", "neutral"),
+                    importance=nf.get("importance", 1),
+                    timestamp=nf.get("timestamp"),
+                    channel=channel,
+                    source_name=user_name if channel=="user" else char_name,
+                    vector_id=nv_id
+                )
+                self.sql_db.mark_facts_consolidated([f_id])
+                
+        except Exception as e:
+            print(f"[LiteMemory] Consolidation error: {e}")
+            import traceback
+            traceback.print_exc()
+
     def _process_add_task(self, task):
+        """
+        New 3-Layer Implementation:
+        1. Log to SQLite (Time Machine)
+        2. Log to Event Store
+        3. Add to Conversation Buffer
+        4. Trigger Batch Extraction (if >= threshold)
+        """
         user_input = task["user_input"]
         ai_response = task["ai_response"]
         user_name = task.get("user_name", "User")
         char_name = task.get("char_name", "AI")
+        timestamp = task["timestamp"]
         
-        print(f"[LiteMemory] Processing Add Task. User: '{user_input[:30]}...' (Names: {user_name}/{char_name})")
+        print(f"[LiteMemory] Processing Add Task. User: '{user_input[:30]}...'")
         
-        # === DUAL-CHANNEL FACT EXTRACTION ===
-        
-        # Channel 1: User facts (from user_input only) → user_memory
-        print("[LiteMemory] [Channel 1] Extracting USER facts...")
-        # Note: We need to update FactExtractor.extract signature too
-        user_facts = self.fact_extractor.extract(user_input, ai_response, user_name)
-        print(f"[LiteMemory] [Channel 1] Found {len(user_facts)} USER facts: {user_facts}")
-        
-        # Channel 2: Conversation facts (topics discussed) → character_memory
-        print("[LiteMemory] [Channel 2] Extracting CONVERSATION facts...")
-        conversation_facts = self._extract_conversation_facts(user_input, ai_response, user_name, char_name)
-        print(f"[LiteMemory] [Channel 2] Found {len(conversation_facts)} CONVERSATION facts: {conversation_facts}")
-        
-        # Process user facts → user_memory
-        for fact in user_facts:
-            self._process_and_save_fact(
-                fact=fact,
-                target_collection=self.user_collection_name,
-                target_backup=self.user_backup_file,
-                fact_source="user",
-                task=task,
-                user_input=user_input
-            )
-        
-        # Process conversation facts → character_memory  
-        for fact in conversation_facts:
-            self._process_and_save_fact(
-                fact=fact,
-                target_collection=self.character_collection_name,
-                target_backup=self.character_backup_file,
-                fact_source="character",
-                task=task,
-                user_input=user_input
-            )
-
-        # === 3. Periodically Consolidate ===
-        # Pass names to consolidator explicitly or via task context? 
-        # Consolidator processes BUFFER, so it might handle mixed names.
-        # But for resolving "User", passing current name helps context.
-        self._handle_consolidation(self.user_collection_name, self.user_backup_file, user_name, char_name)
-        self._handle_consolidation(self.character_collection_name, self.character_backup_file, user_name, char_name)
-
-    def _handle_consolidation(self, collection_name: str, backup_file: str, user_name: str, char_name: str):
-        """
-        Check and execute consolidation if needed.
-        Handles the result (Upserting new consolidated facts AND removing old ones from disk).
-        """
-        result = self.consolidator.check_and_consolidate(collection_name, self.character_id, user_name, char_name)
-        
-        if result:
-            # 1. Save New Facts
-            if result.get("new_facts"):
-                new_facts = result["new_facts"]
-                print(f"[LiteMemory] Consolidating {len(new_facts)} facts for {collection_name}...")
-                
-                for fact_text in new_facts:
-                    if isinstance(fact_text, str):
-                        self._save_consolidated_fact(fact_text, collection_name, backup_file)
-            
-            # 2. Cleanup Old Facts from Disk (Critical for avoiding duplicates in backup)
-            if result.get("ids_to_delete"):
-                self._delete_from_disk(result["ids_to_delete"], backup_file)
-
-    def _save_consolidated_fact(self, text: str, collection_name: str, backup_file: str):
-        """
-        Directly save a fact without LLM conflict check (assumed clean).
-        """
+        # === A. Save Raw Dialogue to SQLite (Time Machine) ===
         try:
-            # Embed
-            vector = self.encoder.encode(text).tolist()
-            new_id = str(uuid.uuid4())
-            timestamp = datetime.now().isoformat()
-            
-            # Upsert
-            self.client.upsert(
-                collection_name=collection_name,
-                points=[
-                    models.PointStruct(
-                        id=new_id,
-                        vector=vector,
-                        payload={
-                            "text": text,
-                            "type": "consolidated_fact",
-                            "timestamp": timestamp,
-                            "source": "consolidation"
-                        }
-                    )
-                ]
+            self.sql_db.add_memory(
+                character_id=self.character_id,
+                content=f"{user_name}: {user_input}",
+                type="dialogue",
+                created_at=timestamp,
+                metadata={"role": "user", "name": user_name}
+            )
+            self.sql_db.add_memory(
+                character_id=self.character_id,
+                content=f"{char_name}: {ai_response}",
+                type="dialogue",
+                created_at=timestamp, 
+                metadata={"role": "assistant", "name": char_name}
             )
             
-            # Backup
-            self._save_to_disk({
-                "id": new_id,
-                "text": text,
-                "vector": vector,
-                "timestamp": timestamp,
-                "meta": {"source": "consolidation"}
-            }, backup_file)
+            # === Event Sourcing Log ===
+            try:
+                self.add_event_log(f"{user_name}: {user_input} | {char_name}: {ai_response}", event_type="interaction")
+            except Exception as e:
+                print(f"[LiteMemory] Event Log Warning: {e}")
             
-            print(f"[LiteMemory] Saved consolidated fact: {text}")
+            # === B. Add to Conversation Buffer ===
+            self.sql_db.add_conversation(user_name, char_name, user_input, ai_response, timestamp)
+            print("[LiteMemory] Conversation buffered.")
+            
+            # === C. Trigger Pipeline ===
+            self._extract_facts_batch()
             
         except Exception as e:
-            print(f"[LiteMemory] Error saving consolidated fact: {e}")
+            print(f"[LiteMemory] Error in _process_add_task: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _handle_consolidation(self, collection_name: str, channel: str, user_name: str, char_name: str):
+        """Phase 3: Trigger Incremental Consolidation"""
+        try:
+            # Check staging count
+            count = self.sql_db.get_facts_count(channel=channel, consolidated=False)
+            if count < self.consolidation_threshold:
+                return
+
+            print(f"[LiteMemory] Triggering Consolidation for '{channel}' (Backlog: {count})...")
+            
+            # 1. Fetch new facts from Staging
+            new_facts_rows = self.sql_db.get_unconsolidated_facts(channel, limit=10) # Process 10 at a time
+            
+            # Convert to list of dicts and ADD VECTORS
+            new_facts = []
+            for row in new_facts_rows:
+                fact_dict = dict(row)
+                if hasattr(self, 'encoder'):
+                    fact_dict["vector"] = self.encoder.encode(fact_dict["text"]).tolist()
+                new_facts.append(fact_dict)
+
+            # 2. Call Consolidator
+            result = self.consolidator.consolidate_incrementally(new_facts, collection_name, user_name, char_name)
+            
+            if not result:
+                return
+
+            # 3. Process Actions
+            
+            # A. Mark Staging as Consolidated
+            processed_staging_ids = result.get("processed_ids", [])
+            if processed_staging_ids:
+                self.sql_db.mark_facts_consolidated(processed_staging_ids)
+
+            # B. Delete Old Vectors from Qdrant
+            delete_qdrant_ids = result.get("qdrant_delete_ids", [])
+            if delete_qdrant_ids:
+                self.client.delete(
+                    collection_name=collection_name,
+                    points_selector=models.PointIdsList(points=delete_qdrant_ids)
+                )
+                print(f"[LiteMemory] Removed {len(delete_qdrant_ids)} obsolete vectors.")
+
+            # C. Insert New Merged Facts
+            new_facts_to_add = result.get("new_facts", [])
+            for nf in new_facts_to_add:
+                nv_id = str(uuid.uuid4())
+                nv_vec = self.encoder.encode(nf["text"]).tolist()
+                
+                self.client.upsert(
+                    collection_name=collection_name,
+                    points=[models.PointStruct(
+                        id=nv_id,
+                        vector=nv_vec,
+                        payload=nf
+                    )]
+                )
+                
+                # Add to staging but mark as consolidated immediately
+                f_id = str(uuid.uuid4())
+                self.sql_db.add_fact_staging(
+                    fact_id=f_id,
+                    text=nf["text"],
+                    emotion=nf.get("emotion", "neutral"),
+                    importance=nf.get("importance", 1),
+                    timestamp=nf.get("timestamp"),
+                    channel=channel,
+                    source_name=user_name if channel=="user" else char_name,
+                    vector_id=nv_id
+                )
+                self.sql_db.mark_facts_consolidated([f_id])
+                
+        except Exception as e:
+            print(f"[LiteMemory] Consolidation error: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _extract_conversation_facts(self, user_input: str, ai_response: str, user_name: str, char_name: str) -> List[str]:
         """Extract facts about the conversation itself (topics discussed, context)"""
@@ -519,8 +923,8 @@ Output (JSON only):
             payload = {
                 "model": "deepseek-chat",
                 "messages": [
-                    {"role": "system", "content": "You are a conversation memory extractor."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "name": "System", "content": "You are a conversation memory extractor."},
+                    {"role": "user", "name": self.character_id, "content": prompt}  # 使用角色ID
                 ],
                 "stream": False,
                 "temperature": 0.0
@@ -554,89 +958,96 @@ Output (JSON only):
             print(f"[LiteMemory] Error extracting conversation facts: {e}")
             return []
     
-    def _process_and_save_fact(self, fact: str, target_collection: str, 
+    def _process_and_save_fact(self, fact_data: str | Dict, target_collection: str, 
                                 target_backup: str, fact_source: str,
-                                task: Dict, user_input: str):
+                                timestamp: str, user_input: str):
         """Process a single fact: check duplicates, resolve conflicts, and save"""
-        print(f"[LiteMemory] Processing fact for {target_collection}: '{fact}'")
+        
+        # Parse metadata
+        if isinstance(fact_data, dict):
+            fact_text = fact_data.get("text", "").strip()
+            emotion = fact_data.get("emotion", "neutral")
+            importance = fact_data.get("importance", 1)
+        else:
+            fact_text = str(fact_data).strip()
+            emotion = "neutral"
+            importance = 1
+            
+        if not fact_text:
+            return
+
+        print(f"[LiteMemory] Processing fact for {target_collection}: '{fact_text}' (Imp:{importance}, Emo:{emotion})")
 
         # 2. Duplicate & Conflict Detection
-        fact_vector = self.encoder.encode(fact).tolist()
+        fact_vector = self.encoder.encode(fact_text).tolist()
         
         existing = self.client.query_points(
             collection_name=target_collection,
             query=fact_vector,
             limit=5,
-            score_threshold=0.6  # Lower threshold to catch potential merge candidates
-        ).points
+            score_threshold=0.6,
+            with_payload=True
+        )
         
-        # Default action: Add the new fact
-        final_fact_text = fact
-        ids_to_delete = []
         should_save = True
+        final_fact_text = fact_text
+        ids_to_delete = []
 
-        if existing:
-            print(f"[LiteMemory] Found {len(existing)} similar existing memories.")
+        if existing and existing.points:
+            # LLM Analysis for conflict resolution
+            action, new_text, merged_ids = self._analyze_fact_interaction(fact_text, existing.points)
             
-            # Check for near-duplicates (very high similarity)
-            is_duplicate = False
-            for hit in existing:
-                if hit.score >= 0.98:  # Extremely similar, likely a duplicate
-                    print(f"[LiteMemory] DUPLICATE DETECTED (score: {hit.score:.3f}). Skipping: '{fact}'")
-                    is_duplicate = True
-                    should_save = False
-                    break
-            
-            if not is_duplicate:
-                # LLM Analysis for Conflicts, Merges, or Redundancy
-                context_facts = [{"id": hit.id, "text": hit.payload["text"], "score": hit.score} 
-                                for hit in existing]
-                
-                if context_facts:
-                    print("[LiteMemory] Analyzing relationship with existing facts (LLM)...")
-                    analysis = self._analyze_fact_interaction(fact, context_facts)
-                    
-                    action = analysis.get("action", "ADD")
-                    ids_to_delete = analysis.get("delete_ids", [])
-                    merged_text = analysis.get("merged_text")
-                    
-                    print(f"[LiteMemory] Analysis Result: {action}")
-                    
-                    if action == "SKIP":
-                        print(f"[LiteMemory] Fact deemed redundant or skipped.")
-                        should_save = False
-                    elif action == "REPLACE":
-                        print(f"[LiteMemory] Replacing existing facts {ids_to_delete}.")
-                    elif action == "MERGE":
-                        if merged_text:
-                            final_fact_text = merged_text
-                            print(f"[LiteMemory] Merging into: '{final_fact_text}'")
-                        else:
-                            print("[LiteMemory] Warning: MERGE action missing 'merged_text'. Falling back to ADD.")
-                    elif action == "ADD":
-                        pass # Default behavior
-
-        # Execute Deletions
-        if ids_to_delete:
-            print(f"[LiteMemory] Deleting obsolete memories: {ids_to_delete}")
-            # Qdrant Delete
-            self.client.delete(
-                collection_name=target_collection,
-                points_selector=models.PointIdsList(points=ids_to_delete)
-            )
-            # Disk Delete (Sync)
-            self._delete_from_disk(ids_to_delete, target_backup)
+            if action == "SKIP":
+                should_save = False
+            elif action == "REPLACE":
+                final_fact_text = new_text
+                ids_to_delete = merged_ids
+                # Delete old ones from disk and Qdrant
+                if ids_to_delete:
+                    print(f"[LiteMemory] Deleting obsolete memories (REPLACE): {ids_to_delete}")
+                    self.client.delete(collection_name=target_collection, points_selector=models.PointIdsList(points=ids_to_delete))
+                    self._delete_from_disk(ids_to_delete, target_backup)
+            elif action == "MERGE":
+                final_fact_text = new_text
+                ids_to_delete = merged_ids
+                # Delete old ones from disk and Qdrant
+                if ids_to_delete:
+                    print(f"[LiteMemory] Deleting obsolete memories (MERGE): {ids_to_delete}")
+                    self.client.delete(collection_name=target_collection, points_selector=models.PointIdsList(points=ids_to_delete))
+                    self._delete_from_disk(ids_to_delete, target_backup)
+            # if ADD, do nothing special
 
         # Execute Save (Upsert)
         if should_save:
             # Re-embed if text changed (Merge case)
-            if final_fact_text != fact:
+            if final_fact_text != fact_text:
                 fact_vector = self.encoder.encode(final_fact_text).tolist()
             
+            # Generate ID once for Dual-Write Consistency
             new_id = str(uuid.uuid4())
+            
             print(f"[LiteMemory] Upserting fact ID: {new_id}")
             
-            # Write to Qdrant
+            # 1. Dual-Write to SQLite (SSOT)
+            try:
+                # determine target character_id for Sqlite based on collection
+                target_char_id = "user" if target_collection == self.user_collection_name else self.character_id
+                
+                self.sql_db.add_memory(
+                    character_id=target_char_id,
+                    content=final_fact_text,
+                    type="fact",
+                    created_at=timestamp,
+                    importance=importance,
+                    emotion=emotion,
+                    source_id=None,
+                    metadata={"source": fact_source, "user_input": user_input},
+                    memory_id=new_id # Sync ID
+                )
+            except Exception as e:
+                print(f"[LiteMemory] ⚠️ SQLite Write Failed: {e}")
+            
+            # 2. Write to Qdrant (Index)
             self.client.upsert(
                 collection_name=target_collection,
                 points=[
@@ -646,21 +1057,29 @@ Output (JSON only):
                         payload={
                             "text": final_fact_text,
                             "user_input": user_input,
-                            "timestamp": task["timestamp"],
+                            "timestamp": timestamp,
                             "type": "fact",
-                            "source": fact_source
+                            "source": fact_source,
+                            "emotion": emotion,
+                            "importance": importance
                         }
                     )
                 ]
             )
 
-            # Write to JSONL Backup
+            # 3. Write to JSONL Backup (Legacy / Cold Storage)
             self._save_to_disk({
                 "id": new_id,
                 "text": final_fact_text,
                 "vector": fact_vector,
-                "timestamp": task["timestamp"],
-                "meta": {"user_input": user_input, "source": fact_source, "replaced_ids": ids_to_delete}
+                "timestamp": timestamp,
+                "meta": {
+                    "user_input": user_input, 
+                    "source": fact_source, 
+                    "replaced_ids": ids_to_delete,
+                    "emotion": emotion,
+                    "importance": importance
+                }
             }, target_backup)
             
             print(f"[LiteMemory] ✅ SAVED: {final_fact_text}")
@@ -782,8 +1201,8 @@ Output JSON ONLY:
             payload = {
                 "model": "deepseek-chat",
                 "messages": [
-                    {"role": "system", "content": "You are a Knowledge Graph consistency manager. Output JSON only."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "name": "System", "content": "You are a Knowledge Graph consistency manager. Output JSON only."},
+                    {"role": "user", "name": self.character_id, "content": prompt}  # 使用角色ID
                 ],
                 "stream": False,
                 "temperature": 0.0
