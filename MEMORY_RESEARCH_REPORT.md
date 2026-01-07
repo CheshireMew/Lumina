@@ -1,106 +1,103 @@
-# 🧠 长期记忆方案深度调研报告
+# 记忆数据库选型对比与架构方案
 
-通过深入分析 `example` 目录下的几个开源项目，我们总结了三种截然不同的长期记忆实现方案。这些方案从轻量级到重量级各具特色，非常值得 Lumina 参考。
+## 1. 深度对比 (按您的要求逐个分析)
 
----
+目标：寻找 **"Native Multi-model" (原生多模态)** + **"All-in-One" (不乱)** + **"Embedded" (适合桌面应用)** 的最佳方案。
 
-## 1. 识底深湖 (Deepseek Lunasia 2.0)
-**方案代号**: `The Memory Lake` (文件湖 + 向量索引)
-**核心文件**: `memory_lake.py`
+### 数据库类 (Databases)
 
-### 🏗️ 架构设计
-它没有使用重型数据库，而是发明了一种**基于文件系统的"记忆湖"**结构：
-*   **存储层**: 将记忆存为独立的 JSON 文件，按 `Data/Timestamp` 命名，存放在文件夹中。
-    *   例如: `chat_logs/memories/2024-01-01_12-00-00_UserTalksAboutAI.json`
-*   **索引层**: 维护一个 `memory_index.json`，记录所有记忆的元数据（主题、时间、重要性）。
-*   **检索层 (Dual Vectors)**: 
-    *   **Topic Vector**: 对"记忆主题"（Summary）进行 Embedding。
-    *   **Detail Vector**: 对"记忆详情"（Full Content）进行 Embedding。
-    *   检索时同时匹配这两个向量。
+| 候选者          | 原生多模态                                                            | 向量能力                                        | 嵌入式/本地化                                                   | 多角色支持                                           | 评价                                                                |
+| :-------------- | :-------------------------------------------------------------------- | :---------------------------------------------- | :-------------------------------------------------------------- | :--------------------------------------------------- | :------------------------------------------------------------------ |
+| **SurrealDB**   | ⭐⭐⭐⭐⭐<br>Graph + Doc + Vector 完美融合，同一个引擎处理所有数据。 | **Native**<br>内置 HNSW 索引，语法原生支持。    | ⭐⭐⭐⭐⭐<br>**单文件二进制**或嵌入式库，零依赖，最干净。      | **优**<br>通过图边 (Edges) 或 NS/DB 隔离，非常灵活。 | **👑 最佳选择**<br>唯一真正满足"原生多模态"且"嵌入式"的现代数据库。 |
+| **ArangoDB**    | ⭐⭐⭐⭐<br>老牌多模态 (Graph + Doc)，功能强大。                      | **Plugin**<br>依赖 FAISS 集成，非完全原生体验。 | ⭐⭐<br>通常作为**服务**运行 (Docker/Service)，对桌面应用太重。 | **优**<br>多租户 (Tenancy) 支持好。                  | **太重**<br>部署和维护成本高，不适合本地单机 App。                  |
+| **Neo4j**       | ⭐⭐⭐<br>Graph First。虽然加了向量，但核心还是图。                   | **Native**<br>近期添加了向量索引。              | ⭐<br>Java 编写，内存占用大，依赖 JVM，部署最"乱"。             | **良**<br>基于标签 (Label) 隔离。                    | **太乱**<br>引入 Java 环境对 Python 项目是灾难。                    |
+| **Memgraph**    | ⭐⭐⭐<br>Graph First (内存数据库)。                                  | **Native**<br>基于 C++ 的高性能向量搜索。       | ⭐⭐⭐<br>有 Docker 镜像，但不如单文件方便。                    | **良**<br>图隔离。                                   | **偏科**<br>侧重高性能图算法，文档存储能力弱于 Surreal。            |
+| **NebulaGraph** | ⭐⭐⭐<br>针对海量数据的分布式图数据库。                              | **Native**<br>支持向量。                        | ⭐<br>分布式架构，完全不适合单机桌面应用。                      | **良**<br>Space 隔离。                               | **杀鸡用牛刀**<br>架构太复杂。                                      |
 
-### ✨ 亮点功能
-*   **双重向量检索**: 既能搜到大意（Topic），也能搜到细节（Detail）。
-*   **智能总结 Agent**: 有一个专门的 `MemorySummaryAgent`，每隔几轮对话就会总结当前话题，生成一个新的"记忆点"存入湖中。
-*   **强制迁移机制**: 代码里包含详细的"数据迁移"逻辑，说明这种文件结构曾经历过迭代，维护了向后兼容性。
+### 框架类 (Frameworks) - 它们不是数据库，而是"用法"
 
-### ⚖️ 优缺点
-*   **优点**: 极其直观，Debug 方便（直接看 JSON），无需维护 DB 进程。
-*   **缺点**: 文件多了 IO 会变慢，不适合数万级记忆。
+| 候选者        | 定位           | 特点                                              | 适用性                                                    |
+| :------------ | :------------- | :------------------------------------------------ | :-------------------------------------------------------- |
+| **LightRAG**  | RAG 框架       | 强调"轻量级"，通常配合 NetworkX (本地) 或 Neo4j。 | **可借鉴思想**，但不解决存储选型。                        |
+| **Graphiti**  | 知识图谱库     | 专注动态时序图谱。                                | 依赖 Neo4j/FalkorDB，**不是独立数据库**。                 |
+| **Cognee**    | 记忆引擎       | 旨在连接由于图和向量。                            | 也是上层框架，底层还要选数据库。                          |
+| **LangGraph** | **Agent 编排** | 定义 Agent 的思考流程 (State Machine)。           | **必须用**，但它是逻辑层，和存储层 (SurrealDB) 配合使用。 |
 
 ---
 
-## 2. Live2D Virtual Girlfriend
-**方案代号**: `Local Graph RAG` (本地轻量图谱)
-**核心文件**: `src/graph_rag.py`
+## 2. 为什么 SurrealDB 是多角色 AI 的绝配？
 
-### 🏗️ 架构设计
-这是一个非常惊艳的**"无数据库"图谱方案**。它不需要 Neo4j，而是直接用 Python 的 `networkx` 库在内存中构建图谱，并用 `pickle` 持久化到磁盘。
+结合您的研究文档 `AI性格培养：记忆数据驱动.txt`，我们需要一个能同时通过 **"感性 (向量)"** 和 **"理性 (图谱/事实)"** 来塑造性格的系统。
 
-*   **实体与关系**: 
-    *   使用 LLM 从对话中提取 `Entity` (实体) 和 `Relationship` (关系)。
-    *   定义了工具函数 `tool_add_entity`, `tool_add_relationship` 供 LLM 调用。
-    *   存储为 Graph Node 和 Edge (例如: `User -> like -> AI`).
-*   **时间记忆 (Temporal Memory)**:
-    *   **分层总结树**: 这是一个天才设计。
-    *   它维护了一个 `Year -> Month -> Day` 的树状结构。
-    *   每天结束总结成 Day Summary，每月结束总结成 Month Summary。
-    *   检索时可以按时间维度进行"元数据过滤"。
+**多角色场景 (Lillian vs Hiyori)** 在 SurrealDB 中的实现：
 
-### ✨ 亮点功能
-*   **Hierarchical Summarization (分层总结)**: 自动把碎片对话聚合成高层记忆，模拟人类的长期记忆机制（模糊化旧细节，保留大意）。
-*   **Lightweight Graph**: 用 `networkx` + `pickle` 实现了 Graph RAG 的所有好处，却没有任何运维成本。
+### 结构设计
 
-### ⚖️ 优缺点
-*   **优点**: 架构最优雅，兼顾了结构化（图谱）和时序性（分层树），且完全本地化。
-*   **缺点**: `pickle` 文件如果损坏由于是二进制很难修复；随着图谱变大，加载速度可能受限。
+我们不需要建立多个数据库，只需利用 **Graph 的边 (Edge)** 来自然隔离和关联。
 
----
+```sql
+-- 1. 定义实体
+CREATE character:lillian;
+CREATE character:hiyori;
+CREATE user:dylan;
 
-## 3. NagaAgent
-**方案代号**: `Heavy Graph RAG` (工业级图谱)
-**核心文件**: `agent_memory.py`, `summer_memory`
+-- 2. 存储事实 (同时是 Document 和 Vector)
+-- 这是一条"感性记忆"，带有向量和情感标签
+CREATE fact:f1 SET
+    text = "User likes cyberpunk style",
+    embedding = [...],
+    emotion = "excited",
+    time = time::now();
 
-### 🏗️ 架构设计
-这是最"重"的方案，旨在构建一个完整的工业级 Agent。
-*   **五元组提取**: 提取 `(Subject, Predicate, Object, Time, Location)`。
-*   **后端存储**: 依赖外部的 **Neo4j** 图数据库。
-*   **异步任务**: 使用 `AsyncTaskManager` 来后台处理记忆提取，不阻塞主聊天流程。
+-- 3. 建立关系 (Graph) - 这一步实现了"隔离"与"性格"
+-- Lillian 观察到了这个事实，并产生了"崇拜"的情绪链接
+RELATE character:lillian->observes->fact:f1 SET weight=0.9, feeling="admire";
 
-### ⚖️ 优缺点
-*   **优点**: 查询能力最强，支持复杂的 Cypher 查询。
-*   **缺点**: 部署太重，需要跑一个 Neo4j 实例，对个人助手来说有点杀鸡用牛刀。
+-- Hiyori 也观察到了同一个事实，但产生了"怀疑"的情绪链接
+RELATE character:hiyori->observes->fact:f1 SET weight=0.5, feeling="skeptical";
+```
 
----
+### 检索策略 (All-in-One 查询)
 
-## 4. MoeChat
-**方案代号**: `YAML Editor` (以及潜在的 GraphRAG)
-**核心文件**: `memory_editor_web.py`
+当 Lillian 需要说话时，我们执行一条 SurrealQL 查询，就能获取 **"符合 Lillian 性格 + 语义相关 + 逻辑正确"** 的上下文：
 
-### 🏗️ 架构设计
-*   **核心记忆 (Core Memory)**: 一个单文件 `core_mem.yml`，定义最关键的设定（名字、性格）。
-*   **长期记忆**: 文件夹里的 YAML 文件。
-*   **人工干预**: 它提供了一个 Web 界面 (`MemoryEditor`)，允许用户**手动修改**记忆。这是一个很实用的功能，因为 AI 总会记错。
+```sql
+SELECT
+    ->observes->fact.text AS memory,
+    ->observes.feeling AS my_feeling,  -- 获取 Lillian 独有的情感视角
+    vector::similarity::cosine(->observes->fact.embedding, $current_context) AS relevance
+FROM character:lillian
+WHERE ->observes->fact.time > time::now() - 30d  -- 时间衰减
+ORDER BY relevance DESC
+LIMIT 5;
+```
+
+**结论**：Hiyori 的查询完全一样，只是把主体换成 `character:hiyori`，她就会得到属于她的、带有她情感色彩的记忆。这就是 **Native Multi-model** 的威力——**数据共享，视角隔离**。
 
 ---
 
-## 🏆 总结与 Lumina 推荐方案
+## 3. 最终架构建议
 
-| 特性 | Lunasia (Memory Lake) | Live2D (Local Graph) | NagaAgent (Neo4j) |
-| :--- | :--- | :--- | :--- |
-| **存储** | JSON Files | NetworkX + Pickle | Neo4j DB |
-| **检索** | Dual Vector (Topic/Detail) | Graph + Time Tree | Graph Query |
-| **复杂度** | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **适合场景**| 大量非结构化聊天记录 | 伴侣/助手 (强调关系和时间) | 企业级知识库 |
+**底层存储**: **SurrealDB** (单文件嵌入式运行)
 
-### 🚀 对 Lumina 的建议：**融合进化版 (LiteMemory)**
+- 负责：向量存储、知识图谱、文档记录、多角色隔离。
 
-鉴于 `mem0` 的坑，以及上述调研，我建议 Lumina 采取 **Live2D + Lunasia** 的融合方案：
+**逻辑编排**: **LangChain / LangGraph** (Python 代码)
 
-1.  **存储层 (借鉴 Lunasia)**: 使用 **JSON Lines (.jsonl)** 或 **JSON Files** 存储原始记忆。这比 Pickle 安全，比 DB 轻量。
-2.  **索引层 (借鉴 Mem0/Lunasia)**: 使用 **Qdrant (Local)** 仅做向量索引。指向 JSON 文件的 ID。
-3.  **逻辑层 (借鉴 Live2D)**:
-    *   **时间分层**: 引入"每日总结"机制，把当天的对话压缩成 Summary 存入 Qdrant。
-    *   **关系提取**: (可选) 在未来版本加入简单的 NetworkX 图谱，记录 User 和 Assistant 的关系变化。
+- 负责：对话流控制、Prompt 组装、工具调用。
 
-**下一步行动**:
-我们目前的 `simple_memory.py` (计划中) 将是这个方向的第一步：**完全掌控数据，使用本地文件 + Qdrant 索引**。
+**记忆算法**: 参考 **LightRAG** 的双层检索思想
+
+- 1. **Local Search**: 在 SurrealDB 中搜具体的 Entity 和 Fact。
+- 2. **Global Search**: 在 SurrealDB 中遍历图谱关系 (User -> prefers -> Style)。
+
+这个方案最干净、最先进，且完全符合您对多角色和性格培养的深度需求。
+
+---
+
+## 4. 下一步计划
+
+1.  **废弃 Qdrant 和 SQLite**。
+2.  **部署 SurrealDB** (下载 windows 单文件 `surreal.exe`)。
+3.  **重写 LiteMemory** 适配 SurrealQL。
+4.  **迁移数据**。

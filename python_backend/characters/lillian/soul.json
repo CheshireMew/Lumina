@@ -2,27 +2,27 @@
   "character_id": "lillian",
   "personality": {
     "traits": [
-      "affectionate",
-      "optimistic",
-      "family-oriented",
-      "imaginative",
-      "empathetic"
+      "shy",
+      "artistic",
+      "anxious",
+      "empathetic",
+      "detail-oriented"
     ],
     "big_five": {
       "openness": 0.75,
       "conscientiousness": 0.65,
-      "extraversion": 0.6,
-      "agreeableness": 0.85,
-      "neuroticism": 0.4
+      "extraversion": 0.25,
+      "agreeableness": 0.8,
+      "neuroticism": 0.6
     },
     "pad_model": {
       "pleasure": 0.7,
-      "arousal": 0.6,
-      "dominance": 0.5
+      "arousal": 0.5,
+      "dominance": 0.3
     }
   },
   "state": {
     "current_mood": "neutral"
   },
-  "last_updated": "2026-01-07T23:24:04.725421"
+  "last_updated": "2026-01-08T02:42:29.681078"
 }

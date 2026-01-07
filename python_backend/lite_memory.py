@@ -178,10 +178,10 @@ class LiteMemory:
         try:
             query_vector = self.encoder.encode(query).tolist()
             for col in [self.character_collection_name, self.user_collection_name]:
-                # ✅ 为 character collection 添加 character_id 过滤
-                # User collection 不需要过滤（用户记忆跨角色共享）
+                # ✅ Apply character_id filter ONLY to character specific collection
+                # User collection is SHARED across all characters.
                 query_filter = None
-                if col == self.character_collection_name:
+                if self.character_id and col == self.character_collection_name:
                     query_filter = models.Filter(
                         must=[
                             models.FieldCondition(
@@ -196,7 +196,7 @@ class LiteMemory:
                     query=query_vector,
                     limit=limit * 2, # Fetch more for re-ranking
                     with_payload=True,
-                    query_filter=query_filter  # ✅ 添加过滤器
+                    query_filter=query_filter
                 ).points
                 vector_results.extend(res)
         except Exception as e:
@@ -213,7 +213,7 @@ class LiteMemory:
             # Calling twice is easier.
             
             keyword_results.extend(self.sql_db.get_memories_by_keyword(self.character_id, query, limit * 2))
-            keyword_results.extend(self.sql_db.get_memories_by_keyword("user", query, limit * 2))
+            # keyword_results.extend(self.sql_db.get_memories_by_keyword("user", query, limit * 2)) # REMOVED: User facts are owned by character, so the first call covers them. 'user' ID doesn't exist.
             
         except Exception as e:
             print(f"[LiteMemory] Keyword search failed: {e}")
@@ -342,15 +342,16 @@ class LiteMemory:
         try:
             # Use proper connection method
             with self.sql_db._get_connection() as conn:
-                # Query random consolidated facts from both channels
+                # Query random consolidated facts from this character
+                # ⚡ Filter by character_id for multi-character support
                 query = """
                     SELECT text, emotion, importance, created_at, channel, source_name
                     FROM facts_staging
-                    WHERE consolidated = 1
+                    WHERE consolidated = 1 AND character_id = ?
                     ORDER BY RANDOM()
                     LIMIT ?
                 """
-                cursor = conn.execute(query, (limit,))
+                cursor = conn.execute(query, (self.character_id, limit))
                 rows = cursor.fetchall()
                 
                 results = []
@@ -588,8 +589,11 @@ class LiteMemory:
         """Helper: Search a specific collection"""
         try:
             # ⚡ Critical Fix: Filter by character_id if set
+            # ⚡ Critical Fix: Filter by character_id if set
             query_filter = None
-            if self.character_id:
+            if self.character_id and collection_name == self.character_collection_name:
+                # Debug Logging for Filter
+                # print(f"[LiteMemory] 🛡️ Filtering search by character_id: '{self.character_id}'")
                 query_filter = models.Filter(
                     must=[
                         models.FieldCondition(
@@ -598,6 +602,8 @@ class LiteMemory:
                         )
                     ]
                 )
+            else:
+                 print(f"[LiteMemory] ⚠️ Warning: No character_id set for search filter!")
 
             search_result = self.client.query_points(
                 collection_name=collection_name,
@@ -733,7 +739,8 @@ class LiteMemory:
             timestamp=fact.get("timestamp", datetime.now().isoformat()),
             channel=channel,
             source_name=source_name,
-            vector_id=vector_id
+            vector_id=vector_id,
+            character_id=self.character_id  # ⚡ 添加角色 ID
         )
 
     def _extract_facts_batch(self):
@@ -869,7 +876,8 @@ class LiteMemory:
                     timestamp=nf.get("timestamp"),
                     channel=channel,
                     source_name=user_name if channel=="user" else char_name,
-                    vector_id=nv_id
+                    vector_id=nv_id,
+                    character_id=self.character_id  # ⚡ 添加角色 ID
                 )
                 self.sql_db.mark_facts_consolidated([f_id])
                 
@@ -918,7 +926,7 @@ class LiteMemory:
                 print(f"[LiteMemory] Event Log Warning: {e}")
             
             # === B. Add to Conversation Buffer ===
-            self.sql_db.add_conversation(user_name, char_name, user_input, ai_response, timestamp)
+            self.sql_db.add_conversation(user_name, char_name, user_input, ai_response, timestamp, character_id=self.character_id)
             print("[LiteMemory] Conversation buffered.")
             
             # === C. Trigger Pipeline ===
@@ -997,7 +1005,8 @@ class LiteMemory:
                     timestamp=nf.get("timestamp"),
                     channel=channel,
                     source_name=user_name if channel=="user" else char_name,
-                    vector_id=nv_id
+                    vector_id=nv_id,
+                    character_id=self.character_id  # ⚡ 添加角色 ID
                 )
                 self.sql_db.mark_facts_consolidated([f_id])
                 

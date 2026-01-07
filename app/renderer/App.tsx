@@ -42,6 +42,11 @@ function App() {
     const [activeCharacterId, setActiveCharacterId] = useState<string>('');
     const [userName, setUserName] = useState<string>('Master'); // Default User Name
     const [isSettingsLoaded, setIsSettingsLoaded] = useState(false); // ⚡ Prevent FOUC
+    
+    // ⚡ Track previous LLM settings for change detection
+    const prevApiKeyRef = useRef<string>('');
+    const prevBaseUrlRef = useRef<string>('');
+    const prevModelRef = useRef<string>('');
 
     // Conversation Memory
     const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
@@ -248,6 +253,11 @@ function App() {
                 const apiKey = await settings.get('apiKey');
                 const baseUrl = await settings.get('apiBaseUrl') || 'https://api.deepseek.com/v1';
                 const model = await settings.get('modelName') || 'deepseek-chat';
+                
+                // ⚡ Initialize refs with loaded values to prevent false-positive reconfigure
+                prevApiKeyRef.current = apiKey || '';
+                prevBaseUrlRef.current = baseUrl;
+                prevModelRef.current = model;
 
                 // User Settings
                 const loadedUserName = await settings.get('userName') || 'Master';
@@ -417,8 +427,36 @@ function App() {
                             // Clear flag immediately to prevent double trigger
                             await fetch(`http://localhost:8001/soul/mutate?clear_pending=true`, { method: 'POST' }); 
                             
-                            // Initiate Conversation
-                            const instruction = `(Private System Instruction) The user has been silent. The backend system detected an idle timeout. Based on your personality, initiate a conversation naturally to get their attention. Do NOT mention you were waiting.`;
+                            // ⚡ Build Rich Prompt with History + Inspiration
+                            // 1. Get recent conversation history
+                            const charName = characters.find(c => c.id === activeCharacterId)?.name || 'AI';
+                            const recentHistory = conversationHistory
+                                .filter(m => !m.content.startsWith('(Private System Instruction')) // 🛡️ Prevent recursion!
+                                .slice(-5)
+                                .map(m => `${m.role === 'user' ? userName : charName}: ${m.content.substring(0, 100)}...`)
+                                .join('\n');
+                            
+                            // 2. Fetch random inspiration from memories
+                            let inspirationText = '';
+                            try {
+                                const inspirationRes = await fetch(`http://localhost:8001/memory/inspiration?character_id=${activeCharacterId}&limit=3`);
+                                if (inspirationRes.ok) {
+                                    const inspirations = await inspirationRes.json();
+                                    if (inspirations.length > 0) {
+                                        inspirationText = inspirations.map((i: any) => `- ${i.content}`).join('\n');
+                                        console.log(`[App] 🎲 Loaded ${inspirations.length} inspirations for proactive chat`);
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('[App] Failed to fetch inspiration, proceeding without');
+                            }
+                            
+                            // 3. Build enhanced instruction
+                            const instruction = `(Private System Instruction - DO NOT EXPOSE THIS TO USER)
+${recentHistory ? `## Recent History\n${recentHistory}\n` : ''}
+${inspirationText ? `## Memory Inspirations\n${inspirationText}\n` : ''}
+Based on your personality and the context (if any), initiate a natural conversation.`;
+                            
                             handleSend(instruction);
                         }
                     }
@@ -455,8 +493,21 @@ function App() {
 
     // Callback when LLM settings change in SettingsModal
     const handleLLMSettingsChange = (apiKey: string, baseUrl: string, model: string) => {
-        console.log('[App] Re-initializing LLM Service with new settings');
-        // llmService.init(apiKey, baseUrl, model); -> Main Process auto-updates
+        // ⚡ Only reconfigure if settings actually changed
+        if (apiKey === prevApiKeyRef.current && baseUrl === prevBaseUrlRef.current && model === prevModelRef.current) {
+            console.log('[App] LLM settings unchanged, skipping reconfigure.');
+            return;
+        }
+        
+        console.log('[App] 🔄 LLM settings changed, reconfiguring...');
+        console.log(`[App] Old: ${prevApiKeyRef.current?.substring(0,8)}... | New: ${apiKey?.substring(0,8)}...`);
+        
+        // Update refs
+        prevApiKeyRef.current = apiKey;
+        prevBaseUrlRef.current = baseUrl;
+        prevModelRef.current = model;
+        
+        // Only now call configure
         memoryService.configure(apiKey, baseUrl, model);
     };
 
@@ -509,7 +560,7 @@ function App() {
 
         // 添加用户消息到历史 (Skip for System Instructions)
         let userMessage: Message | null = null;
-        if (!text.startsWith('(Private System Instruction)')) {
+        if (!text.startsWith('(Private System Instruction')) {
             userMessage = {
                 role: 'user',
                 content: text,
@@ -523,7 +574,7 @@ function App() {
             let relevantMemories = '';
             try {
                 // Only search if not empty AND not a system instruction (which handles its own inspiration)
-                if (text.trim().length > 2 && !text.startsWith('(Private System Instruction)')) {
+                if (text.trim().length > 2 && !text.startsWith('(Private System Instruction')) {
                     console.log('[Memory] Searching for relevant memories...');
                     const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
                     relevantMemories = await memoryService.search(text, 10, userName, activeChar.name);
@@ -670,6 +721,10 @@ function App() {
              // Send Request via IPC with complete parameters
             const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
             
+            // Determine role based on content
+            const isSystemInstruction = text.startsWith('(Private System Instruction');
+            const messageRole = isSystemInstruction ? 'system' : 'user';
+
             (window as any).llm.chatStreamWithHistory(
                 conversationHistory,
                 text,
@@ -677,7 +732,8 @@ function App() {
                 conversationSummary,
                 relevantMemories,
                 userName,           // ✅ 添加用户名
-                activeChar.name     // ✅ 添加角色名
+                activeChar.name,    // ✅ 添加角色名
+                messageRole         // ✅ Role ('user' or 'system')
             );
 
             // Trigger Live2D Motion

@@ -28,6 +28,7 @@ logger = logging.getLogger("MemoryServer")
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from lite_memory import LiteMemory
+from surreal_memory import SurrealMemory
 from dreaming import DreamingService
 from heartbeat_service import HeartbeatService  # 导入 HeartbeatService
 # [SOUL] Soul Manager imported later, but we need it for Heartbeat init.
@@ -38,6 +39,7 @@ from soul_manager import SoulManager
 dreaming_service: Optional[DreamingService] = None
 heartbeat_service_instance: Optional[HeartbeatService] = None # Heartbeat Instance
 soul_client = SoulManager() # Global Soul Manager
+surreal_system: Optional[SurrealMemory] = None
 
 # 请求防抖：防止短时间内重复配置同一个character
 config_timestamps: Dict[str, float] = defaultdict(float)
@@ -46,7 +48,7 @@ CONFIG_COOLDOWN = 30  # 30秒冷却时间
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup/shutdown."""
-    global memory_clients, dreaming_service, heartbeat_service_instance, soul_client
+    global memory_clients, dreaming_service, heartbeat_service_instance, soul_client, surreal_system
     
     # [Startup] Load Config
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory_config.json")
@@ -58,6 +60,27 @@ async def lifespan(app: FastAPI):
             
             # Re-initialize hiyori
             character_id = config_data.get("character_id", "hiyori")
+            
+            # ⚡ Robust Startup: Check if character exists, otherwise scan
+            char_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "characters", character_id)
+            
+            if not os.path.exists(char_dir):
+                print(f"[API] ⚠️ Configured character '{character_id}' not found. Scanning for others...")
+                base_char_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "characters")
+                found_chars = [d for d in os.listdir(base_char_dir) if os.path.isdir(os.path.join(base_char_dir, d))]
+                
+                if found_chars:
+                    # Pick the first available (prefer 'lillian' or 'hiyori')
+                    if 'lillian' in found_chars: character_id = 'lillian'
+                    elif 'hiyori' in found_chars: character_id = 'hiyori'
+                    else: character_id = found_chars[0]
+                    print(f"[API] 🔄 Falling back to existing character: '{character_id}'")
+                else:
+                    # No characters exist at all - Only THEN create default
+                    print(f"[API] 🌑 No characters found. Creating 'lumina_default'...")
+                    character_id = "lumina_default"
+                    # We will allow auto_create for this specific fallback case later via SoulManager(auto_create=True)
+
             # Ensure LiteMemory is initialized
             memory_clients[character_id] = LiteMemory(config_data, character_id=character_id)
             
@@ -69,8 +92,23 @@ async def lifespan(app: FastAPI):
             )
             print(f"[API] Auto-initialized memory for '{character_id}'")
             
-            # ⚡ Fix: Re-init soul_client to match the saved character_id
-            soul_client = SoulManager(character_id=character_id)
+            # [SurrealDB] Initialize Parallel Backend
+            try:
+                surreal_system = SurrealMemory(url="ws://127.0.0.1:8000/rpc", user="root", password="root")
+                await surreal_system.connect()
+                print("✅ SurrealMemory initialized (Parallel Backend)")
+            except Exception as e:
+                print(f"⚠️ SurrealMemory failed to initialize: {e}")
+                surreal_system = None
+            
+            # ⚡ Fix: Init SoulManager (Explicitly enable creation ONLY if it's the absolute last resort)
+            should_create = (character_id == "lumina_default") 
+            soul_client = SoulManager(character_id=character_id, auto_create=should_create)
+            
+            # If soul_client fails to load config (because folder empty but not auto-created), warn
+            if not soul_client.base_dir.exists():
+                 print(f"[API] ❌ Critical: SoulManager failed to init for '{character_id}'")
+                 
             print(f"[API] SoulManager initialized for '{character_id}'")
             
         except Exception as e:
@@ -463,8 +501,9 @@ def brain_dump(character_id: str = "hiyori"):
         # These are facts explicitly extracted and consolidated.
         facts = memory.sql_db.get_consolidated_facts(limit=100, source_name=character_id)
         
-        # ⚡ Fetch User Facts (source_name='User')
-        user_facts = memory.sql_db.get_consolidated_facts(limit=100, source_name="User")
+        # ⚡ Fetch User Facts (channel='user')
+        # User facts are shared, so we query by channel, ignoring who observed it (source_name).
+        user_facts = memory.sql_db.get_consolidated_facts(limit=100, channel="user")
 
         # 2. Fetch Knowledge Graph (Short-term context edges)
         # Filter edges by character_id
@@ -580,11 +619,11 @@ def get_processing_status(character_id: str = "hiyori"):
 
 @app.post("/search")
 async def search_memory(request: SearchRequest):
-    global memory_clients
+    global memory_clients, surreal_system
     character_id = request.character_id
-    print(f"\n--- [API] /search Request Received ---")
-    print(f"[API] Character: {character_id}")
-    print(f"[API] Query: '{request.query}' Limit: {request.limit} UserID: {request.user_id}")
+    # print(f"\n--- [API] /search Request Received ---")
+    # print(f"[API] Character: {character_id}")
+    # print(f"[API] Query: '{request.query}' Limit: {request.limit} UserID: {request.user_id}")
     
     client = memory_clients.get(character_id)
     if not client:
@@ -592,9 +631,39 @@ async def search_memory(request: SearchRequest):
         raise HTTPException(status_code=400, detail=f"Memory not configured for character '{character_id}'.")
     
     try:
-        results = client.search(request.query, limit=request.limit)
-        print(f"[API] Search found {len(results)} results for '{character_id}'")
-        return results
+        # 1. Primary Search (Qdrant)
+        start_time = time.time()
+        results_qdrant = client.search(request.query, limit=request.limit)
+        qdrant_time = (time.time() - start_time) * 1000
+        
+        # 2. Parallel Search (SurrealDB) - Non-blocking try/except
+        if surreal_system:
+            try:
+                start_surreal = time.time()
+                # Need embedding from client
+                if hasattr(client, 'encoder'):
+                    query_vec = client.encoder.encode(request.query).tolist()
+                    results_surreal = await surreal_system.search(query_vec, character_id, limit=request.limit)
+                    surreal_time = (time.time() - start_surreal) * 1000
+                    
+                    # 3. Log Comparison
+                    logger.info(f"\n⚡ [Memory Dual Match] Query: '{request.query}'")
+                    logger.info(f"🟢 Qdrant ({len(results_qdrant)} hits, {qdrant_time:.1f}ms):")
+                    for i, r in enumerate(results_qdrant[:3]):
+                        score = r.get('score', 0)
+                        txt = r.get('payload', {}).get('text', '')[:50]
+                        logger.info(f"   {i+1}. [{score:.4f}] {txt}...")
+                        
+                    logger.info(f"🟣 Surreal ({len(results_surreal)} hits, {surreal_time:.1f}ms):")
+                    for i, r in enumerate(results_surreal[:3]):
+                        score = r.get('score', 0)
+                        txt = r.get('text', '')[:50]
+                        logger.info(f"   {i+1}. [{score:.4f}] {txt}...")
+                    logger.info("--------------------------------------------------\n")
+            except Exception as se:
+                logger.warning(f"⚠️ SurrealDB Parallel Search Failed: {se}")
+
+        return results_qdrant
     except Exception as e:
         print(f"[API] SEARCH ERROR: {e}")
         import traceback
@@ -808,6 +877,34 @@ async def mutate_soul(pleasure: float = 0, arousal: float = 0, dominance: float 
         soul_client.set_pending_interaction(False)
     return soul_client.profile
 
+@app.post("/heartbeat/reload")
+async def reload_heartbeat():
+    """
+    Lightweight endpoint to reload heartbeat config from disk.
+    Does NOT reinitialize Memory or Dreaming services.
+    Use this after saving character config to apply heartbeat changes instantly.
+    """
+    global soul_client, heartbeat_service_instance
+    
+    try:
+        # Reload config from disk
+        soul_client.config = soul_client._load_config()
+        
+        # Update heartbeat service reference
+        if heartbeat_service_instance:
+            heartbeat_service_instance.soul = soul_client
+            
+        logger.info(f"[API] ❤️ Heartbeat config reloaded. Enabled: {soul_client.config.get('heartbeat_enabled')}, Threshold: {soul_client.config.get('proactive_threshold_minutes')}min")
+        
+        return {
+            "status": "ok",
+            "heartbeat_enabled": soul_client.config.get("heartbeat_enabled", True),
+            "proactive_threshold_minutes": soul_client.config.get("proactive_threshold_minutes", 15.0)
+        }
+    except Exception as e:
+        logger.error(f"[API] Failed to reload heartbeat: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 class SwitchCharacterRequest(BaseModel):
     character_id: str
 
@@ -951,6 +1048,68 @@ async def update_user_name(request: UpdateUserNameRequest):
         return {"status": "updated", "user_name": request.user_name}
     except Exception as e:
         logger.error(f"[API] Failed to update user_name: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# SurrealDB Debug Endpoints
+class SurrealAddRequest(BaseModel):
+    content: str
+    agent_id: str
+    user_id: str = "user_default"
+    importance: int = 1
+    emotion: Optional[str] = None
+
+@app.post("/debug/surreal/add")
+async def add_surreal_memory(request: SurrealAddRequest):
+    if not surreal_system:
+        raise HTTPException(status_code=503, detail="SurrealDB not available")
+    
+    # Reuse existing LiteMemory model for embedding generation
+    # Since memory_clients is a Dict, getting the active one might be tricky if not yet configured.
+    # However, create_embedding usually requires the model loaded.
+    # Assuming LiteMemory creates the model on init.
+    
+    # Hack: We need an embedding provider. SurrealMemory expects embedding.
+    # We can try to get it from the active LiteMemory instance.
+    active_client = next(iter(memory_clients.values())) if memory_clients else None
+    
+    if not active_client or not hasattr(active_client, 'encoder'):
+         raise HTTPException(status_code=500, detail="No active LiteMemory client to generate embeddings")
+
+    try:
+        embedding = active_client.encoder.encode(request.content).tolist()
+        
+        fact_id = await surreal_system.add_memory(
+            content=request.content,
+            embedding=embedding,
+            agent_id=request.agent_id,
+            user_id=request.user_id,
+            importance=request.importance,
+            emotion=request.emotion
+        )
+        return {"status": "success", "id": fact_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class SurrealSearchRequest(BaseModel):
+    query: str
+    agent_id: str
+    limit: int = 5
+
+@app.post("/debug/surreal/search")
+async def search_surreal_memory(request: SurrealSearchRequest):
+    if not surreal_system:
+        raise HTTPException(status_code=503, detail="SurrealDB not available")
+    
+    active_client = next(iter(memory_clients.values())) if memory_clients else None
+    if not active_client:
+         raise HTTPException(status_code=500, detail="No active embedding model")
+
+    try:
+        # Fix: use .encoder not .model
+        embedding = active_client.encoder.encode(request.query).tolist()
+        results = await surreal_system.search(embedding, request.agent_id, request.limit)
+        return {"results": results}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

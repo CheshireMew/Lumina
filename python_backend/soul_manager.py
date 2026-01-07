@@ -12,7 +12,7 @@ class SoulManager:
     灵魂管理器 - 重构版
     支持多角色，分离用户配置、AI性格、GalGame状态
     """
-    def __init__(self, character_id: str = "hiyori"):
+    def __init__(self, character_id: str = "hiyori", auto_create: bool = False):
         self.character_id = character_id
         self.base_dir = Path(f"python_backend/characters/{character_id}")
         
@@ -21,9 +21,14 @@ class SoulManager:
         self.soul_path = self.base_dir / "soul.json"
         self.state_path = self.base_dir / "state.json"
         
-        # 自动脚手架：如果目录不存在，初始化默认文件
+        # 自动脚手架：如果目录不存在且允许自动创建，则初始化
         if not self.base_dir.exists():
-            self._scaffold_character()
+            if auto_create:
+                self._scaffold_character()
+            else:
+                print(f"[SoulManager] ⚠️ Character '{character_id}' not found. Auto-create is disabled.")
+                # We do NOT raise error here to allow 'soft' checks, but load_config will fail later if needed.
+                pass
         
         # 加载数据
         self.config = self._load_config()      # 用户配置（Settings修改）

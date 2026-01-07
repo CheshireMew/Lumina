@@ -106,7 +106,8 @@ export class LLMService {
         summary?: string,
         longTermMemory?: string,
         userName: string = 'User',
-        charName: string = 'Assistant'
+        charName: string = 'Assistant',
+        role: 'user' | 'system' = 'user' // ✅ NEW: Allow specifying role (for System Instructions)
     ): Promise<string> {
         if (!this.chatModel) {
             throw new Error("Chat model not initialized");
@@ -134,15 +135,23 @@ export class LLMService {
                 }
             }
 
-            // 2️⃣ 当前用户消息（纯消息，不附加上下文）
-            messages.push(new HumanMessage({ content: userMessage, name: userName }));
+            // 2️⃣ Current Message (User or System Wrapper)
+            if (role === 'system') {
+                 // If role is system, we add it as a SystemMessage (DeepSeek/OpenAI handles this)
+                 // NOTE: We already have a "System Prompt" at the end. 
+                 // Adding another System Message here puts it AFTER history but BEFORE the final "dynamic system prompt".
+                 // This effectively makes it "contextual instruction".
+                 messages.push(new SystemMessage({ content: userMessage }));
+            } else {
+                 messages.push(new HumanMessage({ content: userMessage, name: userName }));
+            }
 
             // 3️⃣ 动态 System Prompt（放最后，包含所有动态上下文）
             let dynamicSystemPrompt = this.systemPrompt;
 
             // 附加长期记忆
             if (longTermMemory) {
-                dynamicSystemPrompt += `\n\n## 相关记忆（来自过往对话）\n${longTermMemory}\n\n请利用这些记忆提供个性化的回复，但不要明确提及你在阅读记忆，除非相关。`;
+                dynamicSystemPrompt += `\n\n## 相关记忆（来自过往对话）\n${longTermMemory}\n\n请利用这些记忆提供个性化的对话，但不要明确提及你在阅读记忆，除非相关。`;
             }
 
             // 附加对话摘要

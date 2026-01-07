@@ -164,6 +164,36 @@ class TimeIndexedMemory:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_consolidated ON facts_staging (consolidated);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_timestamp ON facts_staging (timestamp);")
 
+            # --- Schema Migration: Add character_id to facts_staging ---
+            try:
+                conn.execute("ALTER TABLE facts_staging ADD COLUMN character_id TEXT")
+                print("[TimeIndexedMemory] ⚡ Added character_id column to facts_staging")
+            except Exception:
+                pass  # Column already exists
+            
+            # Data migration: Set existing NULL character_id to 'hiyori'
+            try:
+                conn.execute("UPDATE facts_staging SET character_id = 'hiyori' WHERE character_id IS NULL")
+            except Exception:
+                pass
+
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_character ON facts_staging (character_id);")
+
+            # --- Schema Migration: Add character_id to conversation_buffer ---
+            try:
+                conn.execute("ALTER TABLE conversation_buffer ADD COLUMN character_id TEXT")
+                print("[TimeIndexedMemory] ⚡ Added character_id column to conversation_buffer")
+            except Exception:
+                pass  # Column already exists
+            
+            # Data migration: Set existing NULL character_id to 'hiyori'
+            try:
+                conn.execute("UPDATE conversation_buffer SET character_id = 'hiyori' WHERE character_id IS NULL")
+            except Exception:
+                pass
+
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_conv_character ON conversation_buffer (character_id);")
+
             conn.commit()
             print(f"[TimeIndexedMemory] Database initialized at: {self.db_path}")
 
@@ -497,14 +527,15 @@ class TimeIndexedMemory:
     # ============================================
     
     def add_conversation(self, user_name: str, char_name: str, 
-                        user_input: str, ai_response: str, timestamp: str):
+                        user_input: str, ai_response: str, timestamp: str,
+                        character_id: str = None):
         """Add a conversation to the buffer for batch processing."""
         with self._get_connection() as conn:
             conn.execute("""
                 INSERT INTO conversation_buffer 
-                (user_name, char_name, user_input, ai_response, timestamp)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_name, char_name, user_input, ai_response, timestamp))
+                (user_name, char_name, user_input, ai_response, timestamp, character_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_name, char_name, user_input, ai_response, timestamp, character_id))
             conn.commit()
     
     def get_unprocessed_conversations(self, limit: int = 20) -> List[Dict]:
@@ -531,14 +562,14 @@ class TimeIndexedMemory:
     
     def add_fact_staging(self, fact_id: str, text: str, emotion: str, 
                         importance: int, timestamp: str, channel: str, 
-                        source_name: str, vector_id: str):
+                        source_name: str, vector_id: str, character_id: str = None):
         """Add an extracted fact to the staging table."""
         with self._get_connection() as conn:
             conn.execute("""
                 INSERT INTO facts_staging 
-                (id, text, emotion, importance, timestamp, channel, source_name, vector_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (fact_id, text, emotion, importance, timestamp, channel, source_name, vector_id))
+                (id, text, emotion, importance, timestamp, channel, source_name, vector_id, character_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (fact_id, text, emotion, importance, timestamp, channel, source_name, vector_id, character_id))
             conn.commit()
     
     def get_unconsolidated_facts(self, channel: str, limit: int = 10) -> List[Dict]:
