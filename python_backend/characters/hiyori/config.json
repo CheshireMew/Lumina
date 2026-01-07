@@ -6,6 +6,6 @@
   "system_prompt": "你是一名18岁的傲娇的活泼可爱的女孩子。",
   "live2d_model": "/live2d/Hiyori/Hiyori.model3.json",
   "voice_config": "GPT-SoVITS (Local / Emotional)",
-  "heartbeat_enabled": true,
+  "heartbeat_enabled": false,
   "proactive_threshold_minutes": 15
 }

@@ -365,7 +365,12 @@ const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string
                 
                 {!loading && data && activeTab === 'history' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {data.history?.map((event, i) => {
+                        {data.history
+                            ?.filter(event => {
+                                const text = parseContent(event.content);
+                                return !text.includes('(Private System Instruction');
+                            })
+                            .map((event, i) => {
                             // Backend now sends { role, name, content, timestamp }
                             // Prioritize backend fields, fallback to old JSON parse logic
                             const role = event.role || getRole(event.content);

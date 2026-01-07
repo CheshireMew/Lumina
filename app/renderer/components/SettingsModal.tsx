@@ -455,6 +455,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             
             setDeletedCharIds([]); // Clear deleted list
 
+            // ⚡ Lightweight heartbeat reload (no Memory reinit)
+            try {
+                const reloadRes = await fetch('http://localhost:8001/heartbeat/reload', { method: 'POST' });
+                if (reloadRes.ok) {
+                    const data = await reloadRes.json();
+                    console.log(`[Settings] ❤️ Heartbeat reloaded: Enabled=${data.heartbeat_enabled}, Threshold=${data.proactive_threshold_minutes}min`);
+                }
+            } catch (e) {
+                console.warn('[Settings] Heartbeat reload failed (non-critical):', e);
+            }
+
         } catch (e) {
             console.error('[Settings] Failed to sync characters to backend:', e);
         }

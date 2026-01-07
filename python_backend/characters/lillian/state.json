@@ -3,11 +3,15 @@
   "galgame": {
     "relationship": {
       "level": 0,
-      "progress": 30,
+      "progress": 90.0,
       "current_stage_label": "陌生",
       "user_name": "柴郡"
     },
-    "energy_level": 76.00000000000023,
-    "last_interaction": "2026-01-07T23:24:04.700679"
+    "energy_level": 72.20000000000044,
+    "last_interaction": "2026-01-08T02:42:29.655092",
+    "pending_interaction": {
+      "timestamp": "2026-01-08T03:05:35.250629",
+      "reason": "idle_timeout"
+    }
   }
 }
