@@ -46,21 +46,45 @@ const LEVEL_COLORS: {[key: number]: string[]} = {
 
 
 
-const GalGameHud: React.FC = () => {
+interface GalGameHudProps {
+    activeCharacterId: string;
+}
+
+const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [showMemoryInspector, setShowMemoryInspector] = useState(false);
     const [profile, setProfile] = useState<SoulProfile | null>(null);
 
-    // Poll Backend for Soul State
+    // Poll Backend for Soul State (使用新的多角色 API)
     useEffect(() => {
-        if (!isVisible) return;
+        if (!isVisible || !activeCharacterId) return;
 
         const fetchSoul = async () => {
             try {
-                const res = await fetch('http://localhost:8001/soul');
-                if (res.ok) {
-                    const data = await res.json();
-                    setProfile(data);
+                // ⚡ 分别获取 soul 和 state 数据
+                const soulRes = await fetch(`http://localhost:8001/soul/${activeCharacterId}`);
+                const stateRes = await fetch(`http://localhost:8001/galgame/${activeCharacterId}/state`);
+                
+                if (soulRes.ok && stateRes.ok) {
+                    const soulData = await soulRes.json();
+                    const stateData = await stateRes.json();
+                    
+                    // 合并为 SoulProfile 格式
+                    setProfile({
+                        identity: { name: activeCharacterId },
+                        personality: soulData.personality,
+                        state: {
+                            current_mood: soulData.state?.current_mood || 'neutral',
+                            energy_level: stateData.energy_level || 100,
+                            last_interaction: stateData.last_interaction || new Date().toISOString()
+                        },
+                        relationship: stateData.relationship || {
+                            user_name: 'Master',
+                            level: 0,
+                            progress: 0,
+                           current_stage_label: '陌生人'
+                        }
+                    });
                 }
             } catch (err) {
                 console.error("Failed to fetch soul:", err);
@@ -70,7 +94,7 @@ const GalGameHud: React.FC = () => {
         fetchSoul();
         const interval = setInterval(fetchSoul, 3000); // Poll every 3s
         return () => clearInterval(interval);
-    }, [isVisible]);
+    }, [isVisible, activeCharacterId]); // ⚡ 依赖 activeCharacterId
 
     // Mood Icon Logic using Lucide SVGs
     const getMoodIcon = (mood: string) => {
@@ -162,7 +186,7 @@ const GalGameHud: React.FC = () => {
 
     return (
         <>
-            {showMemoryInspector && <MemoryInspector onClose={() => setShowMemoryInspector(false)} />}
+            {showMemoryInspector && <MemoryInspector onClose={() => setShowMemoryInspector(false)} activeCharacterId={activeCharacterId} />}
             
             {/* Sidebar Actions */}
             <div style={{
@@ -345,6 +369,13 @@ const GalGameHud: React.FC = () => {
                         @keyframes spin { 100% { transform: rotate(360deg); } }
                     `}</style>
                 </div>
+            )}
+            
+            {showMemoryInspector && (
+                <MemoryInspector 
+                    onClose={() => setShowMemoryInspector(false)} 
+                    activeCharacterId={activeCharacterId}
+                />
             )}
         </>
     );

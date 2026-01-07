@@ -1,0 +1,16 @@
+{
+  "character_id": "yuri",
+  "name": "Yuri",
+  "display_name": "Yuri",
+  "description": "A new digital soul.",
+  "system_prompt": "You are a helpful AI assistant.",
+  "live2d_model": "/live2d/imported/PinkFox/PinkFox.model3.json",
+  "voice_config": {
+    "service": "gpt-sovits",
+    "voiceId": "default",
+    "rate": "+0%",
+    "pitch": "+0Hz"
+  },
+  "heartbeat_enabled": true,
+  "proactive_threshold_minutes": 15
+}

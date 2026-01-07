@@ -7,7 +7,8 @@ export class SentenceSplitter {
     private buffer: string = '';
     private onSentenceCallback: ((sentence: string) => void) | null = null;
     // 优化：添加逗号等短停顿符，提前触发 TTS (包含换行)
-    private sentenceEndRegex = /[。！？.!?,，、；\n]$/;
+    // ⚡ '&' 为 LLM 控制的断句符，用于精确控制语音停顿
+    private sentenceEndRegex = /[。！？.!?,，、；&\n]$/;
     private minLength = 1; // 降低最小长度，避免丢失短句
     // 优化：降低超时时间，减少等待延迟（从 1500ms -> 800ms）
     private maxWaitMs = 800; // 最大等待时间（毫秒）

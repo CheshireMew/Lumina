@@ -1,0 +1,10 @@
+{
+  "user_name": "Master",
+  "active_character_id": "hiyori",
+  "ui_settings": {
+    "context_window": 15,
+    "auto_summarization": true,
+    "live2d_high_dpi": false,
+    "chat_mode": "voice"
+  }
+}

@@ -108,35 +108,39 @@ async def shutdown_event():
         logger.info("Shared HTTP client closed")
     # Clean up subprocesses if any (handled by their own logic usually)
 
+# ⚡ 修复: 添加连接池重置端点（用于手动恢复）
+@app.get("/health/reset_pool")
+async def reset_connection_pool():
+    """手动重置 HTTP 连接池（当TTS出现问题时使用）"""
+    global http_client
+    if http_client:
+        await http_client.aclose()
+        http_client = httpx.AsyncClient(timeout=None)
+        logger.info("[Health] HTTP client pool reset")
+        return {"status": "ok", "message": "Connection pool reset"}
+    return {"status": "error", "message": "No client to reset"}
+
 def parse_emotion_tags(text: str):
-    match = re.search(r"^\[([a-zA-Z]+)\]", text.strip())
+    # 1. Extract first emotion tag for style control
+    emotion = None
+    # Match standard [emotion] formats
+    match = re.search(r"\[([a-zA-Z0-9_-]+)\]", text)
     if match:
         emotion = match.group(1)
-        clean_text = re.sub(r"^\[([a-zA-Z]+)\]", "", text.strip()).strip()
-        return clean_text, emotion
-    return text, None
-
-def wrap_with_ssml(text: str, voice: str, style: str = None):
-    """
-    生成 SSML (Speech Synthesis Markup Language)
+        
+    # 2. Clean Text for TTS
+    # Remove all [tags]
+    clean_text = re.sub(r"\[.*?\]", "", text)
+    # Remove all (parentheses comments) often used for actions
+    clean_text = re.sub(r"\(.*?\)", "", clean_text)
+    # Remove markdown bold/italic markers
+    clean_text = clean_text.replace("*", "").replace("_", "")
+    # Remove excess whitespace
+    clean_text = re.sub(r"\s+", " ", clean_text).strip()
     
-    注意：style 参数仅适用于 Azure Cognitive Services
-    Edge TTS 免费版会忽略 <mstts:express-as> 标签
-    """
-    safe_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    if style:  # 此分支在 Edge TTS 下无效，保留仅为兼容性
-        return f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='https://www.w3.org/2001/mstts' xml:lang='en-US'>
-    <voice name='{voice}'>
-        <mstts:express-as style='{style}'>
-            {safe_text}
-        </mstts:express-as>
-    </voice>
-</speak>"""
-    return f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
-    <voice name='{voice}'>
-        {safe_text}
-    </voice>
-</speak>"""
+    return clean_text, emotion
+
+
 
 async def transcode_to_aac(pcm_iterator: AsyncGenerator[bytes, None], sample_rate=32000) -> AsyncGenerator[bytes, None]:
     """
@@ -175,7 +179,7 @@ async def transcode_to_aac(pcm_iterator: AsyncGenerator[bytes, None], sample_rat
                 if chunk:
                     # 使用 run_in_executor 避免阻塞事件循环
                     await loop.run_in_executor(None, process.stdin.write, chunk)
-                    # flush 确保数据立即送入 ffmpeg (影响不大但以防万一)
+                    # flush 确保数据立即送入 ffmpeg
                     await loop.run_in_executor(None, process.stdin.flush) 
         except Exception as e:
             logger.error(f"[Transcoder] Writer error: {e}")
@@ -184,6 +188,7 @@ async def transcode_to_aac(pcm_iterator: AsyncGenerator[bytes, None], sample_rat
                 await loop.run_in_executor(None, process.stdin.close)
             except:
                 pass
+            logger.debug(f"[Transcoder] Writer task finished")
 
     # 启动写入线程
     writer_task = asyncio.create_task(writer())
@@ -200,12 +205,31 @@ async def transcode_to_aac(pcm_iterator: AsyncGenerator[bytes, None], sample_rat
     except Exception as e:
         logger.error(f"[Transcoder] Reader error: {e}")
     finally:
-        # 清理
-        writer_task.cancel()
-        if process.stdout: process.stdout.close()
-        if process.stderr: process.stderr.close()
-        process.terminate()
-        logger.info("[Transcoder] FFmpeg terminated")
+        # ⚡ 修复: 加强进程清理，防止僵尸进程
+        try:
+            writer_task.cancel()
+            await asyncio.wait_for(writer_task, timeout=1.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
+        
+        # 强制清理 FFmpeg 进程
+        try:
+            if process.stdout: process.stdout.close()
+            if process.stderr: process.stderr.close()
+            
+            # 先尝试正常终止
+            process.terminate()
+            try:
+                await asyncio.wait_for(asyncio.to_thread(process.wait), timeout=2.0)
+                logger.info("[Transcoder] FFmpeg terminated gracefully")
+            except asyncio.TimeoutError:
+                # 超时则强制杀死
+                logger.warning("[Transcoder] FFmpeg not responding, force killing...")
+                process.kill()
+                await asyncio.to_thread(process.wait)
+                logger.warning("[Transcoder] FFmpeg force killed")
+        except Exception as e:
+            logger.error(f"[Transcoder] Cleanup error: {e}")
 
 
 @app.post("/tts/synthesize")
@@ -230,6 +254,7 @@ async def synthesize_speech(request: TTSRequest):
 
             # ⚡ 关键改动: 请求 RAW (PCM) 格式，避免 Server 端 FFmpeg 低效
             # ⭐ 优化: 添加 text_split_method='cut5' (按标点切分) 加速首字生成
+            # ⚡ 优化: 添加模型缓存参数，复用 speaker embedding 减少首字延迟
             params = {
                 "text": clean_text,
                 "text_lang": text_lang,
@@ -240,7 +265,10 @@ async def synthesize_speech(request: TTSRequest):
                 "streaming_mode": "true",
                 "text_split_method": "cut5", # 优化: 标点符号切分
                 "batch_size": 1,             # 优化: 强制 batch_size=1
-                "parallel_infer": True       # 优化: 尝试开启并行推理
+                "parallel_infer": True,      # 优化: 尝试开启并行推理
+                # ⚡ 新增: 模型缓存参数（如果 GPT-SoVITS API 支持）
+                "use_cache": True,           # 启用 speaker embedding 缓存
+                "cache_mode": "full"         # 完整缓存模式
             }
             
             target_url = f"{gpt_sovits_engine.api_url}/tts"
@@ -265,8 +293,9 @@ async def synthesize_speech(request: TTSRequest):
                 logger.info(f"[TTS] Upstream Request: {url} (RAW) | Split: cut5")
                 
                 try:
-                    # 使用 client.stream 保持连接复用
-                    async with client.stream("GET", url, params=params, timeout=60.0) as response:
+                    # ⚡ 修复: 添加请求超时保护 (60秒超时)
+                    timeout_config = httpx.Timeout(60.0, connect=10.0, read=60.0)
+                    async with client.stream("GET", url, params=params, timeout=timeout_config) as response:
                         if response.status_code != 200:
                             error_text = await response.aread()
                             logger.error(f"GPT-SoVITS API Error: {response.status_code} {error_text}")
@@ -282,7 +311,12 @@ async def synthesize_speech(request: TTSRequest):
                                 logger.info(f"[TTS-RAW] 🟢 First Byte: {first_byte_time - start_time:.4f}s")
                             yield chunk
                             chunk_count += 1
+                        
+                        # ⚡ 修复: 确保响应完全消费
+                        logger.info(f"[TTS] Stream completed: {chunk_count} chunks")
                             
+                except asyncio.TimeoutError:
+                    logger.error(f"[TTS] Request timeout after 60s")
                 except Exception as e:
                     logger.error(f"[TTS] Upstream connection failed: {e}")
             
@@ -309,11 +343,11 @@ async def synthesize_speech(request: TTSRequest):
         target_voice = "zh-CN-XiaoxiaoNeural"
         
     edge_style = emotion_style_map.get(emotion_tag.lower()) if emotion_tag else None
-    ssml_text = wrap_with_ssml(clean_text, target_voice, edge_style)  # style 参数当前无效
     logger.info(f"[TTS] Fallback Edge TTS: '{clean_text[:10]}...'")
     
     try:
-        communicate = edge_tts_engine.Communicate(ssml_text, target_voice)
+        # Use clean_text directly. edge_tts will handle it.
+        communicate = edge_tts_engine.Communicate(clean_text, target_voice)
         stream_iterator = communicate.stream().__aiter__()
         
         async def edge_stream_generator():

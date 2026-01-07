@@ -11,6 +11,8 @@ interface SettingsModalProps {
     onCharactersUpdated?: (characters: CharacterProfile[], activeId: string) => void;
     onUserNameUpdated?: (newName: string) => void;
     onLive2DHighDpiChange?: (enabled: boolean) => void;
+    onCharacterSwitch?: (characterId: string) => void;
+    activeCharacterId: string; // ⚡ Lifted State
 }
 
 interface WhisperModelInfo {
@@ -34,8 +36,41 @@ const AVAILABLE_MODELS = [
     { name: 'Hiyori (Mic Ver)', path: '/live2d/imported/Hiyori_Mic/hiyori_pro_mic.model3.json' },
 ];
 
+const inputStyle = {
+    width: '100%',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    border: '1px solid #d1d5db',
+    fontSize: '14px',
+    color: '#1f2937',
+    outline: 'none',
+    boxSizing: 'border-box' as const,
+    transition: 'border-color 0.2s'
+};
+
+const labelStyle = {
+    display: 'block',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#4b5563',
+    marginBottom: '4px'
+};
+
+const buttonStyle = {
+    padding: '8px 16px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 500,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s'
+};
+
 const SettingsModal: React.FC<SettingsModalProps> = ({
-    isOpen, onClose, onClearHistory, onContextWindowChange, onLLMSettingsChange, onCharactersUpdated, onUserNameUpdated, onLive2DHighDpiChange
+    isOpen, onClose, onClearHistory, onContextWindowChange, onLLMSettingsChange, onCharactersUpdated, onUserNameUpdated, onLive2DHighDpiChange, onCharacterSwitch,
+    activeCharacterId // Destructure prop
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('general');
 
@@ -71,38 +106,95 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
     // Character Settings
     const [characters, setCharacters] = useState<CharacterProfile[]>([]);
-    const [activeCharacterId, setActiveCharacterId] = useState<string>('');
+    // const [activeCharacterId, setActiveCharacterId] = useState<string>(''); // REMOVED local state: Lifted to props
     const [editingCharId, setEditingCharId] = useState<string | null>(null);
+    // Track deleted characters for batch removal on save
+    const [deletedCharIds, setDeletedCharIds] = useState<string[]>([]);
+    const [isSaving, setIsSaving] = useState(false); // ⚡ Loading State
 
     useEffect(() => {
         if (isOpen) {
             const loadSettings = async () => {
-                const settings = (window as any).settings;
+        const settings = (window as any).settings;
 
-                // LLM
-                setApiKey(await settings.get('apiKey') || '');
-                setApiBaseUrl(await settings.get('apiBaseUrl') || 'https://api.deepseek.com/v1');
-                setModelName(await settings.get('modelName') || 'deepseek-chat');
-                setUserName(await settings.get('userName') || 'Master');
+        // LLM
+        setApiKey(await settings.get('apiKey') || '');
+        setApiBaseUrl(await settings.get('apiBaseUrl') || 'https://api.deepseek.com/v1');
+        setModelName(await settings.get('modelName') || 'deepseek-chat');
+        setUserName(await settings.get('userName') || 'Master');
 
-                // Visual
-                setHighDpiEnabled(await settings.get('live2d_high_dpi') || false);
+        // Visual
+        setHighDpiEnabled(await settings.get('live2d_high_dpi') || false);
 
-                // Memory
-                setContextWindow(await settings.get('contextWindow') || 15);
+        // Memory
+        setContextWindow(await settings.get('contextWindow') || 15);
 
-                // Characters
+        // ⚡ 新逻辑：从后端 API 加载角色列表
+        try {
+            const response = await fetch('http://localhost:8001/characters');
+            if (response.ok) {
+                const { characters: backendChars } = await response.json();
+                
+                // 转换后端格式到前端 CharacterProfile 格式
+                // 转换后端格式到前端 CharacterProfile 格式
+                const convertedChars: CharacterProfile[] = backendChars.map((char: any) => {
+                    // 查找对应的模型路径
+                    const modelDef = AVAILABLE_MODELS.find(m => m.name === char.live2d_model);
+                    const realPath = modelDef ? modelDef.path : char.live2d_model; // Fallback to raw value if not found
+
+                    return {
+                        id: char.character_id,
+                        name: char.name,
+                        description: char.description,
+                        systemPrompt: char.system_prompt,
+                        modelPath: realPath, // ⚡ 使用真正的路径
+                        voiceConfig: char.voice_config,
+                        heartbeatEnabled: char.heartbeat_enabled ?? true,
+                        proactiveThresholdMinutes: char.proactive_threshold_minutes ?? 15
+                    };
+                });
+                
+                
+                // ⚡ Sort on Load: Active character first
+                const activeId = activeCharacterId; // Use current prop value
+                const sortedChars = convertedChars.sort((a, b) => {
+                     if (a.id === activeId) return -1;
+                     if (b.id === activeId) return 1;
+                     return 0;
+                });
+
+                setCharacters(sortedChars);
+                setDeletedCharIds([]); // Reset deleted list on open
+                
+                // Active Character ID is managed by Parent (App.tsx), no local set needed.
+                /* 
+                // 从 localStorage 获取活跃角色 ID（UI 状态）
+                const savedActiveId = await settings.get('activeCharacterId') as string;
+                if (savedActiveId && convertedChars.some(c => c.id === savedActiveId)) {
+                    // setActiveCharacterId(savedActiveId);
+                } 
+                */
+                
+                console.log('[Settings] ✅ Loaded characters from backend:', convertedChars.length);
+            } else {
+                console.error('[Settings] Failed to load characters from backend');
+                // Fallback: 使用本地数据
                 const loadedChars = await settings.get('characters') as CharacterProfile[];
-                const loadedActiveId = await settings.get('activeCharacterId') as string;
                 if (loadedChars) setCharacters(loadedChars);
-                if (loadedActiveId) setActiveCharacterId(loadedActiveId);
+            }
+        } catch (error) {
+            console.error('[Settings] Error loading characters:', error);
+            // Fallback: 使用本地数据
+            const loadedChars = await settings.get('characters') as CharacterProfile[];
+            if (loadedChars) setCharacters(loadedChars);
+        }
 
-                // Whisper & TTS Voices & Audio Devices & Voiceprint
-                fetchModels();
-                fetchTTSVoices();
-                fetchAudioDevices();
-                fetchVoiceprintConfig();
-            };
+        // Whisper & TTS Voices & Audio Devices & Voiceprint
+        fetchModels();
+        fetchTTSVoices();
+        fetchAudioDevices();
+        fetchVoiceprintConfig();
+    };
             loadSettings();
         }
     }, [isOpen]);
@@ -292,13 +384,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     };
 
     const handleSave = async () => {
+        setIsSaving(true);
         const settings = (window as any).settings;
+        
+        // 保存 LLM 配置到 localStorage
         await settings.set('apiKey', apiKey);
         await settings.set('apiBaseUrl', apiBaseUrl);
         await settings.set('modelName', modelName);
         await settings.set('userName', userName);
         await settings.set('contextWindow', contextWindow);
-        await settings.set('characters', characters);
         await settings.set('activeCharacterId', activeCharacterId);
         await settings.set('live2d_high_dpi', highDpiEnabled);
 
@@ -316,7 +410,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     })
                 });
 
-                // Removed alert - check console logs for voiceprint config status
                 if (voiceprintEnabled) {
                     console.log('[Settings] Voiceprint configuration saved. Please restart stt_server.py for changes to take effect.');
                 }
@@ -325,48 +418,89 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             }
         }
 
-        // 同步配置到后端 core_profile.json
+        // ⚡ 修复逻辑：保存所有角色配置到后端 API (批量并发)
         try {
-            // 同步 user_name
-            await fetch('http://localhost:8001/soul/update_user_name', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_name: userName })
-            });
-
-            // 同步当前活跃角色的 identity (name, description)
-            const activeChar = characters.find(c => c.id === activeCharacterId);
-            if (activeChar) {
+            console.log(`[Settings] 📤 Saving ${characters.length} characters...`);
+            
+            // 1. Save/Update all current characters
+            const savePromises = characters.map(char => {
                 const payload = {
-                    name: activeChar.name,
-                    description: activeChar.systemPrompt || activeChar.description
+                    character_id: char.id,
+                    name: char.name,
+                    display_name: char.name,
+                    description: char.description,
+                    system_prompt: char.systemPrompt,
+                    live2d_model: char.modelPath,
+                    voice_config: char.voiceConfig,
+                    heartbeat_enabled: char.heartbeatEnabled,
+                    proactive_threshold_minutes: char.proactiveThresholdMinutes
                 };
-                console.log('[Settings] 📤 Sending to backend:', payload);
-                console.log('[Settings] Description length:', payload.description.length, 'chars');
-                
-                const response = await fetch('http://localhost:8001/soul/update_identity', {
+                return fetch(`http://localhost:8001/characters/${char.id}/config`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    console.log('[Settings] ✅ Backend confirmed:', result);
-                } else {
-                    console.error('[Settings] ❌ API Error:', response.status, await response.text());
-                }
-            }
+            });
+
+            // 2. Delete removed characters
+            const deletePromises = deletedCharIds.map(id => {
+               console.log(`[Settings] 🗑️ Deleting character: ${id}`);
+               return fetch(`http://localhost:8001/characters/${id}`, {
+                   method: 'DELETE'
+               }); 
+            });
+
+            await Promise.all([...savePromises, ...deletePromises]);
+            console.log('[Settings] ✅ All character changes synced to backend');
+            
+            setDeletedCharIds([]); // Clear deleted list
+
         } catch (e) {
-            console.error('[Settings] Failed to sync to backend:', e);
+            console.error('[Settings] Failed to sync characters to backend:', e);
         }
 
+        // 触发回调
         if (onContextWindowChange) onContextWindowChange(contextWindow);
         if (onLLMSettingsChange) onLLMSettingsChange(apiKey, apiBaseUrl, modelName);
         if (onCharactersUpdated) onCharactersUpdated(characters, activeCharacterId);
         if (onUserNameUpdated) onUserNameUpdated(userName);
         if (onLive2DHighDpiChange) onLive2DHighDpiChange(highDpiEnabled);
 
+        // ⚡ 同步用户名到后端（所有角色的 state.json）
+        try {
+            console.log(`[Settings] Syncing user name to backend: ${userName}`);
+            
+            // 为每个角色更新 user_name
+            const userNameUpdatePromises = characters.map(char => {
+                // 获取当前state
+                return fetch(`http://localhost:8001/galgame/${char.id}/state`, {
+                    method: 'GET'
+                }).then(res => res.json()).then(state => {
+                    // 更新 user_name
+                    const updatedState = {
+                        ...state,
+                        relationship: {
+                            ...(state.relationship || {}),
+                            user_name: userName
+                        }
+                    };
+                    
+                    // 保存回后端
+                    return fetch(`http://localhost:8001/galgame/${char.id}/state`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updatedState)
+                    });
+                });
+            });
+            
+            await Promise.all(userNameUpdatePromises);
+            console.log('[Settings] ✅ User name synced to all characters');
+        } catch (e) {
+            console.error('[Settings] Failed to sync user name to backend:', e);
+        }
+
+        setIsSaving(false);
         onClose();
     };
 
@@ -379,14 +513,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
     // Character Management Handlers
     const handleAddCharacter = () => {
+        const timestamp = Date.now();
+        // Use a temporary ID for new characters
+        const tempId = `new_${timestamp}`;
+        
         const newChar: CharacterProfile = {
-            id: `char_${Date.now()}`,
+            id: tempId,
             name: 'New Character',
-            description: 'A brief description',
-            systemPrompt: 'An 18 years cute human girl with a distinct personality.',
+            description: 'A new digital soul.',
+            systemPrompt: 'You are a helpful AI assistant.',
             voiceConfig: {
                 service: 'gpt-sovits',
-                voiceId: 'default_voice',
+                voiceId: 'default',
                 rate: '+0%',
                 pitch: '+0Hz'
             }
@@ -402,35 +540,82 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             return;
         }
         if (confirm('确定要删除这个角色吗？')) {
+            // Track for deletion on save
+            setDeletedCharIds([...deletedCharIds, id]);
+            
             const newChars = characters.filter(c => c.id !== id);
             setCharacters(newChars);
-            if (activeCharacterId === id) {
-                setActiveCharacterId(newChars[0].id);
+            if (activeCharacterId === id && newChars.length > 0) {
+                 if (onCharacterSwitch) onCharacterSwitch(newChars[0].id);
             }
         }
     };
 
     const handleUpdateCharacter = (id: string, updates: Partial<CharacterProfile>) => {
-        setCharacters(characters.map(c => c.id === id ? { ...c, ...updates } : c));
-    };
-
-    const handleVoiceConfigChange = (id: string, field: keyof CharacterProfile['voiceConfig'], value: string) => {
         setCharacters(characters.map(c => {
             if (c.id === id) {
-                return {
-                    ...c,
-                    voiceConfig: { ...c.voiceConfig, [field]: value }
-                };
+                const updatedChar = { ...c, ...updates };
+                
+                // ⚡ 智能 ID 生成逻辑：
+                // 如果是新角色（ID 以 "new_" 开头），且用户正在修改名字
+                // 自动将 ID 更新为名字的拼音/英文形式
+                if (id.startsWith('new_') && updates.name) {
+                    // 简单的 slugify: 转小写，空格变下划线，去除非法字符
+                    const safeId = updates.name
+                        .trim()
+                        .toLowerCase()
+                        .replace(/[^a-z0-9_\u4e00-\u9fa5]/g, '_') // 保留中文、英文、数字、下划线
+                        .replace(/_+/g, '_'); // 合并多个下划线
+                    
+                    if (safeId.length > 0) {
+                        updatedChar.id = safeId;
+                        // 同时更新 editingCharId 以保持焦点
+                        // 注意：Changing ID while editing might cause focus loss if key uses ID. 
+                        // But React usually handles this if key is stable or index-based (here using random keys in map might help, but let's see).
+                    }
+                }
+                return updatedChar;
             }
             return c;
         }));
-
-        // Immediately apply voice change if this is the active character and voiceId is being changed
-        if (field === 'voiceId' && id === activeCharacterId) {
-            console.log(`[SettingsModal] Immediately switching TTS voice to: ${value}`);
-            ttsService.setDefaultVoice(value);
+        
+        // 如果 ID 变了，我们需要更新 editingCharId 和 deletedCharIds (如果是在未保存状态下)
+        // 但由于是在 map 里面改的，我们在外面很难捕捉。
+        // 为了简化，我们只在 map 里修改。如果 editingCharId 失效了，用户可能需要重新点一下编辑，但这比逻辑复杂要好。
+        // 实际上，如果 updates.name 导致 id 变化，我们需要同步更新 editingCharId，否则编辑框会关掉。
+        
+        if (id.startsWith('new_') && updates.name) {
+             const safeId = updates.name.trim().toLowerCase().replace(/[^a-z0-9_\u4e00-\u9fa5]/g, '_').replace(/_+/g, '_');
+             if (safeId.length > 0) {
+                 setEditingCharId(safeId);
+             }
         }
     };
+
+    const handleVoiceConfigChange = (id: string, key: string, value: any) => {
+         setCharacters(prev => prev.map(c => {
+            if (c.id !== id) return c;
+            return {
+                ...c,
+                voiceConfig: {
+                    ...c.voiceConfig,
+                    [key]: value
+                }
+            };
+         }));
+    };
+
+    const handleActivateCharacter = (id: string) => {
+        console.log(`[SettingsModal] Set as Active clicked for: ${id}`);
+        if (onCharacterSwitch) {
+            console.log('[SettingsModal] Invoking onCharacterSwitch callback');
+            onCharacterSwitch(id); // Only notify parent, parent updates prop
+        } else {
+            console.error('[SettingsModal] onCharacterSwitch prop is missing!');
+        }
+    };
+
+
 
     if (!isOpen) return null;
 
@@ -749,7 +934,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {characters.map(char => {
+                                {[...characters].sort((a, b) => {
+                                    if (a.id === activeCharacterId) return -1;
+                                    if (b.id === activeCharacterId) return 1;
+                                    return 0;
+                                }).map(char => {
                                     const isExpanded = editingCharId === char.id;
                                     const isActive = activeCharacterId === char.id;
 
@@ -757,36 +946,88 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         <div key={char.id} style={{
                                             backgroundColor: 'white', borderRadius: '8px',
                                             border: isActive ? '2px solid #6366f1' : '1px solid #e5e7eb',
-                                            overflow: 'hidden', transition: 'all 0.2s'
+                                            overflow: 'hidden', transition: 'all 0.2s',
+                                            boxShadow: isActive ? '0 4px 6px -1px rgba(99, 102, 241, 0.1), 0 2px 4px -1px rgba(99, 102, 241, 0.06)' : 'none'
                                         }}>
                                             {/* Card Header */}
                                             <div
-                                                onClick={() => setEditingCharId(isExpanded ? null : char.id)}
+                                                onClick={() => handleActivateCharacter(char.id)}
                                                 style={{
                                                     padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                                     cursor: 'pointer', backgroundColor: isActive ? '#f5f7ff' : 'white'
                                                 }}
+                                                title="点击切换到此角色"
                                             >
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
                                                     <div style={{
-                                                        width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#e0e7ff',
+                                                        width: '32px', height: '32px', borderRadius: '50%', backgroundColor: isActive ? '#c7d2fe' : '#e0e7ff',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px'
                                                     }}>
-                                                        {char.avatar ? '🖼️' : '👤'}
+                                                        {char.avatar ? '🖼️' : (char.id.startsWith('new_') ? '🆕' : '👤')}
                                                     </div>
                                                     <div>
-                                                        <div style={{ fontWeight: 600, fontSize: '14px', color: '#1f2937' }}>{char.name} {isActive && <span style={{ fontSize: '11px', color: '#4f46e5', backgroundColor: '#e0e7ff', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>Active</span>}</div>
+                                                        <div style={{ fontWeight: 600, fontSize: '14px', color: '#1f2937' }}>
+                                                            {char.name} 
+                                                            {isActive && <span style={{ fontSize: '11px', color: '#ffffff', backgroundColor: '#6366f1', padding: '2px 8px', borderRadius: '10px', marginLeft: '8px' }}>Active</span>}
+                                                        </div>
                                                         <div style={{ fontSize: '12px', color: '#6b7280' }}>{char.description}</div>
                                                     </div>
                                                 </div>
-                                                <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                                                    {isExpanded ? '▲' : '▼'}
+                                                
+                                                {/* Edit Toggle Button (Independent) */}
+                                                <div 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation(); // 防止触发切换
+                                                        setEditingCharId(isExpanded ? null : char.id);
+                                                    }}
+                                                    style={{ 
+                                                        padding: '8px', 
+                                                        borderRadius: '4px',
+                                                        color: '#9ca3af',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        minWidth: '30px'
+                                                    }}
+                                                    title={isExpanded ? "收起编辑" : "编辑详情"}
+                                                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f3f4f6')}
+                                                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                                >
+                                                    {isExpanded ? '▲' : '⚙️'}
                                                 </div>
                                             </div>
 
                                             {/* Expanded Edit Form */}
                                             {isExpanded && (
-                                                <div style={{ padding: '15px', borderTop: '1px solid #f3f4f6', backgroundColor: '#fff' }}>
+                                                <div style={{ padding: '15px', borderTop: '1px solid #f3f4f6', backgroundColor: '#fff' }} onClick={(e) => e.stopPropagation()}>
+                                                    
+                                                    {/* Folder Name / ID Display */}
+                                                    <div style={{ marginBottom: '10px' }}>
+                                                        <label style={labelStyle}>
+                                                            Folder Name / ID
+                                                            <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: '5px', fontSize: '11px' }}>
+                                                                {char.id.startsWith('new_') ? '(将作为文件夹名)' : '(不可修改)'}
+                                                            </span>
+                                                        </label>
+                                                        <input
+                                                            value={char.id}
+                                                            readOnly
+                                                            style={{ 
+                                                                ...inputStyle, 
+                                                                backgroundColor: '#f9fafb', 
+                                                                color: char.id.startsWith('new_') ? '#4f46e5' : '#6b7280',
+                                                                fontFamily: 'monospace',
+                                                                borderColor: char.id.startsWith('new_') ? '#c7d2fe' : '#e5e7eb'
+                                                            }}
+                                                        />
+                                                        {char.id.startsWith('new_') && (
+                                                            <div style={{ fontSize: '11px', color: '#6366f1', marginTop: '4px' }}>
+                                                                ✨ 输入下方 "Name" 时自动生成
+                                                            </div>
+                                                        )}
+                                                    </div>
+
                                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                                                         <div>
                                                             <label style={labelStyle}>Name</label>
@@ -913,6 +1154,45 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                         )}
                                                     </div>
 
+                                                    {/* Interaction Settings */}
+                                                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #eee' }}>
+                                                        <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', marginBottom: '10px' }}>💗 Interaction Settings</h4>
+                                                        
+                                                        <div style={{ display: 'flex', gap: '20px' }}>
+                                                            {/* Heartbeat Toggle */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={char.heartbeatEnabled !== false}
+                                                                    onChange={(e) => handleUpdateCharacter(char.id, { heartbeatEnabled: e.target.checked })}
+                                                                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                                                />
+                                                                <div>
+                                                                    <div style={{ fontSize: '13px', color: '#1f2937', fontWeight: 500 }}>Custom Silence Duration</div>
+                                                                    <div style={{ fontSize: '11px', color: '#6b7280' }}>Checked: Fixed time. Unchecked: Auto (Intimacy).</div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Silence Threshold */}
+                                                            {(char.heartbeatEnabled !== false) && (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <label style={{ fontSize: '13px', color: '#6b7280' }}>Silence (mins):</label>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        max="120"
+                                                                        value={char.proactiveThresholdMinutes || 15}
+                                                                        onChange={(e) => handleUpdateCharacter(char.id, { proactiveThresholdMinutes: Number(e.target.value) })}
+                                                                        style={{ ...inputStyle, width: '60px', padding: '4px 8px' }}
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '5px' }}>
+                                                            AI will initiate conversation after specified minutes of silence.
+                                                        </div>
+                                                    </div>
+
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #f3f4f6' }}>
                                                         <button
                                                             onClick={(e) => handleDeleteCharacter(char.id, e)}
@@ -923,7 +1203,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                                                         {activeCharacterId !== char.id && (
                                                             <button
-                                                                onClick={() => setActiveCharacterId(char.id)}
+                                                                onClick={() => handleActivateCharacter(char.id)}
                                                                 style={{ ...buttonStyle, backgroundColor: '#e0e7ff', color: '#4338ca', border: 'none', padding: '6px 12px', fontSize: '12px' }}
                                                             >
                                                                 Set as Active
@@ -942,8 +1222,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {/* Footer */}
                 <div style={{ padding: '20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white' }}>
-                    <button onClick={onClose} style={{ ...buttonStyle, backgroundColor: 'white', border: '1px solid #d1d5db', color: '#374151' }}>Cancel</button>
-                    <button onClick={handleSave} style={{ ...buttonStyle, backgroundColor: '#2563eb', color: 'white', border: 'none' }}>Save Changes</button>
+                    <button onClick={onClose} disabled={isSaving} style={{ ...buttonStyle, backgroundColor: 'white', border: '1px solid #d1d5db', color: '#374151', opacity: isSaving ? 0.7 : 1 }}>Cancel</button>
+                    <button onClick={handleSave} disabled={isSaving} style={{ ...buttonStyle, backgroundColor: '#2563eb', color: 'white', border: 'none', opacity: isSaving ? 0.7 : 1 }}>
+                        {isSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
                 </div>
             </div>
             <style>{`
@@ -956,36 +1238,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     );
 };
 
-const inputStyle = {
-    width: '100%',
-    padding: '8px 12px',
-    borderRadius: '6px',
-    border: '1px solid #d1d5db',
-    fontSize: '14px',
-    color: '#1f2937',
-    outline: 'none',
-    boxSizing: 'border-box' as const,
-    transition: 'border-color 0.2s'
-};
 
-const labelStyle = {
-    display: 'block',
-    fontSize: '12px',
-    fontWeight: 600,
-    color: '#4b5563',
-    marginBottom: '4px'
-};
-
-const buttonStyle = {
-    padding: '8px 16px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 500,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.2s'
-};
 
 export default SettingsModal;

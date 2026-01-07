@@ -203,7 +203,7 @@ const Live2DViewer = forwardRef<Live2DViewerRef, Live2DViewerProps>(({ modelPath
         };
 
         const handlePointerMove = (e: PointerEvent) => {
-            if (!draggingRef.current || !modelRef.current) return;
+            if (!draggingRef.current || !modelRef.current) return;  // ⚡ 空检查已存在
 
             const dx = e.clientX - dragStartRef.current.x;
             const dy = e.clientY - dragStartRef.current.y;

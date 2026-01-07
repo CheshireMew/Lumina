@@ -1,0 +1,24 @@
+{
+  "character_id": "y",
+  "personality": {
+    "traits": [
+      "friendly"
+    ],
+    "big_five": {
+      "openness": 0.5,
+      "conscientiousness": 0.5,
+      "extraversion": 0.5,
+      "agreeableness": 0.5,
+      "neuroticism": 0.5
+    },
+    "pad_model": {
+      "pleasure": 0.5,
+      "arousal": 0.5,
+      "dominance": 0.5
+    }
+  },
+  "state": {
+    "current_mood": "neutral"
+  },
+  "last_updated": "2026-01-07T19:02:18.923311"
+}

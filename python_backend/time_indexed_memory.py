@@ -105,6 +105,12 @@ class TimeIndexedMemory:
             except Exception:
                 pass # Column likely exists
 
+            # Schema Migration: Ensure 'character_id' column exists for character isolation
+            try:
+                conn.execute("ALTER TABLE memory_events ADD COLUMN character_id TEXT")
+            except Exception:
+                pass # Column likely exists
+
             # --- 6. Graph Edges (Pseudo-Graph) ---
             conn.execute("""
             CREATE TABLE IF NOT EXISTS memory_edges (
@@ -161,13 +167,13 @@ class TimeIndexedMemory:
             conn.commit()
             print(f"[TimeIndexedMemory] Database initialized at: {self.db_path}")
 
-    def add_event(self, content: str, event_type: str = "interaction") -> str:
+    def add_event(self, content: str, event_type: str = "interaction", character_id: str = None) -> str:
         """Appends an event to the Event Store (Log)."""
         event_id = f"evt_{int(datetime.now().timestamp()*1000)}_{uuid.uuid4().hex[:4]}" # More unique ID
         with self._get_connection() as conn:
             conn.execute(
-                "INSERT INTO memory_events (event_id, event_type, content, processed) VALUES (?, ?, ?, 0)",
-                (event_id, event_type, content)
+                "INSERT INTO memory_events (event_id, event_type, content, processed, character_id) VALUES (?, ?, ?, 0, ?)",
+                (event_id, event_type, content, character_id)
             )
             conn.commit()
         return event_id
@@ -202,7 +208,7 @@ class TimeIndexedMemory:
             """, (source, target, relation, weight))
             conn.commit()
 
-    def get_graph_context(self, memory_ids: List[str], hops: int = 1) -> List[Dict]:
+    def get_graph_context(self, memory_ids: List[str], hops: int = 1, limit: int = 10) -> List[Dict]:
         """
         Performs a 'Graph Expansion' (1-Hop) for the given seed memory IDs.
         Retrieves related nodes connected to the search results.
@@ -214,19 +220,31 @@ class TimeIndexedMemory:
         results = []
         
         with self._get_connection() as conn:
-            # Find all outgoing edges from these memories
-            rows = conn.execute(f"""
-                SELECT source_id, relation, target_id, weight 
-                FROM memory_edges 
-                WHERE source_id IN ({placeholders})
-            """, memory_ids).fetchall()
+            # Find outgoing edges AND join with memories table to get content
+            # We want the content of the TARGET node
+            query = f"""
+                SELECT e.source_id, e.relation, e.target_id, e.weight, m.content, m.created_at
+                FROM memory_edges e
+                JOIN memories m ON e.target_id = m.id
+                WHERE e.source_id IN ({placeholders})
+                ORDER BY e.weight DESC
+                LIMIT ?
+            """
+            
+            # Combine params: memory_ids + [limit]
+            params = list(memory_ids) + [limit]
+            
+            rows = conn.execute(query, params).fetchall()
             
             for r in rows:
                 results.append({
-                    "source": r[0],
+                    "id": r[2],         # Target ID is the graph node ID
+                    "source_id": r[0],
                     "relation": r[1],
-                    "target": r[2],
-                    "weight": r[3]
+                    "target_id": r[2],
+                    "weight": r[3],
+                    "content": r[4],    # Memory Content
+                    "created_at": r[5]
                 })
         return results
 
@@ -365,36 +383,95 @@ class TimeIndexedMemory:
                 query += " AND type = ?"
                 params.append(memory_type)
                 
-            query += " ORDER BY created_at DESC LIMIT ?"
+            query += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
             params.append(limit)
             
             cursor = conn.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_recent_chat_history(self, limit: int = 50) -> List[Dict]:
+    def get_recent_chat_history(self, limit: int = 50, character_id: Optional[str] = None) -> List[Dict]:
         """Fetch recent raw interactions/chat events."""
         with self._get_connection() as conn:
-            # We want raw events that are likely chat logs
-            cursor = conn.execute("""
+            # ⚡ Added 'interaction' to the list to match LiteMemory behavior
+            query = """
                 SELECT * FROM memory_events 
-                WHERE event_type IN ('user_interaction', 'archived_chat', 'chat')
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """, (limit,))
+                WHERE event_type IN ('user_interaction', 'archived_chat', 'chat', 'interaction')
+            """
+            params = []
+            
+            if character_id:
+                # REVISED: Use Strict Filter.
+                query += " AND (character_id = ?)" 
+                params.append(character_id)
+            
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            params.append(limit)
+            
+            cursor = conn.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
-    def view_knowledge_graph(self, limit: int = 100) -> Dict[str, Any]:
+    def get_consolidated_facts(self, limit: int = 50, channel: Optional[str] = None, source_name: Optional[str] = None) -> List[Dict]:
+        """
+        获取已巩固的 Facts（供 Memory Inspector UI 显示）
+        
+        Args:
+            limit: 返回结果数量限制
+            channel: 可选，筛选特定频道 ('user' 或 'character')
+            source_name: 可选，筛选特定来源名称 (通常对应 character_id)
+            
+        Returns:
+            Facts 列表
+        """
+        with self._get_connection() as conn:
+            query = """
+                SELECT id, text as content, emotion, importance, 
+                       timestamp as created_at, channel, source_name 
+                FROM facts_staging 
+                WHERE consolidated=1
+            """
+            params = []
+            
+            if channel:
+                query += " AND channel=?"
+                params.append(channel)
+            
+            if source_name:
+                query += " AND source_name=? COLLATE NOCASE"
+                params.append(source_name)
+                
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            params.append(limit)
+            
+            cursor = conn.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def view_knowledge_graph(self, limit: int = 100, character_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Dump the latest graph edges for visualization.
         Returns { "nodes": [], "edges": [] } compatible format.
+        Args:
+            character_id: Optional, filter edges where source memory belongs to this character.
         """
         with self._get_connection() as conn:
-            cursor = conn.execute("""
-                SELECT source_id, target_id, relation, weight
-                FROM memory_edges
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """, (limit,))
+            if character_id:
+                # Join with memories to filter by character_id
+                query = """
+                    SELECT e.source_id, e.target_id, e.relation, e.weight
+                    FROM memory_edges e
+                    JOIN memories m ON e.source_id = m.id
+                    WHERE m.character_id = ?
+                    ORDER BY e.timestamp DESC
+                    LIMIT ?
+                """
+                cursor = conn.execute(query, (character_id, limit))
+            else:
+                query = """
+                    SELECT source_id, target_id, relation, weight
+                    FROM memory_edges
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """
+                cursor = conn.execute(query, (limit,))
             
             edges = []
             nodes_set = set()
@@ -510,40 +587,7 @@ class TimeIndexedMemory:
             )
             return cursor.fetchone()[0]
     
-    def get_consolidated_facts(self, limit: int = 50, channel: Optional[str] = None) -> List[Dict]:
-        """
-        获取已巩固的 Facts（供 Memory Inspector UI 显示）
-        
-        Args:
-            limit: 返回结果数量限制
-            channel: 可选，筛选特定频道 ('user' 或 'character')
-            
-        Returns:
-            Facts 列表，字段名与 memories 表兼容（content, created_at 等）
-        """
-        with self._get_connection() as conn:
-            if channel:
-                query = """
-                    SELECT id, text as content, emotion, importance, 
-                           timestamp as created_at, channel, source_name 
-                    FROM facts_staging 
-                    WHERE consolidated=1 AND channel=?
-                    ORDER BY timestamp DESC 
-                    LIMIT ?
-                """
-                cursor = conn.execute(query, (channel, limit))
-            else:
-                query = """
-                    SELECT id, text as content, emotion, importance, 
-                           timestamp as created_at, channel, source_name 
-                    FROM facts_staging 
-                    WHERE consolidated=1 
-                    ORDER BY timestamp DESC 
-                    LIMIT ?
-                """
-                cursor = conn.execute(query, (limit,))
-            
-            return [dict(row) for row in cursor.fetchall()]
+
 
     def get_random_memories(self, character_id: str, limit: int = 3, type_filter: str = 'fact') -> List[Dict]:
         """Get random memories for inspiration, prioritizing facts."""
