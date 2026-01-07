@@ -1,0 +1,17 @@
+{
+  "character_id": "hiyori",
+  "galgame": {
+    "relationship": {
+      "level": 2,
+      "progress": 66,
+      "current_stage_label": "友谊",
+      "user_name": "柴郡"
+    },
+    "energy_level": 98.3000000000001,
+    "last_interaction": "2026-01-07T21:06:14.044903",
+    "pending_interaction": {
+      "timestamp": "2026-01-07T23:06:07.425894",
+      "reason": "idle_timeout"
+    }
+  }
+}

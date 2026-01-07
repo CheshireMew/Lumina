@@ -115,6 +115,9 @@ class LiteMemory:
             
         self.embedding_size = self.encoder.get_sentence_embedding_dimension()
         print(f"[LiteMemory] Embedder loaded. Dim: {self.embedding_size}")
+
+        # 2.5 Ensure Collections Exist
+        self._init_collections()
         
         # 3. Initialize Fact Extractor
         base_url = config.get("openai_base_url") or config.get("base_url")
@@ -134,6 +137,25 @@ class LiteMemory:
         
         # 6. Startup Recovery Check
         self._startup_recovery()
+
+    def _init_collections(self):
+        """Ensure necessary Qdrant collections exist."""
+        for col_name in [self.character_collection_name, self.user_collection_name]:
+            try:
+                self.client.get_collection(col_name)
+            except Exception:
+                print(f"[LiteMemory] 🆕 Collection '{col_name}' not found. Creating...")
+                try:
+                    self.client.create_collection(
+                        collection_name=col_name,
+                        vectors_config=models.VectorParams(
+                            size=self.embedding_size,
+                            distance=models.Distance.COSINE
+                        )
+                    )
+                    print(f"[LiteMemory] ✅ Collection '{col_name}' created.")
+                except Exception as e:
+                    print(f"[LiteMemory] ❌ Failed to create collection '{col_name}': {e}")
 
     def search_hybrid(self, query: str, limit: int = 10, empower_factor: float = 0.5) -> List[Dict]:
         """
@@ -156,11 +178,25 @@ class LiteMemory:
         try:
             query_vector = self.encoder.encode(query).tolist()
             for col in [self.character_collection_name, self.user_collection_name]:
+                # ✅ 为 character collection 添加 character_id 过滤
+                # User collection 不需要过滤（用户记忆跨角色共享）
+                query_filter = None
+                if col == self.character_collection_name:
+                    query_filter = models.Filter(
+                        must=[
+                            models.FieldCondition(
+                                key="character_id",
+                                match=models.MatchValue(value=self.character_id)
+                            )
+                        ]
+                    )
+                
                 res = self.client.query_points(
                     collection_name=col,
                     query=query_vector,
                     limit=limit * 2, # Fetch more for re-ranking
-                    with_payload=True
+                    with_payload=True,
+                    query_filter=query_filter  # ✅ 添加过滤器
                 ).points
                 vector_results.extend(res)
         except Exception as e:
@@ -221,6 +257,36 @@ class LiteMemory:
             
             scores[mem_id] += 1.0 / (k + rank + 1)
 
+        # 3.5. Weighted Re-ranking (Time & Importance)
+        # Apply Time Decay and Importance Boost to the RRF scores
+        for mem_id, score in scores.items():
+            mem = memory_map[mem_id]
+            
+            # A. Time Decay
+            timestamp_str = mem.get("timestamp")
+            score = self._apply_time_decay(score, timestamp_str)
+            
+            # B. Importance Boost
+            # Importance is 1-10. We boost score by (1 + importance/20).
+            # Max boost (10) = 1.5x. Min boost (1) = 1.05x.
+            # If importance is missing, assume 1.
+            try:
+                # Payload might be dict or parsed JSON
+                payload = mem.get("payload", {})
+                if isinstance(payload, str):
+                    try: payload = json.loads(payload)
+                    except: payload = {}
+                
+                importance = int(payload.get("importance", 1))
+            except:
+                importance = 1
+                
+            importance_factor = 1.0 + (importance / 20.0)
+            score *= importance_factor
+            
+            # Update Score
+            scores[mem_id] = score
+
         # 4. Sort & Format
         combined = []
         for mem_id, score in scores.items():
@@ -228,13 +294,45 @@ class LiteMemory:
             mem["hybrid_score"] = score
             combined.append(mem)
         
-        # Sort by RRF score descending
         combined.sort(key=lambda x: x["hybrid_score"], reverse=True)
-        
-        # Return top N
-        final_results = combined[:limit]
-        print(f"[LiteMemory] Hybrid Search merged {len(vector_results)} vector + {len(keyword_results)} keyword -> {len(final_results)} results.")
-        return final_results
+        top_results = combined[:limit]
+
+        # 5. Graph Enrichment (Knowledge Graph)
+        # Fetch 1-hop neighbors for the top results to provide deeper context
+        try:
+            top_ids = [m["id"] for m in top_results]
+            if top_ids:
+                print(f"[LiteMemory] Fetching graph context for {len(top_ids)} memories...")
+                graph_context = self.sql_db.get_graph_context(top_ids, hops=1)
+                
+                # Add graph nodes as new results if they aren't already present
+                # We give them a slightly lower score than the direct hit that spawned them
+                existing_ids = set(top_ids)
+                
+                for context_item in graph_context:
+                    # Ensure we don't duplicate if it's already in top results
+                    if context_item['id'] in existing_ids:
+                        continue
+                        
+                    existing_ids.add(context_item['id'])
+                    
+                    # Create a memory object for the graph node
+                    graph_mem = {
+                        "id": context_item["id"],
+                        "text": f"[Related] {context_item['content']}", 
+                        "timestamp": context_item.get("created_at"),
+                        "score": 0.0, # Indicative
+                        "hybrid_score": 0.0, # Lower priority
+                        "source": "graph_association",
+                        "payload": {"type": "graph_context", "relation": "associated"} 
+                    }
+                    top_results.append(graph_mem)
+                    
+        except Exception as e:
+             print(f"[LiteMemory] Graph context fetch failed: {e}")
+
+        print(f"[LiteMemory] Hybrid Search merged {len(vector_results)} vector + {len(keyword_results)} keyword -> {len(top_results)} results (with graph context).")
+        return top_results
 
     def get_random_inspiration(self, limit: int = 3):
         """
@@ -276,24 +374,28 @@ class LiteMemory:
             return []
 
     def close(self):
-        """Cleanup resources"""
+        """Cleanup resources and stop background worker."""
+        print(f"[LiteMemory] Closing instance for character: {self.character_id}")
         self.running = False
-        # self.worker_thread.join() # Don't block exit
-        pass
-        self.queue = Queue()
-        self.running = True
-        self.worker_thread = Thread(target=self._worker_loop, daemon=True)
-        self.worker_thread.start()
+        # Push a None task to unblock the queue if it's waiting
+        self.queue.put(None)
         
-        # 6. Initialize both collections and backup files
-        self._init_dual_collections()
+        if self.worker_thread.is_alive():
+             self.worker_thread.join(timeout=2.0)
+             
+        # Qdrant local client explicit close if available (v1.something+)
+        if hasattr(self.client, "close"):
+            self.client.close()
         
-        print(f"[LiteMemory] Initialization complete.")
+        # Close SQLite connection if handled manually (TimeIndexedMemory handles its own context usually, but good to check)
+        # self.sql_db.close() # Assuming TimeIndexedMemory doesn't hold a persistent open connection or handles it.
+        
+        print(f"[LiteMemory] Instance closed.")
 
     # === Graph / Event Sourcing Wrappers ===
     def add_event_log(self, content: str, event_type: str = "interaction") -> str:
         """Log an event to the immutable Event Store."""
-        return self.sql_db.add_event(content, event_type)
+        return self.sql_db.add_event(content, event_type, character_id=self.character_id)
 
     def add_knowledge_edge(self, source: str, target: str, relation: str, weight: float = 1.0):
         """Add a directed edge to the Knowledge Graph."""
@@ -485,10 +587,23 @@ class LiteMemory:
                           limit: int, score_threshold: float) -> List[Dict]:
         """Helper: Search a specific collection"""
         try:
+            # ⚡ Critical Fix: Filter by character_id if set
+            query_filter = None
+            if self.character_id:
+                query_filter = models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="character_id",
+                            match=models.MatchValue(value=self.character_id),
+                        )
+                    ]
+                )
+
             search_result = self.client.query_points(
                 collection_name=collection_name,
                 query=query_vector,
                 limit=limit,
+                query_filter=query_filter, # ADD FILTER
                 score_threshold=score_threshold
             ).points
             
@@ -589,13 +704,21 @@ class LiteMemory:
         # Generate embedding
         vector = self.encoder.encode(text).tolist()
         
+        # ✅ 确保 payload 包含 character_id
+        fact_payload = {
+            **fact,  # 保留原有字段
+            "character_id": self.character_id,  # 添加 character_id
+            "source_name": source_name,  # 添加 source_name
+            "channel": channel  # 添加 channel
+        }
+        
         # 1. Upsert to Qdrant
         self.client.upsert(
             collection_name=collection_name,
             points=[models.PointStruct(
                 id=vector_id,
                 vector=vector,
-                payload=fact
+                payload=fact_payload  # ✅ 使用增强后的 payload
             )]
         )
         

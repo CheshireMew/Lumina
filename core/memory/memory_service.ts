@@ -38,7 +38,10 @@ export class MemoryService {
     /**
      * Configure the memory server with LLM credentials
      */
-    public async configure(apiKey: string, baseUrl: string, model: string): Promise<boolean> {
+    public async configure(apiKey: string, baseUrl: string, model: string, characterId?: string): Promise<boolean> {
+        if (characterId) {
+            this.currentCharacterId = characterId;
+        }
         console.log(`[MemoryService] Configuring for character: ${this.currentCharacterId}`);
         console.log(`[MemoryService] Model: ${model}, BaseURL: ${baseUrl}`);
         try {
@@ -88,7 +91,7 @@ export class MemoryService {
             };
             console.log('[MemoryService] Search Payload:', JSON.stringify(payload));
 
-            const response = await fetch(`${MEMORY_SERVER_URL}/search`, {
+            const response = await fetch(`${MEMORY_SERVER_URL}/search/hybrid`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

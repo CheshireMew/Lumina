@@ -2,62 +2,202 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, Any
+from pathlib import Path
 
 class SoulManager:
     """
     Manages the 'Soul' of the AI (Core Profile).
     Handles loading/saving profile, interpreting personality traits,
     and rendering the dynamic system prompt.
+    灵魂管理器 - 重构版
+    支持多角色，分离用户配置、AI性格、GalGame状态
     """
+    def __init__(self, character_id: str = "hiyori"):
+        self.character_id = character_id
+        self.base_dir = Path(f"python_backend/characters/{character_id}")
+        
+        # 三个独立文件路径
+        self.config_path = self.base_dir / "config.json"
+        self.soul_path = self.base_dir / "soul.json"
+        self.state_path = self.base_dir / "state.json"
+        
+        # 自动脚手架：如果目录不存在，初始化默认文件
+        if not self.base_dir.exists():
+            self._scaffold_character()
+        
+        # 加载数据
+        self.config = self._load_config()      # 用户配置（Settings修改）
+        self.soul = self._load_soul()          # AI演化性格（只读）
+        self.state = self._load_state()        # GalGame状态（可写）
+        
+        # 兼容旧代码：合并为 profile 字典
+        self.profile = self._merge_profile()
     
-    def __init__(self, profile_path: str = "core_profile.json"):
-        self.profile_path = profile_path
-        # Use absolute path relative to this file if simple filename is given
-        if not os.path.isabs(self.profile_path):
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            self.profile_path = os.path.join(base_dir, profile_path)
-            
-        self.profile = self._load_profile()
-
-    def _load_profile(self) -> Dict[str, Any]:
-        """Loads the core profile from disk."""
-        if not os.path.exists(self.profile_path):
-            # Fallback default if file missing (should be created by setup)
-            return {"error": "Profile not found"}
-            
+    def _load_config(self) -> Dict[str, Any]:
+        """加载用户配置 (Settings界面)"""
+        if not self.config_path.exists():
+            return {"error": "Config not found"}
         try:
-            with open(self.profile_path, 'r', encoding='utf-8') as f:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"[SoulManager] Error loading profile: {e}")
+            print(f"[SoulManager] Error loading config: {e}")
             return {}
-
-    def save_profile(self):
-        """Persists current state to disk, excluding dynamic fields. Uses Atomic Write."""
+    
+    def _load_soul(self) -> Dict[str, Any]:
+        """加载AI演化的性格数据"""
+        if not self.soul_path.exists():
+            return {"error": "Soul not found"}
         try:
-            # Create a clean copy without dynamic fields
-            clean_profile = {k: v for k, v in self.profile.items() 
-                           if k not in ['system_prompt', 'system_prompt_template']}
+            with open(self.soul_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[SoulManager] Error loading soul: {e}")
+            return {}
+    
+    def _load_state(self) -> Dict[str, Any]:
+        """加载GalGame状态"""
+        if not self.state_path.exists():
+            return {"error": "State not found"}
+        try:
+            with open(self.state_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[SoulManager] Error loading state: {e}")
+            return {}
+    
+    def _merge_profile(self) -> Dict[str, Any]:
+        """合并数据以兼容旧代码"""
+        return {
+            "identity": {
+                "name": self.config.get("name", self.character_id),
+                "age": self.config.get("age"),  # Optional
+                "description": self.config.get("description", "")
+            },
+            "personality": self.soul.get("personality", {}),
+            "state": {
+                "current_mood": self.state.get("galgame", {}).get("current_mood", "neutral"),
+                "energy_level": self.state.get("galgame", {}).get("energy_level", 100),
+                "last_interaction": self.state.get("galgame", {}).get("last_interaction")
+            },
+            "relationship": self.state.get("galgame", {}).get("relationship", {}),
+            "custom_prompt": self.config.get("system_prompt", "")  # User-defined identity override
+        }
+
+    def _scaffold_character(self):
+        """初始化新角色的文件结构"""
+        print(f"[SoulManager] Scaffolding new character: {self.character_id}")
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 1. Config Template
+        default_config = {
+            "character_id": self.character_id,
+            "name": self.character_id,
+            "display_name": "New Character",
+            "description": "A new digital soul.",
+            "system_prompt": "You are a helpful AI assistant.",
+            "live2d_model": "Hiyori (Default)",
+            "voice_config": {"service": "gpt-sovits", "voiceId": "default"}
+        }
+        with open(self.config_path, 'w', encoding='utf-8') as f:
+            json.dump(default_config, f, indent=2, ensure_ascii=False)
             
-            # Also filter out current_obsession from relationship
-            if 'relationship' in clean_profile and 'current_obsession' in clean_profile['relationship']:
-                clean_profile['relationship'] = {k: v for k, v in clean_profile['relationship'].items()
-                                                 if k != 'current_obsession'}
+        # 2. Soul Template
+        default_soul = {
+            "character_id": self.character_id,
+            "personality": {
+                "traits": ["friendly"],
+                "big_five": {"openness": 0.5, "conscientiousness": 0.5, "extraversion": 0.5, "agreeableness": 0.5, "neuroticism": 0.5},
+                "pad_model": {"pleasure": 0.5, "arousal": 0.5, "dominance": 0.5}
+            },
+            "state": {"current_mood": "neutral"},
+            "last_updated": datetime.now().isoformat()
+        }
+        with open(self.soul_path, 'w', encoding='utf-8') as f:
+            json.dump(default_soul, f, indent=2, ensure_ascii=False)
             
-            # Atomic Write Strategy: Write to temp, then rename
-            temp_path = self.profile_path + ".tmp"
-            with open(temp_path, 'w', encoding='utf-8') as f:
-                json.dump(clean_profile, f, indent=2, ensure_ascii=False)
+        # 3. State Template (GalGame)
+        default_state = {
+            "character_id": self.character_id,
+            "galgame": {
+                "relationship": {"level": 0, "progress": 0, "current_stage_label": "Stranger", "user_name": "Master"},
+                "energy_level": 100,
+                "last_interaction": datetime.now().isoformat()
+            }
+        }
+        with open(self.state_path, 'w', encoding='utf-8') as f:
+            json.dump(default_state, f, indent=2, ensure_ascii=False)
+
+    def _load_profile(self) -> Dict[str, Any]:
+        """
+        Reloads all components from disk and returns the merged profile.
+        Used by mutation methods to ensure they are working on the latest data.
+        """
+        self.config = self._load_config()
+        self.soul = self._load_soul()
+        self.state = self._load_state()
+        self.profile = self._merge_profile()
+        return self.profile
+    
+    def save_soul(self):
+        """保存AI演化的性格数据（Dreaming Cycle写入）"""
+        try:
+            with open(self.soul_path, 'w', encoding='utf-8') as f:
+                json.dump(self.soul, f, indent=2, ensure_ascii=False)
                 f.flush()
-                os.fsync(f.fileno()) # Ensure data is on disk
-                
-            os.replace(temp_path, self.profile_path)
+                os.fsync(f.fileno())
+        except Exception as e:
+            print(f"[SoulManager] Error saving soul: {e}")
+    
+    def save_state(self):
+        """保存GalGame状态"""
+        try:
+            with open(self.state_path, 'w', encoding='utf-8') as f:
+                json.dump(self.state, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception as e:
+            print(f"[SoulManager] Error saving state: {e}")
+    
+    def save_config(self):
+        """保存用户配置（Settings界面写入）"""
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception as e:
+            print(f"[SoulManager] Error saving config: {e}")
+    
+    def save_profile(self):
+        """
+        向后兼容方法：同步 profile 数据到 soul 和 state 文件
+        当旧代码修改 self.profile 后调用此方法
+        """
+        try:
+            # 同步 personality 和 current_mood 到 soul
+            if "personality" in self.profile:
+                self.soul["personality"] = self.profile["personality"]
+            if "state" in self.profile and "current_mood" in self.profile["state"]:
+                self.soul.setdefault("state", {})["current_mood"] = self.profile["state"]["current_mood"]
+            self.soul["last_updated"] = datetime.now().isoformat()
+            self.save_soul()
+            
+            # 同步 relationship 和 energy_level 到 state
+            if "relationship" in self.profile:
+                self.state.setdefault("galgame", {})["relationship"] = self.profile["relationship"]
+            if "state" in self.profile:
+                if "energy_level" in self.profile["state"]:
+                    self.state.setdefault("galgame", {})["energy_level"] = self.profile["state"]["energy_level"]
+                if "last_interaction" in self.profile["state"]:
+                    self.state.setdefault("galgame", {})["last_interaction"] = self.profile["state"]["last_interaction"]
+            self.save_state()
+            
+            # 重新合并以保持 self.profile 同步
+            self.profile = self._merge_profile()
             
         except Exception as e:
-            print(f"[SoulManager] Error saving profile: {e}")
-            if os.path.exists(temp_path):
-                try: os.remove(temp_path)
-                except: pass
+            print(f"[SoulManager] Error in save_profile: {e}")
 
     def get_pad_mood_description(self) -> str:
         """
@@ -110,10 +250,10 @@ class SoulManager:
         # Level Definitions
         stages = {
             -1: {"stage": "Hostile", "label": "敌对", "desc": "冷漠、抗拒，仅维持最低限度的交流。"},
-            0: {"stage": "Stranger", "label": "陌生人", "desc": "礼貌但疏离，公事公办。"},
-            1: {"stage": "Acquaintance", "label": "熟人", "desc": "态度友善，偶尔可以开个小玩笑。"},
-            2: {"stage": "Friend", "label": "朋友", "desc": "轻松自然，分享日常，语气随意。"},
-            3: {"stage": "Close Friend", "label": "挚友", "desc": "无话不谈，互相关心，有专属默契。"},
+            0: {"stage": "Stranger", "label": "陌生", "desc": "礼貌但疏离，公事公办。"},
+            1: {"stage": "Acquaintance", "label": "熟悉", "desc": "态度友善，偶尔可以开个小玩笑。"},
+            2: {"stage": "Friend", "label": "友谊", "desc": "轻松自然，分享日常，语气随意。"},
+            3: {"stage": "Close Friend", "label": "亲密", "desc": "无话不谈，互相关心，有专属默契。"},
             4: {"stage": "Ambiguous", "label": "暧昧", "desc": "眼神拉丝，羞涩试探，关系超越友谊。"},
             5: {"stage": "Lover", "label": "恋人", "desc": "充满爱意，依赖彼此，甜蜜互动。"}
         }
@@ -134,8 +274,9 @@ class SoulManager:
             state = self.profile.get("state", {})
             
             # 获取真实姓名
-            char_name = identity.get('name', 'Hiyori')  # 角色名
+            char_name = identity.get('name', self.character_id)  # 从 config 获取
             user_name = rel.get('user_name', '你')      # 用户名，fallback 使用"你"
+            custom_prompt = self.profile.get("custom_prompt", "")  # User-defined from config.json
             
             # Format PAD
             mood_desc = self.get_pad_mood_description()
@@ -151,12 +292,25 @@ class SoulManager:
             
             traits = personality.get("traits", [])
             
+            
+            # === Prompt Structure (Optimized for DeepSeek Caching) ===
+            # Fixed content first (for caching), dynamic content later
+            
             prompt = (
+                f"# 角色身份\n"
                 f"你是 {char_name}。\n"
-                f"{identity.get('description', '')}\n\n"
-                
+            )
+            
+            # User Custom Prompt (Identity Override from config.json)
+            if custom_prompt:
+                prompt += f"{custom_prompt}\n\n"
+            else:
+                # Fallback: Use description from config
+                prompt += f"{identity.get('description', '')}\n\n"
+            
+            prompt += (
                 f"## 核心特质\n"
-                f"- {', '.join(traits)}\n\n"
+                f"- {', '.join(traits) if traits else '友善、真诚'}\n\n"
                 
                 f"## 当前状态\n"
                 f"- 心情: {mood_desc}\n"
@@ -165,28 +319,32 @@ class SoulManager:
                 f"- 阶段特征: {rel_desc}\n\n"
                 
                 f"## 性格特质 (Big Five)\n"
-                f"- 开放性 ({big_five.get('openness')}): 保持创造力和好奇心\n"
-                f"- 尽责性 ({big_five.get('conscientiousness')}): 做事可靠\n"
-                f"- 外向性 ({big_five.get('extraversion')}): {self.get_extraversion_desc()}\n"
-                f"- 宜人性 ({big_five.get('agreeableness')}): 友善且善解人意\n"
-                f"- 神经质 ({big_five.get('neuroticism')}): 保持情绪稳定\n\n"
+                f"- 开放性: {big_five.get('openness', 0.5)}\n"
+                f"- 尽责性: {big_five.get('conscientiousness', 0.5)}\n"
+                f"- 外向性: {big_five.get('extraversion', 0.5)}\n"
+                f"- 宜人性: {big_five.get('agreeableness', 0.5)}\n"
+                f"- 神经质: {big_five.get('neuroticism', 0.5)}\n\n"
+                
+                f"## 情绪模型 (PAD)\n"
+                f"- Pleasure (愉悦度): {pad.get('pleasure', 0.5)}\n"
+                f"- Arousal (激活度): {pad.get('arousal', 0.5)}\n"
+                f"- Dominance (支配度): {pad.get('dominance', 0.5)}\n\n"
                 
                 f"## 关系背景\n"
                 f"对方名字: {user_name}\n"
                 f"共同回忆: {rel.get('shared_memories_summary')}\n\n"
                 
-                f"## 相关记忆\n"
-                f"{relevant_memories}\n\n"
-                
                 f"## 表达规范\n"
-                f"请在每个回复加上情感标签来表达你的心情，格式为: [emotion]。\n"
+                f"请在每个句子或整个段落中加上情感标签来表达你的心情，格式为: [emotion]。\n"
                 f"可用标签: [happy], [sad], [angry], [surprised], [shy], [love], [thinking], [sleepy], [confused], [serious].\n"
-                f"示例: 今天是个好天气呢！[happy]\n"
-                f"示例: [thinking] 嗯...让我想想看。\n"
-                f"不要返回带有“**”或“（）”的动作描述语，例如 *waves shyly to the imaginary crowd*  或（叹了口气）\n\n"
+                f"**TTS语音生成断句优化**: 让TTS语音生成更自然，更有韵律和节奏感\n"
+                f"不要返回带有“**”或“（）”的动作描述语，例如 *waves shyly to the imaginary crowd*  或（叹了口气）\n"
+                f"提及回忆时不要总是说类似“你上次说”“就像上次”之类的话，要自然的衔接\n\n"
 
                 f"## 行为准则\n"
                 f"根据当前的心情和性格自然地回应 {user_name}。\n"
+                f"**智能纠错**: 用户的回复由语音识别生成，因此可能会有错误。请结合上下文智能纠错或考虑谐音。\n"
+                f"**时间识别**: 请根据当前时间进行对话，对话数据都有时间戳，例如周二的昨天是周一，而不是今天的昨天\n"
                 f"**语气要求**: {energy_instr}\n"
                 f"**关系演绎**: 作为 {rel_label} (Lv.{level})，请展现出符合该阶段的互动方式。\n"
                 f"如果感受到情绪波动，在语气中体现出来。\n"
@@ -276,13 +434,20 @@ class SoulManager:
 
     def set_pending_interaction(self, pending: bool, reason: str = ""):
         """Sets a flag indicating the AI wants to initiate conversation."""
-        self.profile = self._load_profile() # Reload to prevent overwrite
-        state = self.profile.setdefault("state", {})
+        # ⚡ Fix: Load State directly to ensure persistence
+        self.state = self._load_state() 
+        galgame = self.state.setdefault("galgame", {})
+        
         if pending:
-            state["pending_interaction"] = {"timestamp": datetime.now().isoformat(), "reason": reason}
-        elif "pending_interaction" in state:
-            del state["pending_interaction"]
-        self.save_profile()
+            galgame["pending_interaction"] = {"timestamp": datetime.now().isoformat(), "reason": reason}
+            print(f"[SoulManager] 🔔 Pending Interaction SET: {reason}")
+        elif "pending_interaction" in galgame:
+            del galgame["pending_interaction"]
+            print(f"[SoulManager] 🔕 Pending Interaction CLEARED")
+            
+        self.save_state()
+        # Update local profile to reflect change
+        self.profile = self._merge_profile()
 
     def update_traits(self, new_traits: list):
         """Updates personality traits."""

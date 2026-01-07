@@ -41,6 +41,7 @@ function App() {
     const [characters, setCharacters] = useState<CharacterProfile[]>([]);
     const [activeCharacterId, setActiveCharacterId] = useState<string>('');
     const [userName, setUserName] = useState<string>('Master'); // Default User Name
+    const [isSettingsLoaded, setIsSettingsLoaded] = useState(false); // ⚡ Prevent FOUC
 
     // Conversation Memory
     const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
@@ -114,22 +115,35 @@ function App() {
         }
     };
 
-    // 并发合成，但按顺序入队
+    // TTS 合成策略: 
+    // - 允许多句并发合成（不阻塞）
+    // - 但必须按顺序入队到 AudioQueue（保证播放顺序）
     const enqueueSynthesis = (sentence: string, index: number) => {
         const synthPromise = (async () => {
+            // ⚡ 修复: 过滤空句子和纯符号句子（防止发送 ".&" 到 GPT-SoVITS）
+            const cleanSentence = sentence.replace(/[。！？.!?,，、；&\n\s]/g, '').trim();
+            if (cleanSentence.length === 0) {
+                console.log(`[TTS] Skipping empty/symbol-only sentence: "${sentence}"`);
+                return;
+            }
+            
             console.log(`[TTS] Starting synthesis ${index}:`, sentence);
             try {
-                const audioResponse = await ttsService.synthesize(sentence);
+                // ⚡ 移除 '&' 断句符（GPT-SoVITS 不认识，会导致合成问题）
+                const cleanedSentence = sentence.replace(/&/g, '');
+                
+                // 1️⃣ 立即开始合成（并发，不等待前一句）
+                const audioResponse = await ttsService.synthesize(cleanedSentence);
 
-                // 等待前面的句子完成（维持顺序）
+                // 2️⃣ 等待前一句入队完成（保证顺序）
                 if (index > 0) {
-                    await synthPromisesRef.current[index - 1]; // Wait for previous Promise to resolve (enqueued)
+                    await synthPromisesRef.current[index - 1];
                 }
 
+                // 3️⃣ 按顺序入队
                 if (audioResponse) {
-                    // 按顺序入队播放
                     audioQueueRef.current.enqueue(audioResponse);
-                    console.log(`[TTS] Enqueued stream for sentence ${index} (Type: ${audioResponse.contentType})`);
+                    console.log(`[TTS] Enqueued stream for sentence ${index} (Queue length: ${audioQueueRef.current.length})`)
                 }
             } catch (error) {
                 console.error(`[TTS] Synthesis failed for ${index}:`, error);
@@ -143,31 +157,18 @@ function App() {
     const applyCharacter = async (character: CharacterProfile, uName: string) => {
         console.log(`[App] Applying character: ${character.name} for user: ${uName}`);
         
-        // 1. Fetch Dynamic System Prompt from Backend (Soul Manager)
-        let dynamicPrompt = '';
+        // ✅ 直接使用后端返回的 System Prompt（后端已包含 custom_prompt）
         try {
             const res = await fetch('http://localhost:8001/soul');
             if (res.ok) {
                 const soul = await res.json();
-                dynamicPrompt = soul.system_prompt || '';
-                console.log('[App] Fetched Dynamic System Prompt from Backend');
+                const systemPrompt = soul.system_prompt || '';
+                console.log(`[App] Setting System Prompt from Backend (Length: ${systemPrompt.length})`);
+                (window as any).llm.setSystemPrompt(systemPrompt);
             }
         } catch (e) {
             console.error('[App] Failed to fetch soul for prompt:', e);
         }
-
-        // 2. Get User-Configured Prompt (Identity Override)
-        const userCustomPrompt = character.systemPrompt || '';
-
-        // 3. Merge Prompts
-        // Base: Dynamic Prompt (includes State, Memories, Output Format)
-        // Override: User Custom Prompt
-        const finalPrompt = userCustomPrompt.trim() !== '' 
-            ? `${dynamicPrompt}\n\n## 用户设定 (Identity Override)\n${userCustomPrompt}`
-            : dynamicPrompt;
-
-        console.log(`[App] Setting System Prompt (Length: ${finalPrompt.length})`);
-        (window as any).llm.setSystemPrompt(finalPrompt);
         
         // Update TTS Voice Configuration
         if (character.voiceConfig?.voiceId) {
@@ -176,6 +177,66 @@ function App() {
             ttsService.setDefaultVoice(character.voiceConfig.voiceId);
             ttsService.setEngine(engine);
         }
+    };
+
+    // ⚡ 角色切换处理
+    const handleCharacterSwitch = async (newCharacterId: string) => {
+        console.log(`[App] 🔄 Switching character to: ${newCharacterId}`);
+        
+        if (newCharacterId === activeCharacterId) {
+            console.log('[App] Already on this character, skipping switch');
+            return;
+        }
+        
+        // 1. 更新活跃角色
+        setActiveCharacterId(newCharacterId);
+        
+        // 2. 清空当前对话历史（新角色重新开始）
+        setConversationHistory([]);
+        setConversationSummary('');
+        
+        // 3. 通知后端切换角色（重要！确保 soul_client 切换）
+        try {
+            const response = await fetch('http://localhost:8001/soul/switch_character', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ character_id: newCharacterId })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log(`[App] ✅ Backend switched to: ${data.character_name}`);
+            } else {
+                console.error('[App] Backend character switch failed:', await response.text());
+            }
+        } catch (error) {
+            console.error('[App] Failed to notify backend about character switch:', error);
+        }
+        
+        // 4. 重新配置 Memory Service（切换到新角色的记忆库）
+        try {
+            const settings = (window as any).settings;
+            const apiKey = await settings.get('apiKey');
+            const baseUrl = await settings.get('apiBaseUrl') || 'https://api.deepseek.com/v1';
+            const model = await settings.get('modelName') || 'deepseek-chat';
+            
+            console.log(`[App] Reconfiguring memory for character: ${newCharacterId}`);
+            await memoryService.configure(apiKey, baseUrl, model, newCharacterId);
+        } catch (error) {
+            console.error('[App] Failed to reconfigure memory:', error);
+        }
+        
+        // 5. 应用新角色配置（system prompt, voice 等）
+        const newChar = characters.find(c => c.id === newCharacterId);
+        if (newChar) {
+            await applyCharacter(newChar, userName);
+        }
+        
+        // 5. 保存到 localStorage
+        const settings = (window as any).settings;
+        await settings.set('activeCharacterId', newCharacterId);
+        
+        console.log(`[App] ✅ Character switched to: ${newCharacterId}`);
     };
 
     // Load all settings on mount
@@ -193,17 +254,59 @@ function App() {
                 setUserName(loadedUserName);
 
                 // Character Settings
-                let loadedCharacters = await settings.get('characters') as CharacterProfile[];
+                // ⚡ Fetch characters from Backend API (Single Source of Truth)
+                let loadedCharacters: CharacterProfile[] = [];
+                try {
+                    const charRes = await fetch('http://localhost:8001/characters');
+                    if (charRes.ok) {
+                        const data = await charRes.json();
+                        // Backend returns { characters: [...] }
+                        // ⚡ MAPPING: Convert Backend (snake_case) to Frontend (camelCase)
+                        loadedCharacters = (data.characters || []).map((char: any) => ({
+                            id: char.character_id,
+                            name: char.name,
+                            description: char.description,
+                            avatar: char.avatar || '',
+                            modelPath: char.live2d_model,
+                            systemPrompt: char.system_prompt,
+                            voiceConfig: char.voice_config
+                        }));
+                        console.log(`[App] Loaded ${loadedCharacters.length} characters from Backend API`);
+                    } else {
+                        console.warn('[App] Failed to fetch characters from API, falling back to defaults');
+                    }
+                } catch (e) {
+                    console.error('[App] Error fetching characters:', e);
+                }
+
+                if (loadedCharacters.length === 0) {
+                     console.log('[App] No characters found (API empty/failed), using defaults.');
+                     loadedCharacters = DEFAULT_CHARACTERS;
+                }
+
+                // Update local 'characters' cache for other components if needed (optional)
+                await settings.set('characters', loadedCharacters);
+
                 let loadedActiveId = await settings.get('activeCharacterId') as string;
 
                 // Migration / Default Init
                 if (!loadedCharacters || loadedCharacters.length === 0) {
-                    console.log('[App] No characters found, initializing defaults.');
-                    loadedCharacters = DEFAULT_CHARACTERS;
-                    loadedActiveId = DEFAULT_CHARACTERS[0].id;
-                    await settings.set('characters', loadedCharacters);
-                    await settings.set('activeCharacterId', loadedActiveId);
+                    // Logic handled above
                 }
+
+                // Ensure active character ID is valid and exists in current list
+                const characterExists = loadedCharacters.some(c => c.id === loadedActiveId);
+                
+                if (!loadedActiveId || !characterExists) {
+                     if (loadedCharacters.length > 0) {
+                         console.warn(`[App] Active ID '${loadedActiveId}' not found in loaded characters. Resetting to default.`);
+                         loadedActiveId = loadedCharacters[0].id;
+                         await settings.set('activeCharacterId', loadedActiveId);
+                     }
+                }
+                
+                console.log(`[App] Init Active Character: ${loadedActiveId}`);
+                console.log('[App] Available Character IDs:', loadedCharacters.map(c => c.id));
 
                 setCharacters(loadedCharacters);
                 setActiveCharacterId(loadedActiveId);
@@ -212,8 +315,28 @@ function App() {
                     console.log('[App] Initializing LLM Service with loaded settings');
                     // llmService.init(apiKey, baseUrl, model); -> Handled in Main Process on settings:set
 
+                    // ⚡ 重要：首先通知后端切换到当前活跃的角色
+                    console.log(`[App] Syncing backend to active character: ${loadedActiveId}`);
+                    try {
+                        const switchRes = await fetch('http://localhost:8001/soul/switch_character', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ character_id: loadedActiveId })
+                        });
+                        
+                        if (switchRes.ok) {
+                            const switchData = await switchRes.json();
+                            console.log(`[App] ✅ Backend initialized to: ${switchData.character_name}`);
+                        } else {
+                            console.error('[App] Failed to sync backend character on startup');
+                        }
+                    } catch (error) {
+                        console.error('[App] Error syncing backend character:', error);
+                    }
+
                     // Initialize Memory Service
                     console.log('[App] Initializing Memory Service');
+                    memoryService.setCharacter(loadedActiveId); // ⚡ Sync Memory Service State
                     memoryService.configure(apiKey, baseUrl, model);
 
                     // Apply Active Character
@@ -235,49 +358,79 @@ function App() {
                 console.error('[App] Failed to load settings:', error);
             }
         };
-        loadSettings();
+        
+        loadSettings().then(() => {
+            console.log('[App] Settings & Characters Initialization Complete.');
+            setIsSettingsLoaded(true); // ⚡ Only render UI after this
+        });
         
         // [Startup] Trigger Dreaming Cycle on App Launch
         // "Recall the past when waking up"
-        setTimeout(() => {
-            console.log('[App] 🌅 Startup Dreaming Cycle Initiated...');
-            fetch('http://localhost:8001/dream/wake_up', { method: 'POST' })
-                .catch(e => console.warn("[App] Startup Dreaming failed:", e));
-        }, 5000); // Wait 5s for backend to be fully ready
+        if (!startupExecutedRef.current) {
+            startupExecutedRef.current = true;
+            setTimeout(() => {
+                console.log('[App] 🌅 Startup Dreaming Cycle Initiated...');
+                fetch('http://localhost:8001/dream/wake_up', { method: 'POST' })
+                    .catch(e => console.warn("[App] Startup Dreaming failed:", e));
+            }, 5000); // Wait 5s for backend to be fully ready
+        }
     }, []);
     const lastActivityTime = useRef<number>(Date.now());
     const currentSystemPromptRef = useRef<string>(''); // Track System Prompt
     const isDreamingRef = useRef<boolean>(false); // Track dreaming state
+    const startupExecutedRef = useRef<boolean>(false); // ⚡ Prevent double execution in StrictMode
     const IDLE_THRESHOLD_MS = 15 * 60 * 1000; // 15 Minutes
     
-    // Heartbeat to check idle status
+    // Heartbeat to check idle status AND Backend Proactive Trigger (Dual Check)
     useEffect(() => {
-        const interval = setInterval(() => {
+        const interval = setInterval(async () => {
             const now = Date.now();
             const inactiveDuration = now - lastActivityTime.current;
             const inactiveMinutes = (inactiveDuration / 60000).toFixed(1);
 
+            // 1. Frontend Idle Check (Dreaming)
             if (inactiveDuration > IDLE_THRESHOLD_MS) {
                 if (!isDreamingRef.current) {
                     console.log(`[Dreaming] 🌙 User has been idle for ${inactiveMinutes} mins. Triggering Dreaming...`);
                     isDreamingRef.current = true; // Prevent multiple triggers
-                    
-                    // Trigger Backend Dreaming
                     fetch('http://localhost:8001/dream/wake_up', { method: 'POST' })
-                        .then(res => res.json())
-                        .then(data => console.log("[Dreaming] Trigger response:", data))
                         .catch(err => console.error("[Dreaming] Trigger failed:", err));
                 }
             } else {
-                // Verbose Log for user verification
-                if (Math.floor(inactiveDuration / 1000) % 60 === 0) { // Log every minute
-                     console.log(`[Dreaming] ⏱️ User inactive for ${inactiveMinutes} min. Waiting for ${IDLE_THRESHOLD_MS/60000} min...`);
+                 if (Math.floor(inactiveDuration / 1000) % 60 === 0) { 
+                     // console.log(`[Dreaming] ⏱️ User inactive for ${inactiveMinutes} min...`);
+                 }
+            }
+            
+            // 2. ⚡ Backend Proactive Trigger Check
+            // Backend HeartbeatService sets a flag in state.json when it wants to talk.
+            if (activeCharacterId && !isProcessing && !isStreaming) {
+                try {
+                    const res = await fetch(`http://localhost:8001/galgame/${activeCharacterId}/state`);
+                    if (res.ok) {
+                        const stateData = await res.json();
+                        // Check for 'pending_interaction' in 'galgame' (root of stateData return from endpoint? verify endpoint)
+                        // endpoint /galgame/{id}/state returns self.state['galgame']
+                        if (stateData.pending_interaction) {
+                            console.log('[App] ⚡ Proactive Trigger Detected from Backend!', stateData.pending_interaction);
+                            
+                            // Clear flag immediately to prevent double trigger
+                            await fetch(`http://localhost:8001/soul/mutate?clear_pending=true`, { method: 'POST' }); 
+                            
+                            // Initiate Conversation
+                            const instruction = `(Private System Instruction) The user has been silent. The backend system detected an idle timeout. Based on your personality, initiate a conversation naturally to get their attention. Do NOT mention you were waiting.`;
+                            handleSend(instruction);
+                        }
+                    }
+                } catch (e) {
+                    // silent fail
                 }
             }
-        }, 10000); // Check every 10 seconds
+
+        }, 5000); // Check every 5 seconds (Fast enough for response, slow enough for perf)
 
         return () => clearInterval(interval);
-    }, [activeCharacterId, userName]);
+    }, [activeCharacterId, userName, isProcessing, isStreaming]);
 
     // Reset Idle Timer on Interaction
     const resetIdleTimer = () => {
@@ -423,8 +576,10 @@ function App() {
                 let displayUpdate = fullRawResponseRef.current;
                 
                 // Remove complete [tag] and (tag) - Non-greedy
-                displayUpdate = displayUpdate.replace(/\[.*?\]/g, ''); 
-                displayUpdate = displayUpdate.replace(/\(.*?\)/g, '');
+                displayUpdate = displayUpdate.replace(/\[[^\]]*\]/g, '').replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '');
+                
+                // ⚡ 移除 TTS 断句符号 '&' (用户不应该看到)
+                displayUpdate = displayUpdate.replace(/&/g, '');
                 
                 // Remove incomplete trailing tags (Visual polish, but risky if stream pauses)
                 // Only remove if it looks like a started tag (short length)
@@ -451,7 +606,10 @@ function App() {
                 }
 
                 // 添加助手回复到历史 (Cleaned)
-                const finalCleanContent = fullRawResponseRef.current.replace(/\([^)]*\)/g, '').trim();
+                const finalCleanContent = fullRawResponseRef.current
+                    .replace(/\([^)]*\)/g, '')  // 移除情感标签
+                    .replace(/&/g, '')          // 移除 TTS 断句符
+                    .trim();
                 const assistantMessage: Message = {
                     role: 'assistant',
                     content: finalCleanContent,
@@ -509,13 +667,17 @@ function App() {
             (window as any).llm.onStreamToken(onToken);
             (window as any).llm.onStreamEnd(onEnd); // This will handle cleanup too via our wrapper logic if we want, but let's be explicit
 
-             // Send Request via IPC
+             // Send Request via IPC with complete parameters
+            const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
+            
             (window as any).llm.chatStreamWithHistory(
                 conversationHistory,
                 text,
                 contextWindow,
                 conversationSummary,
-                relevantMemories
+                relevantMemories,
+                userName,           // ✅ 添加用户名
+                activeChar.name     // ✅ 添加角色名
             );
 
             // Trigger Live2D Motion
@@ -622,9 +784,11 @@ GUIDELINES:
         }}>
 
             {/* Live2D Layer */}
-            {(() => {
+            {/* Live2D Layer - Block until settings loaded to prevent Hiyori Flash */}
+            {isSettingsLoaded ? (() => {
                 const activeChar = characters.find(c => c.id === activeCharacterId) || characters[0];
                 const modelPath = activeChar?.modelPath || "/live2d/Hiyori/Hiyori.model3.json";
+                console.log(`[App] Rendering Live2D for: ${activeCharacterId}, Path: ${modelPath}`);
                 return (
                     <Live2DViewer
                         key={modelPath} // Force remount on model change
@@ -633,10 +797,14 @@ GUIDELINES:
                         highDpi={live2dHighDpi}
                     />
                 );
-            })()}
+            })() : (
+                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#666' }}>
+                    Loading Soul...
+                </div>
+            )}
 
             {/* GalGame Mode HUD */}
-            <GalGameHud />
+            {isSettingsLoaded && <GalGameHud activeCharacterId={activeCharacterId} />}
 
             {/* UI Layer */}
             <ChatBubble message={currentMessage} isStreaming={isStreaming} />
@@ -717,6 +885,8 @@ GUIDELINES:
                 onCharactersUpdated={handleCharactersUpdated}
                 onUserNameUpdated={handleUserNameUpdated}
                 onLive2DHighDpiChange={handleLive2DHighDpiChange}
+                onCharacterSwitch={handleCharacterSwitch}
+                activeCharacterId={activeCharacterId} // ⚡ Pass prop
             />
 
             {/* Motion Tester */}

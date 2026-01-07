@@ -113,69 +113,143 @@ export class LLMService {
         }
 
         try {
-            // 1. 构建消息数组
+            // ✅ DeepSeek 缓存优化结构：
+            // 1. 历史对话（可缓存前缀）
+            // 2. 当前用户消息
+            // 3. System Prompt + 记忆 + 摘要（合并为一条 SystemMessage）
+            
             const messages: BaseMessage[] = [];
 
-            // 2. 添加系统提示 (Static Prefix for Caching)
-            messages.push(new SystemMessage(this.systemPrompt));
-
-            // 3. Long-term Memory Injection
-            if (longTermMemory) {
-                const memoryPrompt = `\n\nRELEVANT MEMORIES FROM PAST CONVERSATIONS:\n${longTermMemory}\n\nUse these memories to provide a personalized response, but do not explicitly mention that you are reading from memory unless relevant.`;
-                messages.push(new SystemMessage(memoryPrompt));
-            }
-
-            // 4. 如果有摘要，作为系统消息注入
-            if (summary) {
-                messages.push(new SystemMessage(`Previous conversation summary: ${summary}`));
-            }
-
-            // 4. 应用滑动窗口：只保留最近的 contextWindow 轮对话
-            // 每轮 = 1条用户消息 + 1条助手回复 = 2条消息
+            // 1️⃣ 历史对话作为可缓存前缀（最前面，最稳定）
+            // 应用滑动窗口：只保留最近的 contextWindow 轮对话
             const maxHistoryMessages = contextWindow * 2;
             const recentHistory = conversationHistory.slice(-maxHistoryMessages);
 
-            // 4. 将历史转换为 LangChain 消息 (Static Prefix for Caching)
+            // 将历史转换为 LangChain 消息（使用真实用户名和角色名，避免出戏）
             for (const msg of recentHistory) {
                 if (msg.role === 'user') {
-                    // Use 'name' field to explicitly identify the speaker
                     messages.push(new HumanMessage({ content: msg.content, name: userName }));
                 } else if (msg.role === 'assistant') {
                     messages.push(new AIMessage({ content: msg.content, name: charName }));
                 }
             }
 
-            // 5. 构建包含上下文的最终用户消息
-            let finalUserMessage = userMessage;
-            let contextParts = [];
+            // 2️⃣ 当前用户消息（纯消息，不附加上下文）
+            messages.push(new HumanMessage({ content: userMessage, name: userName }));
 
-            // 注入记忆 (Dynamic Context)
+            // 3️⃣ 动态 System Prompt（放最后，包含所有动态上下文）
+            let dynamicSystemPrompt = this.systemPrompt;
+
+            // 附加长期记忆
             if (longTermMemory) {
-                contextParts.push(`\nRELEVANT MEMORIES:\n${longTermMemory}`);
+                dynamicSystemPrompt += `\n\n## 相关记忆（来自过往对话）\n${longTermMemory}\n\n请利用这些记忆提供个性化的回复，但不要明确提及你在阅读记忆，除非相关。`;
             }
 
-            // 注入摘要 (Dynamic Context)
+            // 附加对话摘要
             if (summary) {
-                contextParts.push(`\nPREVIOUS SUMMARY:\n${summary}`);
+                dynamicSystemPrompt += `\n\n## 之前的对话摘要\n${summary}`;
             }
 
-            // 如果有上下文，附加到用户消息末尾
-            if (contextParts.length > 0) {
-                finalUserMessage += `\n\n--- Context Information ---\n${contextParts.join('\n')}\n\n(Use this context to answer, but do not explicitly mention you were given context unless necessary.)`;
-            }
+            messages.push(new SystemMessage(dynamicSystemPrompt));
 
-            // 6. 添加当前用户消息
-            messages.push(new HumanMessage(finalUserMessage));
-
-            // [DEBUG] Log Request content for transparency
-            console.log(`\n--- [LLM Input] (${messages.length} msgs) ---`);
-            // Log the FINAL message which contains the context injection
-            console.log(`[User Final]: ${finalUserMessage.substring(0, 800)}${finalUserMessage.length > 800 ? '...' : ''}`);
-            console.log('-------------------------------------------\n');
+            // ========== [DEBUG] 详细的请求内容打印 ==========
+            console.log('\n\n' + '═'.repeat(80));
+            console.log('📤 发送给 DeepSeek 的完整请求内容');
+            console.log('═'.repeat(80));
+            
+            console.log(`\n📋 请求配置:`);
+            console.log(`   - 用户名: "${userName}"`);
+            console.log(`   - 角色名: "${charName}"`);
+            console.log(`   - 消息总数: ${messages.length}`);
+            console.log(`   - Context Window: ${contextWindow} 轮`);
+            console.log(`   - 历史对话: ${recentHistory.length} 条`);
+            
+            console.log(`\n📨 消息结构详情:\n`);
+            
+            messages.forEach((msg, index) => {
+                let roleIcon = '';
+                let roleText = '';
+                let msgName = '';
+                
+                if (msg._getType() === 'human') {
+                    roleIcon = '👤';
+                    roleText = 'User';
+                    msgName = (msg as any).name || 'Unknown';
+                } else if (msg._getType() === 'ai') {
+                    roleIcon = '🤖';
+                    roleText = 'Assistant';
+                    msgName = (msg as any).name || 'Unknown';
+                } else if (msg._getType() === 'system') {
+                    roleIcon = '⚙️';
+                    roleText = 'System';
+                    msgName = 'System';
+                }
+                
+                const content = msg.content.toString();
+                const preview = content.substring(0, 100);
+                
+                console.log(`[${index + 1}] ${roleIcon} ${roleText} (name: "${msgName}")`);
+                console.log(`    Preview: ${preview}${content.length > 100 ? '...' : ''}`);
+                console.log(`    Length: ${content.length} chars\n`);
+            });
+            
+            // 打印 API 格式
+            const apiMessages = messages.map(msg => {
+                let role = '';
+                if (msg._getType() === 'human') role = 'user';
+                else if (msg._getType() === 'ai') role = 'assistant';
+                else if (msg._getType() === 'system') role = 'system';
+                
+                const apiMsg: any = {
+                    role,
+                    content: msg.content.toString()
+                };
+                
+                const msgName = (msg as any).name;
+                if (msgName) apiMsg.name = msgName;
+                
+                return apiMsg;
+            });
+            
+            console.log('═'.repeat(80));
+            console.log('📡 实际 API 请求格式 (JSON):');
+            console.log('═'.repeat(80));
+            console.log(JSON.stringify({
+                model: 'deepseek-chat',
+                messages: apiMessages,
+                stream: true,
+                temperature: 0.7
+            }, null, 2));
+            
+            console.log('\n' + '═'.repeat(80));
+            console.log('💾 完整 System Prompt 内容:');
+            console.log('═'.repeat(80));
+            console.log(dynamicSystemPrompt);
+            
+            console.log('\n' + '═'.repeat(80));
+            console.log('🔍 缓存分析:');
+            console.log('═'.repeat(80));
+            
+            const historyTokenEstimate = recentHistory.reduce((sum, msg) => 
+                sum + Math.ceil(msg.content.length / 4), 0
+            );
+            const currentTokenEstimate = Math.ceil(userMessage.length / 4);
+            const systemTokenEstimate = Math.ceil(dynamicSystemPrompt.length / 4);
+            const totalTokens = historyTokenEstimate + currentTokenEstimate + systemTokenEstimate;
+            
+            console.log(`\n1️⃣ 历史对话 (可缓存): ~${historyTokenEstimate} tokens`);
+            console.log(`2️⃣ 当前消息: ~${currentTokenEstimate} tokens`);
+            console.log(`3️⃣ System Prompt: ~${systemTokenEstimate} tokens`);
+            console.log(`\n   总计: ~${totalTokens} tokens`);
+            console.log(`   可缓存比例: ${((historyTokenEstimate / totalTokens) * 100).toFixed(1)}%`);
+            console.log(`   💰 预估节省: 40-60% (第2轮起)\n`);
+            
+            console.log('═'.repeat(80) + '\n');
+            // ========== [DEBUG END] ==========
 
             console.log(`[LLMService] Sending ${messages.length} messages (context window: ${contextWindow} turns)`);
 
-            // 7. 流式请求
+            // 4️⃣ 流式请求
             const stream = await this.chatModel.stream(messages);
 
             let fullResponse = '';
@@ -188,7 +262,7 @@ export class LLMService {
             }
 
             // [DEBUG] Log Response content
-            console.log(`\n--- [LLM Output] ---`);
+            console.log(`\n--- [LLM Output from ${charName}] ---`);
             console.log(fullResponse.substring(0, 500) + (fullResponse.length > 500 ? '...' : ''));
             console.log('--------------------\n');
 

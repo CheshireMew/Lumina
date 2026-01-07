@@ -97,8 +97,6 @@ memory_db/
 # Security: Config files with API keys
 python_backend/memory_config.json
 
-
-
 # Local TTS Models
 GPT-SoVITS/
 models/

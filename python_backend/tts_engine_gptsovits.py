@@ -33,6 +33,67 @@ class GPTSoVITSEngine:
             "fear": "fear.wav",
             "disgust": "disgust.wav"
         }
+        
+        # ⚡ 优化: 参考音频内存缓存
+        self.ref_audio_cache = {}
+        self._preload_reference_audios()
+
+
+    def _preload_reference_audios(self):
+        """启动时预加载所有参考音频到内存缓存，避免运行时磁盘I/O"""
+        logger.info("[GPT-SoVITS] Preloading reference audios to memory...")
+        count = 0
+        
+        try:
+            if not os.path.exists(self.assets_root):
+                logger.warning(f"[GPT-SoVITS] Assets root not found: {self.assets_root}")
+                return
+            
+            # 遍历所有音色文件夹
+            for voice_name in os.listdir(self.assets_root):
+                voice_dir = os.path.join(self.assets_root, voice_name)
+                if not os.path.isdir(voice_dir):
+                    continue
+                
+                # 遍历所有情感映射
+                for emotion, filename in self.emotion_map.items():
+                    audio_path = os.path.join(voice_dir, filename)
+                    txt_path = audio_path.replace(".wav", ".txt")
+                    
+                    if not os.path.exists(audio_path):
+                        continue
+                    
+                    # 读取参考文本
+                    ref_text = ""
+                    if os.path.exists(txt_path):
+                        with open(txt_path, 'r', encoding='utf-8') as f:
+                            ref_text = f.read().strip()
+                    else:
+                        # Fallback 文本
+                        if "neutral" in filename: 
+                            ref_text = "今天天气真不错。"
+                        elif "happy" in filename: 
+                            ref_text = "哇，这真是太棒了！"
+                        elif "sad" in filename: 
+                            ref_text = "我现在感觉有点难过。"
+                        elif "angry" in filename: 
+                            ref_text = "这真的让我很生气！"
+                        else:
+                            ref_text = "测试音频。"
+                    
+                    # 自动检测语言
+                    ref_lang = self.detect_language(ref_text)
+                    
+                    # 缓存: (voice, emotion) -> (audio_path, ref_text, ref_lang)
+                    # 注意: 这里仍然缓存路径而非字节，因为GPT-SoVITS API接受文件路径
+                    cache_key = (voice_name, emotion)
+                    self.ref_audio_cache[cache_key] = (audio_path, ref_text, ref_lang)
+                    count += 1
+            
+            logger.info(f"[GPT-SoVITS] ✅ Preloaded {count} reference audios into cache")
+            
+        except Exception as e:
+            logger.error(f"[GPT-SoVITS] Failed to preload reference audios: {e}")
 
     def check_connection(self):
         """检查 GPT-SoVITS 服务是否在线"""
@@ -81,50 +142,46 @@ class GPTSoVITSEngine:
         # 3. 默认英文
         return "en"
 
-    @lru_cache(maxsize=32)
     def get_ref_audio(self, voice: str, emotion: str) -> tuple[str, str, str]:
         """
-        根据音色和情感获取参考音频
-        voice: assets/emotion_audio/ 下的文件夹名
+        根据音色和情感获取参考音频（从内存缓存）
+        ⚡ 优化: 使用启动时预加载的缓存，避免运行时磁盘I/O
         """
         if not voice:
             voice = "default_voice"
         if not emotion:
             emotion = "neutral"
             
-        voice_dir = os.path.join(self.assets_root, voice)
+        # ⚡ 优化: 优先从缓存获取
+        cache_key = (voice, emotion.lower())
+        if cache_key in self.ref_audio_cache:
+            audio_path, ref_text, ref_lang = self.ref_audio_cache[cache_key]
+            return audio_path, ref_text, ref_lang
         
-        # 如果指定音色不存在，回退到 default_voice
-        if not os.path.exists(voice_dir):
-            logger.warning(f"Voice dir not found: {voice}, fallback to default_voice")
-            voice_dir = os.path.join(self.assets_root, "default_voice")
-            
-        filename = self.emotion_map.get(emotion.lower(), "neutral.wav")
-        file_path = os.path.join(voice_dir, filename)
+        # Fallback 1: 尝试该音色的 neutral
+        fallback_key = (voice, "neutral")
+        if fallback_key in self.ref_audio_cache:
+            audio_path, ref_text, ref_lang = self.ref_audio_cache[fallback_key]
+            logger.warning(f"[Cache Fallback] {cache_key} not found, using {fallback_key}")
+            return audio_path, ref_text, ref_lang
         
-        # 尝试查找 fallback (如果具体情感文件不存在，找 neutral.wav)
-        if not os.path.exists(file_path):
-            file_path = os.path.join(voice_dir, "neutral.wav")
-            
-        if not os.path.exists(file_path):
-            logger.error(f"Ref audio not found: {file_path}")
-            return None, "", "zh"
-            
-        ref_text = ""
-        txt_path = file_path.replace(".wav", ".txt")
-        if os.path.exists(txt_path):
-            with open(txt_path, 'r', encoding='utf-8') as f:
-                ref_text = f.read().strip()
-        else:
-            # Fallback text
-            if "neutral" in filename: ref_text = "今天天气真不错。"
-            elif "happy" in filename: ref_text = "哇，这真是太棒了！"
-            elif "sad" in filename: ref_text = "我现在感觉有点难过。"
-            elif "angry" in filename: ref_text = "这真的让我很生气！"
+        # Fallback 2: 尝试 default_voice + emotion
+        fallback_key2 = ("default_voice", emotion.lower())
+        if fallback_key2 in self.ref_audio_cache:
+            audio_path, ref_text, ref_lang = self.ref_audio_cache[fallback_key2]
+            logger.warning(f"[Cache Fallback] {cache_key} not found, using {fallback_key2}")
+            return audio_path, ref_text, ref_lang
         
-        # 自动检测 Prompt 语言
-        ref_lang = self.detect_language(ref_text)
-        return file_path, ref_text, ref_lang
+        # Fallback 3: default_voice + neutral (最后的备选)
+        ultimate_fallback = ("default_voice", "neutral")
+        if ultimate_fallback in self.ref_audio_cache:
+            audio_path, ref_text, ref_lang = self.ref_audio_cache[ultimate_fallback]
+            logger.error(f"[Cache Miss] {cache_key} not found, using ultimate fallback")
+            return audio_path, ref_text, ref_lang
+        
+        # 完全失败（不应该发生，除非 assets 目录为空）
+        logger.error(f"[Critical] No reference audio available in cache!")
+        return None, "", "zh"
 
     def synthesize(self, text: str, voice: str = "default_voice", emotion: str = "neutral", text_lang: str = None) -> bytes:
         """

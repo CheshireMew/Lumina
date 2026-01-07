@@ -3,9 +3,11 @@ import { Database, Gem, Users, Settings, Info } from 'lucide-react';
 
 interface HistoryEvent {
     id: string;
-    event_type: string;
+    event_type?: string; 
     content: string;
     timestamp: string;
+    role?: string; // Backend-provided role (e.g. '柴郡', 'Lillian')
+    name?: string; // Backend-provided name
 }
 
 interface Fact {
@@ -30,6 +32,7 @@ interface MemoryData {
         nodes: any[];
         edges: GraphEdge[];
     };
+    user_facts?: Fact[]; // Add user_facts
     history?: HistoryEvent[];
 }
 
@@ -57,7 +60,7 @@ interface ProcessingStatus {
     };
 }
 
-const MemoryInspector: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string }> = ({ onClose, activeCharacterId }) => {
     const [activeTab, setActiveTab] = useState<'history' | 'facts' | 'status' | 'graph'>('history');
     const [data, setData] = useState<MemoryData | null>(null);
     const [status, setStatus] = useState<ProcessingStatus | null>(null);
@@ -73,13 +76,13 @@ const MemoryInspector: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }, 5000);  // 从 2000ms 改为 5000ms
         
         return () => clearInterval(interval);
-    }, []);
+    }, [activeCharacterId]); // 依赖 activeCharacterId 变化自动刷新
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            // Hardcoded backend URL for now, or use props/context
-            const res = await fetch('http://127.0.0.1:8001/debug/brain_dump?character_id=hiyori');
+            // Use activeCharacterId from props
+            const res = await fetch(`http://127.0.0.1:8001/debug/brain_dump?character_id=${activeCharacterId}`);
             const json = await res.json();
             if (json.status === 'success') {
                 setData(json);
@@ -93,7 +96,7 @@ const MemoryInspector: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     
     const fetchStatus = async () => {
         try {
-            const res = await fetch('http://127.0.0.1:8001/debug/processing_status?character_id=hiyori');
+            const res = await fetch(`http://127.0.0.1:8001/debug/processing_status?character_id=${activeCharacterId}`);
             const json = await res.json();
             if (json.status === 'success') {
                 setStatus(json);
@@ -202,7 +205,7 @@ const MemoryInspector: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     💎 Core Facts ({data?.facts?.length || 0})
                 </button>
                 <button 
-                    onClick={() => setActiveTab('graph')}
+                    onClick={() => setActiveTab('graph')} // Reuse 'graph' state key to mean 'user facts' for simplicity, or rename. Let's start with renaming label.
                     style={{
                         padding: '15px 30px',
                         background: activeTab === 'graph' ? '#00ff9d22' : 'transparent',
@@ -213,7 +216,7 @@ const MemoryInspector: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         borderBottom: activeTab === 'graph' ? '2px solid #00ff9d' : 'none'
                     }}
                 >
-                    🕸️ Knowledge Graph ({data?.graph?.edges?.length || 0})
+                    👤 User Facts ({data?.user_facts?.length || 0})
                 </button>
                 <button
                     onClick={() => setActiveTab('status')}
@@ -363,13 +366,28 @@ const MemoryInspector: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 {!loading && data && activeTab === 'history' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {data.history?.map((event, i) => {
-                            const role = getRole(event.content);
+                            // Backend now sends { role, name, content, timestamp }
+                            // Prioritize backend fields, fallback to old JSON parse logic
+                            const role = event.role || getRole(event.content);
                             const text = parseContent(event.content);
-                            const parseName = getName(event.content);
-                            const isUser = role === 'user';
+                            const parseName = event.name || getName(event.content);
                             
-                            // Use parsed name if available, else fallback
-                            const displayName = parseName ? parseName : (isUser ? 'USER' : 'AI');
+                            // Robust heuristic: Compare role with activeCharacterId
+                            // If role matches active char (case-insensitive) or is standard AI roles, treat as AI.
+                            const normalizedRole = role?.toLowerCase() || '';
+                            const normalizedCharId = activeCharacterId.toLowerCase();
+                            
+                            const isAI = normalizedRole === normalizedCharId || 
+                                         normalizedRole === 'assistant' || 
+                                         normalizedRole === 'ai' || 
+                                         normalizedRole === 'system' ||
+                                         normalizedRole === 'lillian' || // Keep legacy hardcodes just in case
+                                         normalizedRole === 'hiyori';
+                                         
+                            const isUser = !isAI;
+                            
+                            // Display Name Logic
+                            const displayName = parseName || (role === 'user' ? 'USER' : (role === 'system' ? 'SYSTEM' : role)) || 'AI';
                             
                             return (
                                 <div key={i} style={{ 

@@ -1,0 +1,27 @@
+{
+  "personality": {
+    "big_five": {
+      "openness": 0.85,
+      "conscientiousness": 0.7,
+      "extraversion": 0.75,
+      "agreeableness": 0.9,
+      "neuroticism": 0.4
+    },
+    "pad_model": {
+      "pleasure": 0.8,
+      "arousal": 0.65,
+      "dominance": 0.6
+    },
+    "traits": [
+      "affectionate",
+      "imaginative",
+      "resilient",
+      "optimistic",
+      "family-oriented"
+    ]
+  },
+  "state": {
+    "current_mood": "happy"
+  },
+  "last_updated": "2026-01-07T22:48:57.339432"
+}

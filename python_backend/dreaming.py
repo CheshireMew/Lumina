@@ -17,12 +17,15 @@ class DreamingService:
         
         self.base_url = base_url
         self.api_key = api_key
-        self.soul = SoulManager()
+        
+        character_id = "hiyori" # Default
 
         if memory_client:
             # Shared Memory Mode
             self.memory = memory_client
-            # Verify if config exists and has keys, otherwise fallback to defaults or passed args
+            character_id = getattr(memory_client, 'character_id', "hiyori")
+            
+            # Verify if config exists, otherwise fallback to defaults or passed args
             mem_config = getattr(memory_client, 'config', {})
             self.api_key = mem_config.get("api_key", api_key)
             self.base_url = mem_config.get("base_url", base_url)
@@ -31,12 +34,14 @@ class DreamingService:
                 "api_key": self.api_key,
                 "model": mem_config.get("model", "deepseek-chat")
             }
-            print("[Dreaming] Using shared memory client.")
+            print(f"[Dreaming] Using shared memory client for character: {character_id}")
         else:
-            # Standalone mode: Create own instance (will lock DB if server running)
+            # Standalone mode
             print("[Dreaming] Creating new memory client (Standalone Mode).")
+            # ... (config loading logic omitted for brevity, keeping existing flow but ensuring char_id is set) ...
+            # Assume hiyori for standalone unless config says otherwise, logic below handles it
             
-            # Try to load memory_config.json to get correct LLM settings
+            # Try to load memory_config.json
             config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory_config.json")
             loaded_config = {}
             if os.path.exists(config_path):
@@ -47,7 +52,9 @@ class DreamingService:
                 except Exception as e:
                     print(f"[Dreaming] Failed to load config file: {e}")
 
-            # Merge defaults with loaded config
+            character_id = loaded_config.get("character_id", "hiyori")
+            
+            # Merge defaults
             config = {
                 "qdrant_path": "./lite_memory_db", 
                 "sqlite_path": "./memory_db/lumina_memory.db",
@@ -56,14 +63,16 @@ class DreamingService:
                 "embedder_model": loaded_config.get("embedder", "paraphrase-multilingual-MiniLM-L12-v2")
             }
             
-            self.memory = LiteMemory(config=config, character_id="hiyori")
+            self.memory = LiteMemory(config=config, character_id=character_id)
             self.config = {
                 "base_url": base_url,
                 "api_key": api_key,
-                "model": "deepseek-chat" # Default for standalone
+                "model": "deepseek-chat" 
             }
-        
-        print("[Dreaming] Service initialized.")
+            
+        # ✅ Correctly Initialize SoulManager with the right character_id
+        self.soul = SoulManager(character_id=character_id)
+        print(f"[Dreaming] Service initialized for '{character_id}'.")
         
     def _truncate_log(self, text, length=100):
         t = str(text).replace("\n", " ")
@@ -111,16 +120,17 @@ class DreamingService:
                 print(f"[Dreaming] Dreaming of: '{self._truncate_log(text)}'")
                 processed_texts.append(text)
                 
-                # 2. Extract Triples (LLM)
-                triples = self._extract_triples(text)
+                # 2. Extract Triples (LLM) - DISABLED
+                # triples = self._extract_triples(text)
+                triples = []
                 
                 # 3. Write to Knowledge Graph
-                if triples:
-                    print(f"  > 🕸️ Woven {len(triples)} connections.")
-                    for src, rel, tgt in triples:
-                        self.memory.add_knowledge_edge(src, tgt, rel)
-                else:
-                    print("  > No new connections found.")
+                # if triples:
+                #     print(f"  > 🕸️ Woven {len(triples)} connections.")
+                #     for src, rel, tgt in triples:
+                #         self.memory.add_knowledge_edge(src, tgt, rel)
+                # else:
+                #     print("  > No new connections found.")
                 
                 # 4. Deep Reflection (Soul Update)
                 # Apply simple heuristic logic to REAL text

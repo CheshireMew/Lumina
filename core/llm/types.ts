@@ -32,6 +32,8 @@ export interface CharacterProfile {
         pitch: string;   // "+0Hz"
     };
     modelPath?: string; // Path to Live2D model (relative to public)
+    heartbeatEnabled?: boolean; // ⚡ Heartbeat Toggle
+    proactiveThresholdMinutes?: number; // ⚡ Silence threshold
 }
 
 export const DEFAULT_CHARACTERS: CharacterProfile[] = [

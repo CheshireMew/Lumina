@@ -68,6 +68,11 @@ async def lifespan(app: FastAPI):
                 memory_client=memory_clients[character_id]
             )
             print(f"[API] Auto-initialized memory for '{character_id}'")
+            
+            # ⚡ Fix: Re-init soul_client to match the saved character_id
+            soul_client = SoulManager(character_id=character_id)
+            print(f"[API] SoulManager initialized for '{character_id}'")
+            
         except Exception as e:
             print(f"[API] Failed to auto-load config: {e}")
     
@@ -107,6 +112,10 @@ class ConfigRequest(BaseModel):
     model: Optional[str] = "deepseek-chat"
     embedder: Optional[str] = "paraphrase-multilingual-MiniLM-L12-v2"
     character_id: str = "hiyori"  # Character identifier
+    # Heartbeat Settings
+    # Heartbeat Settings
+    heartbeat_enabled: Optional[bool] = None
+    proactive_threshold_minutes: Optional[float] = None
     
     @classmethod
     def validate_base_url(cls, v):
@@ -161,7 +170,7 @@ class UpdateUserNameRequest(BaseModel):
 
 @app.post("/configure")
 async def configure_memory(config: ConfigRequest):
-    global memory_clients, dreaming_service, config_timestamps
+    global memory_clients, dreaming_service, config_timestamps, soul_client, heartbeat_service_instance
     character_id = config.character_id
     
     logger.info(f"=== /configure Request Received ===")
@@ -182,14 +191,22 @@ async def configure_memory(config: ConfigRequest):
         # 更新时间戳
         config_timestamps[character_id] = current_time
         
-        # Close existing instance for this character if exists
-        if character_id in memory_clients:
-            logger.info(f"Closing existing memory client for '{character_id}'...")
-            try:
-                memory_clients[character_id].close()
-            except Exception as e:
-                logger.warning(f"Warning closing client: {e}")
-        
+        # ⚡ CRITICAL FIX: Enforce Single Active Instance
+        # Qdrant local storage locks the folder. We cannot have multiple LiteMemory instances 
+        # open on the same folder even for different characters.
+        # We must verify if ANY client is open and close it.
+        if memory_clients:
+            logger.info(f"Closing ALL existing memory clients to release Qdrant lock ({len(memory_clients)} active)...")
+            # Create a list of keys to avoid runtime error during modification
+            active_ids = list(memory_clients.keys())
+            for active_id in active_ids:
+                try:
+                    logger.info(f"Closing client for '{active_id}'...")
+                    memory_clients[active_id].close()
+                except Exception as e:
+                    logger.warning(f"Error closing client '{active_id}': {e}")
+            memory_clients.clear()
+            
         # Initialize new LiteMemory (Primary Owner of DB Lock)
         logger.info(f"Initializing LiteMemory for {character_id}...")
         
@@ -204,6 +221,29 @@ async def configure_memory(config: ConfigRequest):
             api_key=config.api_key,
             memory_client=memory_clients[character_id]
         )
+        
+        # ⚡ Soul & Heartbeat Reload
+        # Since SoulManager is character-specific, we MUST reload it.
+        logger.info(f"Switching SoulManager to '{character_id}'...")
+        soul_client = SoulManager(character_id=character_id)
+        
+        # ⚡ Update Soul Config with Heartbeat Settings
+        # ⚡ Update Soul Config with Heartbeat Settings (Only if provided)
+        if config.heartbeat_enabled is not None:
+            soul_client.config["heartbeat_enabled"] = config.heartbeat_enabled
+        if config.proactive_threshold_minutes is not None:
+            soul_client.config["proactive_threshold_minutes"] = config.proactive_threshold_minutes
+        soul_client.save_config() # Persist to characters/{id}/config.json
+        
+        # Restart Heartbeat Service with new Soul
+        if heartbeat_service_instance:
+            logger.info("Restarting Heartbeat Service for new character...")
+            try:
+                heartbeat_service_instance.stop()
+            except: pass
+        
+        heartbeat_service_instance = HeartbeatService(soul_client)
+        heartbeat_service_instance.start()
         
         # Save config for auto-load on restart
         try:
@@ -419,18 +459,50 @@ def brain_dump(character_id: str = "hiyori"):
     try:
         memory = memory_clients[character_id]
         
-        # 1. Fetch Facts (从 facts_staging 表获取已巩固的 Facts)
-        facts = memory.sql_db.get_consolidated_facts(limit=50)
+        # 1. Fetch Consolidated Core Facts (from facts_staging and vector store meta)
+        # These are facts explicitly extracted and consolidated.
+        facts = memory.sql_db.get_consolidated_facts(limit=100, source_name=character_id)
         
-        # 2. Fetch Graph
-        graph = memory.sql_db.view_knowledge_graph(limit=100)
+        # ⚡ Fetch User Facts (source_name='User')
+        user_facts = memory.sql_db.get_consolidated_facts(limit=100, source_name="User")
 
-        # 3. Fetch History (Raw Dialog)
-        history = memory.sql_db.get_recent_chat_history(limit=50)
+        # 2. Fetch Knowledge Graph (Short-term context edges)
+        # Filter edges by character_id
+        # graph = memory.sql_db.view_knowledge_graph(limit=100, character_id=character_id)
+        graph = {"edges": [], "nodes": []} # Disabled Graph
+
+        # 3. Fetch History (Clean Dialogue from Memory Store)
+        # Use 'memories' table instead of raw 'memory_events' log to avoid duplicate/merged logs
+        raw_history = memory.sql_db.get_recent_memories(character_id=character_id, limit=100, memory_type="dialogue")
+        
+        # Post-process for Frontend (MemoryInspector.tsx)
+        # Frontend expects: { timestamp, role, content (or content as JSON with name/role) }
+        history = []
+        for h in raw_history:
+            item = {
+                "timestamp": h["created_at"], # Map created_at -> timestamp
+                "content": h["content"],
+                "role": "assistant" if h.get("type") == "dialogue" else "system" 
+            }
+            
+            # Parsing "Name: Message" format stored in LiteMemory
+            # Format usually: "User: Hello" or "Character: Hi"
+            if ": " in h["content"]:
+                parts = h["content"].split(": ", 1)
+                name = parts[0]
+                text = parts[1]
+                
+                item["role"] = name # Use name as role for display
+                item["name"] = name
+                item["content"] = text
+                
+            history.append(item)
+        
         
         return {
             "status": "success",
             "facts": facts,
+            "user_facts": user_facts, # Add User Facts
             "graph": graph,
             "history": history
         }
@@ -558,31 +630,173 @@ async def search_memory_hybrid(request: SearchRequest):
 
 # Global Soul Manager definition moved to top
 
-@app.get("/soul")
-async def get_soul_state():
-    """Returns the current 'Soul File' (Profile) for the frontend."""
-    # Force reload from disk to get latest changes (e.g. from Dreaming)
-    soul_client.profile = soul_client._load_profile()
-    
-    # Ensure runtime consistency for frontend
-    p = soul_client.profile
-    if "relationship" in p:
-        # Inject dynamic label
-        stage_info = soul_client.get_relationship_stage()
-        p["relationship"]["current_stage_label"] = stage_info["label"]
-        p["relationship"]["level"] = p["relationship"].get("level", 2)
-        p["relationship"]["progress"] = p["relationship"].get("progress", 50)
-    
-    # Inject dynamic system prompt for frontend LLM (DeepSeek)
-    try:
-        p["system_prompt"] = soul_client.render_system_prompt()
-    except Exception as e:
-        print(f"[API] Failed to render system prompt: {e}")
-        
-    return p
+# ==================== Character Management API ====================
 
+@app.get("/characters")
+async def list_characters():
+    """列出所有可用角色"""
+    try:
+        from pathlib import Path
+        chars_dir = Path("python_backend/characters")
+        characters = []
+        
+        if chars_dir.exists():
+            for char_dir in chars_dir.iterdir():
+                if char_dir.is_dir():
+                    config_path = char_dir / "config.json"
+                    if config_path.exists():
+                        try:
+                            with open(config_path, 'r', encoding='utf-8') as f:
+                                config = json.load(f)
+                                characters.append(config)
+                        except Exception as e:
+                            logger.error(f"[API] Error loading character config for {char_dir.name}: {e}")
+                            # Skip corrupted character but continue listing others
+                            continue
+        
+        return {"characters": characters}
+    except Exception as e:
+        logger.error(f"[API] Error listing characters: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/characters/{character_id}/config")
+async def get_character_config(character_id: str):
+    """获取角色配置（Settings界面使用）"""
+    try:
+        from soul_manager import SoulManager
+        soul = SoulManager(character_id)
+        return soul.config
+    except Exception as e:
+        print(f"[API] Error getting character config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/characters/{character_id}/config")
+async def update_character_config(character_id: str, config: dict):
+    """更新角色配置（Settings界面保存）"""
+    try:
+        logger.info(f"[API] update_character_config for: {character_id}")
+        # logger.info(f"[API] Payload: {json.dumps(config, ensure_ascii=False)}")
+        
+        from soul_manager import SoulManager
+        soul = SoulManager(character_id)
+        
+        # Ensure directory exists (in case it's a new character being saved purely by config update)
+        if not soul.base_dir.exists():
+            logger.info(f"[API] {character_id} directory missing, creating...")
+            soul.base_dir.mkdir(parents=True, exist_ok=True)
+            
+        soul.config.update(config)
+        soul.save_config()
+        
+        # ⚡ Fix: Sync with global soul_client if it's the active character
+        # This ensures HeartbeatService sees the new settings immediately without restart
+        global soul_client
+        if soul_client and soul_client.character_id == character_id:
+             soul_client.config.update(config)
+             logger.info(f"[API] Synced config to active soul_client (Heartbeat Updated)")
+
+        logger.info(f"[API] Config saved for {character_id}")
+        return {"status": "ok", "character_id": character_id}
+    except Exception as e:
+        logger.error(f"[API] Error updating character config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/characters/{character_id}")
+async def delete_character(character_id: str):
+    """删除角色"""
+    try:
+        from pathlib import Path
+        import shutil
+        
+        # Prevent deleting default character
+        if character_id == "hiyori":
+             raise HTTPException(status_code=400, detail="Cannot delete default character 'hiyori'")
+             
+        char_dir = Path(f"python_backend/characters/{character_id}")
+        
+        if char_dir.exists() and char_dir.is_dir():
+            shutil.rmtree(char_dir)
+            logger.info(f"[API] Deleted character directory: {char_dir}")
+            
+            # Remove from memory clients if active
+            if character_id in memory_clients:
+                del memory_clients[character_id]
+                
+            return {"status": "ok", "message": f"Character {character_id} deleted"}
+        else:
+            return {"status": "skipped", "message": "Character not found"}
+            
+    except Exception as e:
+        print(f"[API] Error deleting character: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/soul/{character_id}")
+async def get_soul_data(character_id: str):
+    """获取AI演化的性格数据（只读）"""
+    try:
+        from soul_manager import SoulManager
+        soul = SoulManager(character_id)
+        return soul.soul
+    except Exception as e:
+        print(f"[API] Error getting soul data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/galgame/{character_id}/state")
+async def get_galgame_state(character_id: str):
+    """获取GalGame状态"""
+    try:
+        from soul_manager import SoulManager
+        soul = SoulManager(character_id)
+        return soul.state.get("galgame", {})
+    except Exception as e:
+        print(f"[API] Error getting galgame state: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/galgame/{character_id}/state")
+async def update_galgame_state(character_id: str, state_update: dict):
+    """更新GalGame状态"""
+    try:
+        from soul_manager import SoulManager
+        soul = SoulManager(character_id)
+        soul.state.setdefault("galgame", {}).update(state_update)
+        soul.save_state()
+        return {"status": "ok", "character_id": character_id}
+    except Exception as e:
+        print(f"[API] Error updating galgame state: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== Legacy Soul API (Backward Compatible) ====================
+
+@app.get("/soul")
+async def get_soul():
+    """获取Soul状态（使用全局 soul_client）"""
+    try:
+        global soul_client
+        
+        # ✅ 使用全局 soul_client，而不是创建新的 hiyori 实例
+        # 重新加载以获取最新数据（如Dreaming更新）
+        soul_client.soul = soul_client._load_soul()
+        soul_client.state = soul_client._load_state()
+        soul_client.profile = soul_client._merge_profile()
+        
+        # 注入关系标签
+        if "relationship" in soul_client.profile:
+            stage_info = soul_client.get_relationship_stage()
+            soul_client.profile["relationship"]["current_stage_label"] = stage_info["label"]
+        
+        # 注入动态 system prompt
+        try:
+            soul_client.profile["system_prompt"] = soul_client.render_system_prompt()
+        except Exception as e:
+            print(f"[API] Failed to render system prompt: {e}")
+        
+        return soul_client.profile
+    except Exception as e:
+        print(f"[API] Error in /soul endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
 @app.post("/soul/mutate")
-async def mutate_soul(pleasure: float = 0, arousal: float = 0, dominance: float = 0, intimacy: float = 0, energy: float = 0):
+async def mutate_soul(pleasure: float = 0, arousal: float = 0, dominance: float = 0, intimacy: float = 0, energy: float = 0, clear_pending: bool = False):
     """Debug endpoint to manually adjust soul state."""
     if pleasure or arousal or dominance:
         soul_client.mutate_mood(d_p=pleasure, d_a=arousal, d_d=dominance)
@@ -590,26 +804,129 @@ async def mutate_soul(pleasure: float = 0, arousal: float = 0, dominance: float 
         soul_client.update_intimacy(intimacy)
     if energy:
         soul_client.update_energy(energy)
+    if clear_pending:
+        soul_client.set_pending_interaction(False)
     return soul_client.profile
+
+class SwitchCharacterRequest(BaseModel):
+    character_id: str
+
+@app.post("/soul/switch_character")
+async def switch_character(request: SwitchCharacterRequest):
+    """切换到指定角色"""
+    global soul_client, memory_clients, dreaming_service, config_timestamps, heartbeat_service_instance
+    
+    try:
+        character_id = request.character_id
+        logger.info(f"[API] Switching to character: {character_id}")
+        
+        # ⚡ 重置防抖时间戳，允许后续的 /configure 调用
+        config_timestamps[character_id] = 0.0
+        
+        # 1. 重新初始化 SoulManager
+        soul_client = SoulManager(character_id=character_id)
+        
+        # 重新加载数据
+        soul_client.soul = soul_client._load_soul()
+        soul_client.state = soul_client._load_state()
+        soul_client.profile = soul_client._merge_profile()
+        
+        character_name = soul_client.profile.get("identity", {}).get("name", character_id)
+        
+        logger.info(f"[API] ✅ Switched to character: {character_name}")
+        
+        # 2. ⚡ 重要：同时初始化 Memory Client
+        # 从配置文件读取 API 配置
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory_config.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    saved_config = json.load(f)
+                
+                # 关闭旧的 memory clients（释放 Qdrant 锁）
+                if memory_clients:
+                    logger.info(f"Closing {len(memory_clients)} existing memory clients...")
+                    for old_id in list(memory_clients.keys()):
+                        try:
+                            memory_clients[old_id].close()
+                        except Exception as e:
+                            logger.warning(f"Error closing '{old_id}': {e}")
+                    memory_clients.clear()
+                
+                # 更新 character_id 并初始化新的 LiteMemory
+                saved_config["character_id"] = character_id
+                memory_clients[character_id] = LiteMemory(saved_config, character_id=character_id)
+                
+                # 重新初始化 Dreaming Service
+                dreaming_service = DreamingService(
+                    base_url=saved_config["base_url"],
+                    api_key=saved_config["api_key"],
+                    memory_client=memory_clients[character_id]
+                )
+                
+                # 3. ⚡ 更新 Heartbeat Service 的 Soul 引用
+                if heartbeat_service_instance:
+                    heartbeat_service_instance.soul = soul_client
+                    logger.info(f"[API] Heartbeat service updated to track character: {character_id}")
+
+                logger.info(f"[API] Memory, Dreaming, and Heartbeat initialized for '{character_id}'")
+            except Exception as e:
+                logger.error(f"[API] Failed to init memory for '{character_id}': {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            logger.warning(f"[API] No saved config found. Memory not initialized.")
+        
+        return {
+            "status": "success",
+            "character_id": character_id,
+            "character_name": character_name,
+            "system_prompt": soul_client.render_system_prompt()
+        }
+    except Exception as e:
+        logger.error(f"[API] Failed to switch character: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.post("/dream/wake_up")
 async def trigger_dreaming(background_tasks: BackgroundTasks):
     """Triggers a dreaming cycle to consolidate memory and evolve soul."""
-    client = memory_clients.get("hiyori")
-    if not client:
-        raise HTTPException(status_code=400, detail="Character not found")
+    global memory_clients, dreaming_service
+    
+    # 动态获取当前活跃的 client
+    active_client = None
+    character_id = None
+    
+    if memory_clients:
+        # 获取第一个（应该是唯一的）client
+        character_id, active_client = next(iter(memory_clients.items()))
+        logger.info(f"[API] Triggering dream for active character: {character_id}")
+    
+    if not active_client:
+        logger.warning("[API] No active memory client found for dreaming.")
+        raise HTTPException(status_code=400, detail="No active character memory found")
         
     def run_dreaming():
          # Re-use existing client to avoid locking
-         logger.info("[Task] Starting Dreaming Cycle...")
+         logger.info(f"[Task] Starting Dreaming Cycle for {character_id}...")
          try:
-             dreamer = DreamingService(memory_client=client)
+             # 使用全局的 dreaming_service 或重新创建
+             if dreaming_service and dreaming_service.memory == active_client:
+                 dreamer = dreaming_service
+             else:
+                 dreamer = DreamingService(memory_client=active_client)
+                 
              dreamer.wake_up()
          except Exception as e:
              logger.error(f"[Task] Dreaming Failed: {e}")
+             import traceback
+             traceback.print_exc()
          
     background_tasks.add_task(run_dreaming)
-    return {"status": "dreaming_initiated"}
+    return {"status": "dreaming_initiated", "character_id": character_id}
 
 @app.post("/soul/update_identity")
 async def update_identity(request: UpdateIdentityRequest):

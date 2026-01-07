@@ -61,16 +61,19 @@ class HeartbeatService:
         # self.soul.update_energy(-0.03) 
         
         # 2. Check for Proactivity
-        last_interaction_str = state.get("last_interaction")
-        intimacy = rel.get("intimacy_score", 0)
+        # ⚡ Logic Update:
+        # custom_mode = True  -> Use proactive_threshold_minutes
+        # custom_mode = False -> Use Intimacy Level Logic
         
+        use_custom_threshold = self.soul.config.get("heartbeat_enabled", False) # Default to Auto if missing? Or User preference.
+        
+        last_interaction_str = state.get("last_interaction")
         if not last_interaction_str:
             return
-
+            
         # Parse time
         try:
             last_dt = datetime.fromisoformat(last_interaction_str)
-            # Ensure naive for comparison with datetime.now()
             if last_dt.tzinfo is not None:
                 last_dt = last_dt.replace(tzinfo=None)
         except ValueError:
@@ -79,33 +82,35 @@ class HeartbeatService:
         delta = datetime.now() - last_dt
         seconds_idle = delta.total_seconds()
         
-        # LOGIC: 
-        # Level -1 (Hostile) -> Never initiate (Huge threshold)
-        # Level 0 (Stranger) -> Very rarely (e.g. 2 hours)
-        # Level 1 (Acquaintance) -> 1 hour
-        # Level 2 (Friend) -> 15 mins
-        # Level 3 (Close Friend) -> 10 mins
-        # Level 4+ (Lover) -> 5 mins
-        
-        level = rel.get("level", 0)
-        
-        threshold = 7200 # Default (Level 0) - 2 hours
-        
-        if level < 0:
-             threshold = 999999 # Practically never
-        elif level == 1:
-             threshold = 3600 # 1 hour
-        elif level == 2:
-             threshold = 900 # 15 mins -- User is currently here
-        elif level == 3:
-             threshold = 600 # 10 mins
-        elif level >= 4:
-             threshold = 300 # 5 mins
-             
+        level = rel.get("level", 0) # ⚡ Fix: Define level here so it's available for logging later
+        threshold = 7200 # Default 2 hours
+
+        if use_custom_threshold:
+            # ⚡ Custom Mode
+            config_threshold_mins = self.soul.config.get("proactive_threshold_minutes", 15.0)
+            threshold = config_threshold_mins * 60.0
+            # print(f"[Heartbeat] Mode: Custom ({config_threshold_mins}m)")
+        else:
+            # ⚡ Auto (Intimacy) Mode
+            # level defined above
+            if level < 0: threshold = 999999 
+            elif level == 0: threshold = 7200 # 2 hours
+            elif level == 1: threshold = 3600 # 1 hour
+            elif level == 2: threshold = 900  # 15 mins
+            elif level == 3: threshold = 600  # 10 mins
+            elif level >= 4: threshold = 300  # 5 mins
+            # print(f"[Heartbeat] Mode: Auto (Level {level} -> {threshold}s)")
+
         # Log periodically (every minute) if significantly idle
         if seconds_idle > 60 and (datetime.now() - self.last_log_time).total_seconds() > 60:
-             # print(f"[Heartbeat] Idle for {seconds_idle:.0f}s. Threshold: {threshold}s. Energy: {state.get('energy_level', 0):.1f}")
-             self.last_log_time = datetime.now()
+             # self.last_log_time = datetime.now()
+             pass
+        
+        if seconds_idle > threshold:
+            # Trigger Proactivity
+            print(f"[Heartbeat] ❤️ IDLE DETECTED: {seconds_idle:.1f}s > {threshold}s. Initiating...")
+            # print(f"[Heartbeat] Idle for {seconds_idle:.0f}s. Threshold: {threshold}s. Energy: {state.get('energy_level', 0):.1f}")
+            self.last_log_time = datetime.now()
         
         if seconds_idle > threshold:
             # We want to talk!
