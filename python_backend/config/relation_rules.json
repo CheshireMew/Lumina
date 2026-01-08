@@ -1,0 +1,20 @@
+{
+    "opposites": [
+        ["LIKES", "HATES"],
+        ["LIKES", "DISLIKES"],
+        ["LOVES", "HATES"],
+        ["TRUSTS", "DISTRUSTS"],
+        ["TRUSTS", "SUSPECTS"],
+        ["KNOWS", "IGNORE"]
+    ],
+    "exclusive": [
+        "BORN_IN",
+        "LIVES_IN",
+        "HAS_GENDER",
+        "IS_A", 
+        "CREATED_BY"
+    ],
+    "thresholds": {
+        "conflict_strength_diff": 0.3
+    }
+}

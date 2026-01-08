@@ -15,6 +15,7 @@ import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 import logging
+import asyncio
 
 # 配置日志
 logging.basicConfig(
@@ -464,20 +465,37 @@ async def get_all_memories(character_id: str = "hiyori"):
         return {"error": str(e)}
 
 @app.get("/memory/inspiration")
-def get_inspiration(character_id: str = "hiyori", limit: int = 3):
+async def get_inspiration(character_id: str = "hiyori", limit: int = 3):
     """
     Returns random facts/memories to inspire proactive conversation.
+    Prioritizes SurrealDB knowledge graph, falls back to SQLite.
     """
-    if character_id not in memory_clients:
-        # Fallback if no client found
-        return []
+    global surreal_system
     
-    try:
-        results = memory_clients[character_id].get_random_inspiration(limit=limit)
-        return results
-    except Exception as e:
-        print(f"[API] Inspiration Error: {e}")
-        return []
+    # 1. Try SurrealDB knowledge graph first
+    if surreal_system:
+        try:
+            results = await surreal_system.get_random_inspiration(character_id=character_id, limit=limit)
+            if results:
+                logger.info(f"[Inspiration] Fetched {len(results)} facts from SurrealDB")
+                return results
+            else:
+                logger.info("[Inspiration] SurrealDB returned 0 facts")
+        except Exception as e:
+            logger.warning(f"[Inspiration] SurrealDB failed: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # 2. Fallback to SQLite (LiteMemory)
+    if character_id in memory_clients:
+        try:
+            results = memory_clients[character_id].get_random_inspiration(limit=limit)
+            logger.info(f"[Inspiration] Fallback to SQLite: {len(results)} facts")
+            return results
+        except Exception as e:
+            logger.warning(f"[Inspiration] SQLite Error: {e}")
+    
+    return []
 
 @app.get("/debug/brain_dump")
 def brain_dump(character_id: str = "hiyori"):

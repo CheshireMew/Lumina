@@ -132,5 +132,23 @@ class ModelManager:
             logger.error(f"ModelScope download failed: {e}")
             return None
 
+    def load_embedding_model(self, model_path: str):
+        """
+        从指定路径加载 SentenceTransformer 模型。
+        """
+        try:
+            # 延迟导入以减少启动时间
+            from sentence_transformers import SentenceTransformer
+            import torch
+            
+            logger.info(f"Loading Embedding Model from {model_path}...")
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            model = SentenceTransformer(model_path, device=device)
+            logger.info(f"Model loaded on {device}")
+            return model
+        except Exception as e:
+            logger.error(f"Failed to load embedding model: {e}")
+            raise
+
 # 全局单例
 model_manager = ModelManager()
