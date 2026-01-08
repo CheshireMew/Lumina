@@ -113,31 +113,35 @@ export class MemoryService {
                 // Format results into a string with full metadata
                 if (results.length > 0) {
                     const formatted = results.map((res: any) => {
-                        // Basic info
+                        // Basic info - handle both old (timestamp) and new (created_at) formats
                         let dateStr = 'Unknown';
-                        if (res.timestamp) {
-                            const date = new Date(res.timestamp);
+                        const tsField = res.timestamp || res.created_at;
+                        if (tsField) {
+                            const date = new Date(tsField);
                             if (!isNaN(date.getTime())) {
                                 dateStr = date.toISOString().split('T')[0];
                             }
                         }
-                        const scoreStr = res.score ? res.score.toFixed(2) : '0.00';
+                        const scoreStr = (res.score ?? res.hybrid_score ?? 0).toFixed(2);
                         
-                        // Extract metadata from payload
-                        const payload = res.payload || {};
-                        const emotion = payload.emotion || 'neutral';
-                        const importance = payload.importance || 1;
+                        // Extract metadata - handle both old (payload nested) and new (flat) formats
+                        const emotion = res.emotion || res.payload?.emotion || 'neutral';
+                        const importance = res.importance || res.payload?.importance || 1;
                         
                         // Determine memory owner using current session names
-                        const source = payload.source || 'unknown';
+                        const source = res.source || res.payload?.source || 'unknown';
                         const memoryOwner = source === 'user' ? userName : charName;
                         
+                        // Get text content - handle both 'text' (SurrealDB alias) and 'content' (formatted)
+                        const textContent = res.text || res.content || res.payload?.text || '(No content)';
+                        
                         // Format: [Date | Relevance | Owner | Emotion | Importance] Content
-                        return `- [${dateStr} | Relevance:${scoreStr} | ${memoryOwner} | Emotion:${emotion} | Importance:${importance}] ${res.text}`;
+                        return `- [${dateStr} | Relevance:${scoreStr} | ${memoryOwner} | Emotion:${emotion} | Importance:${importance}] ${textContent}`;
                     }).join('\n');
                     console.log('[MemoryService] Formatted Memory Context:', formatted);
                     return formatted;
                 }
+
                 return '';
             } else {
                 const errorText = await response.text();

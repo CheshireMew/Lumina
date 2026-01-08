@@ -5,6 +5,7 @@ import InputBox from './components/InputBox'
 import VoiceInput from './components/VoiceInput'
 import SettingsModal from './components/SettingsModal'
 import MotionTester from './components/MotionTester'
+import SurrealViewer from './components/SurrealViewer'
 import GalGameHud from './components/GalGameHud' // Integrated Soul HUD
 import { ttsService } from '@core/voice/tts_service'
 import { SentenceSplitter } from '@core/voice/sentence_splitter'
@@ -32,6 +33,7 @@ function App() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isMotionTesterOpen, setIsMotionTesterOpen] = useState(false);
+    const [isSurrealViewerOpen, setIsSurrealViewerOpen] = useState(false);
     const [chatMode, setChatMode] = useState<'text' | 'voice'>('text');
     const [isStreaming, setIsStreaming] = useState(false);
     const [isTTSEnabled, setIsTTSEnabled] = useState(true); // TTS 开关
@@ -407,20 +409,40 @@ function App() {
                         .catch(err => console.error("[Dreaming] Trigger failed:", err));
                 }
             } else {
-                 if (Math.floor(inactiveDuration / 1000) % 60 === 0) { 
+                if (Math.floor(inactiveDuration / 1000) % 60 === 0) { 
                      // console.log(`[Dreaming] ⏱️ User inactive for ${inactiveMinutes} min...`);
                  }
             }
             
-            // 2. ⚡ Backend Proactive Trigger Check
-            // Backend HeartbeatService sets a flag in state.json when it wants to talk.
-            if (activeCharacterId && !isProcessing && !isStreaming) {
+            // NOTE: Proactive Chat is handled by a dedicated useEffect with locking below.
+            // Do NOT add proactive check here to avoid duplicate triggers.
+
+        }, 5000); // Check every 5 seconds
+
+        return () => clearInterval(interval);
+    }, [activeCharacterId, isProcessing, isStreaming]);
+
+
+
+    // ⚡ Proactive Chat Polling
+    const isProactiveProcessing = useRef(false);
+
+    useEffect(() => {
+        if (!activeCharacterId) return;
+
+        const interval = setInterval(async () => {
+            if (isProactiveProcessing.current) return;
+            
+            // Only check if we are NOT currently processing a message/talking
+            if (!isProcessing && !isStreaming) {
                 try {
+                    // Lock
+                    isProactiveProcessing.current = true;
+                    
                     const res = await fetch(`http://localhost:8001/galgame/${activeCharacterId}/state`);
                     if (res.ok) {
                         const stateData = await res.json();
-                        // Check for 'pending_interaction' in 'galgame' (root of stateData return from endpoint? verify endpoint)
-                        // endpoint /galgame/{id}/state returns self.state['galgame']
+                        // Check for 'pending_interaction'
                         if (stateData.pending_interaction) {
                             console.log('[App] ⚡ Proactive Trigger Detected from Backend!', stateData.pending_interaction);
                             
@@ -431,7 +453,7 @@ function App() {
                             // 1. Get recent conversation history
                             const charName = characters.find(c => c.id === activeCharacterId)?.name || 'AI';
                             const recentHistory = conversationHistory
-                                .filter(m => !m.content.startsWith('(Private System Instruction')) // 🛡️ Prevent recursion!
+                                .filter(m => !m.content.trim().startsWith('(Private System Instruction')) // 🛡️ Prevent recursion!
                                 .slice(-5)
                                 .map(m => `${m.role === 'user' ? userName : charName}: ${m.content.substring(0, 100)}...`)
                                 .join('\n');
@@ -443,7 +465,15 @@ function App() {
                                 if (inspirationRes.ok) {
                                     const inspirations = await inspirationRes.json();
                                     if (inspirations.length > 0) {
-                                        inspirationText = inspirations.map((i: any) => `- ${i.content}`).join('\n');
+                                        // ⚡ Support both SQLite (content) and SurrealDB (context) formats
+                                        inspirationText = inspirations.map((i: any) => {
+                                            if (i.context) return `- ${i.context}`; // SurrealDB
+                                            if (i.content) return `- ${i.content}`; // SQLite
+                                            // Fallback for edge format: Subject VERB Object
+                                            if (i.subject && i.relation && i.object) return `- ${i.subject} ${i.relation} ${i.object}`;
+                                            return '';
+                                        }).filter((s: string) => s !== '').join('\n');
+                                        
                                         console.log(`[App] 🎲 Loaded ${inspirations.length} inspirations for proactive chat`);
                                     }
                                 }
@@ -453,29 +483,30 @@ function App() {
                             
                             // 3. Build enhanced instruction
                             const instruction = `(Private System Instruction - DO NOT EXPOSE THIS TO USER)
-${recentHistory ? `## Recent History\n${recentHistory}\n` : ''}
-${inspirationText ? `## Memory Inspirations\n${inspirationText}\n` : ''}
-Based on your personality and the context (if any), initiate a natural conversation.`;
+
+${inspirationText ? `## Related Topics (Memory)\n${inspirationText}\n` : ''}
+Based on your personality, the memories above, and the silence, initiate a brand new natural conversation topic. Do NOT repeat previous greetings.`;
                             
                             handleSend(instruction);
                         }
                     }
                 } catch (e) {
                     // silent fail
+                } finally {
+                    isProactiveProcessing.current = false;
                 }
+            } else {
+                // If busy, we don't lock, just skip
             }
 
-        }, 5000); // Check every 5 seconds (Fast enough for response, slow enough for perf)
+        }, 5000); // Check every 5 seconds
 
         return () => clearInterval(interval);
-    }, [activeCharacterId, userName, isProcessing, isStreaming]);
-
-    // Reset Idle Timer on Interaction
+    }, [activeCharacterId, isProcessing, isStreaming, characters, conversationHistory, userName]); // Dependencies updater on Interaction
     const resetIdleTimer = () => {
         lastActivityTime.current = Date.now();
         if (isDreamingRef.current) {
             console.log('[Dreaming] Activity detected. Waking up from dreaming state.');
-            isDreamingRef.current = false;
         }
     };
 
@@ -560,7 +591,7 @@ Based on your personality and the context (if any), initiate a natural conversat
 
         // 添加用户消息到历史 (Skip for System Instructions)
         let userMessage: Message | null = null;
-        if (!text.startsWith('(Private System Instruction')) {
+        if (!text.trim().startsWith('(Private System Instruction')) {
             userMessage = {
                 role: 'user',
                 content: text,
@@ -599,9 +630,6 @@ Based on your personality and the context (if any), initiate a natural conversat
             }
 
             // 使用 Ref 来存储累积的响应，防止闭包过时问题
-            // Use Ref for accumulated response to prevent staleness
-            // 使用 Ref 来存储累积的响应，防止闭包过时问题
-            // Use Ref for accumulated response to prevent staleness
             const fullRawResponseRef = { current: '' }; 
             emotionBufferRef.current = '';
             
@@ -860,7 +888,12 @@ GUIDELINES:
             )}
 
             {/* GalGame Mode HUD */}
-            {isSettingsLoaded && <GalGameHud activeCharacterId={activeCharacterId} />}
+            {isSettingsLoaded && (
+                <GalGameHud 
+                    activeCharacterId={activeCharacterId} 
+                    onOpenSurrealViewer={() => setIsSurrealViewerOpen(true)}
+                />
+            )}
 
             {/* UI Layer */}
             <ChatBubble message={currentMessage} isStreaming={isStreaming} />
@@ -955,6 +988,12 @@ GUIDELINES:
                         live2dRef.current.motion(group, index);
                     }
                 }}
+            />
+
+            {/* SurrealDB Viewer */}
+            <SurrealViewer
+                isOpen={isSurrealViewerOpen}
+                onClose={() => setIsSurrealViewerOpen(false)}
             />
         </div>
     );

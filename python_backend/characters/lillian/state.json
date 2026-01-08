@@ -2,16 +2,12 @@
   "character_id": "lillian",
   "galgame": {
     "relationship": {
-      "level": 0,
-      "progress": 90.0,
-      "current_stage_label": "陌生",
+      "level": 1,
+      "progress": 77.0,
+      "current_stage_label": "熟悉",
       "user_name": "柴郡"
     },
-    "energy_level": 72.20000000000044,
-    "last_interaction": "2026-01-08T02:42:29.655092",
-    "pending_interaction": {
-      "timestamp": "2026-01-08T03:05:35.250629",
-      "reason": "idle_timeout"
-    }
+    "energy_level": 14.800000000000608,
+    "last_interaction": "2026-01-08T23:48:25.486981"
   }
 }

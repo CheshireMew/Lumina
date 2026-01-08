@@ -1190,8 +1190,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                                     <label style={{ fontSize: '13px', color: '#6b7280' }}>Silence (mins):</label>
                                                                     <input
                                                                         type="number"
-                                                                        min="1"
+                                                                        min="0.1"
                                                                         max="120"
+                                                                        step="0.1"
                                                                         value={char.proactiveThresholdMinutes || 15}
                                                                         onChange={(e) => handleUpdateCharacter(char.id, { proactiveThresholdMinutes: Number(e.target.value) })}
                                                                         style={{ ...inputStyle, width: '60px', padding: '4px 8px' }}

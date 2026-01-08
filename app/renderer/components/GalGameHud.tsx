@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Zap, Smile, X, User, Activity, Brain } from 'lucide-react';
-import MemoryInspector from './MemoryInspector';
+
 
 interface SoulProfile {
     identity: {
@@ -48,11 +48,11 @@ const LEVEL_COLORS: {[key: number]: string[]} = {
 
 interface GalGameHudProps {
     activeCharacterId: string;
+    onOpenSurrealViewer?: () => void;
 }
 
-const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId }) => {
+const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrealViewer }) => {
     const [isVisible, setIsVisible] = useState(false);
-    const [showMemoryInspector, setShowMemoryInspector] = useState(false);
     const [profile, setProfile] = useState<SoulProfile | null>(null);
 
     // Poll Backend for Soul State (使用新的多角色 API)
@@ -186,8 +186,6 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId }) => {
 
     return (
         <>
-            {showMemoryInspector && <MemoryInspector onClose={() => setShowMemoryInspector(false)} activeCharacterId={activeCharacterId} />}
-            
             {/* Sidebar Actions */}
             <div style={{
                 position: 'absolute',
@@ -202,7 +200,6 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId }) => {
                 <button
                     onClick={() => {
                         setIsVisible(!isVisible);
-                        if (!isVisible) setShowMemoryInspector(false); // Close Memory Inspector when opening Lumina State
                     }}
                     style={{
                         background: isVisible ? 'rgba(255, 105, 180, 0.8)' : 'rgba(255, 105, 180, 0.2)',
@@ -227,8 +224,8 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId }) => {
                 {/* Brain / Memory Inspector */}
                 <button
                     onClick={() => {
-                        setShowMemoryInspector(true);
-                        setIsVisible(false); // Close Lumina State when opening Memory Inspector
+                        setIsVisible(false); 
+                        onOpenSurrealViewer?.();
                     }}
                     style={{
                         background: 'rgba(0, 255, 157, 0.2)',
@@ -371,12 +368,7 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId }) => {
                 </div>
             )}
             
-            {showMemoryInspector && (
-                <MemoryInspector 
-                    onClose={() => setShowMemoryInspector(false)} 
-                    activeCharacterId={activeCharacterId}
-                />
-            )}
+
         </>
     );
 };

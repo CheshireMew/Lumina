@@ -20,11 +20,8 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("LiteMemory")
 
-from fact_extractor import FactExtractor
-
-
-
-from memory_consolidator import MemoryConsolidator
+from fact_extractor_legacy import FactExtractor
+from memory_consolidator_legacy import MemoryConsolidator
 from time_indexed_memory import TimeIndexedMemory
 
 class LiteMemory:
