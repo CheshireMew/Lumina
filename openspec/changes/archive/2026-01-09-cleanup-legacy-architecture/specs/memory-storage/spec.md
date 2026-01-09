@@ -1,18 +1,5 @@
 # Memory Storage Specification Increment
 
-## 移除需求
-
-### 需求：多层记忆架构支持
-
-**原因**：统一使用 SurrealDB 作为唯一后端，简化架构并移除冗余的 Qdrant/SQLite 依赖。
-**迁移**：系统启动时不再初始化 LiteMemory，相关数据归档。
-
-#### 场景：不再初始化 LiteMemory
-
-- **当** 系统启动或切换角色时
-- **那么** 不应尝试连接 Qdrant 或创建 SQLite 文件
-- **且** 应仅初始化 SurrealDB 连接
-
 ## 新增需求
 
 ### 需求：单一数据源

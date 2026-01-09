@@ -53,7 +53,7 @@ function createWindow() {
 
     // Advanced Chat Stream with History
     ipcMain.on('llm:chatStreamWithHistory', async (event, args) => {
-        const { history, userMessage, contextWindow, summary, longTermMemory, userName, charName } = args;
+        const { history, userMessage, contextWindow, summary, longTermMemory, userName, charName, role, dynamicState } = args;
         await llmService.chatStreamWithHistory(
             history,
             userMessage,
@@ -64,7 +64,9 @@ function createWindow() {
             summary,
             longTermMemory,
             userName,
-            charName
+            charName,
+            role,
+            dynamicState // ✅ Pass to Service
         );
         event.sender.send('llm:streamEnd');
     });

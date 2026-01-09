@@ -18,8 +18,7 @@ logger = logging.getLogger("ConfigRouter")
 router = APIRouter(tags=["Config"])
 
 # 全局引用（由 main.py 注入）
-memory_clients: Dict = {}
-dreaming_service = None
+# 全局引用（由 main.py 注入）
 soul_client = None
 heartbeat_service_instance = None
 config_timestamps: Dict = defaultdict(float)
@@ -27,11 +26,9 @@ config_timestamps: Dict = defaultdict(float)
 CONFIG_COOLDOWN = 30  # 30秒冷却时间
 
 
-def inject_dependencies(clients: Dict, dreamer, soul, heartbeat, timestamps: Dict):
+def inject_dependencies(soul, heartbeat, timestamps: Dict):
     """由 main.py 调用，注入全局依赖"""
-    global memory_clients, dreaming_service, soul_client, heartbeat_service_instance, config_timestamps
-    memory_clients = clients
-    dreaming_service = dreamer
+    global soul_client, heartbeat_service_instance, config_timestamps
     soul_client = soul
     heartbeat_service_instance = heartbeat
     config_timestamps = timestamps
@@ -40,8 +37,7 @@ def inject_dependencies(clients: Dict, dreamer, soul, heartbeat, timestamps: Dic
 def get_dependencies():
     """返回当前依赖状态，供 main.py 更新"""
     return {
-        "memory_clients": memory_clients,
-        "dreaming_service": dreaming_service,
+
         "soul_client": soul_client,
         "heartbeat_service_instance": heartbeat_service_instance,
         "config_timestamps": config_timestamps
@@ -51,7 +47,7 @@ def get_dependencies():
 @router.post("/configure")
 async def configure_memory(config: ConfigRequest):
     """配置 Memory 服务"""
-    global memory_clients, dreaming_service, config_timestamps, soul_client, heartbeat_service_instance
+    global config_timestamps, soul_client, heartbeat_service_instance
     
     # 延迟导入避免循环依赖
     from soul_manager import SoulManager
@@ -103,9 +99,6 @@ async def configure_memory(config: ConfigRequest):
         if heartbeat_service_instance:
             logger.info("Updating Heartbeat Service for new character...")
             heartbeat_service_instance.soul = soul_client
-             # Update hippocampus if attached
-            if heartbeat_service_instance.hippocampus:
-                heartbeat_service_instance.hippocampus.character_id = character_id.lower()
 
         
         # 保存配置
@@ -131,7 +124,6 @@ async def health_check():
     """健康检查"""
     return {
         "status": "healthy",
-        "memory_clients_count": len(memory_clients),
-        "dreaming_service": dreaming_service is not None,
+
         "soul_client": soul_client is not None
     }

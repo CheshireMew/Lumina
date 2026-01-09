@@ -35,7 +35,9 @@ interface SoulProfile {
 }
 
 const LEVEL_COLORS: {[key: number]: string[]} = {
-    [-1]: ['#434343', '#000000'], // Hostile: Black/Dark Grey
+    [-3]: ['#000000', '#2c3e50'], // Dead Enemy: Pure Black (Abyss)
+    [-2]: ['#800000', '#ff0000'], // Hostile: Blood Red (Danger)
+    [-1]: ['#2c3e50', '#4ca1af'], // Cold: Dark Blue / Cold Grey (Indifference)
     0: ['#bdc3c7', '#7f8c8d'],     // Stranger: Gray
     1: ['#89f7fe', '#66a6ff'],     // Acquaintance: Blue
     2: ['#00b09b', '#96c93d'],     // Friend: Green
@@ -75,7 +77,7 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                         personality: soulData.personality,
                         state: {
                             current_mood: soulData.state?.current_mood || 'neutral',
-                            energy_level: stateData.energy_level || 100,
+                            energy_level: stateData.energy_level ?? 100,
                             last_interaction: stateData.last_interaction || new Date().toISOString()
                         },
                         relationship: stateData.relationship || {
@@ -290,13 +292,25 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                             <div style={{ marginBottom: '14px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px', alignItems: 'center' }}>
                                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                        <Heart size={14} color="#ff69b4" fill="#ff69b4" />
-                                        <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', background: 'rgba(255, 255, 255, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>
+                                        <Heart size={14} color={getLevelGradient(profile.relationship?.level).split(',')[0].split('(')[1] || '#ff69b4'} fill={getLevelGradient(profile.relationship?.level).split(',')[0].split('(')[1]} />
+                                        <span style={{ 
+                                            fontSize: '10px', 
+                                            color: '#fff', 
+                                            background: getLevelGradient(profile.relationship?.level), 
+                                            padding: '2px 8px', 
+                                            borderRadius: '4px',
+                                            fontWeight: 'bold',
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                                        }}>
                                             Lv.{profile.relationship?.level ?? 0} {profile.relationship?.current_stage_label}
                                         </span>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
-                                        <span style={{ color: '#ff69b4', fontWeight: 'bold', fontSize: '14px' }}>
+                                        <span style={{ 
+                                            color: getLevelGradient(profile.relationship?.level).split(',')[0].split('(')[1] || '#ff69b4', 
+                                            fontWeight: 'bold', 
+                                            fontSize: '14px' 
+                                        }}>
                                             {Math.floor(profile.relationship?.progress ?? 0)}
                                         </span>
                                     </div>

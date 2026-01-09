@@ -5,7 +5,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-    X, Database, ScrollText, Network, Braces, RefreshCw, 
+    X, Database, ScrollText, Network, Braces, RefreshCw, Brain,
     CheckCircle, Clock, Search, Table as TableIcon, Activity, Sparkles, Trash2, Edit, Plus, GitMerge
 } from 'lucide-react';
 
@@ -36,6 +36,9 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
     const [graphData, setGraphData] = useState<{nodes: any[], edges: any[]} | null>(null);
     const [selectedNode, setSelectedNode] = useState<any>(null);
     const [detailEdge, setDetailEdge] = useState<any>(null); // For Knowledge Data detail modal
+    
+    // 缓存已加载的表数据，避免重复请求
+    const [tableCache, setTableCache] = useState<Record<string, any[]>>({});
 
     useEffect(() => {
         if (isOpen) {
@@ -66,8 +69,7 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         }
     };
 
-    const loadTableData = async (tableName: string) => {
-        setLoading(true);
+    const loadTableData = async (tableName: string, forceRefresh: boolean = false) => {
         setSelectedTable(tableName);
         
         // Special case for knowledge_facts text view - handled by graph loader
@@ -75,12 +77,24 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             setLoading(false);
             return;
         }
+        
+        // 使用缓存（如果存在且不强制刷新）
+        if (!forceRefresh && tableCache[tableName]) {
+            setTableData(tableCache[tableName]);
+            return;
+        }
+        
+        setLoading(true);
+        setTableData([]); // 清空旧数据，防止显示上一个表的数据
 
         try {
             const res = await fetch(`${MEMORY_SERVER_URL}/debug/surreal/table/${tableName}?limit=50`);
             if (res.ok) {
                 const data = await res.json();
-                setTableData(data.data || []);
+                const rows = data.data || [];
+                setTableData(rows);
+                // 更新缓存
+                setTableCache(prev => ({ ...prev, [tableName]: rows }));
             }
         } catch (e) {
             setError('加载表数据失败');
@@ -408,17 +422,32 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                         
                         {/* Conversation View */}
                         <div 
-                            onClick={() => { setActiveTab('tables'); loadTableData('conversation'); }}
+                            onClick={() => { setActiveTab('tables'); loadTableData('conversation_log'); }}
                             style={{ 
                                 padding: '12px 20px', cursor: 'pointer', display:'flex', alignItems:'center', gap:'12px',
-                                background: (activeTab === 'tables' && selectedTable === 'conversation') ? 'linear-gradient(90deg, rgba(236, 72, 153, 0.15), transparent)' : 'transparent',
-                                color: (activeTab === 'tables' && selectedTable === 'conversation') ? '#fff' : 'rgba(255,255,255,0.6)',
-                                borderLeft: (activeTab === 'tables' && selectedTable === 'conversation') ? '3px solid #ec4899' : '3px solid transparent',
+                                background: (activeTab === 'tables' && selectedTable === 'conversation_log') ? 'linear-gradient(90deg, rgba(236, 72, 153, 0.15), transparent)' : 'transparent',
+                                color: (activeTab === 'tables' && selectedTable === 'conversation_log') ? '#fff' : 'rgba(255,255,255,0.6)',
+                                borderLeft: (activeTab === 'tables' && selectedTable === 'conversation_log') ? '3px solid #ec4899' : '3px solid transparent',
                                 transition: 'all 0.2s'
                             }}
                         >
                             <ScrollText size={18} /> 
-                            <span style={{fontSize:'14px', fontWeight: (activeTab === 'tables' && selectedTable === 'conversation') ? '600' : '400'}}>Conversation Logs</span>
+                            <span style={{fontSize:'14px', fontWeight: (activeTab === 'tables' && selectedTable === 'conversation_log') ? '600' : '400'}}>Conversation Logs</span>
+                        </div>
+
+                        {/* Episodic Memory View */}
+                        <div 
+                            onClick={() => { setActiveTab('tables'); loadTableData('episodic_memory'); }}
+                            style={{ 
+                                padding: '12px 20px', cursor: 'pointer', display:'flex', alignItems:'center', gap:'12px',
+                                background: (activeTab === 'tables' && selectedTable === 'episodic_memory') ? 'linear-gradient(90deg, rgba(236, 72, 153, 0.15), transparent)' : 'transparent',
+                                color: (activeTab === 'tables' && selectedTable === 'episodic_memory') ? '#fff' : 'rgba(255,255,255,0.6)',
+                                borderLeft: (activeTab === 'tables' && selectedTable === 'episodic_memory') ? '3px solid #ec4899' : '3px solid transparent',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            <Brain size={18} /> 
+                            <span style={{fontSize:'14px', fontWeight: (activeTab === 'tables' && selectedTable === 'episodic_memory') ? '600' : '400'}}>Episodic Memory</span>
                         </div>
 
                         <div style={{ padding: '20px 20px 10px', fontSize: '11px', fontWeight: '800', color: '#a78bfa', textTransform: 'uppercase', letterSpacing:'1px', marginTop:'10px' }}>Knowledge Graph</div>
@@ -533,7 +562,7 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                                             <span style={{ fontWeight: '700', color: '#f472b6', display:'flex', alignItems:'center', gap:'10px', fontSize:'16px' }}>
                                                 <TableIcon size={18} /> {selectedTable} <span style={{fontSize:'12px', opacity:0.7, fontWeight:'400'}}>({tableData.length} records)</span>
                                             </span>
-                                    <button onClick={() => loadTableData(selectedTable!)} style={{ cursor: 'pointer', background: 'none', border: 'none', color:'#f472b6', marginRight:'10px' }}>
+                                    <button onClick={() => loadTableData(selectedTable!, true)} style={{ cursor: 'pointer', background: 'none', border: 'none', color:'#f472b6', marginRight:'10px' }}>
                                                 <RefreshCw size={18} />
                                             </button>
                                             <button 

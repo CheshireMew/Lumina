@@ -135,8 +135,8 @@ export class MemoryService {
                         // Get text content - handle both 'text' (SurrealDB alias) and 'content' (formatted)
                         const textContent = res.text || res.content || res.payload?.text || '(No content)';
                         
-                        // Format: [Date | Relevance | Owner | Emotion | Importance] Content
-                        return `- [${dateStr} | Relevance:${scoreStr} | ${memoryOwner} | Emotion:${emotion} | Importance:${importance}] ${textContent}`;
+                        // Format: [Date] Content
+                        return `- [${dateStr}] ${textContent}`;
                     }).join('\n');
                     console.log('[MemoryService] Formatted Memory Context:', formatted);
                     return formatted;

@@ -19,10 +19,9 @@ class SurrealMemory:
     
     支持:
     - 向量搜索 (HNSW)
-    - 图关系 (Character -> Fact -> User)
     - 全文搜索
     - 对话日志
-    - 多角色隔离
+    - 多角色隔离 (Character ID)
     """
     
     def __init__(self, url: str = "ws://127.0.0.1:8000/rpc", user: str = "root", password: str = "root", 
@@ -49,23 +48,10 @@ class SurrealMemory:
         # Embedding Encoder (Injected)
         self.encoder = None
         
-        # Aliases
-        self.aliases = {}
-        self._load_aliases()
+        # BatchManager (Injected) - 用于检索-整合批次管理
+        self.batch_manager = None
+        
 
-    def _load_aliases(self):
-        """Load entity aliases from config."""
-        self.aliases = {}
-        try:
-            config_path = os.path.join(os.path.dirname(__file__), "config", "entity_aliases.json")
-            if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    self.aliases = json.load(f)
-                logger.info(f"[SurrealMemory] Loaded {len(self.aliases)} entity aliases.")
-            else:
-                logger.info("[SurrealMemory] No entity_aliases.json found.")
-        except Exception as e:
-            logger.warning(f"[SurrealMemory] Failed to load aliases: {e}")
 
     def set_encoder(self, encoder):
         """Inject embedding encoder for entity resolution."""
@@ -76,6 +62,16 @@ class SurrealMemory:
         """注入 Hippocampus 引用，用于自动触发消化"""
         self._hippocampus = hippocampus
         logger.info("[SurrealMemory] 🧠 Hippocampus reference injected")
+    
+    def set_dreaming(self, dreaming):
+        """注入 Dreaming 引用（替代 Hippocampus）"""
+        self._hippocampus = dreaming  # 兼容旧代码
+        logger.info("[SurrealMemory] 🧠 Dreaming reference injected")
+    
+    def set_batch_manager(self, manager):
+        """注入 BatchManager 用于检索-整合批次管理"""
+        self.batch_manager = manager
+        logger.info("[SurrealMemory] 📦 BatchManager injected")
     
     async def _trigger_digest_if_ready(self):
         """检查冷却时间，异步触发 Hippocampus 消化（单条处理）"""
@@ -130,37 +126,40 @@ class SurrealMemory:
             raise
 
     async def _initialize_schema(self):
-        """Define tables, indexes, and full-text search."""
+        """Define tables, indexes for dual-table architecture."""
         if not self.db:
             return
 
         try:
-            # 1. Conversation Table with Vector & Full-Text Index
-            # Now conversation holds the embedding AND the raw text
-            await self.db.query("DEFINE TABLE conversation SCHEMALESS;")
-            await self.db.query("DEFINE INDEX conv_embedding ON conversation FIELDS embedding HNSW DIMENSION 384 DIST COSINE;")
+            # ==================== Dual-Table Architecture ====================
             
-            # Full-Text Search on combined user+ai text? 
-            # Or just user_input + ai_response. Surreal allows composite indexes but simple is better.
-            # Let's create a computed field 'content' for FTS if needed, or just index 'user_input' and 'ai_response' separately.
-            # For simplicity, we'll index 'narrative' which we will fill with "User: ... AI: ..."
+            # 1. conversation_log - Raw dialogue (NO embeddings)
+            await self.db.query("DEFINE TABLE conversation_log SCHEMALESS;")
+            await self.db.query("DEFINE INDEX log_character ON conversation_log FIELDS character_id;")
+            await self.db.query("DEFINE INDEX log_time ON conversation_log FIELDS created_at;")
+            await self.db.query("DEFINE INDEX log_processed ON conversation_log FIELDS is_processed;")
+            
+            # 2. episodic_memory - Processed memories (WITH embeddings for RAG)
+            await self.db.query("DEFINE TABLE episodic_memory SCHEMALESS;")
+            await self.db.query("DEFINE INDEX mem_character ON episodic_memory FIELDS character_id;")
+            await self.db.query("DEFINE INDEX mem_status ON episodic_memory FIELDS status;")
+            await self.db.query("DEFINE INDEX mem_time ON episodic_memory FIELDS created_at;")
+            
+            # Vector search index on episodic_memory (384 dim for paraphrase-multilingual-MiniLM-L12-v2)
+            await self.db.query("""
+                DEFINE INDEX mem_embedding ON episodic_memory FIELDS embedding 
+                MTREE DIMENSION 384 DIST COSINE TYPE F32;
+            """)
+            
+            # Full-text search on episodic_memory content
             await self.db.query("DEFINE ANALYZER my_analyzer TOKENIZERS blank, class FILTERS lowercase, snowball(english);")
-            await self.db.query("DEFINE INDEX conv_text_search ON conversation FIELDS narrative SEARCH ANALYZER my_analyzer BM25;")
+            await self.db.query("DEFINE INDEX mem_content_search ON episodic_memory FIELDS content SEARCH ANALYZER my_analyzer BM25;")
             
-            await self.db.query("DEFINE INDEX conv_time ON conversation FIELDS created_at;")
-            await self.db.query("DEFINE INDEX conv_agent ON conversation FIELDS agent_id;")
-            
-            # Processing tracker
-            await self.db.query("DEFINE FIELD is_processed ON conversation TYPE bool DEFAULT false;")
-
-            # 2. Graph Nodes (Unified Entity)
+            # 3. Graph Nodes (Unified Entity) - Keep for Knowledge Graph
             await self.db.query("DEFINE TABLE entity SCHEMALESS;")
             await self.db.query("DEFINE INDEX entity_name ON entity FIELDS name;")
             
-            # 3. Cleanup Legacy Tables (Optional, or user manually drops)
-            # We won't auto-drop data for safety, but we stop defining them.
-            
-            logger.info("✅ Schema initialized (Conversation-Centric + Graph)")
+            logger.info("✅ Schema initialized (Dual-Table: conversation_log + episodic_memory)")
         except Exception as e:
             logger.warning(f"⚠️ Schema initialization warning: {e}")
 
@@ -200,62 +199,134 @@ class SurrealMemory:
 
     # ==================== Core Memory Operations ====================
     
-    async def add_memory(self, 
-                        content: str, 
-                        embedding: List[float], 
-                        agent_id: str, 
-                        user_id: str = "user_default",
-                        importance: int = 1,
-                        emotion: Optional[str] = None,
-                        channel: str = "character") -> str:
+    async def log_conversation(self, character_id: str, narrative: str) -> str:
         """
-        Add a new memory (conversation with embedding).
-        DEPRECATED: Graph links are now handled by Hippocampus batch processing.
-        This method now serves to persist the conversation with vector data for immediate RAG.
+        Log raw dialogue to conversation_log table (NO embedding).
+        Called by routers/memory.py after each conversation turn.
         """
         if not self.db:
             await self.connect()
 
         try:
-            # We merge 'content' into the conversation record or use it as 'narrative'
-            # Typically this method was creating a 'fact', now we want to create a 'conversation' entry
-            # BUT: log_conversation is also called by routers/memory.py.
-            # We should consolidate these. For now, to minimize refactor on router side,
-            # this method creates a standalone conversation entry with embedding.
-            # The router currently calls log_conversation separately. We need to avoid double entry.
-            
-            # Strategy:
-            # The router calls /add -> awaits add_memory (returns ID) -> awaits log_conversation.
-            # We need to change this flow. 
-            # Ideally, add_memory should DO the conversation logging + embedding.
-            
-            # Let's write to 'conversation' here.
-            
             data = {
-                "narrative": content, # Full text for FTS
-                "embedding": embedding,
-                "emotion": emotion,
+                "character_id": character_id.lower(),
+                "narrative": narrative,
                 "created_at": datetime.now().isoformat(),
-                "channel": channel,
-                "agent_id": agent_id.lower(),  # ⚡ Normalize to lowercase for multi-character consistency
-                # Fields that might be missing if we don't have user_input/ai_response separate here
-                # We will trust the narrative for search.
                 "is_processed": False
             }
             
-            results = await self.db.create("conversation", data)
+            results = await self.db.create("conversation_log", data)
             
             if not results:
                 raise ValueError("Create returned empty result")
 
             result_item = results[0] if isinstance(results, list) else results
-            record_id = result_item['id']
+            record_id = result_item.get('id', str(results))
 
-            logger.info(f"💾 Conversation stored with vector: {record_id}")
+            logger.debug(f"📝 Conversation logged: {record_id}")
+            return str(record_id)
+
+        except Exception as e:
+            logger.error(f"❌ Error logging conversation: {e}")
+            raise
+
+    async def add_episodic_memory(self, 
+                                  character_id: str, 
+                                  content: str, 
+                                  embedding: List[float],
+                                  status: str = "active") -> str:
+        """
+        Add processed memory to episodic_memory table (WITH embedding).
+        Called by Dreaming Extractor/Consolidator.
+        """
+        if not self.db:
+            await self.connect()
+
+        try:
+            data = {
+                "character_id": character_id.lower(),
+                "content": content,
+                "embedding": embedding,
+                "created_at": datetime.now().isoformat(),
+                "status": status,
+                # 新增字段（为批次管理准备）
+                "batch_id": None,
+                "hit_count": 0,
+                "last_hit_at": None
+            }
             
-            # 海马体消化改为空闲触发（由 HeartbeatService 处理），不再每轮对话触发
-            # asyncio.create_task(self._trigger_digest_if_ready())
+            logger.debug(f"[add_episodic_memory] Creating record with data keys: {data.keys()}")
+            results = await self.db.create("episodic_memory", data)
+            logger.debug(f"[add_episodic_memory] Raw result type: {type(results)}, value: {str(results)[:200]}")
             
+            if not results:
+                raise ValueError("Create returned empty result")
+
+            # 解析不同的 SurrealDB 返回格式
+            record_id = None
+            
+            # 格式 1: 直接是 RecordID 对象
+            if hasattr(results, 'id'):
+                record_id = str(results.id) if hasattr(results.id, '__str__') else str(results)
+            # 格式 2: 包含 'id' 键的字典
+            elif isinstance(results, dict) and 'id' in results:
+                record_id = str(results['id'])
+            # 格式 3: 列表格式
+            elif isinstance(results, list) and len(results) > 0:
+                first = results[0]
+                if hasattr(first, 'id'):
+                    record_id = str(first.id)
+                elif isinstance(first, dict) and 'id' in first:
+                    record_id = str(first['id'])
+                else:
+                    record_id = str(first)
+            else:
+                record_id = str(results)
+
+            logger.info(f"🧠 Episodic memory added: {record_id}")
+            return record_id
+
+        except Exception as e:
+            logger.error(f"❌ Error adding episodic memory: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+    # ==================== Legacy Compatibility ====================
+    
+    async def add_memory(self, 
+                        content: str, 
+                        embedding: List[float], 
+                        character_id: str, 
+                        user_id: str = "user_default",
+                        importance: int = 1,
+                        emotion: Optional[str] = None,
+                        channel: str = "character") -> str:
+        """
+        DEPRECATED: Use log_conversation for raw logs, add_episodic_memory for processed.
+        Kept for backward compatibility - now writes to conversation_log.
+        """
+        if not self.db:
+            await self.connect()
+
+        try:
+            # For backward compatibility, write to conversation_log
+            data = {
+                "character_id": character_id.lower(),
+                "narrative": content,
+                "created_at": datetime.now().isoformat(),
+                "is_processed": False
+            }
+            
+            results = await self.db.create("conversation_log", data)
+            
+            if not results:
+                raise ValueError("Create returned empty result")
+
+            result_item = results[0] if isinstance(results, list) else results
+            record_id = result_item.get('id', str(results))
+
+            logger.info(f"💾 Conversation stored (legacy): {record_id}")
             return str(record_id)
 
         except Exception as e:
@@ -289,44 +360,12 @@ class SurrealMemory:
         await self.add_memory(
             content=content,
             embedding=embedding,
-            agent_id=self.character_id,
+            character_id=self.character_id,
             importance=task.get("importance", 1),
             channel="dialogue"
         )
 
-    # ==================== Conversation Logging (Merged) ====================
-    
-    async def log_conversation(self, 
-                               agent_id: str,
-                               user_input: str, 
-                               ai_response: str,
-                               user_name: str = "User",
-                               char_name: str = "AI"):
-        """
-        Detailed logging.
-        In the new architecture, add_memory handles the vector entry.
-        To avoid duplicates, we should 'UPDATE' the entry created by add_memory OR 
-        make add_memory handle everything.
-        
-        Since routers/memory.py calls add_memory THEN log_conversation,
-        we have a potential duplication if both write to 'conversation'.
-        
-        FIX: routers/memory.py's log_conversation call should be redundant if add_memory does its job.
-        However, add_memory doesn't receive 'user_input' raw parts in the signature currently.
-        
-        TEMPORARY FIX: 
-        We will leave this method to purely update the latest conversation entry with structured fields,
-        OR just skip it if add_memory is enough.
-        
-        Better: Let's assume add_memory created the record. 
-        Actually, let's just use THIS method to store the structured log if add_memory didn't.
-        But add_memory HAS the embedding.
-        
-        Let's deprecate this standalone log if add_memory writes to conversation.
-        """
-        # For now, do nothing or just log text.
-        # Ideally, we update the record created by add_memory with these specific fields.
-        pass
+    # (Removed: Old log_conversation - now handled by the simplified version above)
 
     # ==================== Graph Operations (New Brain) ====================
 
@@ -677,28 +716,28 @@ class SurrealMemory:
         except Exception as e:
             logger.error(f"❌ Insight update failed: {e}")
 
-    async def get_unprocessed_conversations(self, limit: int = 20, agent_id: Optional[str] = None) -> List[Dict]:
+    async def get_unprocessed_conversations(self, limit: int = 20, character_id: Optional[str] = None) -> List[Dict]:
         """Fetch conversations that haven't been digested by Hippocampus yet.
         
         Args:
             limit: Maximum number of conversations to return
-            agent_id: If provided, only return conversations for this character (normalized to lowercase)
+            character_id: If provided, only return conversations for this character (normalized to lowercase)
         """
         if not self.db:
             await self.connect()
         
         try:
-            # ⚡ Build query with optional agent_id filter for multi-character isolation
-            if agent_id:
-                normalized_id = agent_id.lower()
+            # ⚡ Build query with optional character_id filter for multi-character isolation
+            if character_id:
+                normalized_id = character_id.lower()
                 query = """
                 SELECT * FROM conversation 
                 WHERE (is_processed = false OR is_processed IS NONE)
-                AND agent_id = $agent_id
+                AND character_id = $character_id
                 ORDER BY created_at ASC
                 LIMIT $limit;
                 """
-                result = await self.db.query(query, {"limit": limit, "agent_id": normalized_id})
+                result = await self.db.query(query, {"limit": limit, "character_id": normalized_id})
             else:
                 # Legacy: No filter (backwards compatible but NOT recommended)
                 query = """
@@ -1113,40 +1152,62 @@ class SurrealMemory:
             logger.error(f"Pruning failed: {e}")
 
     # ==================== Search Operations ====================
+    
+    async def _mark_memories_hit(self, memory_ids: List[str]):
+        """
+        标记记忆被检索命中，仅增加计数
+        
+        Args:
+           memory_ids: 被命中的记忆 ID 列表
+        """
+        if not self.db:
+            await self.connect()
+            
+        for mem_id in memory_ids:
+            try:
+                # 仅增加命中计数，保持 status='active'
+                await self.db.query(f"""
+                    UPDATE {mem_id} SET 
+                        hit_count = (hit_count ?? 0) + 1,
+                        last_hit_at = time::now()
+                """)
+            except Exception as e:
+                logger.warning(f"[_mark_memories_hit] Failed to mark {mem_id}: {e}")
 
     async def search(self, 
                     query_vector: List[float], 
-                    agent_id: str, 
+                    character_id: str, 
                     limit: int = 10, 
-                    threshold: float = 0.3) -> List[Dict]:
+                    threshold: float = 0.6) -> List[Dict]:
         """
-        Vector Search with Character Isolation.
+        Vector Search on episodic_memory with Character Isolation.
         Uses HNSW index for fast approximate nearest neighbor search.
+        
+        注意: 只检索 status='active' 的记忆（已处理的有效记忆）
         """
         if not self.db:
             await self.connect()
 
         try:
-            # Use ?? for null coalescing (NOT 'OR' which is boolean logic!)
-            # narrative ?? string::concat(user_input, ' ', ai_response) ?? 'No content'
             query = """
             SELECT 
                 id, 
-                narrative ?? string::concat(user_input ?? '', ' ', ai_response ?? '') as text, 
-                importance, emotion, created_at, channel,
+                content, 
+                status, created_at, hit_count,
                 vector::similarity::cosine(embedding, $query_vec) AS score 
-            FROM conversation 
-            WHERE agent_id = $agent_id
+            FROM episodic_memory 
+            WHERE character_id = $character_id
+              AND status = 'active'
+              AND vector::similarity::cosine(embedding, $query_vec) > $threshold
             ORDER BY score DESC 
             LIMIT $limit;
             """
 
-            
-            
             results = self._parse_query_result(await self.db.query(query, {
                 "query_vec": query_vector,
-                "agent_id": agent_id,
-                "limit": limit
+                "character_id": character_id,
+                "limit": limit,
+                "threshold": threshold
             }))
             
             # Parse results
@@ -1158,33 +1219,34 @@ class SurrealMemory:
 
     async def search_fulltext(self, 
                               query: str, 
-                              agent_id: str, 
+                              character_id: str, 
                               limit: int = 10) -> List[Dict]:
         """
-        Full-Text Search using BM25.
+        Full-Text Search on episodic_memory using Substring Match (Robust for CJK).
+        Note: Replaces BM25 with exact substring check to handle Chinese correctly without segmentation.
         """
         if not self.db:
             await self.connect()
 
         try:
-            # Use ?? for null coalescing (NOT 'OR' which is boolean logic!)
+            # ⚡ [Fix] Use string::lowercase + contains for Chinese support
+            # Original Analyzer 'snowball(english)' fails on Chinese sentences (no spaces).
             sql = """
             SELECT id, 
-                   narrative ?? string::concat(user_input ?? '', ' ', ai_response ?? '') as text, 
-                   importance, created_at,
-                   search::score(1) AS relevance
-            FROM conversation
-            WHERE (narrative @1@ $query) OR (user_input @1@ $query) OR (ai_response @1@ $query)
-            AND agent_id = $agent_id
-            ORDER BY relevance DESC
+                   content, 
+                   status, created_at,
+                   1.0 AS relevance 
+            FROM episodic_memory
+            WHERE string::lowercase(content) CONTAINS string::lowercase($query)
+              AND character_id = $character_id
+              AND status = 'active'
+            ORDER BY created_at DESC
             LIMIT $limit;
             """
 
-            
-            
             results = self._parse_query_result(await self.db.query(sql, {
                 "query": query,
-                "agent_id": agent_id,
+                "character_id": character_id,
                 "limit": limit
             }))
             
@@ -1197,92 +1259,91 @@ class SurrealMemory:
     async def search_hybrid(self, 
                            query: str,
                            query_vector: List[float],
-                           agent_id: str,
+                           character_id: str,
                            limit: int = 10,
-                           vector_weight: float = 0.7) -> List[Dict]:
+                           vector_weight: float = 0.4,
+                           initial_threshold: float = 0.6,
+                           min_results: int = 3) -> List[Dict]:
         """
-        Hybrid Search: Vector + Full-Text with RRF fusion.
+        Hybrid Search on episodic_memory: Vector + Full-Text with RRF fusion.
+        Adaptive Threshold (Gradient Descent): If results < min_results, lower threshold and retry.
         """
-        # Get Conversation results
-        conv_vec_results = await self.search(query_vector, agent_id, limit * 2)
-        conv_text_results = await self.search_fulltext(query, agent_id, limit * 2)
+        current_threshold = initial_threshold
+        step_c = 0.1
+        min_threshold = 0.2
+        final_results = []
         
-        # Get Entity results (Simple Full-Text on name)
-        entity_results = []
-        if self.db:
-             try:
-                # Fuzzy match on entity name
-                e_query = f"""
-                SELECT id, name as text, 'entity' as type, created_at FROM entity 
-                WHERE name ~ $query 
-                LIMIT 3;
-                """
-                e_res = await self.db.query(e_query, {"query": query})
-                if e_res and isinstance(e_res, list) and e_res[0].get('result'):
-                     raw_entities = e_res[0]['result']
-                     
-                     # --- [NEW] Graph Traversal ---
-                     # For each matched entity, fetch its relations (1 hop)
-                     for ent in raw_entities:
-                         ent_id = ent['id']
-                         relations = await self._get_entity_relations(ent_id)
-                         if relations:
-                             # Combine relations into the text or add as separate field
-                             # Adding as text content to be visible to AI
-                             rel_text = "\n".join(relations)
-                             ent['text'] = f"Entity: {ent['text']}\nRelations:\n{rel_text}"
-                             # Boost importance if it has relations
-                             ent['importance'] = 2.0 
-                         else:
-                             ent['text'] = f"Entity: {ent['text']}"
-                             
-                     entity_results = raw_entities
-                     
-             except Exception as e:
-                 logger.warning(f"Entity search failed: {e}")
+        loop_count = 0
+        max_loops = 5  # Prevent infinite loops
+        
+        while loop_count < max_loops:
+            # 1. 向量检索 (使用当前阈值)
+            vec_results = await self.search(query_vector, character_id, limit * 2, threshold=current_threshold)
+            
+            # 2. 全文检索 (BM25, 阈值固定或由 DB 决定) - 只需要做一次其实，但为了简单放在循环里也可以（或者缓存）
+            # Optimization: 只有第一次循环需要全文检索，后续只更新向量结果? 
+            # 也可以每次都做，SurrealDB 很快.
+            text_results = await self.search_fulltext(query, character_id, limit * 2)
+            
+            # 3. RRF Fusion
+            scores = {}
+            items = {}
+            k = 60
+            
+            def process_list(lst, weight):
+                for rank, item in enumerate(lst):
+                    if not isinstance(item, dict): continue
+                    item_id = str(item.get('id', rank))
+                    if item_id not in scores:
+                        scores[item_id] = 0
+                        items[item_id] = item
+                    scores[item_id] += weight / (k + rank + 1)
 
-        # Debug Logging
-        # logger.info(f"Hybrid debug - Vector: {type(vector_results)} len={len(vector_results)}")
-        
-        # RRF Fusion
-        k = 60
-        scores = {}
-        items = {}
-        
-        # Helper to process lists
-        def process_list(lst, weight):
-            for rank, item in enumerate(lst):
-                if not isinstance(item, dict):
-                    continue
-                item_id = str(item.get('id', rank))
+            process_list(vec_results, vector_weight)
+            process_list(text_results, 1.0 - vector_weight)
+            
+            # Sort
+            sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+            results = []
+            for item_id in sorted_ids[:limit]:
+                item = items[item_id]
+                item['hybrid_score'] = scores[item_id]
+                results.append(item)
+            
+            final_results = results
+            
+            # Check sufficiency
+            if len(final_results) >= min_results:
+                if loop_count > 0:
+                    logger.info(f"[Adaptive] Satisfied {len(final_results)} results at threshold {current_threshold:.2f}")
+                break
                 
-                # Check duplication
-                if item_id not in scores:
-                    scores[item_id] = 0
-                    items[item_id] = item
+            # Check minimum floor
+            if current_threshold <= min_threshold:
+                logger.debug(f"[Adaptive] Reached min threshold {min_threshold}, returning {len(final_results)} results")
+                break
                 
-                scores[item_id] += weight / (k + rank + 1)
+            # Gradient Descent
+            prev_thresh = current_threshold
+            current_threshold = max(min_threshold, current_threshold - step_c)
+            logger.info(f"📉 [Adaptive Search] Results ({len(final_results)}) < {min_results}. Lowering threshold: {prev_thresh:.2f} -> {current_threshold:.2f}")
+            
+            loop_count += 1
 
-        process_list(conv_vec_results, vector_weight)
-        process_list(conv_text_results, 1.0 - vector_weight)
+        # ========== 标记命中记忆 (仅计数) ==========
+        if final_results:
+            try:
+                memory_ids = [str(r['id']) for r in final_results if 'id' in r]
+                if memory_ids:
+                    await self._mark_memories_hit(memory_ids)
+            except Exception as e:
+                logger.warning(f"[search_hybrid] Failed to mark hits: {e}")
         
-        # Add Entities (Give them high weight if matched)
-        process_list(entity_results, 2.0) # Bonus weight for direct entity match
-        
-        # Sort by fused score
-        sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
-        
-        results = []
-        for item_id in sorted_ids[:limit]:
-            item = items[item_id]
-            item['hybrid_score'] = scores[item_id]
-            results.append(item)
-        
-        return results
+        return final_results
 
     # ==================== Graph Queries ====================
 
-    async def get_character_memories(self, agent_id: str, limit: int = 50) -> List[Dict]:
+    async def get_character_memories(self, character_id: str, limit: int = 50) -> List[Dict]:
         """Get all memories observed by a character (graph traversal)."""
         if not self.db:
             await self.connect()
@@ -1293,7 +1354,7 @@ class SurrealMemory:
             # Fetching the target of 'observes' gives us the edge record.
             query = f"""
             SELECT ->observes->? AS memories
-            FROM character:{agent_id}
+            FROM character:{character_id}
             LIMIT 1;
             """
             results = await self.db.query(query)
@@ -1326,29 +1387,46 @@ class SurrealMemory:
             logger.error(f"User fact query error: {e}")
             return []
 
-    async def get_inspiration(self, agent_id: str, limit: int = 3) -> List[Dict]:
+    async def get_inspiration(self, character_id: str, limit: int = 3) -> List[Dict]:
         """Get random memories for inspiration/proactivity."""
         if not self.db:
             await self.connect()
             
         try:
-            # Randomly select from 'conversation' table
-            query = f"""
-            SELECT * FROM conversation
-            WHERE agent_id = $agent_id
-            ORDER BY rand()
-            LIMIT $limit;
-            """
-            results = await self.db.query(query, {"agent_id": agent_id, "limit": limit})
+            # Randomly select from 'episodic_memory' (Facts/Memories)
+            # Use status != 'deleted' to include both active and archived (Long Term)
+            # ⚡ Fix: DB-side 'ORDER BY rand()' is causing empty results in some versions.
+            # We fetch a larger pool and shuffle in Python.
+            pool_limit = limit * 5  # Fetch 5x pool (e.g. 50)
             
+            query = f"""
+            SELECT * FROM episodic_memory
+            WHERE character_id = $character_id
+              AND status != 'deleted'
+            LIMIT $pool_limit;
+            """
+            
+            results = await self.db.query(query, {"character_id": character_id, "pool_limit": pool_limit})
+            
+            # Parse results
+            items = []
             if results and isinstance(results, list) and results[0].get('result'):
-                return results[0]['result']
-            return []
+                items = results[0]['result']
+            elif isinstance(results, list):
+                # Flatten matching items
+                for r in results:
+                     if isinstance(r, dict) and 'id' in r: items.append(r)
+            
+            # Shuffle in Python
+            import random
+            random.shuffle(items)
+            
+            return items[:limit]
         except Exception as e:
             logger.error(f"Inspiration query error: {e}")
             return []
 
-    async def get_all_conversations(self, agent_id: str = None) -> List[Dict]:
+    async def get_all_conversations(self, character_id: str = None) -> List[Dict]:
         """Get all conversation records."""
         if not self.db:
             await self.connect()
@@ -1356,9 +1434,9 @@ class SurrealMemory:
         try:
             query = "SELECT * FROM conversation"
             params = {}
-            if agent_id:
-                query += " WHERE agent_id = $agent_id"
-                params["agent_id"] = agent_id
+            if character_id:
+                query += " WHERE character_id = $character_id"
+                params["character_id"] = character_id
             
             query += " ORDER BY created_at DESC LIMIT 1000;" 
             
@@ -1436,7 +1514,7 @@ class SurrealMemory:
 
     # ==================== Utilities ====================
 
-    async def get_recent_conversations(self, agent_id: str, limit: int = 20) -> List[Dict]:
+    async def get_recent_conversations(self, character_id: str, limit: int = 20) -> List[Dict]:
         """Get recent conversation history for a character."""
         if not self.db:
             await self.connect()
@@ -1444,10 +1522,10 @@ class SurrealMemory:
         try:
             results = await self.db.query("""
                 SELECT * FROM conversation
-                WHERE agent_id = $agent_id
+                WHERE character_id = $character_id
                 ORDER BY created_at DESC
                 LIMIT $limit;
-            """, {"agent_id": agent_id, "limit": limit})
+            """, {"character_id": character_id, "limit": limit})
             
             if results and isinstance(results, list) and 'result' in results[0]:
                 return results[0]['result']
@@ -1456,19 +1534,17 @@ class SurrealMemory:
             logger.error(f"Failed to get conversations: {e}")
             return []
 
-    async def get_stats(self, agent_id: str = None) -> Dict:
+    async def get_stats(self, character_id: str = None) -> Dict:
         """Get memory statistics."""
         if not self.db:
             await self.connect()
             
         try:
-            agent_filter = f"WHERE agent_id = '{agent_id}'" if agent_id else ""
+            agent_filter = f"WHERE character_id = '{character_id}'" if character_id else ""
             
-            entity_result = await self.db.query(f"SELECT count() FROM entity {agent_filter} GROUP ALL;")
-            conv_result = await self.db.query(f"SELECT count() FROM conversation {agent_filter} GROUP ALL;")
-            
-            logger.info(f"[Stats] Raw entity_result: {entity_result}")
-            logger.info(f"[Stats] Raw conv_result: {conv_result}")
+            # 统计 Episodic Memory (有效记忆) 和 Conversation Log (原始日志)
+            mem_result = await self.db.query(f"SELECT count() FROM episodic_memory {agent_filter} GROUP ALL;")
+            log_result = await self.db.query(f"SELECT count() FROM conversation_log {agent_filter} GROUP ALL;")
             
             # 解析 SurrealDB 返回格式（可能有多种格式）
             def parse_count(result):
@@ -1489,17 +1565,19 @@ class SurrealMemory:
                 except:
                     return 0
             
-            entities = parse_count(entity_result)
-            convs = parse_count(conv_result)
-            logger.info(f"[Stats] Parsed: entities={entities}, conversations={convs}")
+            memories = parse_count(mem_result)
+            logs = parse_count(log_result)
+            
+            # 仅在变化时打印日志，或降低日志级别，避免刷屏
+            # logger.info(f"[Stats] Parsed: memories={memories}, logs={logs}")
             
             return {
-                "entities": entities,
-                "conversations": convs
+                "entities": memories,    # 前端可能还在用 entities 这个字段名显示 "Memory"
+                "conversations": logs
             }
         except Exception as e:
             logger.error(f"Stats error: {e}")
-            return {"facts": 0, "conversations": 0}
+            return {"entities": 0, "conversations": 0}
 
     async def close(self):
         """Close connection and stop worker."""

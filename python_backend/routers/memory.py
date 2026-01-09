@@ -24,12 +24,9 @@ surreal_system = None
 hippocampus_service = None
 
 
-def inject_dependencies(clients: Dict, dreamer, soul, surreal, hippocampus=None):
+def inject_dependencies(soul, surreal, dreamer=None, hippocampus=None):
     """由 main.py 调用，注入全局依赖"""
-    global memory_clients, dreaming_service, soul_client, surreal_system, hippocampus_service
-    # memory_clients (LiteMemory) is deprecated/removed.
-    # We keep the argument to avoid breaking validation if main.py passes it, but we ignore it or store as empty.
-    memory_clients = {} 
+    global dreaming_service, soul_client, surreal_system, hippocampus_service
     dreaming_service = dreamer
     soul_client = soul
     surreal_system = surreal
@@ -40,7 +37,16 @@ def inject_dependencies(clients: Dict, dreamer, soul, surreal, hippocampus=None)
 async def add_memory(request: AddMemoryRequest):
     """添加记忆到 SurrealDB（主存储）"""
     global memory_clients, soul_client, surreal_system
+    
+    # [Refactor] Fallback for optional character_id
     character_id = request.character_id
+    if not character_id:
+        # Try SurrealSystem default
+        if surreal_system and hasattr(surreal_system, 'character_id'):
+            character_id = surreal_system.character_id
+        else:
+            character_id = "default"  # Ultimate safety net
+
     print(f"[API] Character: {character_id}")
     
     # 检查 SurrealDB 是否可用
@@ -80,29 +86,14 @@ async def add_memory(request: AddMemoryRequest):
         if not user_input:
              user_input = "(Silence)"
 
-        # 生成 embedding
-        content = f"{request.user_name}: {user_input}\n{request.char_name}: {ai_response}"
-        # 生成 embedding
-        content = f"{request.user_name}: {user_input}\n{request.char_name}: {ai_response}"
-        # Encoder injected in main.py is a lambda: text -> list
-        embedding = encoder(content) if encoder else [0.0] * 384
-        
-        # 写入 SurrealDB（主存储）
-        fact_id = await surreal_system.add_memory(
-            content=content,
-            embedding=embedding,
-            agent_id=character_id,
-            importance=1,
-            channel="dialogue"
-        )
-        
-        # 同时记录对话日志
-        await surreal_system.log_conversation(
-            agent_id=character_id,
-            user_input=user_input,
-            ai_response=ai_response,
-            user_name=request.user_name,
-            char_name=request.char_name
+        # 构造对话内容 [Refactor] Use character_name
+        content = f"{request.user_name}: {user_input}\n{request.character_name}: {ai_response}"
+
+        # 记录对话日志 (SurrealDB)
+        # 注意：不再直接调用 add_memory，而是记录日志后由后台 Dreaming 进程异步提取记忆
+        log_id = await surreal_system.log_conversation(
+            character_id=character_id,
+            narrative=content
         )
         
         # [Soul Update] 
@@ -119,8 +110,8 @@ async def add_memory(request: AddMemoryRequest):
             # The user logic allows accumulation, so it usually returns fast.
             await hippocampus_service.process_memories(batch_size=20)
 
-        print(f"[API] ✅ Memory added to SurrealDB: {fact_id}")
-        return {"status": "success", "id": str(fact_id), "storage": "surreal"}
+        print(f"[API] ✅ Conversation logged: {log_id}")
+        return {"status": "success", "id": str(log_id), "storage": "surreal"}
     except Exception as e:
         print(f"[API] ADD ERROR: {e}")
         import traceback
@@ -132,7 +123,14 @@ async def add_memory(request: AddMemoryRequest):
 async def search_memory(request: SearchRequest):
     """搜索记忆（SurrealDB 主存储）"""
     global memory_clients, surreal_system
+    
+    # [Refactor] Fallback for optional character_id
     character_id = request.character_id
+    if not character_id:
+        if surreal_system and hasattr(surreal_system, 'character_id'):
+            character_id = surreal_system.character_id
+        else:
+            character_id = "default"
     
     # 检查 SurrealDB
     if not surreal_system:
@@ -162,7 +160,7 @@ async def search_memory(request: SearchRequest):
         for r in results:
             formatted_results.append({
                 "id": str(r.get("id", "")),
-                "content": r.get("text", ""),
+                "content": r.get("content", ""),
                 "score": r.get("score", 0),
                 "created_at": r.get("created_at", ""),
                 "importance": r.get("importance", 1)
@@ -180,7 +178,15 @@ async def search_memory(request: SearchRequest):
 async def search_memory_hybrid(request: SearchRequest):
     """混合搜索（向量 + 全文）- SurrealDB"""
     global memory_clients, surreal_system
+    
+    # [Refactor] Fallback for optional character_id
     character_id = request.character_id
+    if not character_id:
+        if surreal_system and hasattr(surreal_system, 'character_id'):
+            character_id = surreal_system.character_id
+        else:
+            character_id = "default"
+            
     print(f"\n--- [API] /search/hybrid Request Received ---")
     print(f"[API] Character: {character_id}")
     print(f"[API] Query: '{request.query}' Limit: {request.limit}")
@@ -204,7 +210,7 @@ async def search_memory_hybrid(request: SearchRequest):
         results = await surreal_system.search_hybrid(
             query=request.query,
             query_vector=query_vec,
-            agent_id=character_id,
+            character_id=character_id,
             limit=request.limit
         )
         
@@ -215,7 +221,7 @@ async def search_memory_hybrid(request: SearchRequest):
         for r in results:
             formatted_results.append({
                 "id": str(r.get("id", "")),
-                "content": r.get("text", ""),
+                "content": r.get("content", ""),
                 "score": r.get("hybrid_score", 0),
                 "created_at": r.get("created_at", ""),
                 "importance": r.get("importance", 1)
@@ -271,14 +277,14 @@ async def get_all_memories(character_id: str = "hiyori"):
          raise HTTPException(status_code=503, detail="SurrealDB not available")
     
     try:
-        results = await surreal_system.get_all_conversations(agent_id=character_id)
+        results = await surreal_system.get_all_conversations(character_id=character_id)
         
         # 格式化
         memories = []
         for r in results:
             memories.append({
                 "id": str(r.get("id", "")),
-                "content": r.get("text", ""), # Map text -> content
+                "content": r.get("content", ""), # Map DB content -> Response content
                 "role": r.get("role", "user"),
                 "created_at": r.get("created_at", "")
             })
@@ -299,14 +305,14 @@ async def get_inspiration(character_id: str = "hiyori", limit: int = 3):
         return []
         
     try:
-        results = await surreal_system.get_inspiration(agent_id=character_id, limit=limit)
+        results = await surreal_system.get_inspiration(character_id=character_id, limit=limit)
         
         # 格式化 (App.tsx expects 'content')
         formatted = []
         for r in results:
             formatted.append({
                 "id": str(r.get("id", "")),
-                "content": r.get("text", ""),
+                "content": r.get("content", ""),
                 "created_at": r.get("created_at", "")
             })
         return formatted

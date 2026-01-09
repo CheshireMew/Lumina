@@ -14,36 +14,31 @@ logger = logging.getLogger("DebugRouter")
 router = APIRouter(prefix="/debug", tags=["Debug"])
 
 # 全局引用（由 main.py 注入）
-# 全局引用（由 main.py 注入）
-memory_clients: Dict = {}
 surreal_system = None
-hippocampus_service = None
+dreaming_service = None
 
 
-def inject_dependencies(clients: Dict, surreal, hippo=None):
+def inject_dependencies(surreal, dreaming=None):
     """由 main.py 调用，注入全局依赖"""
-    global memory_clients, surreal_system, hippocampus_service
-    memory_clients = clients
+    global surreal_system, dreaming_service
     surreal_system = surreal
-    hippocampus_service = hippo
+    dreaming_service = dreaming
 
 
 @router.post("/force_digest")
 async def force_digest_memories():
-    """强制海马体消化所有未处理的记忆"""
-    global hippocampus_service
+    """强制 Dreaming 消化所有未处理的记忆"""
+    global dreaming_service
     
-    if not hippocampus_service:
-        raise HTTPException(status_code=503, detail="Hippocampus service not available")
+    if not dreaming_service:
+        raise HTTPException(status_code=503, detail="Dreaming service not available")
         
     try:
-        # Import here to avoid circular dependency if possible, or use global
-        # Assuming hippocampus_service has process_memories
-        logger.info("[Debug] Forcing memory digestion...")
-        await hippocampus_service.process_memories(batch_size=5, force=True)
-        return {"status": "success", "message": "Digestion triggered"}
+        logger.info("[Debug] Forcing dreaming cycle...")
+        await dreaming_service.process_memories(batch_size=10)
+        return {"status": "success", "message": "Dreaming cycle triggered"}
     except Exception as e:
-        logger.error(f"[Debug] Digestion error: {e}")
+        logger.error(f"[Debug] Dreaming error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -63,7 +58,7 @@ async def brain_dump(character_id: str = "hiyori"):
     try:
         
         # 1. Fetch all conversations from SurrealDB
-        results = await surreal_system.get_all_conversations(agent_id=character_id)
+        results = await surreal_system.get_all_conversations(character_id=character_id)
         
         # Format for frontend
         history = []
@@ -189,7 +184,7 @@ async def trigger_entity_merge():
 
 class SurrealAddRequest(BaseModel):
     content: str
-    agent_id: str
+    character_id: str
     user_id: str = "user_default"
     importance: int = 1
     emotion: Optional[str] = None
@@ -197,7 +192,7 @@ class SurrealAddRequest(BaseModel):
 
 class SurrealSearchRequest(BaseModel):
     query: str
-    agent_id: str
+    character_id: str
     limit: int = 5
 
 
@@ -222,7 +217,7 @@ async def add_surreal_memory(request: SurrealAddRequest):
         fact_id = await surreal_system.add_memory(
             content=request.content,
             embedding=embedding,
-            agent_id=request.agent_id,
+            character_id=request.character_id,
             user_id=request.user_id,
             importance=request.importance,
             emotion=request.emotion
@@ -246,7 +241,7 @@ async def search_surreal_memory(request: SurrealSearchRequest):
 
     try:
         embedding = active_client.encoder.encode(request.query).tolist()
-        results = await surreal_system.search(embedding, request.agent_id, request.limit)
+        results = await surreal_system.search(embedding, request.character_id, request.limit)
         return {"results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -327,7 +322,10 @@ async def get_surreal_table_data(table_name: str, limit: int = 50):
         # 查询数据（不返回 embedding 字段，太大了）
         query = f"SELECT * OMIT embedding FROM {table_name} ORDER BY created_at DESC LIMIT {limit};"
         result = await surreal_system.db.query(query)
-        logger.info(f"[SurrealDB] Table query raw result type: {type(result)}, value: {str(result)[:200]}")
+        if result and isinstance(result, list):
+             logger.info(f"[SurrealDB] Table query returned {len(result)} rows from {table_name}")
+        else:
+             logger.info(f"[SurrealDB] Table query returned raw result type: {type(result)}")
         
         # 解析结果 - SDK query() 已经返回解包后的数据 [{'id': ...}]
         data = []
@@ -502,7 +500,7 @@ async def execute_surreal_query(request: SurrealQueryRequest):
 
 
 @router.get("/surreal/stats")
-async def get_surreal_stats(agent_id: str = None):
+async def get_surreal_stats(character_id: str = None):
     """获取 SurrealDB 统计信息"""
     global surreal_system
     
@@ -510,222 +508,24 @@ async def get_surreal_stats(agent_id: str = None):
         raise HTTPException(status_code=503, detail="SurrealDB not available")
     
     try:
-        stats = await surreal_system.get_stats(agent_id)
+        stats = await surreal_system.get_stats(character_id)
         return {"status": "success", "stats": stats}
     except Exception as e:
         logger.error(f"[SurrealDB] Stats error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/surreal/graph/{agent_id}")
-async def get_surreal_graph(agent_id: str):
-    """获取指定角色的图关系数据（用于可视化）"""
-    global surreal_system
+@router.get("/surreal/graph/{character_id}")
+async def get_surreal_graph(character_id: str):
+    """
+    [DEPRECATED] 图谱可视化端点
     
-    if not surreal_system:
-        raise HTTPException(status_code=503, detail="SurrealDB not available")
-    
-    try:
-        if not surreal_system.db:
-            await surreal_system.connect()
-        
-        # 1. 获取所有 Entity 节点
-        # 限制数量以防前端卡死
-        entity_query = "SELECT * FROM entity ORDER BY created_at DESC LIMIT 50;"
-        entity_result = await surreal_system.db.query(entity_query)
-        
-        logger.info(f"[Graph Debug] Entity Query Result: {str(entity_result)[:200]}")
-        
-        nodes = []
-        edges = []
-        entity_ids = set()
-        
-        # 健壮的结果解析函数 - SDK query() 已返回解包后的数据
-        def parse_surreal_result(res):
-            if not res: return []
-            # SDK 直接返回 [{'id': ...}] 或者 {'tables': ...} (for INFO FOR DB)
-            if isinstance(res, list):
-                return res
-            elif isinstance(res, dict):
-                return res
-            return []
-
-        # 解析 Entity
-        entities_data = parse_surreal_result(entity_result)
-        logger.info(f"[Graph Debug] Parsed {len(entities_data)} entities")
-        
-        for item in entities_data:
-            # Fix unhashable RecordID
-            raw_id = item['id']
-            # Convert RecordID to string "table:id"
-            str_id = str(raw_id)
-            
-            # Pass ALL other attributes to the frontend
-            node_data = {k: v for k, v in item.items() if k != 'id'}
-            
-            nodes.append({
-                "id": str_id,
-                "label": item.get('name', 'Unknown'),
-                "type": "entity",
-                "group": "knowledge",
-                **node_data # Unpack all extra data (context, type, etc)
-            })
-            entity_ids.add(str_id)
-            
-        # 2. 动态发现边表
-        info_query = "INFO FOR DB;"
-        info_result = await surreal_system.db.query(info_query)
-        logger.info(f"[Graph Debug] Info Result: {str(info_result)[:200]}")
-        
-        edge_tables = []
-        known_node_tables = ["conversation", "entity", "character", "user", "user_entity", "memory_embeddings", "migrations"]
-        
-        info_data = parse_surreal_result(info_result)
-        db_tables = {}
-        if isinstance(info_data, dict) and "tables" in info_data:
-            db_tables = info_data["tables"]
-        elif isinstance(info_data, list) and len(info_data) > 0 and "tables" in info_data[0]:
-             db_tables = info_data[0]["tables"]
-             
-        for tbl in db_tables.keys():
-            if tbl not in known_node_tables:
-                edge_tables.append(tbl)
-        
-        # [CRITICAL UPDATE] Force include known relationship tables if they exist but were missed or if we just want to be sure
-        for required_edge in ["observes", "about", "attributed_to"]:
-            if required_edge not in edge_tables:
-                 edge_tables.append(required_edge)
-
-        logger.info(f"[Graph] Found potential edge tables: {edge_tables}")
-        
-        # 3. 查询具体的边
-        for edge_tbl in edge_tables:
-            try:
-                # 为每个边表构建查询 - SELECT * to get all fields
-                edge_query = f"SELECT * FROM {edge_tbl} LIMIT 100;"
-                logger.info(f"[Graph Debug] Querying edge table: {edge_tbl}")
-                edge_res = await surreal_system.db.query(edge_query)
-                # logger.info(f"Raw Edge Res: {edge_res}")
-                
-                e_data = parse_surreal_result(edge_res)
-                logger.info(f"[Graph Debug] Parsed edges from {edge_tbl}: {len(e_data)}")
-                if len(e_data) > 0:
-                     logger.info(f"[Graph Debug] Sample edge: {e_data[0]}")
-
-                for link in e_data:
-                    # Surreal edge format: 'in' is source, 'out' is target
-                    # Also check commonly aliased fields just in case
-                    src = link.get('in') or link.get('source')
-                    dst = link.get('out') or link.get('target')
-
-                    if src and dst:
-                        src = str(src)
-                        dst = str(dst)
-                        
-                        # Include ALL edge data for detail view
-                        edge_obj = {
-                            "from": src,
-                            "to": dst,
-                            "label": edge_tbl.upper(),
-                            "arrows": "to",
-                            # Full edge data for detail modal
-                            "strength": link.get('strength') or link.get('weight'),
-                            "weight": link.get('weight'),
-                            "emotion": link.get('emotion'),
-                            "context": link.get('context'),
-                            "potential_reason": link.get('potential_reason'),
-                            "created_at": str(link.get('created_at', '')),
-                            "last_mentioned": str(link.get('last_mentioned') or link.get('last_accessed', '')),
-                            "id": str(link.get('id', '')),
-                        }
-                        edges.append(edge_obj)
-                        
-                        # 补充隐式节点 (Implicit Nodes)
-                        # 如果边的端点不在我们目前的 nodes 列表里，添加它们，
-                        # 这样我们至少能看到孤立的这种连接，而不是因为缺节点而不画线。
-                        if src not in entity_ids:
-                            nodes.append({
-                                "id": src, 
-                                "label": src.split(":")[-1], 
-                                "type": "implicit", 
-                                "group": "other"
-                            })
-                            entity_ids.add(src)
-                        
-                        if dst not in entity_ids:
-                            nodes.append({
-                                "id": dst, 
-                                "label": dst.split(":")[-1], 
-                                "type": "implicit", 
-                                "group": "other"
-                            })
-                            entity_ids.add(dst)
-                            
-            except Exception as e:
-                logger.warning(f"[Graph] Failed to query edge table {edge_tbl}: {e}")
-
-        # 4. 加入角色自身节点
-        char_node_id = f"character:{agent_id}"
-        if char_node_id not in entity_ids:
-             nodes.append({"id": char_node_id, "label": agent_id, "type": "character", "group": "agent"})
-
-
-        edge_query = f"""
-        SELECT id, in, out, weight, emotion 
-        FROM observes 
-        WHERE in = character:{agent_id}
-        LIMIT 100;
-        """
-        edge_result = await surreal_system.db.query(edge_query)
-        
-        # SDK 直接返回 [{'id': ...}]
-        if edge_result:
-            for edge in edge_result:
-                fact_id = str(edge.get('out', ''))
-                edges.append({
-                    "source": f"character:{agent_id}",
-                    "target": fact_id,
-                    "type": "observes",
-                    "weight": edge.get('weight', 0)
-                })
-                
-                # 添加事实节点
-                nodes.append({"id": fact_id, "type": "fact", "label": "Fact"})
-        
-        # 获取 about 边（fact -> user）
-        about_query = """
-        SELECT id, in, out FROM about LIMIT 100;
-        """
-        about_result = await surreal_system.db.query(about_query)
-        
-        # SDK 直接返回 [{'id': ...}]
-        if about_result:
-            user_ids = set()
-            for edge in about_result:
-                fact_id = str(edge.get('in', ''))
-                user_id = str(edge.get('out', ''))
-                
-                # 只添加与当前角色相关的边
-                if any(n['id'] == fact_id for n in nodes):
-                    edges.append({
-                        "source": fact_id,
-                        "target": user_id,
-                        "type": "about"
-                    })
-                    user_ids.add(user_id)
-            
-            # 添加用户节点
-            for uid in user_ids:
-                nodes.append({"id": uid, "type": "user", "label": uid.split(":")[-1]})
-        
-        return {
-            "status": "success",
-            "graph": {
-                "nodes": nodes,
-                "edges": edges
-            }
-        }
-    except Exception as e:
-        logger.error(f"[SurrealDB] Graph error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    图谱功能已移除，所有记忆现在存储在 episodic_memory 表中。
+    请使用 /surreal/table/episodic_memory 查看记忆数据。
+    """
+    return {
+        "status": "deprecated",
+        "message": "Graph visualization is deprecated. Use /debug/surreal/table/episodic_memory instead.",
+        "graph": {"nodes": [], "edges": []}
+    }
 

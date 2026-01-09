@@ -36,8 +36,10 @@ contextBridge.exposeInMainWorld('llm', {
         summary?: string, 
         longTermMemory?: string,
         userName?: string,
-        charName?: string
-    ) => ipcRenderer.send('llm:chatStreamWithHistory', { history, userMessage, contextWindow, summary, longTermMemory, userName, charName }),
+        charName?: string,
+        role: "user" | "system" = "user",
+        dynamicState: string = ""
+    ) => ipcRenderer.send('llm:chatStreamWithHistory', { history, userMessage, contextWindow, summary, longTermMemory, userName, charName, role, dynamicState }),
 
     // Summarization
     updateSummary: (currentSummary: string, newMessages: any[]) => ipcRenderer.invoke('llm:updateSummary', { currentSummary, newMessages }),

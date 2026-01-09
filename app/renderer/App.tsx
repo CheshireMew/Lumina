@@ -80,19 +80,21 @@ function App() {
             let emotionFound = false;
 
             // Define mutation effects
-            // [sad]/[angry] -> Energy -5
+            // [sad]/[angry] -> Energy -1
             // [happy]/[love] -> Intimacy +1
             // [shy]/[hopeful] -> Intimacy +0.5
             let d_energy = 0;
             let d_intimacy = 0;
             
             if (emotionContent.includes('sad') || emotionContent.includes('angry') || emotionContent.includes('depress') || emotionContent.includes('cry')) {
-                 d_energy = -5;
-                 d_intimacy = -2; // Negative emotions decrease intimacy
+                 d_energy = -1;
+                 d_intimacy = -1; // Negative emotions decrease intimacy
             } else if (emotionContent.includes('happy') || emotionContent.includes('love') || emotionContent.includes('joy') || emotionContent.includes('excite')) {
-                 d_intimacy = 1;
+                 d_intimacy = 0.5;
+                 d_energy = 0.2;
             } else if (emotionContent.includes('shy') || emotionContent.includes('hope')) {
-                 d_intimacy = 1;
+                 d_intimacy = 0.2;
+                 d_energy = -0.5;
             }
     
             // Call Backend Mutation API if there is a change
@@ -292,8 +294,9 @@ function App() {
                 }
 
                 if (loadedCharacters.length === 0) {
-                     console.log('[App] No characters found (API empty/failed), using defaults.');
-                     loadedCharacters = DEFAULT_CHARACTERS;
+                     console.warn('[App] No characters found (API empty/failed). Backend likely offline.');
+                     // ⚡ Prevent fallback to DEFAULT_CHARACTERS to avoid polling invalid 'lumina_default'
+                     // loadedCharacters = DEFAULT_CHARACTERS;
                 }
 
                 // Update local 'characters' cache for other components if needed (optional)
@@ -314,6 +317,10 @@ function App() {
                          console.warn(`[App] Active ID '${loadedActiveId}' not found in loaded characters. Resetting to default.`);
                          loadedActiveId = loadedCharacters[0].id;
                          await settings.set('activeCharacterId', loadedActiveId);
+                     } else {
+                         // ⚡ Clear ID if no characters available (stop polling)
+                         loadedActiveId = '';
+                         await settings.set('activeCharacterId', '');
                      }
                 }
                 
@@ -388,7 +395,8 @@ function App() {
         }
     }, []);
     const lastActivityTime = useRef<number>(Date.now());
-    const currentSystemPromptRef = useRef<string>(''); // Track System Prompt
+    const currentSystemPromptRef = useRef<string>(''); // Track System Prompt (Static)
+    const dynamicInstructionRef = useRef<string>(''); // Track Dynamic Instruction (Mood/Trades/Values)
     const isDreamingRef = useRef<boolean>(false); // Track dreaming state
     const startupExecutedRef = useRef<boolean>(false); // ⚡ Prevent double execution in StrictMode
     const IDLE_THRESHOLD_MS = 15 * 60 * 1000; // 15 Minutes
@@ -430,35 +438,56 @@ function App() {
     useEffect(() => {
         if (!activeCharacterId) return;
 
-        const interval = setInterval(async () => {
+        const syncState = async () => {
             if (isProactiveProcessing.current) return;
             
             // Only check if we are NOT currently processing a message/talking
             if (!isProcessing && !isStreaming) {
                 try {
-                    // Lock
-                    isProactiveProcessing.current = true;
-                    
                     const res = await fetch(`http://localhost:8001/galgame/${activeCharacterId}/state`);
                     if (res.ok) {
                         const stateData = await res.json();
+                        
+                        // ⚡ Sync Prompts from Character-Specific Endpoint (More Reliable)
+                        if (stateData.dynamic_instruction) {
+                            dynamicInstructionRef.current = stateData.dynamic_instruction;
+                        }
+                        if (stateData.system_prompt) {
+                            currentSystemPromptRef.current = stateData.system_prompt;
+                             (window as any).llm.setSystemPrompt(stateData.system_prompt);
+                        }
+
                         // Check for 'pending_interaction'
                         if (stateData.pending_interaction) {
                             console.log('[App] ⚡ Proactive Trigger Detected from Backend!', stateData.pending_interaction);
                             
-                            // Clear flag immediately to prevent double trigger
-                            await fetch(`http://localhost:8001/soul/mutate?clear_pending=true`, { method: 'POST' }); 
+                            // 1. 先上锁，防止下一次轮询进入
+                            isProactiveProcessing.current = true;
+                            
+                            // 2. 只有在成功清除后台标记后，才让 AI 说话
+                            try {
+                                await fetch(`http://localhost:8001/soul/mutate?clear_pending=true`, { method: 'POST' });
+                            } catch (clearErr) {
+                                console.error('[App] Failed to clear pending state, aborting interaction to avoid loop.');
+                                isProactiveProcessing.current = false;
+                                return;
+                            }
+                            
+                            // ⚡ 获取关系信息
+                            const relationship = stateData.relationship || {};
+                            const level = relationship.level || 0;
+                            const currentStageLabel = relationship.current_stage_label || 'Stranger';
+                            const charName = characters.find(c => c.id === activeCharacterId)?.name || 'AI';
                             
                             // ⚡ Build Rich Prompt with History + Inspiration
                             // 1. Get recent conversation history
-                            const charName = characters.find(c => c.id === activeCharacterId)?.name || 'AI';
                             const recentHistory = conversationHistory
                                 .filter(m => !m.content.trim().startsWith('(Private System Instruction')) // 🛡️ Prevent recursion!
                                 .slice(-5)
                                 .map(m => `${m.role === 'user' ? userName : charName}: ${m.content.substring(0, 100)}...`)
                                 .join('\n');
                             
-                            // 2. Fetch random inspiration from memories
+                            // 2. Fetch random inspiration from memories (SurrealDB)
                             let inspirationText = '';
                             try {
                                 const inspirationRes = await fetch(`http://localhost:8001/memory/inspiration?character_id=${activeCharacterId}&limit=3`);
@@ -481,26 +510,43 @@ function App() {
                                 console.warn('[App] Failed to fetch inspiration, proceeding without');
                             }
                             
-                            // 3. Build enhanced instruction
+                            // 3. Build enhanced instruction with time and relationship info
+                            const nowStr = new Date().toLocaleString();
+                            const dynamicInstruction = dynamicInstructionRef.current || '';
+                            
                             const instruction = `(Private System Instruction - DO NOT EXPOSE THIS TO USER)
+[SYSTEM NOTICE]
+Current Time: ${nowStr}
+Relationship: Lv.${level} (${currentStageLabel})
+Task: Continue a conversation naturally.
+
+${dynamicInstruction}
 
 ${inspirationText ? `## Related Topics (Memory)\n${inspirationText}\n` : ''}
-Based on your personality, the memories above, and the silence, initiate a brand new natural conversation topic. Do NOT repeat previous greetings.`;
+GUIDELINES:
+- Use the [Related Topics] as a topic starter IF they seem interesting, or just continue the conversation.
+- Keep it natural, casual, and brief.
+- Context: You are ${charName}. Don't mention you are an AI.
+- Based on your personality and the silence, initiate a brand new natural conversation topic. Do NOT repeat previous greetings.`;
                             
-                            handleSend(instruction);
+                            // Use Ref to call handleSend
+                            handleSendRef.current(instruction);
+                            
+                            // 释放锁（在 handleSend 完成后）
+                            isProactiveProcessing.current = false;
                         }
                     }
                 } catch (e) {
-                    // silent fail
-                } finally {
+                    // silent fail for network issues
                     isProactiveProcessing.current = false;
                 }
-            } else {
-                // If busy, we don't lock, just skip
             }
+        };
 
-        }, 5000); // Check every 5 seconds
+        // ⚡ Run immediately on mount/change
+        syncState();
 
+        const interval = setInterval(syncState, 5000); // Check every 5 seconds
         return () => clearInterval(interval);
     }, [activeCharacterId, isProcessing, isStreaming, characters, conversationHistory, userName]); // Dependencies updater on Interaction
     const resetIdleTimer = () => {
@@ -753,15 +799,41 @@ Based on your personality, the memories above, and the silence, initiate a brand
             const isSystemInstruction = text.startsWith('(Private System Instruction');
             const messageRole = isSystemInstruction ? 'system' : 'user';
 
+            // ⚡ Mix RAG Context + Dynamic Instruction (Split Prompt Strategy)
+            let dynamicState = dynamicInstructionRef.current || '';
+            
+            // 🛡️ Just-In-Time Fetch Override (Fixes "Missing Soul" race condition)
+            if (!dynamicState && activeCharacterId) {
+                console.log('[App] ⚠️ Dynamic State undefined, performing JIT fetch...');
+                try {
+                    const res = await fetch(`http://localhost:8001/galgame/${activeCharacterId}/state`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.dynamic_instruction) {
+                            dynamicState = data.dynamic_instruction;
+                            dynamicInstructionRef.current = dynamicState; // Update Ref too
+                            console.log('[App] ✅ JIT Fetch Successful, length:', dynamicState.length);
+                        }
+                    }
+                } catch (e) {
+                    console.error('[App] JIT Fetch failed:', e);
+                }
+            }
+            // const finalContext = (relevantMemories ? relevantMemories + "\n\n" : "") + dynamicState; 
+            // ❌ Don't mix them! Pass separately to fix "Related Memories" header issue.
+            
+            console.log(`[App] Sending Context: RAG(${relevantMemories ? relevantMemories.length : 0} chars) + Dynamic(${dynamicState.length} chars)`);
+
             (window as any).llm.chatStreamWithHistory(
                 conversationHistory,
                 text,
                 contextWindow,
                 conversationSummary,
-                relevantMemories,
-                userName,           // ✅ 添加用户名
-                activeChar.name,    // ✅ 添加角色名
-                messageRole         // ✅ Role ('user' or 'system')
+                relevantMemories,   // ✅ Pass RAG Only (Wrapped with Header in Main)
+                userName,           
+                activeChar.name,    
+                messageRole,        
+                dynamicState        // ✅ Pass Dynamic Instruction Separately (No Header Wrapper)
             );
 
             // Trigger Live2D Motion
@@ -792,6 +864,8 @@ Based on your personality, the memories above, and the silence, initiate a brand
         isProcessingRef.current = isProcessing; // Sync Ref
     });
 
+    // ⚡ Dynamic System Prompt Sync (从后端获取最新的 System Prompt)
+    // 注意：Proactive Interaction 检查已移至 L430-505 的多角色版本
     useEffect(() => {
         const timer = setInterval(async () => {
              if (isProcessingRef.current) return;
@@ -807,50 +881,12 @@ Based on your personality, the memories above, and the silence, initiate a brand
                      (window as any).llm.setSystemPrompt(soul.system_prompt);
                      currentSystemPromptRef.current = soul.system_prompt;
                  }
-
-                 if (soul.state?.pending_interaction) {
-                     console.log("[App] ⚡ Proactive Interaction Detected!");
-                     const { level, current_stage_label } = soul.relationship || { level: 0, current_stage_label: 'Stranger' };
-                     
-                     // 1. Fetch Inspiration (Random Facts/Memories)
-                     let inspirationText = "";
-                     try {
-                         // TODO: Use activeCharacterId from ref or state if possible, currently hardcoded to default or handled by backend default
-                         // Actually backend default is 'hiyori', which is fine for now.
-                         const inspRes = await fetch('http://localhost:8001/memory/inspiration?limit=2');
-                         if (inspRes.ok) {
-                             const memories = await inspRes.json();
-                             if (Array.isArray(memories) && memories.length > 0) {
-                                 // Clean up UUID and timestamp prefixes from content
-                                 const cleanMemories = memories.map((m: any) => {
-                                     const cleanContent = m.content.replace(/^\([a-fA-F0-9-]+\)\s*\[[^\]]+\]\s*/, '').trim();
-                                     return cleanContent;
-                                 });
-                                 inspirationText = "\n[Random Memory Fragments]:\n" + 
-                                     cleanMemories.map((c: string) => `- ${c}`).join("\n");
-                             }
-                         }
-                     } catch (err) {
-                         console.warn("[App] Failed to fetch inspiration:", err);
-                     }
-
-                     const nowStr = new Date().toLocaleString();
-
-                     const instruction = `(Private System Instruction)
-[SYSTEM NOTICE]
-Current Time: ${nowStr}
-Relationship: Lv.${level} (${current_stage_label})
-Task: Continue a conversation naturally.
-
-${inspirationText}
-
-GUIDELINES:
-- Use the [Random Memory Fragments] as a topic starter IF they seem interesting, or just continue the history conversation.
-- Keep it natural, casual, and brief.
-- Context: You are ${soul.identity?.name}. Don't mention you are an AI.`;
-                     
-                     handleSendRef.current(instruction);
+                 
+                 // Update Dynamic Instruction Ref
+                 if (soul.dynamic_instruction) {
+                     dynamicInstructionRef.current = soul.dynamic_instruction;
                  }
+                 // ⚡ 移除：pending_interaction 检查已由 L430-505 多角色版本处理
              } catch (e) { }
         }, 5000);
         return () => clearInterval(timer);
