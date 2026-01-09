@@ -22,19 +22,33 @@ export class PythonSTTService {
             return;
         }
 
-        const pythonScript = path.join(__dirname, '../../python_backend/stt_server.py');
-        const pythonPath = 'C:\\Users\\Dylan\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
+        let executable: string;
+        let args: string[];
+        let cwd: string;
 
-        console.log('[PythonSTT] Starting Python STT service...');
-        console.log('[PythonSTT] Script path:', pythonScript);
-        console.log('[PythonSTT] Python executable:', pythonPath);
+        if (app.isPackaged) {
+            // Production: Launch compiled executable
+            // Note: PyInstaller 'onedir' creates a folder named lumina_backend
+            executable = path.join(process.resourcesPath, 'bin', 'lumina_backend', 'lumina_backend.exe');
+            args = ['stt'];
+            cwd = path.join(process.resourcesPath, 'bin', 'lumina_backend');
+            console.log('[PythonSTT] Launching packaged backend:', executable);
+        } else {
+            // Development: Use local Python
+            const pythonScript = path.join(__dirname, '../../python_backend/stt_server.py');
+            // Keep user's specific python path for dev stability
+            executable = 'C:\\Users\\Dylan\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
+            args = [pythonScript];
+            cwd = path.join(__dirname, '../../python_backend');
+            console.log('[PythonSTT] Launching dev backend:', executable, args);
+        }
 
-        // 终极方案：直接调用绝对路径的 Python，不通过 shell
-        this.process = spawn(pythonPath, [pythonScript], {
-            cwd: path.join(__dirname, '../../python_backend'),
+        this.process = spawn(executable, args, {
+            cwd: cwd,
             stdio: ['ignore', 'pipe', 'pipe'],
-            shell: false, // 不使用 shell，直接执行文件
-            windowsHide: true
+            shell: false, 
+            windowsHide: true,
+            env: { ...process.env, LITE_MODE: app.isPackaged ? 'true' : 'false' }
         });
 
         // 监听输出
