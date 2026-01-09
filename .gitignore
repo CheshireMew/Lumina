@@ -118,3 +118,23 @@ lumina_surreal.db/
 python_backend/archive_legacy/lite_memory_db/
 python_backend/archive_legacy/memory_db/
 python_backend/archive_legacy/lumina_memory.db/
+
+# ========== Release Sensitive Files ==========
+# Character state (contains conversation history)
+python_backend/characters/*/state.json
+
+# User audio profiles
+voiceprint_profiles/
+
+# Local config with potential API keys
+audio_config.json
+stt_config.json
+
+# Build artifacts
+dist_backend/
+build_backend/
+*.spec.bak
+
+# PyInstaller temp
+*.manifest
+*.pyo

@@ -7,14 +7,16 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import Optional
 
+from app_config import MODELS_DIR
+
 # 导入 logger
 logger = logging.getLogger("ModelManager")
 
 class ModelManager:
     def __init__(self, base_dir=None):
         if base_dir is None:
-            # 默认为 python_backend 的上一级目录下的 models
-            self.base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models")
+            # 使用 app_config 统一管理的路径 (兼容打包装/开发模式)
+            self.base_dir = str(MODELS_DIR)
         else:
             self.base_dir = base_dir
             

@@ -33,5 +33,44 @@
     "vite": "^5.0.8",
     "vite-plugin-electron": "^0.28.0",
     "vite-plugin-electron-renderer": "^0.14.5"
+  },
+  "build": {
+    "appId": "com.cheshiremew.lumina",
+    "productName": "Lumina",
+    "asar": true,
+    "directories": {
+      "output": "release/${version}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": true
+    },
+    "extraResources": [
+      {
+        "from": "dist_backend/lumina_backend",
+        "to": "bin/lumina_backend"
+      },
+      {
+        "from": "python_backend/bin/surreal.exe",
+        "to": "bin/surreal.exe" 
+      },
+      {
+        "from": "GPT-SoVITS/runtime/ffmpeg.exe",
+        "to": "bin/ffmpeg.exe"
+      }
+    ]
   }
 }
