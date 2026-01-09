@@ -2,7 +2,7 @@
 Pydantic 请求/响应模型
 从 memory_server.py 提取，供各路由模块共享
 """
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Dict, Any, List, Optional
 
 
@@ -39,16 +39,19 @@ class ConfigRequest(BaseModel):
 class AddMemoryRequest(BaseModel):
     """添加记忆请求"""
     user_id: str = "user"
-    character_id: str = "hiyori"
+    character_id: Optional[str] = None
     user_name: str = "User"
-    char_name: str = "AI"
+    character_name: str = Field(default="AI", alias="char_name")
     messages: List[Dict[str, Any]]
+
+    class Config:
+        populate_by_name = True
 
 
 class SearchRequest(BaseModel):
     """记忆搜索请求"""
     user_id: str
-    character_id: str = "hiyori"
+    character_id: Optional[str] = None
     query: str
     limit: Optional[int] = 10
     empower_factor: Optional[float] = 0.5
@@ -57,18 +60,24 @@ class SearchRequest(BaseModel):
 class ConsolidateRequest(BaseModel):
     """历史整合请求"""
     user_id: str = "user"
-    character_id: str = "hiyori"
+    character_id: Optional[str] = None
     user_name: str = "User"
-    char_name: str = "AI"
+    character_name: str = Field(default="AI", alias="char_name")
     messages: List[Dict[str, Any]]
+
+    class Config:
+        populate_by_name = True
 
 
 class DreamRequest(BaseModel):
     """深度整合/做梦请求"""
     user_id: str = "user"
-    character_id: str = "hiyori"
+    character_id: Optional[str] = None
     user_name: str = "User"
-    char_name: str = "AI"
+    character_name: str = Field(default="AI", alias="char_name")
+
+    class Config:
+        populate_by_name = True
 
 
 class UpdateIdentityRequest(BaseModel):

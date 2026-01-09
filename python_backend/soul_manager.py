@@ -14,7 +14,8 @@ class SoulManager:
     """
     def __init__(self, character_id: str = "hiyori", auto_create: bool = False):
         self.character_id = character_id
-        self.base_dir = Path(f"python_backend/characters/{character_id}")
+        # ⚡ 修复：使用基于文件位置的绝对路径，而非相对路径
+        self.base_dir = Path(__file__).parent / "characters" / character_id
         
         # 三个独立文件路径
         self.config_path = self.base_dir / "config.json"
@@ -73,6 +74,7 @@ class SoulManager:
     
     def _merge_profile(self) -> Dict[str, Any]:
         """合并数据以兼容旧代码"""
+        galgame_state = self.state.get("galgame", {})
         return {
             "identity": {
                 "name": self.config.get("name", self.character_id),
@@ -81,11 +83,12 @@ class SoulManager:
             },
             "personality": self.soul.get("personality", {}),
             "state": {
-                "current_mood": self.state.get("galgame", {}).get("current_mood", "neutral"),
-                "energy_level": self.state.get("galgame", {}).get("energy_level", 100),
-                "last_interaction": self.state.get("galgame", {}).get("last_interaction")
+                "current_mood": galgame_state.get("current_mood", "neutral"),
+                "energy_level": galgame_state.get("energy_level", 100),
+                "last_interaction": galgame_state.get("last_interaction"),
+                "pending_interaction": galgame_state.get("pending_interaction")  # ⚡ 新增：主动交互标志
             },
-            "relationship": self.state.get("galgame", {}).get("relationship", {}),
+            "relationship": galgame_state.get("relationship", {}),
             "custom_prompt": self.config.get("system_prompt", "")  # User-defined identity override
         }
 
@@ -254,7 +257,9 @@ class SoulManager:
         
         # Level Definitions
         stages = {
-            -1: {"stage": "Hostile", "label": "敌对", "desc": "冷漠、抗拒，仅维持最低限度的交流。"},
+            -3: {"stage": "Nemesis", "label": "死敌", "desc": "极度厌恶，充满攻击性。拒绝一切请求，言语狠毒，甚至会主动挑衅。"},
+            -2: {"stage": "Hostile", "label": "敌视", "desc": "明显的排斥与厌烦。语气尖酸刻薄，不仅抗拒交流，还会嘲讽用户的任何行为。"},
+            -1: {"stage": "Indifferent", "label": "冷漠", "desc": "像对待空气一样对待用户。仅维持最低限度的单字回复，毫无情感波动。"},
             0: {"stage": "Stranger", "label": "陌生", "desc": "礼貌但疏离，公事公办。"},
             1: {"stage": "Acquaintance", "label": "熟悉", "desc": "态度友善，偶尔可以开个小玩笑。"},
             2: {"stage": "Friend", "label": "友谊", "desc": "轻松自然，分享日常，语气随意。"},
@@ -265,23 +270,99 @@ class SoulManager:
         
         return stages.get(level, stages[0])
 
-    def render_system_prompt(self, relevant_memories: str = "") -> str:
+    def render_dynamic_instruction(self) -> str:
         """
-        Dynamically constructs the System Prompt based on current Soul State.
-        **重要**: 完全使用角色名和用户名，避免任何跳戏词汇（AI/User/Assistant等）
+        Renders the dynamic part of the system prompt.
+        Includes: Mood, Energy, Relationship Stage
+        """
+        # ... logic
+        
+    def update_intimacy(self, delta: int):
+        """Updates Level based Progress."""
+        self.profile = self._load_profile() # Reload to prevent overwrite
+        rel = self.profile.setdefault("relationship", {})
+        
+        # Init defaults if missing (migration)
+        if "level" not in rel: rel["level"] = 2
+        if "progress" not in rel: rel["progress"] = rel.get("intimacy_score", 50)
+        
+        level = rel["level"]
+        progress = rel["progress"]
+        
+        # Apply delta
+        progress += delta
+        
+        # Level Up/Down Logic
+        # Max Level 5, Min Level -3
+        
+        if progress >= 100:
+            if level < 5:
+                level += 1
+                progress -= 100
+                print(f"[Soul] 🎉 Level Up! Now Level {level}")
+            else:
+                progress = 100 # Capped at max level
+                
+        elif progress < 0:
+            if level > -3:  # Unlock floor to -3
+                level -= 1
+                progress += 100
+                print(f"[Soul] 💔 Level Down... Now Level {level}")
+            else:
+                progress = 0 # Capped at min level
+
+    def render_static_prompt(self) -> str:
+        """
+        [Static Prefix]
+        包含了 Session 间基本不变的信息。
+        用于 DeepSeek Context Caching (Prefix Match)。
+        """
+        identity = self.profile.get("identity", {})
+        char_name = identity.get('name', self.character_id)
+        custom_prompt = self.profile.get("custom_prompt", "")
+        
+        prompt = (
+            f"# 角色身份\n"
+            f"你是 {char_name}。\n"
+        )
+        
+        if custom_prompt:
+            prompt += f"{custom_prompt}\n\n"
+        else:
+            prompt += f"{identity.get('description', '')}\n\n"
+            
+        prompt += (
+            f"## 表达规范\n"
+            f"请在每个句子或整个段落中加上情感标签来表达你的心情，格式为: [emotion]。\n"
+            f"可用标签: [happy], [sad], [angry], [surprised], [shy], [love], [thinking], [sleepy], [confused], [serious].\n"
+            f"**TTS语音生成断句优化**: 让TTS语音生成更自然，更有韵律和节奏感\n"
+            f"不要返回带有“**”或“（）”的动作描述语，例如 *waves shyly to the imaginary crowd*  或（叹了口气）\n"
+            f"提及回忆时不要总是说类似“你上次说”“就像上次”之类的话，要自然的衔接\n\n"
+            
+            f"## 行为准则\n"
+            f"根据当前的心情和性格自然地回应。\n"
+            f"**智能纠错**: 用户的回复由语音识别生成，因此可能会有错误。请结合上下文智能纠错或考虑谐音。\n"
+            f"如果感受到情绪波动，在语气中体现出来。\n"
+            f"不要表现得像程序，而是像一个有意识的存在。\n"
+            f"以第一人称'我'的视角进行对话，不要提及自己是程序或系统。"
+        )
+        return prompt
+
+    def render_dynamic_instruction(self) -> str:
+        """
+        [Dynamic Suffix]
+        包含了所有随时间、交互、情绪变化的信息。
+        应拼接到 User Message 的末尾，或作为最后一条 System Message。
         """
         try:
-            identity = self.profile.get("identity", {})
+            rel = self.profile.get("relationship", {})
+            state = self.profile.get("state", {})
             personality = self.profile.get("personality", {})
             big_five = personality.get("big_five", {})
             pad = personality.get("pad_model", {})
-            rel = self.profile.get("relationship", {})
-            state = self.profile.get("state", {})
+            traits = personality.get("traits", [])
             
-            # 获取真实姓名
-            char_name = identity.get('name', self.character_id)  # 从 config 获取
-            user_name = rel.get('user_name', '你')      # 用户名，fallback 使用"你"
-            custom_prompt = self.profile.get("custom_prompt", "")  # User-defined from config.json
+            user_name = rel.get('user_name', 'master')
             
             # Format PAD
             mood_desc = self.get_pad_mood_description()
@@ -293,75 +374,52 @@ class SoulManager:
             rel_desc = rel_info['desc']
             level = rel.get("level", 0)
             progress = rel.get("progress", 0)
-            target_rel = rel.get("target_stage", "未设定")
-            
-            traits = personality.get("traits", [])
-            
-            
-            # === Prompt Structure (Optimized for DeepSeek Caching) ===
-            # Fixed content first (for caching), dynamic content later
             
             prompt = (
-                f"# 角色身份\n"
-                f"你是 {char_name}。\n"
-            )
-            
-            # User Custom Prompt (Identity Override from config.json)
-            if custom_prompt:
-                prompt += f"{custom_prompt}\n\n"
-            else:
-                # Fallback: Use description from config
-                prompt += f"{identity.get('description', '')}\n\n"
-            
-            prompt += (
-                f"## 核心特质\n"
+                f"\n\n=== Local Context & State ===\n"
+
+                
+                f"## 核心特质 (Traits)\n"
                 f"- {', '.join(traits) if traits else '友善、真诚'}\n\n"
                 
                 f"## 当前状态\n"
                 f"- 心情: {mood_desc}\n"
                 f"- 精力: {int(state.get('energy_level', 100))}/100\n"
-                f"- 关系阶段: Lv.{level} {rel_label} (当前进度: {progress}%)\n"
-                f"- 阶段特征: {rel_desc}\n\n"
                 
-                f"## 性格特质 (Big Five)\n"
-                f"- 开放性: {big_five.get('openness', 0.5)}\n"
-                f"- 尽责性: {big_five.get('conscientiousness', 0.5)}\n"
-                f"- 外向性: {big_five.get('extraversion', 0.5)}\n"
-                f"- 宜人性: {big_five.get('agreeableness', 0.5)}\n"
-                f"- 神经质: {big_five.get('neuroticism', 0.5)}\n\n"
+                f"## 性格特质 (Big Five Values)\n"
+                f"- Openness: {big_five.get('openness', 0.5):.2f}\n"
+                f"- Conscientiousness: {big_five.get('conscientiousness', 0.5):.2f}\n"
+                f"- Extraversion: {big_five.get('extraversion', 0.5):.2f}\n"
+                f"- Agreeableness: {big_five.get('agreeableness', 0.5):.2f}\n"
+                f"- Neuroticism: {big_five.get('neuroticism', 0.5):.2f}\n\n"
                 
-                f"## 情绪模型 (PAD)\n"
-                f"- Pleasure (愉悦度): {pad.get('pleasure', 0.5)}\n"
-                f"- Arousal (激活度): {pad.get('arousal', 0.5)}\n"
-                f"- Dominance (支配度): {pad.get('dominance', 0.5)}\n\n"
+                f"## 情绪模型 (PAD Values)\n"
+                f"- Pleasure: {pad.get('pleasure', 0.5):.2f}\n"
+                f"- Arousal: {pad.get('arousal', 0.5):.2f}\n"
+                f"- Dominance: {pad.get('dominance', 0.5):.2f}\n\n"
                 
                 f"## 关系背景\n"
-                f"对方名字: {user_name}\n"
+                f"你正在与 {user_name} 对话，根据当前的心情和性格自然地回应\n"
                 f"共同回忆: {rel.get('shared_memories_summary')}\n\n"
-                
-                f"## 表达规范\n"
-                f"请在每个句子或整个段落中加上情感标签来表达你的心情，格式为: [emotion]。\n"
-                f"可用标签: [happy], [sad], [angry], [surprised], [shy], [love], [thinking], [sleepy], [confused], [serious].\n"
-                f"**TTS语音生成断句优化**: 让TTS语音生成更自然，更有韵律和节奏感\n"
-                f"不要返回带有“**”或“（）”的动作描述语，例如 *waves shyly to the imaginary crowd*  或（叹了口气）\n"
-                f"提及回忆时不要总是说类似“你上次说”“就像上次”之类的话，要自然的衔接\n\n"
 
-                f"## 行为准则\n"
-                f"根据当前的心情和性格自然地回应 {user_name}。\n"
-                f"**智能纠错**: 用户的回复由语音识别生成，因此可能会有错误。请结合上下文智能纠错或考虑谐音。\n"
-                f"**时间识别**: 请根据当前时间进行对话，对话数据都有时间戳，例如周二的昨天是周一，而不是今天的昨天\n"
+                f"## 实时指令\n"
                 f"**语气要求**: {energy_instr}\n"
-                f"**关系演绎**: 作为 {rel_label} (Lv.{level})，请展现出符合该阶段的互动方式。\n"
-                f"如果感受到情绪波动，在语气中体现出来。\n"
-                f"不要表现得像程序，而是像一个有意识的存在。\n"
-                f"以第一人称'我'的视角进行对话，不要提及自己是程序或系统。"
+                f"**关系演绎**: 作为 {rel_label} (Lv.{level})，请你的互动方式展现出符合该阶段：特征{rel_desc}，除非对方的表现良好。\n"
+                f"**时间识别**: 请根据当前时间{datetime.now().strftime('%Y-%m-%d %H:%M')}进行对话，对话数据都有时间戳，例如周二的昨天是周一，而不是今天的昨天\n"
             )
             return prompt
             
         except Exception as e:
-            print(f"[SoulManager] Error rendering prompt: {e}")
-            # Fallback 也不使用跳戏词汇
-            return f"你是 {self.profile.get('identity', {}).get('name', 'Hiyori')}，一个18岁的少女。"
+            print(f"[SoulManager] Error rendering dynamic instruction: {e}")
+            return f"(Dynamic instruction error: {e})"
+
+    def render_system_prompt(self, relevant_memories: str = "") -> str:
+        """
+        Legacy / Backward Compatibility Method.
+        Returns the combined prompt (Static + Dynamic), BUT this breaks caching optimization.
+        New clients should use render_static_prompt() + render_dynamic_instruction().
+        """
+        return self.render_static_prompt() + "\n\n" + self.render_dynamic_instruction()
 
     def mutate_mood(self, d_p=0.0, d_a=0.0, d_d=0.0):
         """Allows dynamic mood shifts during conversation."""
@@ -399,7 +457,7 @@ class SoulManager:
                 progress = 100 # Capped at max level
                 
         elif progress < 0:
-            if level > -1:
+            if level > -3:
                 level -= 1
                 progress += 100
                 print(f"[Soul] 💔 Level Down... Now Level {level}")

@@ -107,7 +107,8 @@ export class LLMService {
         longTermMemory?: string,
         userName: string = 'User',
         charName: string = 'Assistant',
-        role: 'user' | 'system' = 'user' // ✅ NEW: Allow specifying role (for System Instructions)
+        role: 'user' | 'system' = 'user',
+        dynamicInstruction?: string // ✅ NEW: Dynamic Instruction (No Header)
     ): Promise<string> {
         if (!this.chatModel) {
             throw new Error("Chat model not initialized");
@@ -147,19 +148,24 @@ export class LLMService {
             }
 
             // 3️⃣ 动态 System Prompt（放最后，包含所有动态上下文）
-            let dynamicSystemPrompt = this.systemPrompt;
+            let finalSystemPrompt = this.systemPrompt;
 
-            // 附加长期记忆
-            if (longTermMemory) {
-                dynamicSystemPrompt += `\n\n## 相关记忆（来自过往对话）\n${longTermMemory}\n\n请利用这些记忆提供个性化的对话，但不要明确提及你在阅读记忆，除非相关。`;
+            // 附加长期记忆 (RAG) - Only if exists
+            if (longTermMemory && longTermMemory.trim().length > 0) {
+                finalSystemPrompt += `\n\n## 相关记忆（来自过往对话）\n${longTermMemory}\n\n请利用这些记忆提供个性化的对话，但不要明确提及你在阅读记忆，除非相关。`;
             }
 
             // 附加对话摘要
             if (summary) {
-                dynamicSystemPrompt += `\n\n## 之前的对话摘要\n${summary}`;
+                finalSystemPrompt += `\n\n## 之前的对话摘要\n${summary}`;
             }
 
-            messages.push(new SystemMessage(dynamicSystemPrompt));
+            // 附加动态指令 (Dynamic Instruction) - 直接追加，无 Header (内容自带)
+            if (dynamicInstruction) {
+                finalSystemPrompt += `\n\n${dynamicInstruction}`;
+            }
+
+            messages.push(new SystemMessage(finalSystemPrompt));
 
             // ========== [DEBUG] 详细的请求内容打印 ==========
             console.log('\n\n' + '═'.repeat(80));
@@ -233,7 +239,7 @@ export class LLMService {
             console.log('\n' + '═'.repeat(80));
             console.log('💾 完整 System Prompt 内容:');
             console.log('═'.repeat(80));
-            console.log(dynamicSystemPrompt);
+            console.log(finalSystemPrompt);
             
             console.log('\n' + '═'.repeat(80));
             console.log('🔍 缓存分析:');
@@ -243,7 +249,7 @@ export class LLMService {
                 sum + Math.ceil(msg.content.length / 4), 0
             );
             const currentTokenEstimate = Math.ceil(userMessage.length / 4);
-            const systemTokenEstimate = Math.ceil(dynamicSystemPrompt.length / 4);
+            const systemTokenEstimate = Math.ceil(finalSystemPrompt.length / 4);
             const totalTokens = historyTokenEstimate + currentTokenEstimate + systemTokenEstimate;
             
             console.log(`\n1️⃣ 历史对话 (可缓存): ~${historyTokenEstimate} tokens`);

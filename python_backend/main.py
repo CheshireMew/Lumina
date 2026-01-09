@@ -26,26 +26,23 @@ logging.basicConfig(
 logger = logging.getLogger("MemoryServer")
 
 # ========== 全局状态 ==========
-memory_clients: Dict = {}
-dreaming_service = None
-soul_client = None
 heartbeat_service_instance = None
 surreal_system = None
-hippocampus_service_instance = None
+batch_manager_instance = None  # 批次管理器
+dreaming_service_instance = None
 config_timestamps: Dict = defaultdict(float)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global memory_clients, dreaming_service, heartbeat_service_instance, soul_client, surreal_system
+    global heartbeat_service_instance, soul_client, surreal_system
     
     from model_manager import model_manager
     from soul_manager import SoulManager
     from heartbeat_service import HeartbeatService
     from surreal_memory import SurrealMemory
-    from hippocampus import Hippocampus
-    from graph_curator import GraphCurator
+    from dreaming import Dreaming
     
     # [Startup] 加载配置
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory_config.json")
@@ -86,9 +83,9 @@ async def lifespan(app: FastAPI):
                 logger.error(f"Failed to load embedding model: {e}")
                 embedding_model = None
 
-            # 初始化 Dreaming (Legacy) - Disabled
+
     
-            dreaming_service = None # Disabling legacy dreaming service
+
             
             logger.info(f"Auto-initialized memory for '{character_id}' (Surreal Only)")
             
@@ -101,6 +98,11 @@ async def lifespan(app: FastAPI):
                 if embedding_model:
                      # Create a lambda or wrapper to match expected interface (encode(text)->list)
                     surreal_system.set_encoder(lambda text: embedding_model.encode(text).tolist())
+                    
+                # [Injection] 初始化并注入 BatchManager
+                from consolidation_batch import BatchManager
+                batch_manager_instance = BatchManager()
+                surreal_system.set_batch_manager(batch_manager_instance)
                     
                 logger.info("✅ SurrealMemory initialized (Parallel Backend)")
             except Exception as e:
@@ -115,32 +117,28 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to auto-load config: {e}")
 
-    # 初始化 Hippocampus (海马体)
+    # 初始化 Dreaming (ex-Hippocampus)
+    global dreaming_service_instance
     try:
-        if surreal_system and soul_client:
-            # ⚡ Pass character_id for isolated memory digestion
-            hippocampus_service_instance = Hippocampus(surreal_system, soul_client, character_id=character_id)
-            logger.info(f"🧠 Hippocampus initialized for '{character_id}'")
+        if surreal_system:
+            dreaming_service_instance = Dreaming(memory_client=surreal_system, character_id=character_id)
+            logger.info(f"🧠 Dreaming Service initialized for '{character_id}'")
             
-            # 注入 Hippocampus 引用到 SurrealMemory，用于自动触发消化
-            surreal_system.set_hippocampus(hippocampus_service_instance)
+            # Inject into SurrealMemory for auto-digestion
+            surreal_system.set_dreaming(dreaming_service_instance)
         else:
-            logger.warning("⚠️ Hippocampus skipped (missing dependencies)")
+            logger.warning("⚠️ Dreaming Service skipped (SurrealDB not available)")
     except Exception as e:
-        logger.error(f"Failed to init Hippocampus: {e}")
+        logger.error(f"Failed to init Dreaming: {e}")
     
     # 启动 Heartbeat
     try:
         logger.info("Starting Heartbeat Service...")
         if soul_client:
-            # 初始化图谱维护者 (The Gardener) - Inject Hippocampus for LLM Arbitration
-            graph_curator = GraphCurator(surreal_system, hippocampus_service_instance) if surreal_system else None
-        
-            # 传入 Hippocampus 和 GraphCurator 引用
+            # Heartbeat uses Dreaming logic to pulse
             heartbeat_service_instance = HeartbeatService(
                 soul_client, 
-                hippocampus=hippocampus_service_instance,
-                graph_curator=graph_curator, 
+                dreaming=dreaming_service_instance, 
                 main_loop=asyncio.get_running_loop()
             )
             heartbeat_service_instance.start()
@@ -160,32 +158,35 @@ async def lifespan(app: FastAPI):
 
 def _inject_all_dependencies():
     """向所有路由模块注入依赖"""
-    from routers import config, memory, characters, soul, debug
+    from routers import config, memory, characters, soul, debug, dream
     
     # config router
     config.inject_dependencies(
-        memory_clients, dreaming_service, soul_client, 
+        soul_client, 
         heartbeat_service_instance, config_timestamps
     )
     
     # memory router
     memory.inject_dependencies(
-        memory_clients, dreaming_service, soul_client, surreal_system, 
-        hippocampus_service_instance
+        soul_client, surreal_system, 
+        dreaming_service_instance
     )
     
     # characters router
-    characters.inject_dependencies(memory_clients, soul_client)
+    characters.inject_dependencies(soul_client)
     
     # soul router
+    # soul router
     soul.inject_dependencies(
-        memory_clients, soul_client, dreaming_service,
+        soul_client,
         heartbeat_service_instance, config_timestamps
     )
     
     # debug router
-    # debug router
-    debug.inject_dependencies(memory_clients, surreal_system, hippocampus_service_instance)
+    debug.inject_dependencies(surreal_system, dreaming_service_instance)
+    
+    # dream router
+    dream.inject_dependencies(dreaming_service_instance, surreal_system)
 
 
 # ========== 创建应用 ==========
@@ -205,13 +206,14 @@ app.add_middleware(
 )
 
 # ========== 注册路由 ==========
-from routers import config, memory, characters, soul, debug
+from routers import config, memory, characters, soul, debug, dream
 
 app.include_router(config.router)
 app.include_router(memory.router)
 app.include_router(characters.router)
 app.include_router(soul.router)
 app.include_router(debug.router)
+app.include_router(dream.router)
 
 
 # ========== 根端点 ==========

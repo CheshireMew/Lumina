@@ -15,14 +15,13 @@ logger = logging.getLogger("CharacterRouter")
 router = APIRouter(prefix="/characters", tags=["Characters"])
 
 # 全局引用（由 main.py 注入）
-memory_clients: Dict = {}
+# 全局引用（由 main.py 注入）
 soul_client = None
 
 
-def inject_dependencies(clients: Dict, soul):
+def inject_dependencies(soul):
     """由 main.py 调用，注入全局依赖"""
-    global memory_clients, soul_client
-    memory_clients = clients
+    global soul_client
     soul_client = soul
 
 
@@ -111,8 +110,8 @@ async def delete_character(character_id: str):
             logger.info(f"[API] Deleted character directory: {char_dir}")
             
             # Remove from memory clients if active
-            if character_id in memory_clients:
-                del memory_clients[character_id]
+            # if character_id in memory_clients:
+            #    del memory_clients[character_id]
                 
             return {"status": "ok", "message": f"Character {character_id} deleted"}
         else:

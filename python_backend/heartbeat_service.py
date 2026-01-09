@@ -15,11 +15,10 @@ class HeartbeatService:
     4. Hippocampus Digest Trigger (After 5 min idle).
     """
     
-    def __init__(self, soul_manager: SoulManager, hippocampus=None, graph_curator=None, main_loop=None):
+    def __init__(self, soul_manager: SoulManager, dreaming=None, main_loop=None):
         self.soul = soul_manager
-        self.hippocampus = hippocampus  # Hippocampus 引用（用于空闲触发消化）
-        self.graph_curator = graph_curator # Graph Curator 引用 (用于周期性维护)
-        self.main_loop = main_loop      # 主事件循环（用于跨线程调用异步方法）
+        self.dreaming = dreaming  # Dreaming Service Ref
+        self.main_loop = main_loop      # Event Loop
         self.running = False
         self.thread = None
         # 记录上次行动的时间，避免日志刷屏
@@ -53,79 +52,55 @@ class HeartbeatService:
 
     def _check_and_trigger_digest(self, seconds_idle: float):
         """
-        检查是否需要触发 Hippocampus 消化。
-        条件: 空闲 5 分钟以上，且上次消化已超过 5 分钟。
+        Check if we should trigger Dreaming.
+        Condition: Idle > 5 mins.
         """
         import asyncio
         
-        # 1. 检查是否有 Hippocampus 引用和主循环
-        if not self.hippocampus or not self.main_loop:
+        # DEBUG: Check entry
+        # print(f"[Heartbeat] Checking digest trigger... Dreaming={bool(self.dreaming)}, Loop={bool(self.main_loop)}, InProgress={self._digest_in_progress}")
+        
+        # 1. Check Dependencies
+        if not self.dreaming or not self.main_loop:
             return
         
-        # 2. 检查是否正在处理中
-        if self._digest_in_progress:
-            return
+        # 2. Check Lock
+        if self._digest_in_progress: return
         
-        # 3. 检查空闲时间是否达到阈值 (5 分钟) -> 进入 "Dreaming State"
-        is_dreaming_state = seconds_idle >= self._digest_idle_threshold
-        
-        if not is_dreaming_state:
-            return
-            
-        # 4. 检查距离上次消化是否超过间隔
-        # 如果处于 Dreaming State，我们使用较短的间隔 (10s) 连续处理
+        # 3. Rate Limiting (Poll Interval)
+        # We now poll periodically regardless of idle state, because Dreaming service checks counts efficiently.
         now = datetime.now()
         threshold = self._digest_interval_active
-        
         if self._last_digest_time:
             elapsed = (now - self._last_digest_time).total_seconds()
-            if elapsed < threshold:
-                return
+            if elapsed < threshold: return
         
-        # 5. 触发消化
-        # print(f"[Heartbeat] 🧠 DREAMING: Idle {seconds_idle:.0f}s, processing next memory batch...")
+        # 5. Trigger Dreaming
+        # print(f"[Heartbeat] 💤 Dreaming Cycle (Idle {seconds_idle:.0f}s)...")
         self._digest_in_progress = True
         self._last_digest_time = now
         
+        def on_complete(future):
+            """异步任务完成后释放锁"""
+            self._digest_in_progress = False
+            try:
+                future.result()  # 捕获异常
+            except Exception as e:
+                print(f"[Heartbeat] ❌ Dreaming failed: {e}")
+        
         try:
-            # 使用主循环执行异步任务，确保 SurrealDB 连接在正确的 loop 中使用
             future = asyncio.run_coroutine_threadsafe(
-                self.hippocampus.process_memories(batch_size=1), 
+                self.dreaming.process_memories(),
                 self.main_loop
             )
-            
-            # 等待结果（可选，如果在线程中不希望阻塞太久，可以不等待，但为了逻辑安全这里等待）
-            try:
-                future.result(timeout=60) # 设置超时防止死锁
-                print("[Heartbeat] ✅ Hippocampus digest complete")
-            except asyncio.TimeoutError:
-                print("[Heartbeat] ⚠️ Hippocampus digest timed out")
-            except Exception as e:
-                print(f"[Heartbeat] ❌ Hippocampus digest failed: {e}")
-                
+            future.add_done_callback(on_complete)
         except Exception as e:
             print(f"[Heartbeat] ❌ Threadsafe call failed: {e}")
-        finally:
-            self._digest_in_progress = False
+            self._digest_in_progress = False  # 只有在调用失败时立即释放
 
     def _check_maintenance_schedule(self):
-        """检查并触发每日图谱维护"""
-        if not self.graph_curator or not self.main_loop: return
-
-        now = datetime.now()
-        elapsed = (now - self._last_maintenance_time).total_seconds()
-        
-        if elapsed > self._maintenance_interval_seconds:
-            print(f"[Heartbeat] 🌿 Scheduled Maintenance: Triggering Graph Curator...")
-            self._last_maintenance_time = now
-            
-            # 异步调用 run_maintenance
-            import asyncio
-            future = asyncio.run_coroutine_threadsafe(
-                self.graph_curator.run_maintenance(),
-                self.main_loop
-            )
-            # Log result via callback or fire-and-forget logic
+        """Deprecated: Graph Maintenance"""
+        pass
 
 
     def _bdi_loop(self):
@@ -209,8 +184,8 @@ class HeartbeatService:
         
         if seconds_idle > threshold:
             # We want to talk!
-            # Check if already pending to avoid spam
-            if "pending_interaction" not in state:
+            # ⚡ 修复：检查值是否为真（not None/False），而非检查 key 是否存在
+            if not state.get("pending_interaction"):
                 print(f"[Heartbeat] ❤️ DESIRE: I miss the user... (Level: {level}) -> Setting Pending Flag")
                 self.soul.set_pending_interaction(True, reason="idle_timeout") 
         

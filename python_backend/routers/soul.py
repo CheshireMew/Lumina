@@ -16,19 +16,17 @@ logger = logging.getLogger("SoulRouter")
 router = APIRouter(tags=["Soul"])
 
 # 全局引用（由 main.py 注入）
+# 全局引用（由 main.py 注入）
 memory_clients: Dict = {}
 soul_client = None
-dreaming_service = None
 heartbeat_service_instance = None
 config_timestamps: Dict = {}
 
 
-def inject_dependencies(clients: Dict, soul, dreamer, heartbeat, timestamps: Dict):
+def inject_dependencies(soul, heartbeat, timestamps: Dict):
     """由 main.py 调用，注入全局依赖"""
-    global memory_clients, soul_client, dreaming_service, heartbeat_service_instance, config_timestamps
-    memory_clients = clients
+    global soul_client, heartbeat_service_instance, config_timestamps
     soul_client = soul
-    dreaming_service = dreamer
     heartbeat_service_instance = heartbeat
     config_timestamps = timestamps
 
@@ -51,11 +49,19 @@ async def get_soul_data(character_id: str):
 
 @router.get("/galgame/{character_id}/state")
 async def get_galgame_state(character_id: str):
-    """获取GalGame状态"""
+    """获取GalGame状态 + 实时Prompt Context"""
     try:
         from soul_manager import SoulManager
         soul = SoulManager(character_id)
-        return soul.state.get("galgame", {})
+        
+        # Base GalGame State
+        data = soul.state.get("galgame", {}).copy()
+        
+        # Inject Real-time Context
+        data["dynamic_instruction"] = soul.render_dynamic_instruction()
+        data["system_prompt"] = soul.render_static_prompt()
+        
+        return data
     except Exception as e:
         logger.error(f"[API] Error getting galgame state: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -93,11 +99,12 @@ async def get_soul():
             stage_info = soul_client.get_relationship_stage()
             soul_client.profile["relationship"]["current_stage_label"] = stage_info["label"]
         
-        # 注入动态 system prompt
+        # 注入 System Prompt (Static) 和 Dynamic Instruction
         try:
-            soul_client.profile["system_prompt"] = soul_client.render_system_prompt()
+            soul_client.profile["system_prompt"] = soul_client.render_static_prompt()
+            soul_client.profile["dynamic_instruction"] = soul_client.render_dynamic_instruction()
         except Exception as e:
-            logger.warning(f"[API] Failed to render system prompt: {e}")
+            logger.warning(f"[API] Failed to render prompts: {e}")
         
         return soul_client.profile
     except Exception as e:
@@ -153,7 +160,7 @@ async def reload_heartbeat():
 @router.post("/soul/switch_character")
 async def switch_character(request: SwitchCharacterRequest):
     """切换到指定角色"""
-    global soul_client, memory_clients, dreaming_service, config_timestamps, heartbeat_service_instance
+    global soul_client, memory_clients, config_timestamps, heartbeat_service_instance
     
     try:
         from soul_manager import SoulManager
@@ -175,13 +182,9 @@ async def switch_character(request: SwitchCharacterRequest):
         character_name = soul_client.profile.get("identity", {}).get("name", character_id)
         logger.info(f"[API] ✅ Switched to character: {character_name}")
         
-        # 3. 更新 Heartbeat Service 和 Hippocampus
+        # 3. 更新 Heartbeat Service
         if heartbeat_service_instance:
             heartbeat_service_instance.soul = soul_client
-            # ⚡ 同步更新 Hippocampus 的 character_id 用于隔离消化
-            if heartbeat_service_instance.hippocampus:
-                heartbeat_service_instance.hippocampus.character_id = character_id.lower()
-                logger.info(f"[API] Hippocampus character_id updated to '{character_id.lower()}'")
             logger.info(f"[API] Heartbeat service updated")
 
         logger.info(f"[API] Character switch complete for '{character_id}'")
@@ -190,7 +193,8 @@ async def switch_character(request: SwitchCharacterRequest):
             "status": "success",
             "character_id": character_id,
             "character_name": character_name,
-            "system_prompt": soul_client.render_system_prompt()
+            "system_prompt": soul_client.render_static_prompt(),
+            "dynamic_instruction": soul_client.render_dynamic_instruction()
         }
     except Exception as e:
         logger.error(f"[API] Failed to switch character: {e}")
@@ -199,11 +203,7 @@ async def switch_character(request: SwitchCharacterRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/dream/wake_up")
-async def trigger_dreaming(background_tasks: BackgroundTasks):
-    """触发做梦/整合周期"""
-    # Legacy Dreaming Removed.
-    return {"status": "disabled", "message": "Legacy Dreaming Service is disabled. Memory digestion is now real-time via Hippocampus."}
+
 
 
 @router.post("/soul/update_identity")
