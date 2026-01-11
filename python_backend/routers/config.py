@@ -22,16 +22,18 @@ router = APIRouter(tags=["Config"])
 soul_client = None
 heartbeat_service_instance = None
 config_timestamps: Dict = defaultdict(float)
+dreaming_service_instance = None
 
 CONFIG_COOLDOWN = 30  # 30秒冷却时间
 
 
-def inject_dependencies(soul, heartbeat, timestamps: Dict):
+def inject_dependencies(soul, heartbeat, timestamps: Dict, dreaming=None):
     """由 main.py 调用，注入全局依赖"""
-    global soul_client, heartbeat_service_instance, config_timestamps
+    global soul_client, heartbeat_service_instance, config_timestamps, dreaming_service_instance
     soul_client = soul
     heartbeat_service_instance = heartbeat
     config_timestamps = timestamps
+    dreaming_service_instance = dreaming
 
 
 def get_dependencies():
@@ -40,7 +42,8 @@ def get_dependencies():
 
         "soul_client": soul_client,
         "heartbeat_service_instance": heartbeat_service_instance,
-        "config_timestamps": config_timestamps
+        "config_timestamps": config_timestamps,
+        "dreaming_service_instance": dreaming_service_instance
     }
 
 
@@ -93,6 +96,10 @@ async def configure_memory(config: ConfigRequest):
             soul_client.config["heartbeat_enabled"] = config.heartbeat_enabled
         if config.proactive_threshold_minutes is not None:
             soul_client.config["proactive_threshold_minutes"] = config.proactive_threshold_minutes
+        if config.galgame_mode_enabled is not None:
+            soul_client.config["galgame_mode_enabled"] = config.galgame_mode_enabled
+        if config.soul_evolution_enabled is not None:
+            soul_client.config["soul_evolution_enabled"] = config.soul_evolution_enabled
         soul_client.save_config()
         
         # Update Heartbeat Service (In-place)
@@ -100,6 +107,13 @@ async def configure_memory(config: ConfigRequest):
             logger.info("Updating Heartbeat Service for new character...")
             heartbeat_service_instance.soul = soul_client
 
+        # ⚡ Update Dreaming Service LLM Config
+        if dreaming_service_instance:
+            dreaming_service_instance.update_llm_config(
+                api_key=config.api_key,
+                base_url=config.base_url,
+                model=config.model
+            )
         
         # 保存配置
         try:

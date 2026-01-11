@@ -304,7 +304,7 @@ async def get_surreal_tables():
 
 
 @router.get("/surreal/table/{table_name}")
-async def get_surreal_table_data(table_name: str, limit: int = 50):
+async def get_surreal_table_data(table_name: str, limit: int = 50, character_id: Optional[str] = None):
     """获取指定表的数据"""
     global surreal_system
     
@@ -319,8 +319,17 @@ async def get_surreal_table_data(table_name: str, limit: int = 50):
         if not surreal_system.db:
             await surreal_system.connect()
         
+        # 构建查询
+        where_clause = ""
+        if character_id:
+            where_clause = f"WHERE character_id = '{character_id}'"
+            
         # 查询数据（不返回 embedding 字段，太大了）
-        query = f"SELECT * OMIT embedding FROM {table_name} ORDER BY created_at DESC LIMIT {limit};"
+        query = f"SELECT * OMIT embedding FROM {table_name} {where_clause} ORDER BY created_at DESC LIMIT {limit};"
+        
+        logger.info(f"[DebugRouter] Querying table '{table_name}' with user '{character_id}'")
+        logger.info(f"[DebugRouter] SQL: {query}")
+        
         result = await surreal_system.db.query(query)
         if result and isinstance(result, list):
              logger.info(f"[SurrealDB] Table query returned {len(result)} rows from {table_name}")

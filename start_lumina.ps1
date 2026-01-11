@@ -5,24 +5,47 @@ $OutputEncoding = [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF
 
 Write-Host "🚀 Starting Lumina System..." -ForegroundColor Cyan
 
-# 0. 启动 SurrealDB (Port 8000) - 持久化存储
-Write-Host "🗄️ Starting SurrealDB..." -ForegroundColor Green
-Start-Process -FilePath "surreal" -ArgumentList "start --log info --user root --pass root --bind 0.0.0.0:8000 --allow-all file:lumina_surreal.db" -WindowStyle Minimized
+# Load Config
+$ConfigPath = Join-Path $PSScriptRoot "config\ports.json"
+if (Test-Path $ConfigPath) {
+    $ports = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+    Write-Host "✅ Loaded configuration from ports.json" -ForegroundColor Green
+}
+else {
+    Write-Warning "⚠️ config/ports.json not found, using defaults."
+    $ports = @{
+        memory_port  = 8010
+        stt_port     = 8765
+        tts_port     = 8766
+        surreal_port = 8000
+        host         = "127.0.0.1"
+    }
+}
+
+# 0. 清理旧进程 (防止端口冲突)
+Write-Host "🧹 Cleaning up old processes..." -ForegroundColor Yellow
+Stop-Process -Name "surreal" -ErrorAction SilentlyContinue
+Stop-Process -Name "uvicorn" -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+
+
+# 0. 启动 SurrealDB
+Write-Host "🗄️ Starting SurrealDB (Port $($ports.surreal_port))..." -ForegroundColor Green
+Start-Process -FilePath "surreal" -ArgumentList "start --log info --user root --pass root --bind 0.0.0.0:$($ports.surreal_port) --allow-all file:lumina_surreal.db" -WindowStyle Minimized
 Start-Sleep -Seconds 5
 
-# 1. 启动 TTS Server (Port 5050)
-Write-Host "🎙️ Starting TTS Server..." -ForegroundColor Green
+# 1. 启动 TTS Server
+Write-Host "🎙️ Starting TTS Server (Port $($ports.tts_port))..." -ForegroundColor Green
 Start-Process -FilePath "python" -ArgumentList "python_backend/tts_server.py" -WindowStyle Minimized
-# 等待几秒确保端口占用
 Start-Sleep -Seconds 2
 
-# 2. 启动 STT Server (Port 8765)
-Write-Host "👂 Starting STT Server..." -ForegroundColor Green
+# 2. 启动 STT Server
+Write-Host "👂 Starting STT Server (Port $($ports.stt_port))..." -ForegroundColor Green
 Start-Process -FilePath "python" -ArgumentList "python_backend/stt_server.py" -WindowStyle Minimized
 Start-Sleep -Seconds 2
 
-# 3. 启动 Memory Server (Port 8001)
-Write-Host "🧠 Starting Memory Server...    " -ForegroundColor Green
+# 3. 启动 Memory Server
+Write-Host "🧠 Starting Memory Server (Port $($ports.memory_port))..." -ForegroundColor Green
 Start-Process -FilePath "python" -ArgumentList "python_backend/main.py" -WindowStyle Minimized
 Start-Sleep -Seconds 2
 

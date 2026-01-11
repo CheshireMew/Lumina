@@ -149,8 +149,24 @@ async def search_memory(request: SearchRequest):
         # Encoder injected text -> list
         query_vec = encoder(request.query)
         
+        # [Free Tier Opt] Dynamic Routing
+        from llm.manager import llm_manager
+        route = llm_manager.get_route("memory")
+        
+        target_table = "episodic_memory"
+        final_limit = request.limit
+        
+        if route and route.provider_id == "free_tier":
+            print("[API] 🚀 Free Tier detected: Fallback to Searching Conversation Logs (Limit 5)")
+            target_table = "conversation_log"
+            final_limit = min(request.limit, 5) # Restrict context
+            
         # 搜索 SurrealDB
-        results = await surreal_system.search(query_vec, character_id, limit=request.limit)
+        results = await surreal_system.search(
+            query_vec, character_id, 
+            limit=final_limit,
+            target_table=target_table
+        )
         
         search_time = (time.time() - start_time) * 1000
         logger.info(f"🟣 SurrealDB Search: '{request.query}' → {len(results)} hits ({search_time:.1f}ms)")
@@ -206,12 +222,25 @@ async def search_memory_hybrid(request: SearchRequest):
         # 生成查询向量
         query_vec = encoder(request.query)
         
+        # [Free Tier Opt] Dynamic Routing
+        from llm.manager import llm_manager
+        route = llm_manager.get_route("memory")
+        
+        target_table = "episodic_memory"
+        final_limit = request.limit
+        
+        if route and route.provider_id == "free_tier":
+            print("[API] 🚀 Free Tier detected: Fallback to Hybrid Searching Logs (Limit 5)")
+            target_table = "conversation_log"
+            final_limit = min(request.limit, 5)
+
         # SurrealDB 混合搜索
         results = await surreal_system.search_hybrid(
             query=request.query,
             query_vector=query_vec,
             character_id=character_id,
-            limit=request.limit
+            limit=final_limit,
+            target_table=target_table
         )
         
         print(f"[API] Hybrid Search (SurrealDB) found {len(results)} results")

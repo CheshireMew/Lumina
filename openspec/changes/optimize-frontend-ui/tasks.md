@@ -1,0 +1,6 @@
+- [ ] **Specs**: Define specific UI improvements in `specs/ui-ux/spec.md`.
+- [ ] **Implementation**: Refactor `VoiceInput.tsx` (Microphone Icon/Animation).
+- [ ] **Implementation**: Polish `ChatInterface.tsx` (Message bubbles, spacing).
+- [ ] **Implementation**: Enhance `GalGameHud.tsx` (Status bars, animations).
+- [ ] **Implementation**: Update `SettingsModal.tsx` (Layout, Portable Mode indicator).
+- [ ] **Verification**: Manual UI walk-through.

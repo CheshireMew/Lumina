@@ -1,17 +1,20 @@
+
 import React, { useState, useEffect } from 'react';
 import { CharacterProfile, DEFAULT_CHARACTERS } from '@core/llm/types';
 import { ttsService } from '@core/voice/tts_service';
+import { API_CONFIG } from '../config';
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     onClearHistory?: () => void;
     onContextWindowChange?: (newWindow: number) => void;
-    onLLMSettingsChange?: (apiKey: string, baseUrl: string, model: string) => void;
+    onLLMSettingsChange?: (apiKey: string, baseUrl: string, model: string, temperature: number) => void;
     onCharactersUpdated?: (characters: CharacterProfile[], activeId: string) => void;
     onUserNameUpdated?: (newName: string) => void;
     onLive2DHighDpiChange?: (enabled: boolean) => void;
     onCharacterSwitch?: (characterId: string) => void;
+    onThinkingModeChange?: (enabled: boolean) => void;
     activeCharacterId: string; // ⚡ Lifted State
 }
 
@@ -23,7 +26,7 @@ interface WhisperModelInfo {
     download_status: 'idle' | 'downloading' | 'completed' | 'failed';
 }
 
-type Tab = 'general' | 'voice' | 'memory' | 'characters';
+type Tab = 'general' | 'voice' | 'memory' | 'characters' | 'interaction';
 
 const AVAILABLE_MODELS = [
     { name: 'Hiyori (Default)', path: '/live2d/Hiyori/Hiyori.model3.json' },
@@ -70,7 +73,7 @@ const buttonStyle = {
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
     isOpen, onClose, onClearHistory, onContextWindowChange, onLLMSettingsChange, onCharactersUpdated, onUserNameUpdated, onLive2DHighDpiChange, onCharacterSwitch,
-    activeCharacterId // Destructure prop
+    activeCharacterId, onThinkingModeChange
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('general');
 
@@ -78,6 +81,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [apiKey, setApiKey] = useState('');
     const [apiBaseUrl, setApiBaseUrl] = useState('https://api.deepseek.com/v1');
     const [modelName, setModelName] = useState('deepseek-chat');
+    const [temperature, setTemperature] = useState(0.7);
+    // ⚡ DeepSeek Custom Settings
+    const [thinkingEnabled, setThinkingEnabled] = useState(false);
 
     // Visual Settings
     const [highDpiEnabled, setHighDpiEnabled] = useState(false);
@@ -104,38 +110,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [voiceprintProfile, setVoiceprintProfile] = useState('default');
     const [voiceprintStatus, setVoiceprintStatus] = useState<string>('');
 
+    // VAD Settings
+    const [vadStartThreshold, setVadStartThreshold] = useState(0.6);
+    const [vadEndThreshold, setVadEndThreshold] = useState(0.05);
+
     // Character Settings
     const [characters, setCharacters] = useState<CharacterProfile[]>([]);
     // const [activeCharacterId, setActiveCharacterId] = useState<string>(''); // REMOVED local state: Lifted to props
     const [editingCharId, setEditingCharId] = useState<string | null>(null);
     // Track deleted characters for batch removal on save
+    const [isLoadingCharacters, setIsLoadingCharacters] = useState(false);
+
+    // Interaction Settings (Global Tab State)
+    const [globalGalgameEnabled, setGlobalGalgameEnabled] = useState(true);
+    const [globalSoulEvolutionEnabled, setGlobalSoulEvolutionEnabled] = useState(true); // ⚡ New toggle
+    const [globalProactiveEnabled, setGlobalProactiveEnabled] = useState(true);
+    const [globalHeartbeatEnabled, setGlobalHeartbeatEnabled] = useState(false); // "Use Custom Duration"
+    const [globalProactiveThreshold, setGlobalProactiveThreshold] = useState(15);
+    
+    // ⚡ Bilibili Settings
+    const [globalBilibiliEnabled, setGlobalBilibiliEnabled] = useState(false);
+    const [globalBilibiliRoomId, setGlobalBilibiliRoomId] = useState('');
+
     const [deletedCharIds, setDeletedCharIds] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false); // ⚡ Loading State
 
-    useEffect(() => {
-        if (isOpen) {
-            const loadSettings = async () => {
-        const settings = (window as any).settings;
-
-        // LLM
-        setApiKey(await settings.get('apiKey') || '');
-        setApiBaseUrl(await settings.get('apiBaseUrl') || 'https://api.deepseek.com/v1');
-        setModelName(await settings.get('modelName') || 'deepseek-chat');
-        setUserName(await settings.get('userName') || 'Master');
-
-        // Visual
-        setHighDpiEnabled(await settings.get('live2d_high_dpi') || false);
-
-        // Memory
-        setContextWindow(await settings.get('contextWindow') || 15);
-
-        // ⚡ 新逻辑：从后端 API 加载角色列表
+    const fetchCharacters = async () => {
+        setIsLoadingCharacters(true);
         try {
-            const response = await fetch('http://localhost:8001/characters');
+            const response = await fetch(`${API_CONFIG.BASE_URL}/characters`);
             if (response.ok) {
                 const { characters: backendChars } = await response.json();
                 
-                // 转换后端格式到前端 CharacterProfile 格式
                 // 转换后端格式到前端 CharacterProfile 格式
                 const convertedChars: CharacterProfile[] = backendChars.map((char: any) => {
                     // 查找对应的模型路径
@@ -149,14 +155,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         systemPrompt: char.system_prompt,
                         modelPath: realPath, // ⚡ 使用真正的路径
                         voiceConfig: char.voice_config,
-                        heartbeatEnabled: char.heartbeat_enabled ?? true,
-                        proactiveThresholdMinutes: char.proactive_threshold_minutes ?? 15
+                        heartbeatEnabled: char.heartbeat_enabled ?? true, // Strategy: False=Auto, True=Fixed
+                        proactiveChatEnabled: char.proactive_chat_enabled ?? true, // Master Switch
+                        galgameModeEnabled: char.galgame_mode_enabled ?? true, // ⚡ Galgame Mode
+                        soulEvolutionEnabled: char.soul_evolution_enabled ?? true, // ⚡ Soul Evolution Mode
+                        proactiveThresholdMinutes: char.proactive_threshold_minutes ?? 15,
+                        bilibili: char.bilibili || { enabled: false, roomId: 0 } // ⚡ Bilibili Config
                     };
                 });
                 
-                
                 // ⚡ Sort on Load: Active character first
                 const activeId = activeCharacterId; // Use current prop value
+                
+                // ⚡ Initialize Global Interaction Settings from Active Character (or first)
+                const activeChar = convertedChars.find(c => c.id === activeId) || convertedChars[0];
+                if (activeChar) {
+                    setGlobalGalgameEnabled(activeChar.galgameModeEnabled !== false);
+                    setGlobalSoulEvolutionEnabled(activeChar.soulEvolutionEnabled !== false); // ⚡ Init
+                    setGlobalProactiveEnabled(activeChar.proactiveChatEnabled !== false);
+                    setGlobalHeartbeatEnabled(activeChar.heartbeatEnabled === true);
+                    setGlobalProactiveThreshold(activeChar.proactiveThresholdMinutes || 15);
+                    setGlobalBilibiliEnabled(activeChar.bilibili?.enabled || false);
+                    setGlobalBilibiliRoomId(activeChar.bilibili?.roomId?.toString() || '');
+                }
+
                 const sortedChars = convertedChars.sort((a, b) => {
                      if (a.id === activeId) return -1;
                      if (b.id === activeId) return 1;
@@ -166,28 +188,59 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 setCharacters(sortedChars);
                 setDeletedCharIds([]); // Reset deleted list on open
                 
-                // Active Character ID is managed by Parent (App.tsx), no local set needed.
-                /* 
-                // 从 localStorage 获取活跃角色 ID（UI 状态）
-                const savedActiveId = await settings.get('activeCharacterId') as string;
-                if (savedActiveId && convertedChars.some(c => c.id === savedActiveId)) {
-                    // setActiveCharacterId(savedActiveId);
-                } 
-                */
-                
                 console.log('[Settings] ✅ Loaded characters from backend:', convertedChars.length);
             } else {
                 console.error('[Settings] Failed to load characters from backend');
                 // Fallback: 使用本地数据
+                const settings = (window as any).settings;
                 const loadedChars = await settings.get('characters') as CharacterProfile[];
                 if (loadedChars) setCharacters(loadedChars);
             }
         } catch (error) {
             console.error('[Settings] Error loading characters:', error);
             // Fallback: 使用本地数据
+            const settings = (window as any).settings;
             const loadedChars = await settings.get('characters') as CharacterProfile[];
             if (loadedChars) setCharacters(loadedChars);
+        } finally {
+            setIsLoadingCharacters(false);
         }
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            const loadSettings = async () => {
+                const settings = (window as any).settings;
+
+                // LLM
+                setApiKey(await settings.get('apiKey') || '');
+                let url = await settings.get('apiBaseUrl') || `${API_CONFIG.BASE_URL}/v1`;
+                // ⚡ Auto-migrate stale /free-llm prefix
+                if (url.includes('/free-llm')) {
+                    url = url.replace('/free-llm', '');
+                    console.log('[Settings] Migrated stale Free LLM URL to:', url);
+                    await settings.set('apiBaseUrl', url); // Persist fix immediately
+                }
+                setApiBaseUrl(url);
+                // ⚡ Detect Free Mode if URL points to our backend (127.0.0.1:8010)
+                setLlmProvider(url.includes('127.0.0.1:8010') || url.includes('localhost:8010') ? 'free' : 'custom');
+                
+        setModelName(await settings.get('modelName') || 'gpt-4o-mini');
+        setTemperature(await settings.get('llm_temperature') || 0.7);
+        
+        // ⚡ DeepSeek Thinking
+        setThinkingEnabled(await settings.get('thinking_enabled') || false); // Default false
+
+        setUserName(await settings.get('userName') || 'Master');
+
+        // Visual
+        setHighDpiEnabled(await settings.get('live2d_high_dpi') || false);
+
+        // Memory
+        setContextWindow(await settings.get('contextWindow') || 15);
+
+        // ⚡ 新逻辑：从后端 API 加载角色列表
+        fetchCharacters();
 
         // Whisper & TTS Voices & Audio Devices & Voiceprint
         fetchModels();
@@ -202,51 +255,128 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // TTS Voices Fetching
     const [edgeVoices, setEdgeVoices] = useState<{ name: string, gender: string }[]>([]);
     const [gptVoices, setGptVoices] = useState<{ name: string, gender: string }[]>([]);
+    const [activeTtsEngines, setActiveTtsEngines] = useState<string[]>([]); // ⚡ Track active engines
+    const [llmProvider, setLlmProvider] = useState<'free' | 'custom'>('free'); // ⚡ Provider Toggle
+
+    // ⚡ LLM Manager State
+    const [llmRoutes, setLlmRoutes] = useState<any[]>([]);
+    const [llmProviders, setLlmProviders] = useState<any[]>([]);
+    const [advancedModelTab, setAdvancedModelTab] = useState(false); // Toggle for simple vs advanced
+
+    // ⚡ Log Suppression Refs
+    const hasWarnedTTS = React.useRef(false);
+    const hasWarnedSTT = React.useRef(false);
+
+    const fetchTTSStatus = async () => {
+        try {
+            const res = await fetch(`${API_CONFIG.TTS_BASE_URL}/health`);
+            if (res.ok) {
+                const data = await res.json();
+                setActiveTtsEngines(data.active_engines || []);
+                hasWarnedTTS.current = false; // Reset warning on success
+            }
+        } catch (e) {
+             if (!hasWarnedTTS.current) {
+                 console.warn("[Settings] TTS Service unavailable (suppressing further errors)");
+                 hasWarnedTTS.current = true;
+             }
+             setActiveTtsEngines([]);
+        }
+    };
 
     const fetchTTSVoices = async () => {
+        await fetchTTSStatus(); // ⚡ Check health first
         try {
             // Fetch Edge TTS Voices
             try {
-                const res = await fetch('http://127.0.0.1:8766/tts/voices?engine=edge-tts');
+                const res = await fetch(`${API_CONFIG.TTS_BASE_URL}/tts/voices?engine=edge-tts`);
                 if (res.ok) {
                     const data = await res.json();
                     const allVoices = [...(data.chinese || []), ...(data.english || [])];
                     setEdgeVoices(allVoices);
                 }
-            } catch (e) { console.warn("Failed to fetch Edge voices", e); }
+            } catch (e) { 
+                // Silent catch if status already warned
+                if (!hasWarnedTTS.current) console.warn("Failed to fetch Edge voices", e); 
+            }
 
             // Fetch GPT-SoVITS Voices
             try {
-                const res = await fetch('http://127.0.0.1:8766/tts/voices?engine=gpt-sovits');
+                const res = await fetch(`${API_CONFIG.TTS_BASE_URL}/tts/voices?engine=gpt-sovits`);
                 if (res.ok) {
                     const data = await res.json();
                     setGptVoices(data.voices || []);
                 }
-            } catch (e) { console.warn("Failed to fetch GPT-SoVITS voices", e); }
+            } catch (e) { 
+                if (!hasWarnedTTS.current) console.warn("Failed to fetch GPT-SoVITS voices", e); 
+            }
 
         } catch (e) {
-            console.error("Failed to fetch TTS voices", e);
+            if (!hasWarnedTTS.current) console.error("Failed to fetch TTS voices", e);
         }
     };
 
     // Audio Devices Fetching
     const fetchAudioDevices = async () => {
         try {
-            const res = await fetch(`${sttServerUrl}/audio/devices`);
+            const res = await fetch(`${API_CONFIG.STT_BASE_URL}/audio/devices`);
             if (res.ok) {
                 const data = await res.json();
                 setAudioDevices(data.devices || []);
                 setCurrentAudioDevice(data.current || null);
+                hasWarnedSTT.current = false; // Reset warning
             }
         } catch (e) {
-            console.error("Failed to fetch audio devices", e);
+            if (!hasWarnedSTT.current) {
+                console.warn("[Settings] STT Service unavailable (suppressing further errors)");
+                hasWarnedSTT.current = true;
+            }
+        }
+    };
+
+    // ⚡ Fetch LLM Manager Data
+    const fetchLlmManagerData = async () => {
+        try {
+            const routesRes = await fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/routes`);
+            const provRes = await fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/providers`);
+            
+            if (routesRes.ok && provRes.ok) {
+                const rData = await routesRes.json();
+                const pData = await provRes.json();
+                setLlmRoutes(rData.routes || []);
+                setLlmProviders(pData.providers || []);
+            }
+        } catch (e) {
+            console.warn("[Settings] Failed to fetch LLM Manager data (backend might be old version)", e);
+        }
+    };
+
+    const handleRouteUpdate = async (feature: string, providerId: string, model: string, temp?: number, topP?: number, presPenalty?: number, freqPenalty?: number) => {
+        try {
+            const res = await fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/routes/${feature}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    provider_id: providerId, 
+                    model: model, 
+                    temperature: temp,
+                    top_p: topP,
+                    presence_penalty: presPenalty,
+                    frequency_penalty: freqPenalty
+                })
+            });
+            if (res.ok) {
+                fetchLlmManagerData(); // Refresh
+            }
+        } catch (e) {
+            console.error("Failed to update route", e);
         }
     };
 
     const handleAudioDeviceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
         const deviceName = e.target.value;
         try {
-            const res = await fetch(`${sttServerUrl}/audio/config`, {
+            const res = await fetch(`${API_CONFIG.STT_BASE_URL}/audio/config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ device_name: deviceName })
@@ -263,10 +393,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
-    // Voiceprint Functions
+    // Voiceprint & VAD Functions
     const fetchVoiceprintConfig = async () => {
         try {
-            const res = await fetch(`${sttServerUrl}/voiceprint/status`);
+            // Fetch Voiceprint Status
+            const res = await fetch(`${API_CONFIG.STT_BASE_URL}/voiceprint/status`);
             if (res.ok) {
                 const data = await res.json();
                 setVoiceprintEnabled(data.enabled || false);
@@ -274,9 +405,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 setVoiceprintProfile(data.profile || 'default');
                 setVoiceprintStatus(data.profile_loaded ? '✓ 已加载声纹' : '⚠️ 未注册声纹');
             }
+            // Fetch VAD Status (New)
+            const statusRes = await fetch(`${API_CONFIG.STT_BASE_URL}/audio/status`);
+            if (statusRes.ok) {
+                const data = await statusRes.json();
+                if (data.speech_start_threshold !== undefined) setVadStartThreshold(data.speech_start_threshold);
+                if (data.speech_end_threshold !== undefined) setVadEndThreshold(data.speech_end_threshold);
+            }
         } catch (e) {
-            console.warn('Failed to fetch voiceprint config', e);
+            console.warn('Failed to fetch voice/vad config', e);
         }
+    };
+
+    const handleVadChange = async (key: 'speech_start_threshold' | 'speech_end_threshold', value: number) => {
+        if (key === 'speech_start_threshold') setVadStartThreshold(value);
+        if (key === 'speech_end_threshold') setVadEndThreshold(value);
+        
+        // Debounced save could be better, but direct set is okay for settings
+        try {
+            await fetch(`${API_CONFIG.STT_BASE_URL}/audio/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    [key]: value
+                })
+            });
+        } catch (e) { console.error("Failed to update VAD param", e); }
     };
 
     // Migration: Initialize systemPrompt from description if missing (for legacy characters)
@@ -302,7 +456,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const handleVoiceprintToggle = async (enabled: boolean) => {
         try {
             // Always use current state values, never hardcoded defaults
-            const res = await fetch(`${sttServerUrl}/audio/config`, {
+            const res = await fetch(`${API_CONFIG.STT_BASE_URL}/audio/config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -325,7 +479,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const handleVoiceprintThresholdChange = async (threshold: number) => {
         setVoiceprintThreshold(threshold);
         try {
-            await fetch(`${sttServerUrl}/audio/config`, {
+            await fetch(`${API_CONFIG.STT_BASE_URL}/audio/config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -348,6 +502,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             interval = setInterval(fetchModels, 2000);
         }
         return () => clearInterval(interval);
+    }, [isOpen, activeTab]);
+
+    // ⚡ Poll LLM Manager Data when open
+    useEffect(() => {
+        if (isOpen && activeTab === 'general') {
+            fetchLlmManagerData();
+        }
     }, [isOpen, activeTab]);
 
     const [sttEngineType, setSttEngineType] = useState<string>('faster_whisper');
@@ -391,22 +552,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         await settings.set('apiKey', apiKey);
         await settings.set('apiBaseUrl', apiBaseUrl);
         await settings.set('modelName', modelName);
+        await settings.set('llm_temperature', temperature);
+        await settings.set('thinking_enabled', thinkingEnabled); // ⚡ Save Thinking Mode
         await settings.set('userName', userName);
         await settings.set('contextWindow', contextWindow);
         await settings.set('activeCharacterId', activeCharacterId);
         await settings.set('live2d_high_dpi', highDpiEnabled);
 
-        // 保存声纹配置并应用到后端
-        if (voiceprintEnabled || voiceprintThreshold !== 0.6 || voiceprintProfile !== 'default') {
+        // 保存声纹及VAD配置并应用到后端
+        // ⚡ Now includes VAD Thresholds so they are also persisted!
+        if (voiceprintEnabled || voiceprintThreshold !== 0.6 || voiceprintProfile !== 'default' || vadStartThreshold !== 0.6 || vadEndThreshold !== 0.15) {
             try {
                 await fetch(`${sttServerUrl}/audio/config`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         device_name: currentAudioDevice,
+                        // Voiceprint
                         enable_voiceprint_filter: voiceprintEnabled,
                         voiceprint_threshold: voiceprintThreshold,
-                        voiceprint_profile: voiceprintProfile
+                        voiceprint_profile: voiceprintProfile,
+                        // VAD (Persisted)
+                        speech_start_threshold: vadStartThreshold,
+                        speech_end_threshold: vadEndThreshold
                     })
                 });
 
@@ -414,7 +582,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     console.log('[Settings] Voiceprint configuration saved. Please restart stt_server.py for changes to take effect.');
                 }
             } catch (e) {
-                console.error('Failed to save voiceprint config', e);
+                console.error('Failed to save voiceprint/VAD config', e);
             }
         }
 
@@ -431,11 +599,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     description: char.description,
                     system_prompt: char.systemPrompt,
                     live2d_model: char.modelPath,
-                    voice_config: char.voiceConfig,
-                    heartbeat_enabled: char.heartbeatEnabled,
-                    proactive_threshold_minutes: char.proactiveThresholdMinutes
+                    // voice_config: char.voiceConfig, // Already included above, removed duplicate
+                    
+                    // ⚡ Apply Global Interaction Settings to ALL characters on save
+                    heartbeat_enabled: globalHeartbeatEnabled,
+                    proactive_chat_enabled: globalProactiveEnabled,
+                    galgame_mode_enabled: globalGalgameEnabled,
+                    soul_evolution_enabled: globalSoulEvolutionEnabled, // ⚡ Save to backend
+                    proactive_threshold_minutes: globalProactiveThreshold,
+                    bilibili: {
+                        enabled: globalBilibiliEnabled,
+                        room_id: parseInt(globalBilibiliRoomId) || 0
+                    }
                 };
-                return fetch(`http://localhost:8001/characters/${char.id}/config`, {
+                return fetch(`${API_CONFIG.BASE_URL}/characters/${char.id}/config`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -445,7 +622,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             // 2. Delete removed characters
             const deletePromises = deletedCharIds.map(id => {
                console.log(`[Settings] 🗑️ Deleting character: ${id}`);
-               return fetch(`http://localhost:8001/characters/${id}`, {
+               return fetch(`${API_CONFIG.BASE_URL}/characters/${id}`, {
                    method: 'DELETE'
                }); 
             });
@@ -457,7 +634,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             // ⚡ Lightweight heartbeat reload (no Memory reinit)
             try {
-                const reloadRes = await fetch('http://localhost:8001/heartbeat/reload', { method: 'POST' });
+                const reloadRes = await fetch(`${API_CONFIG.BASE_URL}/heartbeat/reload`, { method: 'POST' });
                 if (reloadRes.ok) {
                     const data = await reloadRes.json();
                     console.log(`[Settings] ❤️ Heartbeat reloaded: Enabled=${data.heartbeat_enabled}, Threshold=${data.proactive_threshold_minutes}min`);
@@ -470,50 +647,88 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             console.error('[Settings] Failed to sync characters to backend:', e);
         }
 
-        // 触发回调
+
+        // ⚡ Sync LLM Settings to Backend Manager (Global Toggle overrides Advanced Routing)
+        try {
+            console.log('[Settings] Syncing LLM Manager Configuration...');
+            // 1. If Custom, update Provider Config first
+            if (llmProvider === 'custom') {
+                 await fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/providers/custom_provider`, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({
+                         api_key: apiKey,
+                         base_url: apiBaseUrl
+                     })
+                 });
+            }
+
+            // 2. Update Routes (Chat, Dreaming, Memory) based on Global Toggle
+            const targetProvider = llmProvider === 'free' ? 'free_tier' : 'custom_provider';
+            // ⚡ Fix: Use selected modelName for Free Tier too! (Don't hardcode gpt-4o-mini)
+            const targetModel = modelName;
+
+            const features = ['chat', 'dreaming', 'memory']; // Core features to sync
+            
+            await Promise.all(features.map(feature => 
+                fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/routes/${feature}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        provider_id: targetProvider,
+                        model: targetModel
+                    })
+                })
+            ));
+            console.log(`[Settings] ✅ LLM Routes synced to ${targetProvider}`);
+            
+            // Refresh Manager Data for UI
+            fetchLlmManagerData();
+
+        } catch (e) {
+             console.error('[Settings] Failed to sync LLM Manager settings:', e);
+        }
+
+        // ⚡ Construct Updated Characters List with Global Settings
+        const updatedCharacters = characters.map(char => ({
+            ...char,
+            galgameModeEnabled: globalGalgameEnabled,
+            soulEvolutionEnabled: globalSoulEvolutionEnabled, // ⚡ Update local
+            proactiveChatEnabled: globalProactiveEnabled,
+            heartbeatEnabled: globalHeartbeatEnabled,
+            proactiveThresholdMinutes: globalProactiveThreshold,
+            bilibili: {
+                enabled: globalBilibiliEnabled,
+                roomId: parseInt(globalBilibiliRoomId) || 0
+            }
+        }));
+
+        // 触发回调 (Use updated characters)
         if (onContextWindowChange) onContextWindowChange(contextWindow);
-        if (onLLMSettingsChange) onLLMSettingsChange(apiKey, apiBaseUrl, modelName);
-        if (onCharactersUpdated) onCharactersUpdated(characters, activeCharacterId);
+        if (onLLMSettingsChange) onLLMSettingsChange(apiKey, apiBaseUrl, modelName, temperature);
+        if (onCharactersUpdated) onCharactersUpdated(updatedCharacters, activeCharacterId); // Pass NEW list
         if (onUserNameUpdated) onUserNameUpdated(userName);
         if (onLive2DHighDpiChange) onLive2DHighDpiChange(highDpiEnabled);
+        if (onThinkingModeChange) onThinkingModeChange(thinkingEnabled); // ⚡ Callback
 
-        // ⚡ 同步用户名到后端（所有角色的 state.json）
+        // ⚡ 同步用户名到后端（批量 API）
         try {
-            console.log(`[Settings] Syncing user name to backend: ${userName}`);
-            
-            // 为每个角色更新 user_name
-            const userNameUpdatePromises = characters.map(char => {
-                // 获取当前state
-                return fetch(`http://localhost:8001/galgame/${char.id}/state`, {
-                    method: 'GET'
-                }).then(res => res.json()).then(state => {
-                    // 更新 user_name
-                    const updatedState = {
-                        ...state,
-                        relationship: {
-                            ...(state.relationship || {}),
-                            user_name: userName
-                        }
-                    };
-                    
-                    // 保存回后端
-                    return fetch(`http://localhost:8001/galgame/${char.id}/state`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updatedState)
-                    });
-                });
+            console.log(`[Settings] Syncing user name to backend (Bulk): ${userName}`);
+            await fetch(`${API_CONFIG.BASE_URL}/soul/user_name_bulk`, { // Use backend URL properly
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_name: userName })
             });
-            
-            await Promise.all(userNameUpdatePromises);
-            console.log('[Settings] ✅ User name synced to all characters');
+            console.log('[Settings] ✅ User name bulk synced');
         } catch (e) {
             console.error('[Settings] Failed to sync user name to backend:', e);
         }
-
+        
         setIsSaving(false);
         onClose();
     };
+
+
 
     const handleClearHistory = () => {
         if (confirm('确定要清空所有对话历史吗？此操作不可恢复。')) {
@@ -633,7 +848,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000,
+            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000,
             backdropFilter: 'blur(3px)'
         }}>
             <div style={{
@@ -647,7 +862,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div style={{ padding: '20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h2 style={{ margin: 0, fontSize: '20px', color: '#1a1a1a', fontWeight: 600 }}>Settings</h2>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        {(['general', 'voice', 'memory', 'characters'] as Tab[]).map(tab => (
+                        {(['general', 'voice', 'memory', 'characters', 'interaction'] as Tab[]).map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
@@ -692,34 +907,274 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <section>
                                 <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>LLM Configuration</h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>API Host</label>
-                                        <input
-                                            value={apiBaseUrl}
-                                            onChange={(e) => setApiBaseUrl(e.target.value)}
-                                            style={inputStyle}
-                                            placeholder="https://api.deepseek.com/v1"
-                                        />
+                                    
+                                    {/* Provider Switch */}
+                                    <div style={{ display: 'flex', gap: '10px', marginBottom: '5px' }}>
+                                        <button
+                                            onClick={() => {
+                                                setLlmProvider('free');
+                                                setApiBaseUrl(`${API_CONFIG.BASE_URL}/free-llm/v1`);
+                                                setModelName('gpt-4o-mini');
+                                                setApiKey('sk-free-demo'); 
+
+                                                // ⚡ Visual Sync: Update routes to reflect Free changes immediately (Optimistic)
+                                                setLlmRoutes(prev => prev.map(r => ({
+                                                    ...r,
+                                                    provider_id: 'free_tier',
+                                                    model: 'gpt-4o-mini'
+                                                })));
+                                            }}
+                                            style={{
+                                                flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer',
+                                                border: llmProvider === 'free' ? '1px solid #4f46e5' : '1px solid #e5e7eb',
+                                                backgroundColor: llmProvider === 'free' ? '#eef2ff' : 'white',
+                                                color: llmProvider === 'free' ? '#4f46e5' : '#374151',
+                                                fontWeight: 600, fontSize: '13px'
+                                            }}
+                                        >
+                                            🚀 Free AI (免配置)
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setLlmProvider('custom');
+                                                setApiBaseUrl('https://api.deepseek.com/v1');
+                                                setModelName('deepseek-chat');
+
+                                                // ⚡ Visual Sync: Update routes to reflect Custom changes immediately (Optimistic)
+                                                setLlmRoutes(prev => prev.map(r => ({
+                                                    ...r,
+                                                    provider_id: 'custom_provider',
+                                                    model: 'deepseek-chat'
+                                                })));
+                                            }}
+                                            style={{
+                                                flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer',
+                                                border: llmProvider === 'custom' ? '1px solid #4f46e5' : '1px solid #e5e7eb',
+                                                backgroundColor: llmProvider === 'custom' ? '#eef2ff' : 'white',
+                                                color: llmProvider === 'custom' ? '#4f46e5' : '#374151',
+                                                fontWeight: 600, fontSize: '13px'
+                                            }}
+                                        >
+                                            🔧 Custom / DeepSeek
+                                        </button>
                                     </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>API Key</label>
-                                        <input
-                                            type="password"
-                                            value={apiKey}
-                                            onChange={(e) => setApiKey(e.target.value)}
-                                            style={inputStyle}
-                                            placeholder="sk-..."
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Model Name</label>
-                                        <input
-                                            value={modelName}
-                                            onChange={(e) => setModelName(e.target.value)}
-                                            style={inputStyle}
-                                            placeholder="deepseek-chat"
-                                        />
-                                    </div>
+
+                                    {/* Settings based on Provider */}
+                                    {llmProvider === 'free' ? (
+                                        <>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Model</label>
+                                                <select
+                                                    value={modelName}
+                                                    onChange={(e) => {
+                                                        const newVal = e.target.value;
+                                                        setModelName(newVal);
+                                                        
+                                                        // ⚡ Visual Sync: Update routes when main model changes
+                                                        setLlmRoutes(prev => prev.map(r => ({
+                                                            ...r,
+                                                            provider_id: 'free_tier',
+                                                            model: newVal
+                                                        })));
+                                                    }}
+                                                    style={inputStyle}
+                                                >
+                                                    <option value="gpt-4o-mini">GPT-4o Mini (Fast & Smart)</option>
+                                                    <option value="claude-3-haiku">Claude 3 Haiku</option>
+                                                    <option value="llama-3-70b">Llama 3 70B</option>
+                                                    <option value="mixtral-8x7b">Mixtral 8x7B</option>
+                                                </select>
+                                                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                                                    Based on DuckDuckGo AI. No API Key required.
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>API Host</label>
+                                                <input
+                                                    value={apiBaseUrl}
+                                                    onChange={(e) => setApiBaseUrl(e.target.value)}
+                                                    style={inputStyle}
+                                                    placeholder="https://api.deepseek.com/v1"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>API Key</label>
+                                                <input
+                                                    type="password"
+                                                    value={apiKey}
+                                                    onChange={(e) => setApiKey(e.target.value)}
+                                                    style={inputStyle}
+                                                    placeholder="sk-..."
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Model Name</label>
+                                                <input
+                                                    value={modelName}
+                                                    onChange={(e) => setModelName(e.target.value)}
+                                                    style={inputStyle}
+                                                    placeholder="deepseek-chat"
+                                                />
+                                            </div>
+                                            
+                                            <div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                    <label style={{ fontSize: '13px', color: '#6b7280' }}>Temperature (Creativity)</label>
+                                                    <span style={{ fontSize: '12px', color: '#6366f1', fontWeight: 600 }}>{temperature}</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="2"
+                                                    step="0.1"
+                                                    value={temperature}
+                                                    onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                                                    style={{ width: '100%', cursor: 'pointer', accentColor: '#6366f1' }}
+                                                />
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9ca3af' }}>
+                                                    <span>Precise (0.0)</span>
+                                                    <span>Balanced (0.7)</span>
+                                                    <span>Creative (1.3+)</span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                                
+                                {/* ⚡ Advanced Route Config */}
+                                <div style={{ marginTop: '15px' }}>
+                                    {/* ⚡ Hide Advanced Routing for Free Tier (Auto-managed) */}
+                                    {llmProvider !== 'free' && (
+                                        <button 
+                                            onClick={() => setAdvancedModelTab(!advancedModelTab)}
+                                            style={{ fontSize: '12px', color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                                        >
+                                            {advancedModelTab ? 'Hide Advanced Model Routing' : 'Show Advanced Model Routing (Per-Feature Configuration)'}
+                                        </button>
+                                    )}
+                                    
+                                    {llmProvider === 'free' && (
+                                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
+                                            ✨ Free Mode actively manages memory optimization for you. (Advanced routing disabled)
+                                        </div>
+                                    )}
+                                    
+                                    {advancedModelTab && llmProvider !== 'free' && (
+                                        <div style={{ marginTop: '10px', background: '#eef2ff', padding: '10px', borderRadius: '8px', border: '1px solid #c7d2fe' }}>
+                                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>Feature Routing</div>
+                                            
+                                            {llmRoutes.map(route => {
+                                                const currentProv = llmProviders.find(p => p.id === route.provider_id);
+                                                return (
+                                                    <div key={route.feature} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontSize: '12px' }}>
+                                                        <div style={{ width: '80px', fontWeight: 500, textTransform: 'capitalize' }}>{route.feature}</div>
+                                                        
+                                                        <select 
+                                                            value={route.provider_id} 
+                                                            onChange={(e) => handleRouteUpdate(route.feature, e.target.value, route.model)}
+                                                            style={{ ...inputStyle, width: '120px', padding: '4px' }}
+                                                        >
+                                                            {llmProviders.map(p => (
+                                                                <option key={p.id} value={p.id}>{p.id}</option>
+                                                            ))}
+                                                        </select>
+                                                        
+                                                        <select 
+                                                            value={route.model}
+                                                            onChange={(e) => handleRouteUpdate(route.feature, route.provider_id, e.target.value)}
+                                                            style={{ ...inputStyle, width: '150px', padding: '4px' }}
+                                                        >
+                                                            {/* Show models from current provider */}
+                                                            {currentProv?.models?.map((m: string) => (
+                                                                <option key={m} value={m}>{m}</option>
+                                                            ))}
+                                                            {/* Fallback if model not in list */}
+                                                            {!currentProv?.models?.includes(route.model) && <option value={route.model}>{route.model}</option>}
+                                                        </select>
+
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
+                                                            {/* Temperature */}
+                                                            <div title="Temperature (0.0-2.0)" style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                <span style={{ fontSize: '10px' }}>🌡️</span>
+                                                                <input
+                                                                    type="number" step="0.1" min="0" max="2"
+                                                                    value={route.temperature ?? 0.7}
+                                                                    onChange={(e) => handleRouteUpdate(route.feature, route.provider_id, route.model, parseFloat(e.target.value), route.top_p, route.presence_penalty, route.frequency_penalty)}
+                                                                    style={{ ...inputStyle, width: '45px', padding: '2px' }}
+                                                                />
+                                                            </div>
+                                                            {/* Top P */}
+                                                            <div title="Top P (0.0-1.0)" style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                <span style={{ fontSize: '10px' }}>🎯</span>
+                                                                <input
+                                                                    type="number" step="0.05" min="0" max="1"
+                                                                    value={route.top_p ?? 1.0}
+                                                                    onChange={(e) => handleRouteUpdate(route.feature, route.provider_id, route.model, route.temperature, parseFloat(e.target.value), route.presence_penalty, route.frequency_penalty)}
+                                                                    style={{ ...inputStyle, width: '45px', padding: '2px' }}
+                                                                />
+                                                            </div>
+                                                            {/* Presence Penalty */}
+                                                            <div title="Presence Penalty (0.0-2.0)" style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                <span style={{ fontSize: '10px' }}>🆕</span>
+                                                                <input
+                                                                    type="number" step="0.1" min="0" max="2"
+                                                                    value={route.presence_penalty ?? 0.0}
+                                                                    onChange={(e) => handleRouteUpdate(route.feature, route.provider_id, route.model, route.temperature, route.top_p, parseFloat(e.target.value), route.frequency_penalty)}
+                                                                    style={{ ...inputStyle, width: '45px', padding: '2px' }}
+                                                                />
+                                                            </div>
+                                                            {/* Frequency Penalty */}
+                                                            <div title="Frequency Penalty (0.0-2.0)" style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                <span style={{ fontSize: '10px' }}>🔁</span>
+                                                                <input
+                                                                    type="number" step="0.1" min="0" max="2"
+                                                                    value={route.frequency_penalty ?? 0.0}
+                                                                    onChange={(e) => handleRouteUpdate(route.feature, route.provider_id, route.model, route.temperature, route.top_p, route.presence_penalty, parseFloat(e.target.value))}
+                                                                    style={{ ...inputStyle, width: '45px', padding: '2px' }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {/* ⚡ DeepSeek Thinking Mode Toggle */}
+                                    {llmProvider === 'custom' && (
+                                        <div style={{ padding: '12px', border: '1px solid #eee', borderRadius: '8px', marginBottom: '16px', backgroundColor: '#f9fafb' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                                <label style={{ ...labelStyle, fontSize: '13px', color: '#6366f1' }}>
+                                                    🧠 DeepSeek 思考模式 (Thinking Mode)
+                                                </label>
+                                                <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '36px', height: '20px' }}>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={thinkingEnabled}
+                                                        onChange={(e) => setThinkingEnabled(e.target.checked)}
+                                                        style={{ opacity: 0, width: 0, height: 0 }}
+                                                    />
+                                                    <span style={{ 
+                                                        position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, 
+                                                        backgroundColor: thinkingEnabled ? '#6366f1' : '#ccc', borderRadius: '20px', transition: '.4s' 
+                                                    }}>
+                                                        <span style={{ 
+                                                            position: 'absolute', content: '""', height: '16px', width: '16px', left: '2px', bottom: '2px', 
+                                                            backgroundColor: 'white', borderRadius: '50%', transition: '.4s',
+                                                            transform: thinkingEnabled ? 'translateX(16px)' : 'translateX(0)'
+                                                        }}></span>
+                                                    </span>
+                                                </label>
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#666' }}>
+                                                启用后将使用 Chain of Thought (Reasoning) 进行深度思考，展示即时思考过程。
+                                                <br/>
+                                                <span style={{ fontSize: '11px', color: '#999' }}>注意：需要支持 deepseek-reasoner 或兼容的 API 端点。</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </section>
 
@@ -741,7 +1196,135 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                     )}
 
-                    {/* Voice Tab */}
+                    {/* Interaction Tab (New Global Tab) */}
+                    {activeTab === 'interaction' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <section>
+                                 <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>Global Interaction Control</h3>
+                                 <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                     
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {/* 0. Galgame Mode (Master Switch) */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={globalGalgameEnabled}
+                                                onChange={(e) => setGlobalGalgameEnabled(e.target.checked)}
+                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                            />
+                                            <div>
+                                                <div style={{ fontSize: '13px', color: '#1f2937', fontWeight: 500 }}>Enable Galgame System (恋爱养成系统)</div>
+                                                <div style={{ fontSize: '11px', color: '#6b7280' }}>Enable Intimacy, Mood, Energy mechanics & Context injection.</div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* 0.5 Soul Evolution (Logic Switch) */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={globalSoulEvolutionEnabled}
+                                                onChange={(e) => setGlobalSoulEvolutionEnabled(e.target.checked)}
+                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                            />
+                                            <div>
+                                                <div style={{ fontSize: '13px', color: '#1f2937', fontWeight: 500 }}>Enable Soul Evolution (性格自动演化)</div>
+                                                <div style={{ fontSize: '11px', color: '#6b7280' }}>Allow AI personality (MBTI, Mood) to change based on conversation.</div>
+                                            </div>
+                                        </div>
+
+                                        {/* 1. Master Switch: Proactive Chat */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={globalProactiveEnabled}
+                                                // disabled={!globalGalgameEnabled} // Decoupled as requested
+                                                onChange={(e) => setGlobalProactiveEnabled(e.target.checked)}
+                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }} // Opacity removed
+                                            />
+                                            <div>
+                                                <div style={{ fontSize: '13px', color: '#1f2937', fontWeight: 500 }}>
+                                                    Enable Proactive Chat (主动搭话模式)
+                                                </div>
+                                                <div style={{ fontSize: '11px', color: '#9ca3af' }}>AI will initiate conversation when idle (applies to all characters).</div>
+                                            </div>
+                                        </div>
+
+                                        {/* 2. Strategy Settings */}
+                                        {globalProactiveEnabled && (
+                                            <div style={{ marginLeft: '24px', paddingLeft: '10px', borderLeft: '2px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {/* Custom Duration Toggle */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={globalHeartbeatEnabled}
+                                                        onChange={(e) => setGlobalHeartbeatEnabled(e.target.checked)}
+                                                        style={{ width: '14px', height: '14px', cursor: 'pointer' }}
+                                                    />
+                                                     <div style={{ fontSize: '13px', color: '#374151' }}>Use Custom Silence Duration</div>
+                                                </div>
+
+                                                {/* Duration Input */}
+                                                {globalHeartbeatEnabled ? (
+                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                                                        <label style={{ fontSize: '12px', color: '#6b7280' }}>Silence (mins):</label>
+                                                        <input
+                                                            type="number"
+                                                            min="0.1"
+                                                            max="120"
+                                                            step="0.1"
+                                                            value={globalProactiveThreshold}
+                                                            onChange={(e) => setGlobalProactiveThreshold(Number(e.target.value))}
+                                                            style={{ ...inputStyle, width: '80px', padding: '4px 8px' }}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ fontSize: '11px', color: '#9ca3af' }}>
+                                                        Using <strong>Auto-Intimacy Mode</strong> (Duration depends on character's relationship level).
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f9fafb', borderRadius: '4px', border: '1px dashed #d1d5db', fontSize: '12px', color: '#6b7280' }}>
+                                        🎨 <strong>Note:</strong> These settings control the interaction logic for ALL characters. Audio and Voice settings are still individual per character card.
+                                    </div>
+                                 </div>
+                            </section>
+
+                            <section>
+                                 <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>Live Streaming Integration (Plugin)</h3>
+                                 <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={globalBilibiliEnabled}
+                                            onChange={(e) => setGlobalBilibiliEnabled(e.target.checked)}
+                                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                        />
+                                        <div>
+                                            <div style={{ fontSize: '13px', color: '#1f2937', fontWeight: 500 }}>
+                                                Enable Bilibili Danmaku Monitor (B站弹幕监听)
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: '#9ca3af' }}>Allow AI to read and respond to live comments.</div>
+                                        </div>
+                                    </div>
+
+                                    {globalBilibiliEnabled && (
+                                        <div style={{ marginLeft: '24px' }}>
+                                            <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Bilibili Room ID</label>
+                                            <input
+                                                type="text"
+                                                value={globalBilibiliRoomId}
+                                                onChange={(e) => setGlobalBilibiliRoomId(e.target.value)}
+                                                style={{ ...inputStyle, width: '150px' }}
+                                                placeholder="e.g. 123456"
+                                            />
+                                        </div>
+                                    )}
+                                 </div>
+                            </section>
+                        </div>
+                    )}
                     {activeTab === 'voice' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                             <div>
@@ -829,6 +1412,66 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         <span className="spinner">⏳</span> 
                                         <span>正在切换/下载模型，请留意控制台日志...</span>
                                     </div>}
+                                </div>
+                            </div>
+
+                            {/* VAD Settings */}
+                            <div>
+                                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>语音活动检测 (VAD Settings)</h3>
+                                <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
+                                    
+                                    {/* Sensitivity Slider */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
+                                                触发灵敏度 (Start Threshold)
+                                            </label>
+                                            <span style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace' }}>
+                                                {vadStartThreshold.toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0.3"
+                                            max="0.95"
+                                            step="0.05"
+                                            value={vadStartThreshold}
+                                            onChange={(e) => handleVadChange('speech_start_threshold', parseFloat(e.target.value))}
+                                            style={{ width: '100%', cursor: 'pointer' }}
+                                        />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
+                                            <span>容易触发 (0.3)</span>
+                                            <span>严格过滤 (0.95)</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Pause Tolerance Slider */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
+                                                断句延迟 (End Threshold)
+                                            </label>
+                                            <span style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace' }}>
+                                                {vadEndThreshold.toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0.01"
+                                            max="0.3"
+                                            step="0.01"
+                                            value={vadEndThreshold}
+                                            onChange={(e) => handleVadChange('speech_end_threshold', parseFloat(e.target.value))}
+                                            style={{ width: '100%', cursor: 'pointer' }}
+                                        />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
+                                            <span>容忍停顿 (0.01)</span>
+                                            <span>快速切断 (0.3)</span>
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                                            ⚠️ 值越小，允许的停顿越长 (更不容易被打断)。建议 0.05 - 0.15。
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1068,7 +1711,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                             value={char.systemPrompt || ''}
                                                             onChange={(e) => handleUpdateCharacter(char.id, { systemPrompt: e.target.value })}
                                                             style={{ ...inputStyle, minHeight: '100px', fontFamily: 'inherit', fontSize: '13px' }}
-                                                            placeholder="你是一个18岁的活泼可爱的女孩子，你正在你的恋人聊天。\n对话一定要使用英语，除非对方问某个东西是什么或者某个单词什么意思。"
+                                                            placeholder="你是一个18岁的活泼可爱的女孩子。"
                                                         />
                                                     </div>
 
@@ -1095,9 +1738,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                                 onChange={(e) => handleVoiceConfigChange(char.id, 'service', e.target.value)}
                                                                 style={{ ...inputStyle, marginBottom: '5px' }}
                                                             >
-                                                                <option value="edge-tts">Edge TTS (Cloud / Free)</option>
-                                                                <option value="gpt-sovits">GPT-SoVITS (Local / Emotional)</option>
+                                                                <option value="edge-tts">
+                                                                    Edge TTS (Cloud / Free) 
+                                                                    {activeTtsEngines.includes('Edge TTS') ? ' ✅' : ' ⚠️ Unavailable'}
+                                                                </option>
+                                                                <option value="gpt-sovits" disabled={!activeTtsEngines.includes('GPT-SoVITS')}>
+                                                                    GPT-SoVITS (Local / Emotional) 
+                                                                    {activeTtsEngines.includes('GPT-SoVITS') ? ' ✅' : ' ❌ Offline'}
+                                                                </option>
                                                             </select>
+                                                            {char.voiceConfig.service === 'gpt-sovits' && !activeTtsEngines.includes('GPT-SoVITS') && (
+                                                                <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '2px' }}>
+                                                                    ⚠️ 该服务未启动，将无法发声 (自动降级到 Edge TTS)
+                                                                </div>
+                                                            )}
                                                         </div>
 
                                                         {/* Voice Selection */}
@@ -1165,45 +1819,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                         )}
                                                     </div>
 
-                                                    {/* Interaction Settings */}
-                                                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #eee' }}>
-                                                        <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', marginBottom: '10px' }}>💗 Interaction Settings</h4>
-                                                        
-                                                        <div style={{ display: 'flex', gap: '20px' }}>
-                                                            {/* Heartbeat Toggle */}
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={char.heartbeatEnabled !== false}
-                                                                    onChange={(e) => handleUpdateCharacter(char.id, { heartbeatEnabled: e.target.checked })}
-                                                                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                                                                />
-                                                                <div>
-                                                                    <div style={{ fontSize: '13px', color: '#1f2937', fontWeight: 500 }}>Custom Silence Duration</div>
-                                                                    <div style={{ fontSize: '11px', color: '#6b7280' }}>Checked: Fixed time. Unchecked: Auto (Intimacy).</div>
-                                                                </div>
-                                                            </div>
 
-                                                            {/* Silence Threshold */}
-                                                            {(char.heartbeatEnabled !== false) && (
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <label style={{ fontSize: '13px', color: '#6b7280' }}>Silence (mins):</label>
-                                                                    <input
-                                                                        type="number"
-                                                                        min="0.1"
-                                                                        max="120"
-                                                                        step="0.1"
-                                                                        value={char.proactiveThresholdMinutes || 15}
-                                                                        onChange={(e) => handleUpdateCharacter(char.id, { proactiveThresholdMinutes: Number(e.target.value) })}
-                                                                        style={{ ...inputStyle, width: '60px', padding: '4px 8px' }}
-                                                                    />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '5px' }}>
-                                                            AI will initiate conversation after specified minutes of silence.
-                                                        </div>
-                                                    </div>
 
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #f3f4f6' }}>
                                                         <button

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { events } from '../core/events';
 
 interface VoiceInputProps {
     onSend: (message: string) => void;
@@ -43,8 +44,13 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
                         console.log('[VAD Status]', data.status);
                         setVadStatus(data.status);
 
-                        if (data.status === 'listening' && onSpeechStartRef.current) {
-                            onSpeechStartRef.current();
+                        if (data.status === 'listening') {
+                             console.log('[VAD] User speaking, emitting event...');
+                             events.emit('audio:vad.start', undefined);
+                             
+                             if (onSpeechStartRef.current) {
+                                 onSpeechStartRef.current();
+                             }
                         }
                     }
                     else if (data.type === 'partial') {
@@ -55,9 +61,31 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
                         console.log('[STT] Final:', data.text);
 
                         if (data.text.trim()) {
-                            setTranscript(data.text);
+                            // Extract Emotion if available
+                            let finalText = data.text;
+                            
+                            // 1. Remove raw XML-like tags from display text if present (e.g. <|HAPPY|>)
+                            const displayText = data.text.replace(/<\|[A-Z]+\|>/g, '').trim();
+                            setTranscript(displayText);
+
+                            // 2. Inject emotion into LLM context
+                            if (data.emotion) {
+                                // Map SenseVoice tags to human readable
+                                // <|HAPPY|> -> Happy
+                                const emotionMap: Record<string, string> = {
+                                    '<|HAPPY|>': 'Happy',
+                                    '<|SAD|>': 'Sad',
+                                    '<|ANGRY|>': 'Angry',
+                                    '<|NEUTRAL|>': 'Neutral',
+                                    '<|FEAR|>': 'Fear',
+                                    '<|SURPRISE|>': 'Surprise'
+                                };
+                                const readableEmotion = emotionMap[data.emotion] || data.emotion;
+                                finalText = `(User emotion: ${readableEmotion}) ${displayText}`;
+                            }
+
                             setTimeout(() => {
-                                onSendRef.current(data.text);
+                                onSendRef.current(finalText);
                                 setTranscript('');
                             }, 500);
                         }

@@ -40,6 +40,8 @@
     ],
     "exclude": [
         "node_modules",
-        "example"
+        "example",
+        "**/archive/**",
+        "**/archive_legacy/**"
     ]
 }

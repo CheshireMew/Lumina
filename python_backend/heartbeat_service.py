@@ -38,11 +38,11 @@ class HeartbeatService:
         
         # ⚡ 修复：启动时重置 last_interaction 为当前时间，避免立即触发空闲检测
         self.soul.update_last_interaction()
-        print("[Heartbeat] ⏰ Reset last_interaction to now")
+        print("[Heartbeat] Reset last_interaction to now")
         
         self.thread = threading.Thread(target=self._bdi_loop, daemon=True)
         self.thread.start()
-        print("[Heartbeat] ❤️ Service Started. (Interval: 10s)")
+        print("[Heartbeat] Service Started. (Interval: 10s)")
 
     def stop(self):
         self.running = False
@@ -131,11 +131,16 @@ class HeartbeatService:
         # self.soul.update_energy(-0.03) 
         
         # 2. Check for Proactivity
-        # ⚡ Logic Update:
-        # custom_mode = True  -> Use proactive_threshold_minutes
-        # custom_mode = False -> Use Intimacy Level Logic
+        # ⚡ Master Switch
+        if not self.soul.config.get("proactive_chat_enabled", True):
+            # Proactive Chat Disabled
+            return
+
+        # ⚡ Strategy Switch:
+        # heartbeat_enabled = True  -> Use Custom Timer (proactive_threshold_minutes)
+        # heartbeat_enabled = False -> Use Auto (Intimacy Level) Logic
         
-        use_custom_threshold = self.soul.config.get("heartbeat_enabled", False) # Default to Auto if missing? Or User preference.
+        use_custom_threshold = self.soul.config.get("heartbeat_enabled", False) 
         
         last_interaction_str = state.get("last_interaction")
         if not last_interaction_str:
@@ -184,8 +189,9 @@ class HeartbeatService:
         
         if seconds_idle > threshold:
             # We want to talk!
-            # ⚡ 修复：检查值是否为真（not None/False），而非检查 key 是否存在
-            if not state.get("pending_interaction"):
+            # ⚡ 修复：检查 galgame 子字典中的 pending_interaction
+            galgame_state = state.get("galgame", {})
+            if not galgame_state.get("pending_interaction"):
                 print(f"[Heartbeat] ❤️ DESIRE: I miss the user... (Level: {level}) -> Setting Pending Flag")
                 self.soul.set_pending_interaction(True, reason="idle_timeout") 
         

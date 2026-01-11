@@ -138,3 +138,6 @@ build_backend/
 # PyInstaller temp
 *.manifest
 *.pyo
+
+# Portable Mode Data
+Lumina_Data/

@@ -16,6 +16,9 @@ class ConfigRequest(BaseModel):
     # Heartbeat Settings
     heartbeat_enabled: Optional[bool] = None
     proactive_threshold_minutes: Optional[float] = None
+    proactive_chat_enabled: Optional[bool] = None # Added for completeness/future explicit explicit use
+    galgame_mode_enabled: Optional[bool] = None
+    soul_evolution_enabled: Optional[bool] = None # ⚡ New toggle
     
     @field_validator('base_url')
     @classmethod

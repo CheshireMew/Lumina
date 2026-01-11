@@ -1,87 +1,65 @@
-# Feature Inventory
+# 功能清单 (Feature Inventory)
 
-## 🏗️ 架构重构 (v2.0 - 2026-01-08)
+## 核心架构
 
-- **状态**: ✅ 已模块化
-- **后端** (`python_backend/`):
-  - `main.py`: 入口文件，包含生命周期管理。
-  - `routers/`: 5 个模块化路由（config, memory, characters, soul, debug）。
-  - `schemas/requests.py`: Pydantic 数据模型。
-- **前端** (`app/renderer/components/`):
-  - `SettingsModal/`: 模块化设置面板，包含 4 个 Tab 组件。
-  - 支持多角色切换（`activeCharacterId` 提升至 App.tsx）。
+- **前端**: Electron + React + TypeScript + Vite.
+- **后端**: Python (FastAPI) + Uvicorn.
+- **数据库**: SurrealDB (图/向量数据库), SQLite (旧版/备份).
+- **通信**: HTTP REST + WebSocket.
 
-## 🧠 Memory System (SurrealDB Unified V3)
+## 模块详解
 
-- **Status**: ✅ Operational / Production
-- **Refactoring (2026-01)**: Removed `LiteMemory` (Qdrant/SQLite) in favor of pure SurrealDB.
-- **Architecture**:
-  - **Single Source of Truth**: SurrealDB (`./lumina_memory.db` via `surreal_memory.py`).
-  - **Features**:
-    - **Vector Search**: Integrated HNSW index in SurrealDB.
-    - **Graph Relations**: Native graph support (`character` -> `observes` -> `fact`).
-    - **Automated Digestion**: `Hippocampus` + `HeartbeatService` pipeline.
-  - **Models**:
-    - Embeddings: `paraphrase-multilingual-MiniLM-L12-v2` loaded via `ModelManager`.
-- **Legacy Status**:
-  - `LiteMemory`, `Qdrant`, `SQLite` removed and archived (`python_backend/archive_legacy`).
-  - `DreamingService` (Legacy) disabled.
+### 1. 音频系统 (Audio System)
 
-## 🗄️ SurrealDB 集成（Graph Memory V1）
+- **STT (语音转文字)**:
+  - 独立服务进程 (`stt_server.py`).
+  - 引擎: SenseVoice, Paraformer.
+  - 配置: `stt_config.json`.
+- **TTS (文字转语音)**:
+  - 独立服务进程 (`tts_server.py`).
+  - 引擎: GPT-SoVITS.
+  - 前端队列: `audio_queue.ts` (顺序播放).
+- **VAD (语音活动检测)**:
+  - 已迁移至后端 (`audio_manager.py`).
+  - 前端 `VoiceInput` 组件负责可视化状态。
 
-- **状态**: ✅ Operational (2026-01-08)
-- **文件**: `surreal_memory.py`, `graph_curator.py`
-- **架构文档**: [docs/KNOWLEDGE_GRAPH_MAINTENANCE.md](docs/KNOWLEDGE_GRAPH_MAINTENANCE.md)
-- **功能**:
-  - **向量搜索**: HNSW 索引 (384 维)，自动注入 `LiteMemory` 编码器复用资源。
-  - **混合搜索**: Vector + FullText + Graph Search (1-hop 关系遍历)。
-  - **知识图谱 (Knowledge Graph)**:
-    - **实体消歧**: `_resolve_entity` 基于向量相似度自动合并同义实体。
-    - **关系强化**: `add_knowledge_graph` 自动增强现有边权重 (`strength` += 0.05)。
-  - **图谱维护 (The Gardener)**:
-    - **生物衰减**: 读取查询自动应用时间衰减公式 (`strength` \* `0.99^days`).
-    - **周期治理**: `heartbeat_service` 每 24h 触发 `graph_curator.py` 清除极弱连边。
-- **安装要求**:
-  - SurrealDB Server 2.0+ (支持向量索引)
-  - 安装: `winget install SurrealDB.SurrealDB` 或从 [surrealdb.com](https://surrealdb.com/install) 下载
-  - 启动: `surreal start --log info --user root --pass root memory`
-  - 连接地址: `ws://127.0.0.1:8000/rpc`
+### 2. 角色系统 (`soul_manager.py`)
 
-## 🗣️ Voice System
+- **档案**: 存储在 `characters/{id}/` 目录.
+- **Live2D**: 前端 `Live2DViewer` 组件.
+- **情感引擎 (Emotion Engine)**:
+  - 文字转情感映射 (`emotion_map.json`).
+  - Live2D 动作触发.
+  - 灵魂变异 (Soul Mutation, 能量/亲密度属性).
 
-- **Status**: ✅ Operational
-- **Components**:
-  - `stt_server.py`: Speech-to-Text (FunASR/SenseVoice).
-  - `tts_server.py`: Text-to-Speech (CosyVoice & GPT-SoVITS).
-    - **Optimization**: Implemented "Raw Stream Pipe" architecture. Requests PCM Stream from GPT-SoVITS and transcodes to AAC via local FFmpeg pipe for zero-latency MSE compatibility.
-    - **Performance**: Added TTFB (Time To First Byte) & Chunk monitoring logs.
-    - **Emotion Control**: Edge TTS 不支持情感样式；GPT-SoVITS 通过参考音频（`assets/emotion_audio/`）实现情感克隆。
-  - `tts_service.ts` & `audio_queue.ts`: Frontend TTS Streaming Layer (Added dynamic chunk buffering and low-latency playback).
+### 3. 记忆系统 (`memory/`)
 
-## 🎨 Live2D / Character System
+- **结构**: 3 层记忆架构 (短期/中期/长期).
+- **存储**: SurrealDB.
+- **特性**:
+  - 混合搜索 (向量 + 关键词).
+  - 自动摘要 (Auto-summarization).
+  - "做梦"机制 (Dreaming, 离线整合/反思).
 
-- **Status**: ✅ Operational / Optimized
-- **Components**:
-  - `Live2DViewer.tsx`: Core model renderer.
-  - `emotion_map.json`: Maps linguistic emotions (e.g. `happy`, `开心`) to model motion groups.
-- **Features**:
-  - **Motion Triggers**: LLM-driven `[emotion]` tags trigger animations (Priority 3 Force).
-  - **Quiet Mode**: Custom 15s Idle Timer disables internal auto-motion to prevent interruptions.
-  - **Tag Hiding**: `App.tsx` & `ChatBubble.tsx` strip `[tags]` from UI/TTS output.
-  - **Multi-Character**: Support for multiple profiles, each with custom prompts (auto-injected system instructions).
-- **Debugging**:
-  - Enhanced emotion detection logging in `App.tsx` (processEmotions function).
-  - Detailed logs for: buffer content, tag matches, emotion mapping, trigger status.
-  - Support for Chinese parentheses「)」in emotion tags.
-  - Test script: `test/emotion_test.ts`.
-  - Debug guide: `.gemini/antigravity/brain/.../emotion_debug_guide.md`.
+### 4. 交互循环 (Interaction Loop)
 
-## 📝 Documentation
+- **主动聊天 (Proactive Chat)**:
+  - 后端状态监控 (`galgame/{id}/state`).
+  - 前端轮询 (5 秒间隔).
+  - 逻辑: 检测沉默 -> 基于记忆/上下文触发话题.
+- **聊天界面**:
+  - 文本输入.
+  - 语音输入 (麦克风).
+  - 使用 "ChatBubbles" 渲染历史记录.
 
-- `MEM0_ANALYSIS.md`: Detailed analysis of `mem0` library and persistence issues.
-- `MEMORY_RESEARCH_REPORT.md`: In-depth research on 4 similar projects (Lunasia, Live2D, NagaAgent, MoeChat) comparing their memory architectures.
+## 架构审查发现的问题
 
-- **Voice Input**: Updated microphone icon to circular design with visual states (Ready/Listening/Thinking).
-- **UI Design**: Applied flat layered design to Voice Input icon (Outer Ring + Inner Circle).
-- **UI Design**: Simplified Voice Input icon to pure Glyph style (No background ring/circle).
-- **UI Design**: Added Frosted Glass effect background to Voice Input icon.
+- **前端复杂度高**: `App.tsx` 承担了太多职责 (UI, 业务逻辑, 网络请求)，甚至被称为 "God Component"。
+- **硬编码**: API URL 在前端组件中到处都是 (`localhost:8001`)。
+- **并发管理**: 需要开启多个后端终端才能完整运行 (Main, STT, TTS)。
+
+## 路线图 (Roadmap)
+
+- [ ] 重构前端 Hooks (拆分 App.tsx).
+- [ ] 统一后端启动器.
+- [ ] 优化 SurrealDB 连接处理.

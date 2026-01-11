@@ -6,10 +6,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
     X, Database, ScrollText, Network, Braces, RefreshCw, Brain,
-    CheckCircle, Clock, Search, Table as TableIcon, Activity, Sparkles, Trash2, Edit, Plus, GitMerge
+    CheckCircle, Clock, Search, Table as TableIcon, Activity, Sparkles, Trash2, Edit, Plus, GitMerge, Filter, ChevronRight, ChevronDown, Eye, Maximize2
 } from 'lucide-react';
-
-const MEMORY_SERVER_URL = 'http://localhost:8001';
+import { API_CONFIG } from '../config';
 
 interface TableInfo {
     name: string;
@@ -22,10 +21,10 @@ interface QueryResult {
     error?: string;
 }
 
-const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void; activeCharacterId?: string | null }> = ({ isOpen, onClose, activeCharacterId }) => {
     const [activeTab, setActiveTab] = useState<'tables' | 'query' | 'stats' | 'graph'>('tables');
     const [tables, setTables] = useState<TableInfo[]>([]);
-    const [selectedTable, setSelectedTable] = useState<string | null>(null);
+    const [selectedTable, setSelectedTable] = useState<string | null>('conversation_log'); // Default to conversation_log
     const [tableData, setTableData] = useState<any[]>([]);
     const [query, setQuery] = useState('SELECT * FROM fact LIMIT 10;');
     const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
@@ -44,6 +43,10 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         if (isOpen) {
             loadTables();
             loadStats();
+            // Load default table if selected
+            if (selectedTable) {
+                loadTableData(selectedTable);
+            }
         }
     }, [isOpen]);
 
@@ -54,9 +57,22 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         }
     }, [activeTab]);
 
+    // Reload when character changes
+    useEffect(() => {
+        if (activeCharacterId) {
+            console.log(`[SurrealViewer] Character switched to ${activeCharacterId}, clearing cache...`);
+            setTableCache({}); // Clear cache ALWAYS
+            
+            // Only reload immediately if open
+            if (isOpen && selectedTable) {
+                loadTableData(selectedTable, true); // Force refresh
+            }
+        }
+    }, [activeCharacterId]);
+
     const loadTables = async () => {
         try {
-            const res = await fetch(`${MEMORY_SERVER_URL}/debug/surreal/tables`);
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/surreal/tables`);
             if (res.ok) {
                 const data = await res.json();
                 console.log('[SurrealViewer] Tables response:', data);
@@ -88,7 +104,13 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         setTableData([]); // 清空旧数据，防止显示上一个表的数据
 
         try {
-            const res = await fetch(`${MEMORY_SERVER_URL}/debug/surreal/table/${tableName}?limit=50`);
+            let url = `${API_CONFIG.BASE_URL}/debug/surreal/table/${tableName}?limit=50`;
+            // Apply filtering for character-specific tables
+            if (activeCharacterId && (tableName === 'conversation_log' || tableName === 'episodic_memory')) {
+                url += `&character_id=${activeCharacterId}`;
+            }
+
+            const res = await fetch(url);
             if (res.ok) {
                 const data = await res.json();
                 const rows = data.data || [];
@@ -105,7 +127,7 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
 
     const loadStats = async () => {
         try {
-            const res = await fetch(`${MEMORY_SERVER_URL}/debug/surreal/stats`);
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/surreal/stats`);
             if (res.ok) {
                 const data = await res.json();
                 setStats(data.stats);
@@ -119,7 +141,7 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         setLoading(true);
         try {
             console.log('[SurrealViewer] Fetching graph data...');
-            const res = await fetch(`${MEMORY_SERVER_URL}/debug/surreal/graph/hiyori`);
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/surreal/graph/hiyori`);
             if (res.ok) {
                 const data = await res.json();
                 console.log('[SurrealViewer] Graph data received:', data);
@@ -145,7 +167,7 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         setQueryResult(null);
         setError(null);
         try {
-            const res = await fetch(`${MEMORY_SERVER_URL}/debug/surreal/query`, {
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/surreal/query`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query })
@@ -222,13 +244,15 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                 ordered.push(key);
             }
         });
-        // 2. Add remaining keys
+        // 2. Add remaining keys (excluding hidden ones)
+        const hiddenCols = ['id', 'last_hit_at'];
         allKeys.forEach(key => {
-            if (!priority.includes(key) && !ordered.includes(key)) {
+            if (!priority.includes(key) && !ordered.includes(key) && !hiddenCols.includes(key)) {
                 ordered.push(key);
             }
         });
-        return ordered;
+        // 3. Final cleanup: Remove hidden columns from the result, even if they were in priority
+        return ordered.filter(col => !hiddenCols.includes(col));
     };
 
     const handleDeleteRecord = async (id: string, table: string) => {
@@ -241,7 +265,7 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                 cleanId = id.split(':')[1];
             }
             
-            const res = await fetch(`${MEMORY_SERVER_URL}/debug/surreal/record/${table}/${cleanId}`, {
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/surreal/record/${table}/${cleanId}`, {
                 method: 'DELETE'
             });
             const data = await res.json();
@@ -263,7 +287,7 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         if (!confirm("Confirm Merge?\nThis will merge duplicates based on 'entity_aliases.json'.\n(Edges will be migrated to the canonical entity, aliases deleted.)")) return;
 
         try {
-            const res = await fetch(`${MEMORY_SERVER_URL}/debug/memory/merge_entities`, { method: 'POST' });
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/memory/merge_entities`, { method: 'POST' });
             const data = await res.json();
             if (data.status === 'success') {
                 const logSummary = data.logs?.slice(-10)?.join('\n') || 'No logs';
@@ -306,7 +330,7 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             
             if (isCreating) {
                 // Remove empty keys if needed, or send as is
-                const res = await fetch(`${MEMORY_SERVER_URL}/debug/surreal/record/${table}`, {
+                const res = await fetch(`${API_CONFIG.BASE_URL}/debug/surreal/record/${table}`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(editorForm)
@@ -327,9 +351,9 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                 // Don't send ID in body if merge? Surreal ignores it usually but better safe.
                 const { id: _, ...updateData } = editorForm;
                 
-                const res = await fetch(`${MEMORY_SERVER_URL}/debug/surreal/record/${table}/${cleanId}`, {
+                const res = await fetch(`${API_CONFIG.BASE_URL}/debug/surreal/record/${table}/${cleanId}`, {
                     method: 'PUT',
-                     headers: {'Content-Type': 'application/json'},
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(updateData)
                 });
                 const data = await res.json();
@@ -583,6 +607,7 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                                     <thead>
                                                         <tr style={{ textAlign: 'left', backgroundColor: 'rgba(0,0,0,0.2)', color: '#a5b4fc', position: 'sticky', top: 0, zIndex: 1, backdropFilter:'blur(4px)' }}>
+                                                            <th style={{ padding: '12px 15px', borderBottom: '1px solid rgba(255, 105, 180, 0.1)', width: '40px', textAlign: 'center' }}>#</th>
                                                             <th style={{ padding: '12px 15px', borderBottom: '1px solid rgba(255, 105, 180, 0.1)', width:'90px' }}>Action</th>
                                                             {columns.map(col => (
                                                                 <th key={col} style={{ padding: '12px 15px', borderBottom: '1px solid rgba(255, 105, 180, 0.1)', whiteSpace: 'nowrap', fontWeight:'600' }}>{col}</th>
@@ -592,7 +617,8 @@ const SurrealViewer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                                                     <tbody>
                                                         {tableData.map((row, i) => (
                                                             <tr key={i} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
-                                                <td style={{ padding: '12px 15px', color: '#e2e8f0', verticalAlign: 'top', width:'90px', display:'flex', gap:'5px' }}>
+                                                                <td style={{ padding: '12px 15px', color: '#e2e8f0', verticalAlign: 'top', textAlign: 'center', opacity: 0.5, fontFamily: 'monospace' }}>{i + 1}</td>
+                                                                <td style={{ padding: '12px 15px', color: '#e2e8f0', verticalAlign: 'top', width:'90px', display:'flex', gap:'5px' }}>
                                                                     <button 
                                                                         onClick={() => handleEditRecord(row)}
                                                                         style={{

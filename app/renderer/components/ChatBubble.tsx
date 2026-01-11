@@ -3,9 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 interface ChatBubbleProps {
     message: string;
     isStreaming?: boolean;
+    reasoning?: string;
 }
 
-const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false }) => {
+const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, reasoning }) => {
     const [displayedText, setDisplayedText] = useState('');
     const wasStreamingRef = useRef(false);
 
@@ -39,27 +40,63 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false })
     return (
         <div style={{
             position: 'absolute',
-            top: '15%',
-            left: '75%',
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            padding: '15px 20px',
-            borderRadius: '20px 20px 20px 5px',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-            maxWidth: '400px',
-            maxHeight: '300px',
+            top: '20%',
+            left: '20px',
+            transform: 'none',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            padding: '16px 24px',
+            borderRadius: '24px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            maxWidth: '450px',
+            maxHeight: '70vh',
             overflowY: 'auto',
-            wordWrap: 'break-word',
+            overflowWrap: 'break-word',
+            wordBreak: 'break-word',
             whiteSpace: 'pre-wrap',
             fontSize: '16px',
             lineHeight: '1.6',
-            color: '#333',
-            fontFamily: '"Microsoft YaHei", sans-serif',
-            backdropFilter: 'blur(5px)',
-            border: '1px solid rgba(255,255,255,0.5)',
-            animation: 'fadeIn 0.3s ease-out'
+            color: '#1f2937',
+            fontFamily: '"Microsoft YaHei", "Segoe UI", sans-serif',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255,255,255,0.8)',
+            animation: 'fadeIn 0.3s ease-out',
+            zIndex: 2000,
         }}>
-            {displayedText.replace(/\[[^\]]+\]/g, '').replace(/[\(（][^)）]+[\)）]/g, '')}
+            {/* 🧠 Thinking Process Block */}
+            {reasoning && (
+                <div style={{ 
+                    marginBottom: '16px', 
+                    padding: '12px', 
+                    backgroundColor: 'rgba(243, 244, 246, 0.8)', 
+                    borderRadius: '12px',
+                    borderLeft: '4px solid #8b5cf6', // Purple accent for "Thinking"
+                    fontSize: '0.9em',
+                    color: '#4b5563'
+                }}>
+                    <div style={{ 
+                        fontWeight: 'bold', 
+                        marginBottom: '4px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px',
+                        color: '#7c3aed'
+                    }}>
+                        <span>🧠</span> DeepSeek Thinking...
+                    </div>
+                    <div style={{ 
+                        whiteSpace: 'pre-wrap', 
+                        fontFamily: 'Consolas, monospace',
+                        opacity: 0.9,
+                        maxHeight: '200px',
+                        overflowY: 'auto'
+                    }}>
+                        {reasoning}
+                    </div>
+                </div>
+            )}
+            
+            {/* Main Content */}
+            {displayedText}
         </div>
     );
 };

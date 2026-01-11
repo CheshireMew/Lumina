@@ -247,6 +247,12 @@ async def synthesize_speech(request: TTSRequest):
         
         try:
             ref_audio_path, ref_text, ref_lang = gpt_sovits_engine.get_ref_audio(request.voice, emotion_tag)
+            # ⚡ Fallback Check: Ensure service is actually online before trying to stream
+            if not gpt_sovits_engine.is_available:
+                gpt_sovits_engine.check_connection() # Last ditch check
+                if not gpt_sovits_engine.is_available:
+                     raise Exception("Service is marked offline (is_available=False)")
+
             text_lang = gpt_sovits_engine.detect_language(clean_text)
             
             if not ref_audio_path:
@@ -393,9 +399,21 @@ async def list_emotions():
 async def health_check():
     engines = []
     if edge_tts_engine: engines.append("Edge TTS")
-    if gpt_sovits_engine: engines.append("GPT-SoVITS")
+    if gpt_sovits_engine:
+        # Re-check status on health call (lazy check) or trust the init flag?
+        # Trust flag but maybe trigger re-check if user asks? 
+        # For now, just check the flag we set on init.
+        if gpt_sovits_engine.is_available:
+            engines.append("GPT-SoVITS")
+        else:
+             # Try one more time just in case it came online late
+             gpt_sovits_engine.check_connection()
+             if gpt_sovits_engine.is_available:
+                 engines.append("GPT-SoVITS")
+             
     return {"status": "ok", "active_engines": engines}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8766, log_level="info")
+    from app_config import config
+    uvicorn.run(app, host=config.network.host, port=config.network.tts_port, log_level="info")

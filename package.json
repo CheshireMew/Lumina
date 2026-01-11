@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "AI Virtual Companion with Live2D and LLM integration",
+  "author": "CheshireMew",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -16,6 +17,7 @@
     "@langchain/openai": "^1.2.0",
     "axios": "^1.13.2",
     "electron-store": "^8.2.0",
+    "eventemitter3": "^5.0.1",
     "lucide-react": "^0.562.0",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
@@ -38,6 +40,17 @@
     "appId": "com.cheshiremew.lumina",
     "productName": "Lumina",
     "asar": true,
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "!python_backend/**/*",
+      "!models/**/*",
+      "!GPT-SoVITS/**/*",
+      "!release/**/*",
+      "!dist_backend/**/*",
+      "!**/*.md",
+      "!**/*.log"
+    ],
     "directories": {
       "output": "release/${version}"
     },
@@ -65,11 +78,15 @@
       },
       {
         "from": "python_backend/bin/surreal.exe",
-        "to": "bin/surreal.exe" 
+        "to": "bin/surreal.exe"
       },
       {
         "from": "GPT-SoVITS/runtime/ffmpeg.exe",
         "to": "bin/ffmpeg.exe"
+      },
+      {
+        "from": "public/live2d/hiyori_pro",
+        "to": "bin/lumina_backend/live2d/hiyori_pro"
       }
     ]
   }
