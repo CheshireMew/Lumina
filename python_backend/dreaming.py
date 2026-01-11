@@ -14,6 +14,8 @@ try:
 except ImportError:
     OpenAI = None
 
+from llm.manager import llm_manager
+
 logger = logging.getLogger("Dreaming")
 
 
@@ -26,33 +28,36 @@ class Dreaming:
     For multi-character support, create separate instances per character.
     """
     
-    def __init__(self, memory_client=None, character_id: str = "default"):
+    def __init__(self, memory_client=None, character_id: str = "default", llm_client=None):
         """
         Initialize Dreaming for a specific character.
         
         Args:
             memory_client: SurrealMemory instance (shared DB connection)
             character_id: The character this dreaming instance is for (MUST be specified)
+            llm_client: Optional shared OpenAI client instance
         """
+        from app_config import config
+        
         self.memory = memory_client
         self.character_id = character_id.lower()  # Normalize for consistency
         
-        # LLM Config
-        self.api_key = os.environ.get("OPENAI_API_KEY", "")
-        self.base_url = os.environ.get("OPENAI_BASE_URL", "http://localhost:11434/v1")
-        self.model = os.environ.get("LLM_MODEL", "deepseek-chat")
+        # LLM Config from centralized config
+        # LLM Config from centralized config
+        # ⚡ Deprecated: Now using LLMManager logic, these are just for reference or fallback
+        self.api_key = config.llm.api_key 
+        self.base_url = config.llm.base_url
+        self.model = config.llm.model
         
-        # Load config overrides
-        self._load_config()
-        
-        # Initialize LLM client
-        self.llm_client = None
-        if OpenAI and self.api_key:
-            self.llm_client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        # Initialize LLM client (Shared or New)
+        # ⚡ Refactor: We no longer store a persistent client here if we want dynamic routing.
+        # But for backward compatibility with passed-in clients (if any), we keep it.
+        # However, we prefer using llm_manager.get_client() on demand.
+        self.llm_client = llm_client
         
         # ⚡ Soul Evolution 配置
         self.soul_evolution_config = {
-            "min_interval_minutes": 30,       # 两次演化间隔至少 30 分钟
+            "min_interval_minutes": 15,       # 两次演化间隔至少 15 分钟
             "min_memories_threshold": 20,     # 至少处理 20 条新记忆后触发
             "min_text_length": 500,           # 分析文本至少 500 字符
         }
@@ -63,23 +68,15 @@ class Dreaming:
         # ⚡ Soul Manager (延迟加载，避免循环导入)
         self._soul_manager = None
         
-        logger.info(f"[Dreaming] Initialized for character: {self.character_id}")
-
-    def _load_config(self):
-        """Load LLM config from memory_config.json if available."""
-        # Use absolute path based on file location
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(base_dir, "memory_config.json")
-        
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                    if config.get("base_url"): self.base_url = config["base_url"]
-                    if config.get("api_key"): self.api_key = config["api_key"]
-                    if config.get("model"): self.model = config["model"]
-            except Exception as e:
-                logger.warning(f"Failed to load memory_config.json at {config_path}: {e}")
+    def update_llm_config(self, api_key: str, base_url: str, model: str):
+        """
+        Update LLM configuration dynamically.
+        ⚡ Refactor: Just update the local references, but LLMManager handles the actual clients.
+        """
+        self.api_key = api_key
+        self.base_url = base_url
+        self.model = model
+        # We don't need to rebuild client here anymore as we fetch it on fly
 
 
     async def process_memories(self, batch_size: int = 10):
@@ -101,13 +98,35 @@ class Dreaming:
         logger.debug(f"[Dreaming] ✨ Starting Reverie Cycle for character '{self.character_id}'...")
         
         # Phase 1: Extract raw logs -> memories
-        await self._run_extractor(limit=batch_size)
+        
+        # [Free Tier Opt] Check Routing First
+        route = llm_manager.get_route("dreaming")
+        if route and route.provider_id == "free_tier":
+            logger.info(f"[Dreaming] ⏸️ Free Tier detected. Skipping extraction to save resources/prevent instability.")
+            return
+
+        await self._run_extractor(batch_size)
         
         # Phase 2: Consolidate frequently retrieved memories (Hit-Count Based)
         await self._run_consolidator(limit=10)
         
-        # Phase 3: Soul Evolution (条件触发)
-        await self._check_and_trigger_soul_evolution()
+        from soul_manager import SoulManager
+        soul = SoulManager(self.character_id)
+        # ⚡ Check newly separated toggle
+        if soul.config.get("soul_evolution_enabled", True): 
+            await self._check_and_trigger_soul_evolution()
+        else:
+            logger.debug(f"[Dreaming] Soul Evolution DISABLED in settings. Skipping personality update.")
+
+    async def reset_retry_counts(self):
+        """Helper to reset stuck logs on startup (User requested 'Second Chance')"""
+        try:
+             # Reset logs that have failed 5+ times so they get another chance on restart
+             query = "UPDATE conversation_log SET retry_count = 0 WHERE retry_count >= 5;"
+             await self.memory.db.query(query)
+             logger.info("[Dreaming] 🔄 Reset retry counts for stuck logs (Startup Fresh Start)")
+        except Exception as e:
+             logger.warning(f"[Dreaming] Failed to reset retry counts: {e}")
 
 
     # ==================== Phase 1: Extractor ====================
@@ -120,23 +139,32 @@ class Dreaming:
         extracts meaningful facts, and stores as active memories.
         """
         # 1. First check total unprocessed count
+        # ⚡ Retry Filter: Only pick logs that haven't failed 5 times yet
         count_query = """
         SELECT count() FROM conversation_log 
         WHERE character_id = $character_id 
-          AND is_processed = false GROUP ALL;
+          AND is_processed = false 
+          AND (retry_count IS NULL OR retry_count < 5)
+        GROUP ALL;
         """
-        count_result = await self.memory.db.query(count_query, {"character_id": self.character_id})
+        try:
+            # Bug Fix: SurrealDB async_ws might raise KeyError during violent shutdown
+            count_result = await self.memory.db.query(count_query, {"character_id": self.character_id})
+        except KeyError:
+            logger.warning("[Dreaming] DB query interrupted during shutdown (KeyError suppression)")
+            return
+        except Exception as e:
+            logger.warning(f"[Dreaming] Extractor query failed: {e}")
+            return
         
         total_count = 0
         if count_result and isinstance(count_result, list):
             first = count_result[0]
             if isinstance(first, dict) and 'result' in first:
-                 # result might be [{'count': 25}]
                  inner = first['result']
                  if inner and isinstance(inner, list) and inner and 'count' in inner[0]:
                      total_count = inner[0]['count']
             elif isinstance(first, dict) and 'count' in first:
-                 # Direct format: [{'count': 45}]
                  total_count = first['count']
         
         # DEBUG: Print Limit and Count
@@ -151,6 +179,7 @@ class Dreaming:
         SELECT * FROM conversation_log 
         WHERE character_id = $character_id 
           AND is_processed = false 
+          AND (retry_count IS NULL OR retry_count < 5)
         ORDER BY created_at ASC
         LIMIT $limit;
         """
@@ -183,47 +212,38 @@ class Dreaming:
             narrative = log.get('narrative', '')
             log_text += f"[{ts}] {narrative}\n"
             
-        # LLM Prompt
-        prompt = f"""你是核心记忆提取模块。
-
-### 任务：
-从对话日志中提取有价值的事实，并进行发散联想。
-注意：
-1. 对话日志是由语音转录生成的，因此可能存在错别字或谐音字以及无意义的错乱文字，请进行修正。
-2. 重复或冲突的事实请根据上下文自动合并，同时将所有可以合并的对话合并成一条事实
-3. 同时每句对话中可能包含多个不同的主体和事实，请把它分离成多个"memory"片段
-
-### 输出格式 (必须是标准的 JSON List):
-[ 
-  {{"memory": "[日期+时间] [主体1+事实][对记忆简短的发散联想]"}},
-  {{"memory": "[日期+时间] [主体1+事实][对记忆简短的发散联想]"}},
-  {{"memory": "[日期+时间] [主体2+事实][对记忆简短的发散联想]"}},
-  {{"memory": "[日期+时间] [主体3+事实][对记忆简短的发散联想]"}},
-]
-注意：必须是JSON格式列表。
-
-[Raw Logs]:
-{log_text}
-"""
-        
         try:
             # Call LLM
-            if not self.llm_client:
-                logger.warning(f"[Dreaming] No LLM client configured, skipping extraction")
-                return
+            # ⚡ Refactor: Use LLMManager
+            client = llm_manager.get_client("memory")
+            model_name = llm_manager.get_model_name("memory")
             
-            # === DEBUG: 打印发送给 LLM 的内容 ===
-            logger.info(f"[Extractor] 📤 Sending to LLM ({len(logs)} logs):")
-            logger.info(f"[Extractor] Prompt:\n{prompt}")
-                
-            response = self.llm_client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a memory extractor. Output JSON only."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3
+            # Use PromptManager
+            from prompt_manager import prompt_manager
+            
+            # Load structured template which returns a dict: {"system": "...", "user": "..."}
+            prompt_data = prompt_manager.load_structured("memory/extract.yaml", {"log_text": log_text})
+            
+            if not isinstance(prompt_data, dict):
+                logger.error("[Dreaming] Failed to load structured memory extraction template")
+                return
+
+            # Construct messages
+            messages = [
+                {"role": "system", "content": prompt_data.get("system", "You are a memory extractor.")},
+                {"role": "user", "content": prompt_data.get("user", log_text)}
+            ]
+            
+            # === DEBUG: 打印发送给 LLM 的内容 (Summarized) ===
+            logger.info(f"[Extractor] Active Model: {model_name}")
+            logger.info(f"[Extractor] Sending to LLM ({len(logs)} logs) via {model_name}")
+
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                **llm_manager.get_parameters("memory")
             )
+
             
             content = response.choices[0].message.content.strip()
             
@@ -268,7 +288,7 @@ class Dreaming:
             for log in logs:
                 log_id = log.get('id', '')
                 if log_id:
-                    await self.memory.db.query(f"UPDATE {log_id} SET is_processed = true;")
+                    await self.memory.db.query(f"UPDATE {log_id} SET is_processed = true, retry_count = 0;")
             
             # ⚡ 累积处理的内容，供 Soul Evolution 使用
             self.accumulate_for_evolution(log_text, len(new_memories))
@@ -277,8 +297,24 @@ class Dreaming:
             
         except json.JSONDecodeError as e:
             logger.error(f"[Dreaming] Failed to parse LLM response as JSON: {e}")
+            # ⚡ Retry Logic: Increment retry_count for this batch
+            await self._handle_extraction_failure(logs)
         except Exception as e:
             logger.error(f"[Dreaming] Extractor failed for {self.character_id}: {e}")
+            # ⚡ Retry Logic: Increment retry_count for this batch
+            await self._handle_extraction_failure(logs)
+
+    async def _handle_extraction_failure(self, logs: List[Dict]):
+        """Helper to increment retry counts on failure"""
+        try:
+            for log in logs:
+                log_id = log.get('id', '')
+                if log_id:
+                    # Increment retry_count, default to 0 if null
+                    await self.memory.db.query(f"UPDATE {log_id} SET retry_count = (retry_count OR 0) + 1;")
+            logger.info(f"[Dreaming] Incremented retry_count for {len(logs)} logs due to failure.")
+        except Exception as db_err:
+            logger.error(f"[Dreaming] Failed to update retry counts: {db_err}")
 
 
     # ==================== Phase 2: Consolidator ====================
@@ -350,44 +386,36 @@ class Dreaming:
             })
             
         # LLM Prompt
-        prompt = f"""你是记忆重构架构师。
+        # Prepare LLM Input (Text blob for template)
+        memory_text = json.dumps(input_list, ensure_ascii=False, indent=2)
 
-### 输入数据（这些是经常被回忆起的高频记忆，说明它们很重要）：
-{json.dumps(input_list, ensure_ascii=False, indent=2)}
-注意：对话日志是由语音转录生成的，因此可能存在错别字或谐音字以及无意义的错乱文字，请进行修正。
-
-### 处理逻辑：
-- 提炼：这些记忆被反复提及，请提取其中最核心、最持久的信息。
-- 升华：将具体的事件转化为深刻理解（如性格特质、偏好、潜在意识
-- 去重：如果多条记忆重复，请合并为一条。
-- 矛盾：修正过时信息。
-- 句对话中可能包含多个不同的主体和事实，请把它分离成多个"memory"片段
-
-### 输出格式 (仅 JSON 列表):
-[
-  {{"memory": "[日期+时间] [主体1+事实][基于高频回忆的简短深刻洞察]"}},
-  {{"memory": "[日期+时间] [主体1+事实][基于高频回忆的简短深刻洞察]"}},
-  {{"memory": "[日期+时间] [主体2+事实][基于高频回忆的简短深刻洞察]"}},
-  {{"memory": "[日期+时间] [主体3+事实][基于高频回忆的简短深刻洞察]"}},
-]
-注意：必须是JSON格式列表。不要输出其他内容。
-"""
+        # Use PromptManager
+        from prompt_manager import prompt_manager
         
+        prompt_data = prompt_manager.load_structured("memory/consolidate.yaml", {"memory_text": memory_text})
+        
+        if not isinstance(prompt_data, dict):
+            logger.error("[Consolidator] Failed to load structured consolidation template")
+            return
+
+        messages = [
+            {"role": "system", "content": prompt_data.get("system", "You are a memory consolidator.")},
+            {"role": "user", "content": prompt_data.get("user", memory_text)}
+        ]
+        messages = [
+            {"role": "system", "content": prompt_data.get("system", "You are a memory consolidator.")},
+            {"role": "user", "content": prompt_data.get("user", memory_text)}
+        ]
         try:
-            if not self.llm_client:
-                logger.warning("[Dreaming] LLM client not available for consolidator")
-                return
+            # ⚡ Refactor: Use LLMManager
+            client = llm_manager.get_client("memory")
+            model_name = llm_manager.get_model_name("memory")
+            
+            logger.info(f"[Consolidator] 🚀 Active Model: {model_name}")
 
-            # === DEBUG: 打印发送给 LLM 的内容 ===
-            logger.info(f"[Consolidator] 📤 Sending to LLM ({len(pending_mems)} memories):")
-            logger.info(f"[Consolidator] Prompt:\n{prompt}")
-
-            response = self.llm_client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a memory consolidator. Output JSON only."},
-                    {"role": "user", "content": prompt}
-                ],
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=messages,
                 temperature=0.5
             )
             
@@ -443,140 +471,6 @@ class Dreaming:
             logger.error(f"[Dreaming] Failed to parse consolidator response: {e}")
         except Exception as e:
             logger.error(f"[Dreaming] Consolidator failed for {self.character_id}: {e}")
-
-
-    async def _run_consolidator_with_batch(self, batch):
-        """
-        使用 BatchManager 批次处理 Consolidator
-        
-        处理指定批次中的记忆（由 search_hybrid 检索创建）
-        这些记忆语义相关，应该一起整合
-        
-        Args:
-            batch: ConsolidationBatch 对象
-        """
-        from consolidation_batch import ConsolidationBatch
-        
-        if not isinstance(batch, ConsolidationBatch):
-            logger.error("[Dreaming] Invalid batch type")
-            return
-            
-        memory_ids = batch.retrieved_ids
-        if not memory_ids:
-            logger.debug(f"[Dreaming] Batch {batch.batch_id} has no memories")
-            return
-        
-        # 根据 ID 查询记忆内容
-        pending_mems = []
-        for mem_id in memory_ids:
-            try:
-                result = await self.memory.db.query(f"SELECT * FROM {mem_id}")
-                if result and isinstance(result, list) and len(result) > 0:
-                    mem = result[0]
-                    if isinstance(mem, dict) and 'result' in mem:
-                        pending_mems.extend(mem['result'])
-                    elif isinstance(mem, dict):
-                        pending_mems.append(mem)
-            except Exception as e:
-                logger.warning(f"Failed to fetch memory {mem_id}: {e}")
-        
-        if not pending_mems:
-            logger.debug(f"[Dreaming] No valid memories in batch {batch.batch_id}")
-            self.memory.batch_manager.complete_batch(batch.batch_id)
-            return
-        
-        # 记录发送给 LLM 的 ID
-        sent_ids = [str(m.get('id', '')) for m in pending_mems if m.get('id')]
-        self.memory.batch_manager.mark_sent_to_llm(batch.batch_id, sent_ids)
-        
-        # 准备 LLM 输入
-        input_list = []
-        for i, mem in enumerate(pending_mems):
-            input_list.append({
-                "id": str(i + 1),
-                "memory": mem.get('content', '')
-            })
-            
-        # LLM Prompt
-        prompt = f"""你是记忆重构架构师。
-
-### 输入数据（这些是语义相关的记忆，来自同一次检索）：
-{json.dumps(input_list, ensure_ascii=False, indent=2)}
-注意：对话日志是由语音转录生成的，因此可能存在错别字或谐音字以及无意义的错乱文字，请进行修正。
-
-### 处理逻辑：
-- 合并：将所有可以合并的记忆合并成一条。
-- 深刻：提取深层洞察，反映主体的性格、偏好、潜在意识。
-- 矛盾：如有矛盾，保留最新信息。
-- 每段对话中可能包含多个不同的事实，请把它分离成多个"memory"
-
-### 输出格式 (仅 JSON 列表):
-[
-  {{"memory": "[日期+时间] [事实] [简短的深刻洞察]"}},
-  {{"memory": "[日期+时间] [事实] [简短的深刻洞察]"}}
-]
-"""
-        
-        try:
-            if not self.llm_client:
-                logger.warning("[Dreaming] No LLM client, skipping batch consolidation")
-                return
-                
-            response = self.llm_client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a memory consolidator. Output JSON only."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.5
-            )
-            
-            content = response.choices[0].message.content.strip()
-            
-            # Clean markdown
-            if content.startswith("```json"): 
-                content = content.split("\n", 1)[1]
-            if content.endswith("```"): 
-                content = content.rsplit("\n", 1)[0]
-            
-            consolidated = json.loads(content)
-            if isinstance(consolidated, dict):
-                consolidated = consolidated.get("memories", [consolidated])
-            
-            # 1. 归档旧记忆
-            for mem in pending_mems:
-                mem_id = mem.get('id', '')
-                if mem_id:
-                    await self.memory.db.query(f"UPDATE {mem_id} SET status = 'archived';")
-            
-            # 2. 插入新记忆
-            for item in consolidated:
-                raw_text = item.get("memory", "")
-                if not raw_text: continue
-                
-                vector = [0.0] * 384
-                if hasattr(self.memory, 'encoder') and self.memory.encoder:
-                    try:
-                        vector = self.memory.encoder(raw_text)
-                    except:
-                        pass
-                
-                await self.memory.add_episodic_memory(
-                    character_id=self.character_id,
-                    content=raw_text,
-                    embedding=vector,
-                    status="active"
-                )
-            
-            # 3. 完成批次
-            self.memory.batch_manager.complete_batch(batch.batch_id)
-            
-            logger.info(f"[Dreaming] 📦 Batch {batch.batch_id}: {len(pending_mems)} -> {len(consolidated)} memories")
-            
-        except Exception as e:
-            logger.error(f"[Dreaming] Batch consolidation failed: {e}")
-            self.memory.batch_manager.fail_batch(batch.batch_id, str(e))
-
 
     # ==================== Phase 3: Soul Evolution ====================
     
@@ -637,9 +531,9 @@ class Dreaming:
         分析最近的记忆，演化 Big Five、PAD、Traits 和 Mood。
         使用 LLM JSON Output 模式。
         """
-        if not self.llm_client:
-            logger.warning("[Soul Evolution] No LLM client available")
-            return
+        # LLM Client is now retrieved dynamically from LLMManager
+        # checked later in try/catch block via get_client
+        pass
         
         soul = self._get_soul_manager()
         
@@ -669,71 +563,48 @@ class Dreaming:
         current_pad = soul.profile.get("personality", {}).get("pad_model", {})
         current_mood = soul.profile.get("state", {}).get("current_mood", "neutral")
         
-        # 3. 构建 Prompt
-        system_prompt = """You are a master-level psychology expert. Your goal is to evolve the internal state of a character based on their recent experiences and past memories.
-
-You must output a valid JSON object strictly following the structure below.
-
-Your Task:
-Analyze the Recent Interactions in the context of the character's history.
-Determine how the character's internal state should shift.
-Output the NEW ABSOLUTE VALUES for Big Five and PAD, and a potentially updated list of Traits.
-Also select the most appropriate "current_mood" tag from the allowed list: 
-[happy], [sad], [angry], [neutral], [tired], [excited], [shy], [obsessed], [confused]
-
-EXAMPLE JSON OUTPUT:
-{
-    "new_traits": ["<derive 4-5 traits from interaction>"],
-    "new_big_five": {
-        "openness": <choose number between 0.0 and 1.0>,
-        "conscientiousness": <choose number between 0.0 and 1.0>,
-        "extraversion": <choose number between 0.0 and 1.0>,
-        "agreeableness": <choose number between 0.0 and 1.0>,
-        "neuroticism": <choose number between 0.0 and 1.0>
-    },
-    "new_pad": {
-        "pleasure": <choose number between 0.0 and 1.0>,
-        "arousal": <choose number between 0.0 and 1.0>,
-        "dominance": <choose number between 0.0 and 1.0>
-    },
-    "current_mood": "(choose from: [happy], [sad], [angry], [neutral], [tired], [excited], [shy], [obsessed], [confused])"
-}
-"""
-
-        user_prompt = f"""Current State:
-- Traits: {current_traits}
-- Big Five: {current_big_five}
-- PAD Model: {current_pad}
-- Current Mood: {current_mood}
-
-Random Past Memories (Context):
-{random_mem_text}
-
-Recent Interactions (Focus on this):
-"{text_batch[:2000]}"
-
-Instruction:
-Based on the interactions, output the NEW state. 
-- **Big Five and PAD values must be specific floats between 0.0 and 1.0.**
-- **Do NOT simply copy the Current State.** You must decide if the recent interaction implies a change (increase or decrease).
-- If the interaction is neutral, small changes are fine. If emotional, larger shifts are expected.
-- Determine if 'Traits' need to change (keep 4-5 adjectives).
-- Select a 'current_mood' from the allowed list.
-- **You MUST return ALL fields (new_big_five, new_pad, current_mood) in the JSON.**
-- Return valid JSON only.
-"""
+        # 3. 构建 Prompt (Use PromptManager)
+        from prompt_manager import prompt_manager
         
+        context = {
+            "current_traits": current_traits,
+            "current_big_five": current_big_five,
+            "current_pad": current_pad, 
+            "current_mood": current_mood,
+            "random_mem_text": random_mem_text,
+            "recent_logs": text_batch[:2000] # Pass text batch for template
+        }
+        
+        # Load structured YAML template
+        # The evolve.yaml template returns {system: ..., user: ...} structure?
+        # Wait, my evolve.yaml has `system: |` and `user: |`.
+        # So load_structured will return a dict with those keys.
+        
+        prompt_data = prompt_manager.load_structured("memory/evolve.yaml", context)
+        
+        if not isinstance(prompt_data, dict):
+            logger.error("[Soul Evolution] Failed to load structured template")
+            return
+
+        messages = [
+            {"role": "system", "content": prompt_data.get("system", "You are an evolution engine.")},
+            {"role": "user", "content": prompt_data.get("user", "Start evolution.")}
+        ]
+
         try:
             logger.info(f"[Soul Evolution] 🧠 Calling LLM for Soul Evolution (JSON Mode)...")
             
-            response = self.llm_client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.4,  # Slightly higher temp to encourage change
-                response_format={"type": "json_object"} if hasattr(self.llm_client, 'response_format') else None
+            # ⚡ Refactor: Use LLMManager
+            client = llm_manager.get_client("evolution")
+            model_name = llm_manager.get_model_name("evolution")
+            
+            logger.info(f"[Soul Evolution] 🚀 Active Model: {model_name}")
+            
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                **llm_manager.get_parameters("evolution"),
+                response_format={"type": "json_object"} if hasattr(client, 'create') else None # Loose check, mostly all support it now or ignore
             )
             
             content = response.choices[0].message.content.strip()

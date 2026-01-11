@@ -21,6 +21,7 @@ export interface Live2DViewerRef {
      * @param expressionId The ID of the expression
      */
     expression: (expressionId: string) => void;
+    stopExpression: () => void;
 }
 
 const Live2DViewer = forwardRef<Live2DViewerRef, Live2DViewerProps>(({ modelPath, highDpi = false }, ref) => {
@@ -53,12 +54,18 @@ const Live2DViewer = forwardRef<Live2DViewerRef, Live2DViewerProps>(({ modelPath
         },
         expression: (expressionId) => {
             if (modelRef.current) {
-                // CoreModel access for setting parameters/expressions might differ slightly depending on SDK version
-                // internalModel.motionManager.expressionManager... 
-                // For simplicity with this library, it often wraps expression logic.
-                // Let's rely on internal model expression manager if available or parameter setting.
                 (modelRef.current as any).expression(expressionId);
             }
+        },
+        stopExpression: () => {
+             if (modelRef.current) {
+                 // Reset expression to default (empty string often works or internal logic)
+                 // Or stop all motions which often resets state
+                 // For now, let's try setting empty expression or just logging
+                 console.log('[Live2DViewer] Stopping expression/motion override.');
+                 (modelRef.current as any).stopAllMotions();
+                 // If expression persisting is an issue, we might need a Neutral expression ID.
+             }
         }
     }));
 
@@ -135,12 +142,12 @@ const Live2DViewer = forwardRef<Live2DViewerRef, Live2DViewerProps>(({ modelPath
                 const scaleX = appRef.current.view.width / model.width;
                 const scaleY = appRef.current.view.height / model.height;
                 // fit 80% of screen height
-                const scale = Math.min(scaleX, scaleY) * 0.8;
+                const scale = Math.min(scaleX, scaleY) * 0.6; // Reduced scale
 
                 model.scale.set(scale);
                 model.anchor.set(0.5, 0.5);
-                model.x = appRef.current.view.width / 2;
-                model.y = appRef.current.view.height / 2;
+                model.x = window.innerWidth / 2;
+                model.y = window.innerHeight * 0.6; // Lower position
 
                 // Slow down animation slightly for more natural feel and longer duration
                 (model as any).timeScale = 0.8;

@@ -82,7 +82,7 @@ const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string
         setLoading(true);
         try {
             // Use activeCharacterId from props
-            const res = await fetch(`http://127.0.0.1:8001/debug/brain_dump?character_id=${activeCharacterId}`);
+            const res = await fetch(`http://127.0.0.1:8010/debug/brain_dump?character_id=${activeCharacterId}`);
             const json = await res.json();
             if (json.status === 'success') {
                 setData(json);
@@ -96,7 +96,7 @@ const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string
     
     const fetchStatus = async () => {
         try {
-            const res = await fetch(`http://127.0.0.1:8001/debug/processing_status?character_id=${activeCharacterId}`);
+            const res = await fetch(`http://127.0.0.1:8010/debug/processing_status?character_id=${activeCharacterId}`);
             const json = await res.json();
             if (json.status === 'success') {
                 setStatus(json);

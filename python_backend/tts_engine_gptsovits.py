@@ -98,10 +98,16 @@ class GPTSoVITSEngine:
     def check_connection(self):
         """检查 GPT-SoVITS 服务是否在线"""
         try:
-            # 简单检查，设置标记
-            self.is_available = True 
+            # 实际发送请求检查服务状态 (1秒超时)
+            resp = requests.get(f"{self.api_url}/", timeout=1)
+            if resp.status_code < 500: # 只要不是500，就算通
+                 self.is_available = True
+                 logger.info(f"[GPT-SoVITS] Service online at {self.api_url}")
+            else:
+                 self.is_available = False
+                 logger.warning(f"[GPT-SoVITS] Service responded with error: {resp.status_code}")
         except Exception as e:
-            logger.warning(f"GPT-SoVITS service check failed: {e}")
+            logger.warning(f"[GPT-SoVITS] Service offline or unreachable: {e}")
             self.is_available = False
 
     def list_voices(self):

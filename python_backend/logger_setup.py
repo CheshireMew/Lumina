@@ -17,8 +17,16 @@ class TeeOutput:
 
     def write(self, data):
         # 写入原始流 (通常是控制台，保留颜色)
-        self.stream.write(data)
-        self.stream.flush()
+        try:
+            self.stream.write(data)
+            self.stream.flush()
+        except UnicodeEncodeError:
+            # Fallback for terminals that can't handle the char
+            try:
+                self.stream.write(data.encode('utf-8').decode(sys.stdout.encoding, errors='ignore'))
+                self.stream.flush()
+            except:
+                pass # Give up on writing this chunk to console
         
         # 写入文件 (去除颜色)
         if self.file_handle:
@@ -48,13 +56,19 @@ def setup_logger(log_filename="server.log"):
     # 打开日志文件 (追加模式)
     log_file = open(log_path, 'a', encoding='utf-8')
 
+    # [FIX] Force Windows stdout to UTF-8
+    if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+            sys.stderr.reconfigure(encoding='utf-8')
+        except Exception as e:
+            print(f"Warning: Failed to set utf-8 encoding: {e}")
+
     # 重定向 stdout 和 stderr
-    # 注意：这会捕获所有的 print() 输出
     sys.stdout = TeeOutput(sys.stdout, log_file)
     sys.stderr = TeeOutput(sys.stderr, log_file)
 
     # 配置 logging 模块
-    #由于 stdout 已经被重定向，StreamHandler 会自动走 TeeOutput
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',

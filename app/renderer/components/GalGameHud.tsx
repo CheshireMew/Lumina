@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Zap, Smile, X, User, Activity, Brain } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Heart, Zap, Play, Search, X, Smile, Activity, Brain, User } from 'lucide-react';
+import { API_CONFIG } from '../config';
 
 
 interface SoulProfile {
@@ -51,21 +52,22 @@ const LEVEL_COLORS: {[key: number]: string[]} = {
 interface GalGameHudProps {
     activeCharacterId: string;
     onOpenSurrealViewer?: () => void;
+    galgameEnabled?: boolean; // ⚡ New Prop
 }
 
-const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrealViewer }) => {
+const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrealViewer, galgameEnabled = true }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [profile, setProfile] = useState<SoulProfile | null>(null);
 
     // Poll Backend for Soul State (使用新的多角色 API)
     useEffect(() => {
-        if (!isVisible || !activeCharacterId) return;
+        if (!isVisible || !activeCharacterId || !galgameEnabled) return; // Skip if disabled
 
         const fetchSoul = async () => {
             try {
                 // ⚡ 分别获取 soul 和 state 数据
-                const soulRes = await fetch(`http://localhost:8001/soul/${activeCharacterId}`);
-                const stateRes = await fetch(`http://localhost:8001/galgame/${activeCharacterId}/state`);
+                const soulRes = await fetch(`${API_CONFIG.BASE_URL}/soul/${activeCharacterId}`);
+                const stateRes = await fetch(`${API_CONFIG.BASE_URL}/galgame/${activeCharacterId}/state`);
                 
                 if (soulRes.ok && stateRes.ok) {
                     const soulData = await soulRes.json();
@@ -96,9 +98,10 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
         fetchSoul();
         const interval = setInterval(fetchSoul, 3000); // Poll every 3s
         return () => clearInterval(interval);
-    }, [isVisible, activeCharacterId]); // ⚡ 依赖 activeCharacterId
+    }, [isVisible, activeCharacterId, galgameEnabled]); // ⚡ 依赖 activeCharacterId 和 galgameEnabled
 
     // Mood Icon Logic using Lucide SVGs
+    // ... (rest of helper functions) ...
     const getMoodIcon = (mood: string) => {
         const size = 32;
         switch (mood?.toLowerCase()) {
@@ -121,7 +124,7 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                 return <Smile size={size} color="#bdc3c7" />;
         }
     };
-    
+
     // Tiny SVG Radar Chart Component
     const PersonalityRadar = ({ traits }: { traits: SoulProfile['personality']['big_five'] }) => {
         if (!traits) return null;
@@ -204,23 +207,25 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                         setIsVisible(!isVisible);
                     }}
                     style={{
-                        background: isVisible ? 'rgba(255, 105, 180, 0.8)' : 'rgba(255, 105, 180, 0.2)',
+                        background: !galgameEnabled 
+                            ? 'rgba(128, 128, 128, 0.2)' // Grey if disabled
+                            : isVisible ? 'rgba(255, 105, 180, 0.8)' : 'rgba(255, 105, 180, 0.2)',
                         backdropFilter: 'blur(8px)',
                         border: '1px solid rgba(255, 255, 255, 0.3)',
                         borderRadius: '50%',
                         width: '48px',
                         height: '48px',
                         cursor: 'pointer',
-                        boxShadow: '0 4px 15px rgba(255, 105, 180, 0.3)',
-                        color: isVisible ? '#fff' : '#ff69b4',
+                        boxShadow: !galgameEnabled ? 'none' : '0 4px 15px rgba(255, 105, 180, 0.3)',
+                        color: !galgameEnabled ? '#aaa' : (isVisible ? '#fff' : '#ff69b4'),
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         transition: 'all 0.3s ease'
                     }}
-                    title="Toggle Status"
+                    title={galgameEnabled ? "Toggle Status" : "Galgame Mode Disabled"}
                 >
-                    <Heart size={24} fill={isVisible ? "currentColor" : "none"} />
+                    <Heart size={24} fill={isVisible && galgameEnabled ? "currentColor" : "none"} />
                 </button>
 
                 {/* Brain / Memory Inspector */}
@@ -250,14 +255,14 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                 </button>
             </div>
 
-            {/* Status Panel */}
+            {/* Status Panel (or Placeholder) */}
             {isVisible && (
                 <div style={{
                     position: 'absolute',
                     top: 20,
                     left: 80, // Offset to right of sidebar
                     width: '280px',
-                    background: 'rgba(20, 20, 30, 0.7)', // Dark Glass
+                    background: 'rgba(20, 20, 30, 0.85)', // Slightly darker
                     backdropFilter: 'blur(10px)',
                     borderRadius: '16px',
                     padding: '16px',
@@ -269,7 +274,7 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Activity size={18} color="#ff69b4" />
+                            <Activity size={18} color={galgameEnabled ? "#ff69b4" : "#aaa"} />
                             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Lumina State</h3>
                         </div>
                         <button 
@@ -280,99 +285,123 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                         </button>
                     </div>
 
-                    {profile ? (
-                        <>
-                            {/* Character Name */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', marginBottom: '16px', color: '#ddd' }}>
-                                <User size={16} />
-                                <span>Agent: <span style={{ color: '#fff', fontWeight: 'bold' }}>{profile.identity?.name}</span></span>
-                            </div>
-
-                            {/* Intimacy Bar (Level System) */}
-                            <div style={{ marginBottom: '14px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px', alignItems: 'center' }}>
-                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                        <Heart size={14} color={getLevelGradient(profile.relationship?.level).split(',')[0].split('(')[1] || '#ff69b4'} fill={getLevelGradient(profile.relationship?.level).split(',')[0].split('(')[1]} />
-                                        <span style={{ 
-                                            fontSize: '10px', 
-                                            color: '#fff', 
-                                            background: getLevelGradient(profile.relationship?.level), 
-                                            padding: '2px 8px', 
-                                            borderRadius: '4px',
-                                            fontWeight: 'bold',
-                                            textShadow: '0 1px 2px rgba(0,0,0,0.5)'
-                                        }}>
-                                            Lv.{profile.relationship?.level ?? 0} {profile.relationship?.current_stage_label}
-                                        </span>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <span style={{ 
-                                            color: getLevelGradient(profile.relationship?.level).split(',')[0].split('(')[1] || '#ff69b4', 
-                                            fontWeight: 'bold', 
-                                            fontSize: '14px' 
-                                        }}>
-                                            {Math.floor(profile.relationship?.progress ?? 0)}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                                    <div style={{
-                                        width: `${Math.min(100, profile.relationship?.progress || 0)}%`,
-                                        height: '100%',
-                                        background: getLevelGradient(profile.relationship?.level),
-                                        transition: 'width 0.5s ease',
-                                        boxShadow: '0 0 8px rgba(0,0,0,0.3)'
-                                    }} />
-                                </div>
-                            </div>
-
-                            {/* Energy Bar */}
-                            <div style={{ marginBottom: '16px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px', alignItems: 'center' }}>
-                                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                        <Zap size={14} color="#4facfe" fill="#4facfe" />
-                                        <span>Energy</span>
-                                    </div>
-                                    <span style={{ color: '#4facfe', fontWeight: 'bold' }}>{Math.round(profile.state?.energy_level || 0)}</span>
-                                </div>
-                                <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                                    <div style={{
-                                        width: `${profile.state?.energy_level || 0}%`,
-                                        height: '100%',
-                                        background: 'linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)',
-                                        transition: 'width 0.5s ease'
-                                    }} />
-                                </div>
-                            </div>
-
-                            {/* Mood & Personality Grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                {/* Left: Mood */}
-                                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                    <div style={{ marginBottom: '8px' }}>
-                                        {getMoodIcon(profile.state?.current_mood || 'neutral')}
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '4px' }}>
-                                        {profile.state?.current_mood || 'Neutral'}
-                                    </div>
-                                    <div style={{ fontSize: '10px', fontFamily: 'monospace', color: '#eee', textAlign: 'center' }}>
-                                        <div>P: {(profile.personality.pad_model.pleasure).toFixed(2)}</div>
-                                        <div>A: {(profile.personality.pad_model.arousal).toFixed(2)}</div>
-                                        <div>D: {(profile.personality.pad_model.dominance).toFixed(2)}</div>
-                                    </div>
-                                </div>
-                                
-                                {/* Right: Big Five Radar */}
-                                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '10px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                    <PersonalityRadar traits={profile.personality.big_five} />
-                                </div>
-                            </div>
-                        </>
-                    ) : (
-                        <div style={{ padding: '20px', textAlign: 'center', color: '#666', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                            <Activity className="spin" size={24} />
-                            <span>Syncing Soul...</span>
+                    {!galgameEnabled ? (
+                        // ⚡ Disabled Placeholder
+                        <div style={{ 
+                            padding: '30px 10px', 
+                            textAlign: 'center', 
+                            color: '#9ca3af', 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            gap: '12px' 
+                        }}>
+                             <div style={{ fontSize: '40px', opacity: 0.5 }}>🔒</div>
+                             <div style={{ fontSize: '14px', fontWeight: 600, color: '#e5e7eb' }}>
+                                 请打开 Galgame 模式进行体验
+                             </div>
+                             <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
+                                 在设置中开启 <span style={{ color: '#ff69b4' }}>Galgame Mode</span> 以查看好感度、心情和能量状态。
+                             </div>
                         </div>
+                    ) : (
+                        profile ? (
+                            <>
+                                {/* Character Name */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', marginBottom: '16px', color: '#ddd' }}>
+                                    <User size={16} />
+                                    <span>Agent: <span style={{ color: '#fff', fontWeight: 'bold' }}>{profile.identity?.name}</span></span>
+                                </div>
+    
+                                {/* Intimacy Bar (Level System) */}
+                                <div style={{ marginBottom: '14px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                            <Heart size={14} 
+                                                color={(LEVEL_COLORS[profile.relationship?.level ?? 0] || LEVEL_COLORS[0])[1]} 
+                                                fill={(LEVEL_COLORS[profile.relationship?.level ?? 0] || LEVEL_COLORS[0])[1]} 
+                                            />
+                                            <span style={{ 
+                                                fontSize: '10px', 
+                                                color: '#fff', 
+                                                background: getLevelGradient(profile.relationship?.level), 
+                                                padding: '2px 8px', 
+                                                borderRadius: '4px',
+                                                fontWeight: 'bold',
+                                                textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                                            }}>
+                                                Lv.{profile.relationship?.level ?? 0} {profile.relationship?.current_stage_label}
+                                            </span>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <span style={{ 
+                                                color: (LEVEL_COLORS[profile.relationship?.level ?? 0] || LEVEL_COLORS[0])[1], 
+                                                fontWeight: 'bold', 
+                                                fontSize: '14px' 
+                                            }}>
+                                                {Math.floor(profile.relationship?.progress ?? 0)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                                        <div style={{
+                                            width: `${Math.min(100, profile.relationship?.progress || 0)}%`,
+                                            height: '100%',
+                                            background: getLevelGradient(profile.relationship?.level),
+                                            transition: 'width 0.5s ease',
+                                            boxShadow: '0 0 8px rgba(0,0,0,0.3)'
+                                        }} />
+                                    </div>
+                                </div>
+    
+                                {/* Energy Bar */}
+                                <div style={{ marginBottom: '16px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                            <Zap size={14} color="#4facfe" fill="#4facfe" />
+                                            <span>Energy</span>
+                                        </div>
+                                        <span style={{ color: '#4facfe', fontWeight: 'bold' }}>{Math.round(profile.state?.energy_level || 0)}</span>
+                                    </div>
+                                    <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                                        <div style={{
+                                            width: `${profile.state?.energy_level || 0}%`,
+                                            height: '100%',
+                                            background: 'linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)',
+                                            transition: 'width 0.5s ease'
+                                        }} />
+                                    </div>
+                                </div>
+    
+                                {/* Mood & Personality Grid */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                    {/* Left: Mood */}
+                                    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                        <div style={{ marginBottom: '8px' }}>
+                                            {getMoodIcon(profile.state?.current_mood || 'neutral')}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '4px' }}>
+                                            {profile.state?.current_mood || 'Neutral'}
+                                        </div>
+                                        <div style={{ fontSize: '10px', fontFamily: 'monospace', color: '#eee', textAlign: 'center' }}>
+                                            <div>P: {(profile.personality.pad_model.pleasure).toFixed(2)}</div>
+                                            <div>A: {(profile.personality.pad_model.arousal).toFixed(2)}</div>
+                                            <div>D: {(profile.personality.pad_model.dominance).toFixed(2)}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Right: Big Five Radar */}
+                                    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '10px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                        <PersonalityRadar traits={profile.personality.big_five} />
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#666', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                <Activity className="spin" size={24} />
+                                <span>Syncing Soul...</span>
+                            </div>
+                        )
                     )}
                     
                     <style>{`
@@ -381,8 +410,6 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                     `}</style>
                 </div>
             )}
-            
-
         </>
     );
 };

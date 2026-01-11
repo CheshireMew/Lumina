@@ -109,6 +109,8 @@ class AudioManager:
         # 加载配置
         self.load_config()
         
+
+    
     def load_config(self):
         """从配置文件加载设备设置"""
         if CONFIG_FILE.exists():
@@ -116,7 +118,10 @@ class AudioManager:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     config = json.load(f)
                     self.device_name = config.get("device_name")
-                    logger.info(f"已加载音频设备配置: {self.device_name}")
+                    self.speech_start_threshold = config.get("speech_start_threshold", 0.6)
+                    self.speech_end_threshold = config.get("speech_end_threshold", 0.05)
+                    self.min_speech_frames = config.get("min_speech_frames", 15)
+                    logger.info(f"已加载音频配置: Device={self.device_name}, Start={self.speech_start_threshold}, End={self.speech_end_threshold}")
             except Exception as e:
                 logger.error(f"加载音频配置失败: {e}")
     
@@ -131,15 +136,30 @@ class AudioManager:
             except Exception as e:
                 logger.warning(f"读取配置文件失败: {e}，将创建新配置")
         
-        # 只更新 device_name，保留其他配置（如声纹配置）
+        # 更新字段
         config['device_name'] = self.device_name
+        config['speech_start_threshold'] = self.speech_start_threshold
+        config['speech_end_threshold'] = self.speech_end_threshold
+        config['min_speech_frames'] = self.min_speech_frames
         
         try:
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
-            logger.info(f"已保存音频设备配置: {self.device_name}")
+            logger.info(f"已保存音频配置")
         except Exception as e:
             logger.error(f"保存配置失败: {e}")
+
+    def update_params(self, start_threshold: float = None, end_threshold: float = None, min_frames: int = None):
+        """动态更新 VAD 参数"""
+        if start_threshold is not None:
+            self.speech_start_threshold = max(0.1, min(1.0, start_threshold))
+        if end_threshold is not None:
+            self.speech_end_threshold = max(0.01, min(1.0, end_threshold))
+        if min_frames is not None:
+             self.min_speech_frames = max(5, min(100, min_frames))
+        
+        self.save_config()
+        logger.info(f"VAD 参数更新: Start={self.speech_start_threshold}, End={self.speech_end_threshold}")
     
     def list_devices(self) -> List[Dict]:
         """

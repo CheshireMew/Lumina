@@ -14,8 +14,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+
 # 确保可以导入本地模块
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from vision_service import router as vision_router # [NEW] Vision API
 
 # 配置日志
 logging.basicConfig(
@@ -27,9 +30,11 @@ logger = logging.getLogger("MemoryServer")
 
 # ========== 全局状态 ==========
 heartbeat_service_instance = None
+soul_client = None # [FIX] Ensure defined
 surreal_system = None
 batch_manager_instance = None  # 批次管理器
 dreaming_service_instance = None
+bilibili_service_instance = None
 config_timestamps: Dict = defaultdict(float)
 
 
@@ -49,7 +54,7 @@ async def lifespan(app: FastAPI):
     if os.path.exists(config_path):
         try:
             logger.info(f"Loading saved config from {config_path}...")
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, 'r', encoding='utf-8-sig') as f: # [FIX] Handle BOM
                 config_data = json.load(f)
             
             character_id = config_data.get("character_id", "hiyori")
@@ -72,13 +77,29 @@ async def lifespan(app: FastAPI):
                     character_id = "lumina_default"
 
             # Load Embedding Model Centralized
-            model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "paraphrase-multilingual-MiniLM-L12-v2")
+            from app_config import config, MODELS_DIR
+            
+            # ⚡ Use central models dir
+            model_subpath = config.models.embedding_model_name
+            model_path = MODELS_DIR / model_subpath
+            
             try:
-                # Ensure model exists (or download) - reusing logic from lite_memory used to have
-                # For now, assume model_manager handles download if we call setup/download
-                # But here we assume it's there or we load from path.
-                # Actually, let's just attempt load.
-                embedding_model = model_manager.load_embedding_model(model_path)
+                # Check if exists locally
+                if not os.path.exists(str(model_path)) or not os.listdir(str(model_path)):
+                     logger.info(f"Embedding model not found at {model_path}. Downloading...")
+                     try:
+                         from sentence_transformers import SentenceTransformer
+                         # TODO: Consolidate this download logic with stt_server.py or a shared utility
+                         # Download from Hub and Save to local portable folder
+                         # We use a temporary cache or let it use default cache then save
+                         temp_model = SentenceTransformer("sentence-transformers/" + model_subpath)
+                         temp_model.save(str(model_path))
+                         logger.info(f"Model saved to {model_path}")
+                     except Exception as dl_err:
+                         logger.error(f"Download failed: {dl_err}")
+                         raise dl_err
+
+                embedding_model = model_manager.load_embedding_model(str(model_path))
             except Exception as e:
                 logger.error(f"Failed to load embedding model: {e}")
                 embedding_model = None
@@ -89,9 +110,9 @@ async def lifespan(app: FastAPI):
             
             logger.info(f"Auto-initialized memory for '{character_id}' (Surreal Only)")
             
-            # 初始化 SurrealDB
+            # 初始化 SurrealDB (使用 app_config 配置)
             try:
-                surreal_system = SurrealMemory(url="ws://127.0.0.1:8000/rpc", user="root", password="root")
+                surreal_system = SurrealMemory(character_id=character_id)
                 await surreal_system.connect()
                 
                 # [Injection] Inject Global Encoder into SurrealMemory
@@ -131,6 +152,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to init Dreaming: {e}")
     
+    # [NEW] 初始化 Bilibili Service
+    global bilibili_service_instance
+    try:
+        from bilibili_service import BilibiliService
+        # Default room ID 0, will load from Soul config
+        bilibili_service_instance = BilibiliService(soul_client, room_id=0)
+        await bilibili_service_instance.start()
+    except Exception as e:
+        logger.error(f"Failed to start Bilibili Service: {e}")
+
     # 启动 Heartbeat
     try:
         logger.info("Starting Heartbeat Service...")
@@ -146,47 +177,66 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to start Heartbeat: {e}")
 
     # 注入依赖到各路由模块
+    
+    def _inject_all_dependencies():
+        """向所有路由模块注入依赖"""
+        from routers import config, memory, characters, soul, debug, dream, free_llm, llm_mgmt
+        
+        # config router
+        config.inject_dependencies(
+            soul_client, 
+            heartbeat_service_instance, config_timestamps,
+            dreaming_service_instance
+        )
+        
+        # free llm router (no deps but good to init)
+        free_llm.inject_dependencies(soul_client)
+
+        # memory router
+        memory.inject_dependencies(
+            soul_client, surreal_system, 
+            dreaming_service_instance
+        )
+        
+        # characters router
+        characters.inject_dependencies(soul_client)
+
+        # soul router
+        soul.inject_dependencies(
+            soul_client,
+            heartbeat_service_instance, config_timestamps
+        )
+
+        # llm_mgmt router
+        llm_mgmt.inject_dependencies(soul_client)
+        
+        # debug router
+        debug.inject_dependencies(surreal_system, dreaming_service_instance)
+        
+        # dream router
+        dream.inject_dependencies(dreaming_service_instance, surreal_system)
+
     _inject_all_dependencies()
 
     yield
     
     # [Shutdown] 清理
     logger.info("Shutting down...")
+    
+    if bilibili_service_instance:
+        await bilibili_service_instance.stop()
+
     if heartbeat_service_instance:
         heartbeat_service_instance.stop()
+    
+    if surreal_system:
+        logger.info("Closing SurrealDB connection...")
+        await surreal_system.close()
 
 
-def _inject_all_dependencies():
-    """向所有路由模块注入依赖"""
-    from routers import config, memory, characters, soul, debug, dream
+
     
-    # config router
-    config.inject_dependencies(
-        soul_client, 
-        heartbeat_service_instance, config_timestamps
-    )
-    
-    # memory router
-    memory.inject_dependencies(
-        soul_client, surreal_system, 
-        dreaming_service_instance
-    )
-    
-    # characters router
-    characters.inject_dependencies(soul_client)
-    
-    # soul router
-    # soul router
-    soul.inject_dependencies(
-        soul_client,
-        heartbeat_service_instance, config_timestamps
-    )
-    
-    # debug router
-    debug.inject_dependencies(surreal_system, dreaming_service_instance)
-    
-    # dream router
-    dream.inject_dependencies(dreaming_service_instance, surreal_system)
+
 
 
 # ========== 创建应用 ==========
@@ -206,7 +256,8 @@ app.add_middleware(
 )
 
 # ========== 注册路由 ==========
-from routers import config, memory, characters, soul, debug, dream
+from routers import config, memory, characters, soul, debug, dream, llm_mgmt, free_llm
+from fastapi.staticfiles import StaticFiles
 
 app.include_router(config.router)
 app.include_router(memory.router)
@@ -214,6 +265,25 @@ app.include_router(characters.router)
 app.include_router(soul.router)
 app.include_router(debug.router)
 app.include_router(dream.router)
+app.include_router(llm_mgmt.router)
+app.include_router(free_llm.router) # ⚡ Free LLM / V1 API
+app.include_router(vision_router) # [NEW] Vision API
+
+# Live2D Static Files
+current_dir = os.path.dirname(os.path.abspath(__file__))
+live2d_path = os.path.join(current_dir, "live2d")
+
+# Fallback for Development (../public/live2d)
+if not os.path.exists(live2d_path):
+    dev_path = os.path.join(current_dir, "..", "public", "live2d")
+    if os.path.exists(dev_path):
+        live2d_path = dev_path
+
+if os.path.exists(live2d_path):
+    app.mount("/live2d", StaticFiles(directory=live2d_path), name="live2d")
+    logger.info(f"Mounted Live2D static files from {live2d_path}")
+else:
+    logger.warning(f"Live2D directory not found. Checked: {live2d_path}")
 
 
 # ========== 根端点 ==========
@@ -234,4 +304,5 @@ async def root():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8001)
+    from app_config import config
+    uvicorn.run(app, host=config.network.host, port=config.network.memory_port)

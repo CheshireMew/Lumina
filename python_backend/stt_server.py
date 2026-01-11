@@ -22,6 +22,8 @@ if os.name == 'nt':
 # --- Custom Logger & Model Manager ---
 from logger_setup import setup_logger
 from model_manager import model_manager
+from app_config import config as app_settings
+
 
 # Initialize Logger (TeeOutput)
 logger = setup_logger("stt_server.log")
@@ -85,7 +87,7 @@ MODEL_SIZES = {
     "paraformer-en": "Sherpa-ONNX (Paraformer-EN)"
 }
 
-CONFIG_FILE = Path("stt_config.json")
+CONFIG_FILE = app_settings.config_root / "stt_config.json"
 
 class STTEngineManager:
     def __init__(self):
@@ -99,18 +101,17 @@ class STTEngineManager:
         self.load_config()
 
     def load_config(self):
-        if CONFIG_FILE.exists():
-            try:
-                with open(CONFIG_FILE, "r") as f:
-                    config = json.load(f)
-                    self.current_model_name = config.get("model", "base")
-                    # Auto-detect engine type based on name
-                    if self.current_model_name == "sense-voice":
-                        self.engine_type = "sense_voice"
-                    else:
-                        self.engine_type = "faster_whisper"
-            except Exception as e:
-                logger.error(f"Failed to load config: {e}")
+        # Use centralized config (app_settings.stt)
+        self.current_model_name = app_settings.stt.model
+        
+        # Auto-detect engine type based on name
+        if self.current_model_name == "sense-voice":
+            self.engine_type = "sense_voice"
+        elif self.current_model_name.startswith("paraformer"):
+            self.engine_type = self.current_model_name.replace("-", "_")
+        else:
+            self.engine_type = "faster_whisper"
+
 
     def save_config(self):
         try:
@@ -263,16 +264,11 @@ async def startup_event():
     # Load model in background
     threading.Thread(target=engine_manager.load_model, args=(engine_manager.current_model_name,)).start()
     
-    # Load Audio Config
-    config_path = Path("audio_config.json")
-    config = {}
-    if config_path.exists():
-        with open(config_path, encoding='utf-8-sig') as f:
-            config = json.load(f)
-    
-    enable_voiceprint = config.get("enable_voiceprint_filter", False)
-    voiceprint_threshold = config.get("voiceprint_threshold", 0.6)
-    voiceprint_profile = config.get("voiceprint_profile", "default")
+    # Load Audio Config from centralized config
+    enable_voiceprint = app_settings.audio.enable_voiceprint_filter
+    voiceprint_threshold = app_settings.audio.voiceprint_threshold
+    voiceprint_profile = app_settings.audio.voiceprint_profile
+
     
     if enable_voiceprint:
         try:
@@ -410,8 +406,8 @@ async def startup_event():
         aggressiveness=1 if enable_voiceprint else 3
     )
     
-    audio_manager.start()
-    logger.info("AudioManager initialized and started")
+    # audio_manager.start() # ⚡ Defer start to WebSocket connection
+    logger.info("AudioManager initialized (Waiting for WS connection to start)")
 
 # --- API Endpoints ---
 
@@ -480,6 +476,7 @@ async def switch_model(request: SwitchModelRequest, background_tasks: Background
     background_tasks.add_task(engine_manager.switch_model_background, request.model_name)
     return {"status": "pending", "message": f"Switching to {request.model_name}..."}
 
+
 # --- Audio Config APIs (Legacy & New) ---
 
 @app.get("/audio/devices")
@@ -488,67 +485,86 @@ async def list_audio_devices():
          raise HTTPException(500, "AudioManager not ready")
     return {"devices": audio_manager.list_devices(), "current": audio_manager.device_name}
 
-class AudioConfigRequest(BaseModel):
+class UnifiedAudioConfig(BaseModel):
+    # Device & Voiceprint
     device_name: Optional[str] = None
-    # 声纹配置参数
     enable_voiceprint_filter: Optional[bool] = None
     voiceprint_threshold: Optional[float] = None
     voiceprint_profile: Optional[str] = None
-
-class AudioDeviceRequest(BaseModel):
-    device_name: str
+    
+    # VAD Settings
+    speech_start_threshold: Optional[float] = None
+    speech_end_threshold: Optional[float] = None
+    min_speech_frames: Optional[int] = None
 
 @app.post("/audio/config")
-async def update_audio_config(request: dict): # Loose typing to accept various configs
-    # Compatibility shim for legacy and new config requests
+async def update_audio_config(request: UnifiedAudioConfig):
     global audio_manager
-    config_path = Path("audio_config.json")
+    config_path = app_settings.config_root / "audio_config.json"
     
     try:
+        # 1. Load existing config
         if config_path.exists():
              with open(config_path, encoding='utf-8-sig') as f:
                  config = json.load(f)
         else:
              config = {}
         
-        # 更新配置
-        if request.get("device_name") is not None:
-            config["device_name"] = request["device_name"]
-        if request.get("enable_voiceprint_filter") is not None:
-            config["enable_voiceprint_filter"] = request["enable_voiceprint_filter"]
-        if request.get("voiceprint_threshold") is not None:
-            config["voiceprint_threshold"] = request["voiceprint_threshold"]
-        if request.get("voiceprint_profile") is not None:
-            config["voiceprint_profile"] = request["voiceprint_profile"]
-        
-        # 保存配置
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
+        # 2. Update Config Dict (Persistence)
+        if request.device_name is not None:
+            config["device_name"] = request.device_name
             
-        # 如果修改了设备，更新AudioManager
-        if request.get("device_name") and audio_manager:
-            audio_manager.set_device_by_name(request["device_name"])
-        
-        # 声纹配置需要重启stt_server才能生效
-        if request.get("enable_voiceprint_filter") is not None or request.get("voiceprint_threshold") is not None or request.get("voiceprint_profile") is not None:
-            logger.warning("⚠️ 声纹配置已更新，请重启 stt_server.py 使配置生效")
+        # Voiceprint
+        if request.enable_voiceprint_filter is not None:
+            config["enable_voiceprint_filter"] = request.enable_voiceprint_filter
+        if request.voiceprint_threshold is not None:
+            config["voiceprint_threshold"] = request.voiceprint_threshold
+        if request.voiceprint_profile is not None:
+            config["voiceprint_profile"] = request.voiceprint_profile
             
-        # Apply runtime changes
-        if "device_name" in request and audio_manager:
-            audio_manager.set_device_by_name(request["device_name"])
+        # VAD
+        if request.speech_start_threshold is not None:
+            config["speech_start_threshold"] = request.speech_start_threshold
+        if request.speech_end_threshold is not None:
+            config["speech_end_threshold"] = request.speech_end_threshold
+        if request.min_speech_frames is not None:
+            config["min_speech_frames"] = request.min_speech_frames
+        
+        # 3. Save Config to File
+        with open(config_path, "w", encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+            
+        # 4. Apply Runtime Changes (if AudioManager is active)
+        if audio_manager:
+            # Device Switch
+            if request.device_name:
+                audio_manager.set_device_by_name(request.device_name)
+            
+            # VAD Param Update
+            audio_manager.update_params(
+                start_threshold=request.speech_start_threshold,
+                end_threshold=request.speech_end_threshold,
+                min_frames=request.min_speech_frames
+            )
+            # Note: Voiceprint params usually require restart or deeper reload, 
+            # but we can try to update runtime properties if possible.
+            # Currently AudioManager takes them in __init__, so restart is safer for those.
 
+        # 5. Log warnings
+        if any(x is not None for x in [request.enable_voiceprint_filter, request.voiceprint_threshold, request.voiceprint_profile]):
+             logger.warning("⚠️ Voiceprint configuration updated. Verify if restart is needed or if AudioManager handles it.")
             
     except Exception as e:
-        logger.error(f"Config Update Failed: {e}")
+        logger.error(f"Config Update Failed: {e}", exc_info=True)
         raise HTTPException(500, str(e))
         
-    return {"status": "ok", "config": config}
+    return {"status": "ok", "config": config, "message": "Configuration saved and applied."}
 
 @app.get("/voiceprint/status")
 async def get_voiceprint_status():
     """Return current voiceprint configuration and status"""
     global voiceprint_manager
-    config_path = Path("audio_config.json")
+    config_path = app_settings.config_root / "audio_config.json"
     
     try:
         if config_path.exists():
@@ -584,7 +600,14 @@ async def get_voiceprint_status():
 @app.get("/audio/status")
 async def get_audio_status():
     if not audio_manager: return {"status": "uninitialized"}
-    return audio_manager.get_status()
+    status = audio_manager.get_status()
+    # Ensure VAD params are included
+    status.update({
+        "speech_start_threshold": audio_manager.speech_start_threshold,
+        "speech_end_threshold": audio_manager.speech_end_threshold,
+        "min_speech_frames": audio_manager.min_speech_frames
+    })
+    return status
 
 # --- WebSocket ---
 
@@ -595,14 +618,29 @@ async def websocket_endpoint(websocket: WebSocket):
     import asyncio
     connection_id = str(uuid.uuid4())
     active_websockets[connection_id] = websocket
-    logger.info(f"Client connected: {connection_id}")
+    logger.info(f"Client connected: {connection_id} (Total: {len(active_websockets)})")
     
+    # ⚡ Auto-Start Audio Manager if first client
+    if len(active_websockets) == 1 and audio_manager:
+        if not audio_manager.is_running:
+            logger.info("[Auto-Start] Starting AudioManager (First Client)")
+            audio_manager.start()
+            
+            # ⚡ Clear queue to prevent stale messages from previous sessions
+            while not message_queue.empty():
+                try: message_queue.get_nowait()
+                except: pass
+
     try:
         while True:
             # 1. Check outbound queue
             try:
-                message = message_queue.get_nowait()
-                await websocket.send_json(message)
+                # ⚡ Only send if running (prevent leakage)
+                if audio_manager and audio_manager.is_running:
+                    message = message_queue.get_nowait()
+                    await websocket.send_json(message)
+                else:
+                    await asyncio.sleep(0.1) 
             except queue.Empty:
                 pass
             
@@ -626,9 +664,15 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         if connection_id in active_websockets:
             del active_websockets[connection_id]
-        logger.info(f"Client disconnected: {connection_id}")
+        logger.info(f"Client disconnected: {connection_id} (Remaining: {len(active_websockets)})")
+        
+        # ⚡ Auto-Stop Audio Manager if no clients
+        if len(active_websockets) == 0 and audio_manager and audio_manager.is_running:
+            logger.info("[Auto-Stop] Stopping AudioManager (No Clients)")
+            audio_manager.stop()
 
 if __name__ == "__main__":
     import uvicorn
+    from app_config import config
     # 0.0.0.0 for external access if needed, but 127.0.0.1 is safer for local
-    uvicorn.run(app, host="127.0.0.1", port=8765)
+    uvicorn.run(app, host=config.network.host, port=config.network.stt_port)

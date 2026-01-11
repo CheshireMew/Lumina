@@ -33,9 +33,17 @@ hiddenimports = [
 # tmp_ret = collect_all('sherpa_onnx')
 # datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
-# Collect Langchain/Surrealdb if needed
-# hiddenimports += collect_submodules('langchain')
-# hiddenimports += collect_submodules('surrealdb')
+# Collect Langchain/Surrealdb/Torch
+hiddenimports += collect_submodules('langchain')
+hiddenimports += collect_submodules('surrealdb')
+# Force collect torch to ensure cuda/dlls are present
+tmp_torch = collect_all('torch')
+datas += tmp_torch[0]; binaries += tmp_torch[1]; hiddenimports += tmp_torch[2]
+tmp_audio = collect_all('torchaudio')
+datas += tmp_audio[0]; binaries += tmp_audio[1]; hiddenimports += tmp_audio[2]
+
+# Fix missing unittest dependency for Torch
+hiddenimports += ['unittest', 'unittest.mock']
 
 # Config Files to Bundle
 # (Source, Dest)
@@ -47,6 +55,7 @@ datas += [
     # (os.path.join(BACKEND_DIR, 'assets'), 'assets'), # Only if exists
     (os.path.join(BACKEND_DIR, 'schemas'), 'schemas'), # Schemas
     (os.path.join(BACKEND_DIR, 'tools'), 'tools'), # Tools
+    (os.path.join(BACKEND_DIR, 'characters'), 'characters'), # Character Data
     # (os.path.join(BACKEND_DIR, 'voiceprint_profiles'), 'voiceprint_profiles'), # Optional
 ]
 

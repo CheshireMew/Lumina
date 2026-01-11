@@ -1,0 +1,4 @@
+- [ ] **Specs**: Define path resolution logic in `specs/config/spec.md`.
+- [ ] **Implementation**: Update `python_backend/app_config.py`.
+- [ ] **Implementation**: Ensure SurrealDB uses the discovered data path.
+- [ ] **Verification**: Test logic with and without `Lumina_Data` folder.

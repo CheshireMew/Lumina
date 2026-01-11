@@ -1,4 +1,5 @@
 import './polyfills';
+import './App.css'; // Global Styles
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'

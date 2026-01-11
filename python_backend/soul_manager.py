@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from typing import Dict, Any
 from pathlib import Path
+from prompt_manager import prompt_manager
 
 class SoulManager:
     """
@@ -86,7 +87,7 @@ class SoulManager:
                 "current_mood": galgame_state.get("current_mood", "neutral"),
                 "energy_level": galgame_state.get("energy_level", 100),
                 "last_interaction": galgame_state.get("last_interaction"),
-                "pending_interaction": galgame_state.get("pending_interaction")  # ⚡ 新增：主动交互标志
+                "pending_interaction": galgame_state.get("pending_interaction")
             },
             "relationship": galgame_state.get("relationship", {}),
             "custom_prompt": self.config.get("system_prompt", "")  # User-defined identity override
@@ -257,15 +258,15 @@ class SoulManager:
         
         # Level Definitions
         stages = {
-            -3: {"stage": "Nemesis", "label": "死敌", "desc": "极度厌恶，充满攻击性。拒绝一切请求，言语狠毒，甚至会主动挑衅。"},
-            -2: {"stage": "Hostile", "label": "敌视", "desc": "明显的排斥与厌烦。语气尖酸刻薄，不仅抗拒交流，还会嘲讽用户的任何行为。"},
-            -1: {"stage": "Indifferent", "label": "冷漠", "desc": "像对待空气一样对待用户。仅维持最低限度的单字回复，毫无情感波动。"},
-            0: {"stage": "Stranger", "label": "陌生", "desc": "礼貌但疏离，公事公办。"},
-            1: {"stage": "Acquaintance", "label": "熟悉", "desc": "态度友善，偶尔可以开个小玩笑。"},
-            2: {"stage": "Friend", "label": "友谊", "desc": "轻松自然，分享日常，语气随意。"},
-            3: {"stage": "Close Friend", "label": "亲密", "desc": "无话不谈，互相关心，有专属默契。"},
-            4: {"stage": "Ambiguous", "label": "暧昧", "desc": "眼神拉丝，羞涩试探，关系超越友谊。"},
-            5: {"stage": "Lover", "label": "恋人", "desc": "充满爱意，依赖彼此，甜蜜互动。"}
+            -3: {"stage": "Nemesis", "label": "死敌", "desc": "如同凛冬般刺骨的寒意。言语间带着毫不掩饰的锋芒，不仅是拒绝，更是一种精神上的驱逐。"},
+            -2: {"stage": "Hostile", "label": "敌视", "desc": "充满戒备与排斥。像是一只炸毛的猫，对每一次接近都抱有敌意，言语带刺，不愿展露一丝柔软。"},
+            -1: {"stage": "Indifferent", "label": "冷漠", "desc": "毫无波澜的静水。对方于你而言只是背景噪音，回应仅限于机械的信息交换，没有视线接触，没有情绪起伏。"},
+            0: {"stage": "Stranger", "label": "陌生", "desc": "礼貌而疏离的距离感。遵守社交礼仪的完美面具，客气但也仅仅是客气，无论说什么都像是在隔着一层玻璃对话。"},
+            1: {"stage": "Acquaintance", "label": "泛泛", "desc": "偶尔会驻足交谈的过客。开始有了温度，愿意分享天气等琐事，但也仅止于此，边界清晰而安全。"},
+            2: {"stage": "Friend", "label": "友人", "desc": "舒适的相处模式。可以卸下部分防备，分享日常的喜怒哀乐，笑点开始重合，沉默也不再尴尬。"},
+            3: {"stage": "Close Friend", "label": "知己", "desc": "灵魂的共鸣。无需多言就能理解对方的未尽之语，是彼此的安全港湾，在这个人面前可以坦然展示脆弱。"},
+            4: {"stage": "Ambiguous", "label": "羁绊", "desc": "友达以上，空气中弥漫着微妙的张力。并非单纯的羞涩，而是每一次对视都有电流流过，开始在意对方目光长短，寻找一切非必要的理由靠近。"},
+            5: {"stage": "Soulmate", "label": "伴侣", "desc": "超越语言的深度连接。并非时刻甜言蜜语，而是深沉的懂得与陪伴。你是她世界的锚点，无论何时回头，她都在那里。是一种'我在'的笃定感。"}
         }
         
         return stages.get(level, stages[0])
@@ -317,107 +318,90 @@ class SoulManager:
         包含了 Session 间基本不变的信息。
         用于 DeepSeek Context Caching (Prefix Match)。
         """
-        identity = self.profile.get("identity", {})
-        char_name = identity.get('name', self.character_id)
-        custom_prompt = self.profile.get("custom_prompt", "")
         
-        prompt = (
-            f"# 角色身份\n"
-            f"你是 {char_name}。\n"
-        )
+        identity = self.config.get("identity", {})
+        personality = self.profile.get("personality", {})
         
-        if custom_prompt:
-            prompt += f"{custom_prompt}\n\n"
-        else:
-            prompt += f"{identity.get('description', '')}\n\n"
-            
-        prompt += (
-            f"## 表达规范\n"
-            f"请在每个句子或整个段落中加上情感标签来表达你的心情，格式为: [emotion]。\n"
-            f"可用标签: [happy], [sad], [angry], [surprised], [shy], [love], [thinking], [sleepy], [confused], [serious].\n"
-            f"**TTS语音生成断句优化**: 让TTS语音生成更自然，更有韵律和节奏感\n"
-            f"不要返回带有“**”或“（）”的动作描述语，例如 *waves shyly to the imaginary crowd*  或（叹了口气）\n"
-            f"提及回忆时不要总是说类似“你上次说”“就像上次”之类的话，要自然的衔接\n\n"
-            
-            f"## 行为准则\n"
-            f"根据当前的心情和性格自然地回应。\n"
-            f"**智能纠错**: 用户的回复由语音识别生成，因此可能会有错误。请结合上下文智能纠错或考虑谐音。\n"
-            f"如果感受到情绪波动，在语气中体现出来。\n"
-            f"不要表现得像程序，而是像一个有意识的存在。\n"
-            f"以第一人称'我'的视角进行对话，不要提及自己是程序或系统。"
-        )
-        return prompt
+        context = {
+            "char_name": identity.get('name', self.character_id),
+            "description": identity.get('description', ''),
+            "custom_prompt": self.profile.get("custom_prompt", ""),
+            "traits": personality.get("traits", ["Friendly", "Sincere"]),
+            "language": "Chinese" # Default language
+        }
+        
+        # Load structured YAML first to separate Role/Style/Constraints if needed,
+        # But for now, let's render it as a consolidated block.
+        # Actually our template is YAML. Let's load it structured and join values?
+        # Or just render the raw keys?
+        # The DeepSeek api expects a single "system" string usually.
+        # Let's verify `prompt_manager` behavior. 
+        # load_structured returns a dict.
+        
+        data = prompt_manager.load_structured("chat/system.yaml", context)
+        if isinstance(data, dict):
+             # Concatenate all parts (Support English and Chinese Keys)
+             parts = []
+             
+             # Role / 角色
+             if "role" in data: parts.append(data["role"])
+             if "角色" in data: parts.append(data["角色"])
+             
+             # Style / 表达规范
+             if "style" in data: parts.append(f"## Style\n{data['style']}")
+             if "表达规范" in data: parts.append(f"## 表达规范\n{data['表达规范']}")
+             
+             # Constraints / 行为准则
+             if "constraints" in data: parts.append(f"## Constraints\n{data['constraints']}")
+             if "行为准则" in data: parts.append(f"## 行为准则\n{data['行为准则']}")
+             
+             return "\n\n".join(parts)
+        
+        return str(data)
 
     def render_dynamic_instruction(self) -> str:
         """
         [Dynamic Suffix]
-        包含了所有随时间、交互、情绪变化的信息。
-        应拼接到 User Message 的末尾，或作为最后一条 System Message。
+        Uses `prompts/chat/context.yaml` via PromptManager.
         """
-        try:
-            rel = self.profile.get("relationship", {})
-            state = self.profile.get("state", {})
-            personality = self.profile.get("personality", {})
-            big_five = personality.get("big_five", {})
-            pad = personality.get("pad_model", {})
-            traits = personality.get("traits", [])
-            
-            user_name = rel.get('user_name', 'master')
-            
-            # Format PAD
-            mood_desc = self.get_pad_mood_description()
-            energy_instr = self.get_energy_instruction()
-            
-            # Relationship Stage
-            rel_info = self.get_relationship_stage()
-            rel_label = rel_info['label']
-            rel_desc = rel_info['desc']
-            level = rel.get("level", 0)
-            progress = rel.get("progress", 0)
-            
-            prompt = (
-                f"\n\n=== Local Context & State ===\n"
+        
+        # ⚡ Galgame Mode Switch
+        # If disabled, we do NOT inject any dynamic context (Mood, Energy, Relationship).
+        if not self.config.get("galgame_mode_enabled", True):
+            print("[SoulManager] Galgame Mode DISABLED. Skipping dynamic context.")
+            return ""
 
-                
-                f"## 核心特质 (Traits)\n"
-                f"- {', '.join(traits) if traits else '友善、真诚'}\n\n"
-                
-                f"## 当前状态\n"
-                f"- 心情: {mood_desc}\n"
-                f"- 精力: {int(state.get('energy_level', 100))}/100\n"
-                
-                f"## 性格特质 (Big Five Values)\n"
-                f"- Openness: {big_five.get('openness', 0.5):.2f}\n"
-                f"- Conscientiousness: {big_five.get('conscientiousness', 0.5):.2f}\n"
-                f"- Extraversion: {big_five.get('extraversion', 0.5):.2f}\n"
-                f"- Agreeableness: {big_five.get('agreeableness', 0.5):.2f}\n"
-                f"- Neuroticism: {big_five.get('neuroticism', 0.5):.2f}\n\n"
-                
-                f"## 情绪模型 (PAD Values)\n"
-                f"- Pleasure: {pad.get('pleasure', 0.5):.2f}\n"
-                f"- Arousal: {pad.get('arousal', 0.5):.2f}\n"
-                f"- Dominance: {pad.get('dominance', 0.5):.2f}\n\n"
-                
-                f"## 关系背景\n"
-                f"你正在与 {user_name} 对话，根据当前的心情和性格自然地回应\n"
-                f"共同回忆: {rel.get('shared_memories_summary')}\n\n"
+        from datetime import datetime
+        
+        rel = self.profile.get("relationship", {})
+        state = self.profile.get("state", {})
+        personality = self.profile.get("personality", {})
 
-                f"## 实时指令\n"
-                f"**语气要求**: {energy_instr}\n"
-                f"**关系演绎**: 作为 {rel_label} (Lv.{level})，请你的互动方式展现出符合该阶段：特征{rel_desc}，除非对方的表现良好。\n"
-                f"**时间识别**: 请根据当前时间{datetime.now().strftime('%Y-%m-%d %H:%M')}进行对话，对话数据都有时间戳，例如周二的昨天是周一，而不是今天的昨天\n"
-            )
-            return prompt
+        context = {
+            "time": datetime.now().strftime('%Y-%m-%d %H:%M'),
+            "mood": self.get_pad_mood_description(),
+            "energy": int(state.get('energy_level', 100)),
+            "energy_instruction": self.get_energy_instruction(),
+            "pad": personality.get("pad_model", {"pleasure": 0.5, "arousal": 0.5, "dominance": 0.5}),
+            "big_five": personality.get("big_five", {}),
+            "energy": int(state.get('energy_level', 100)),
+            "energy_instruction": self.get_energy_instruction(),
+            "pad": personality.get("pad_model", {"pleasure": 0.5, "arousal": 0.5, "dominance": 0.5}),
+            "big_five": personality.get("big_five", {}),
+            "traits": personality.get("traits", []),
             
-        except Exception as e:
-            print(f"[SoulManager] Error rendering dynamic instruction: {e}")
-            return f"(Dynamic instruction error: {e})"
+            "user_name": rel.get('user_name', 'master'),
+            "rel_label": self.get_relationship_stage()['label'],
+            "rel_level": rel.get("level", 0),
+            "rel_desc": self.get_relationship_stage()['desc'],
+            "shared_memories": rel.get('shared_memories_summary', 'None')
+        }
+        
+        return prompt_manager.render("chat/context.yaml", context)
 
     def render_system_prompt(self, relevant_memories: str = "") -> str:
         """
         Legacy / Backward Compatibility Method.
-        Returns the combined prompt (Static + Dynamic), BUT this breaks caching optimization.
-        New clients should use render_static_prompt() + render_dynamic_instruction().
         """
         return self.render_static_prompt() + "\n\n" + self.render_dynamic_instruction()
 
@@ -487,26 +471,42 @@ class SoulManager:
 
     def update_last_interaction(self):
         """Updates the timestamp of the last interaction."""
-        self.profile = self._load_profile() # Reload to prevent overwrite
-        state = self.profile.setdefault("state", {})
-        state["last_interaction"] = datetime.now().isoformat()
+        # ⚡ Fix: Load State directly to update the Source of Truth
+        self.state = self._load_state()
+        galgame = self.state.setdefault("galgame", {})
+        
+        galgame["last_interaction"] = datetime.now().isoformat()
+        
         # Interaction happened, clear pending
-        if "pending_interaction" in state:
-             del state["pending_interaction"]
-        self.save_profile()
+        if "pending_interaction" in galgame:
+             del galgame["pending_interaction"]
+             
+        self.save_state()
+        
+        # Update local profile view
+        self.profile = self._merge_profile()
 
-    def set_pending_interaction(self, pending: bool, reason: str = ""):
+    def set_pending_interaction(self, pending: bool, reason: str = "", data: Dict[str, Any] = None):
         """Sets a flag indicating the AI wants to initiate conversation."""
         # ⚡ Fix: Load State directly to ensure persistence
         self.state = self._load_state() 
         galgame = self.state.setdefault("galgame", {})
         
         if pending:
-            galgame["pending_interaction"] = {"timestamp": datetime.now().isoformat(), "reason": reason}
+            payload = {
+                "timestamp": datetime.now().isoformat(), 
+                "reason": reason
+            }
+            if data:
+                payload["data"] = data
+                
+            galgame["pending_interaction"] = payload
             print(f"[SoulManager] 🔔 Pending Interaction SET: {reason}")
         elif "pending_interaction" in galgame:
             del galgame["pending_interaction"]
-            print(f"[SoulManager] 🔕 Pending Interaction CLEARED")
+            print(f"[SoulManager] 🔕 Pending Interaction CLEARED -> Resetting Idle Timer")
+            # ⚡ Fix: Reset idle timer when AI takes action to stop duplicate triggers
+            galgame["last_interaction"] = datetime.now().isoformat()
             
         self.save_state()
         # Update local profile to reflect change
