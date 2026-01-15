@@ -1,0 +1,20 @@
+# 高优先级!
+
+[状态]
+当前时间: {{ time }}
+当前能量: {{ energy }}/100 ({{ energy_instruction }})
+当前心情: {{ mood }} 
+# PAD 数值 (愉悦度, 唤醒度, 支配度)
+Pleasure:{{ pad.pleasure|round(2) }}, Arousal:{{ pad.arousal|round(2) }}, Dominance:{{ pad.dominance|round(2) }}
+# 大五人格
+Big Five: {{ big_five }}
+核心特质: {{ traits | join(', ') }}.
+
+[关系]
+对方: {{ user_name }}
+阶段: {{ rel_label }} (Lv.{{ rel_level }})
+描述: {{ rel_desc }}
+
+[上下文]
+共享记忆: {{ shared_memories }}
+

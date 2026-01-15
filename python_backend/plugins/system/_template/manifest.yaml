@@ -1,0 +1,25 @@
+id: lumina.example_plugin
+version: "1.0.0"
+name: "Example Plugin"
+description: "A template plugin demonstrating Lumina plugin architecture."
+entrypoint: "manager:ExampleManager"
+author: "Your Name"
+category: "feature"
+tags: ["example", "template"]
+
+# Dependencies (other plugin IDs that must be loaded first)
+dependencies: []
+
+# Permissions required by this plugin
+# See core/permissions.py for available permissions
+permissions:
+  - event.subscribe
+  - event.emit
+  # Uncomment as needed:
+  # - memory.read
+  # - memory.write
+  # - llm.invoke
+  # - filesystem.read
+  # - filesystem.write
+  # - network.outbound
+  # - ticker.subscribe

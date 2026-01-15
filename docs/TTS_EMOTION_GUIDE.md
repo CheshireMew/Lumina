@@ -2,28 +2,28 @@
 
 ## 功能概述
 
-已为 Lumina 的 TTS 系统添加了情感合成功能，支持通过情感标签控制语音的表达方式。
+已为 Lumina 的 TTS 系统添加了情感合成功能,支持通过情感标签控制语音的表达方式。
 
 ## 使用方式
 
-### 方式 1: 文本内嵌标签（推荐）
+### 方式 1: 文本内嵌标签(推荐)
 
-在文本开头添加 `[情感标签]`：
+在文本开头添加 `[情感标签]`:
 
 ```python
 # 示例
-text = "[happy]哇，今天天气真好呀！"
-text = "[sad]我好难过，你能陪陪我吗？"
-text = "[angry]你怎么能这样！"
+text = "[happy]哇,今天天气真好呀!"
+text = "[sad]我好难过,你能陪陪我吗?"
+text = "[angry]你怎么能这样!"
 ```
 
 ### 方式 2: API 参数
 
-通过 `emotion` 参数指定：
+通过 `emotion` 参数指定:
 
 ```python
 payload = {
-    "text": "你好，我是小小！",
+    "text": "你好,我是小小!",
     "voice": "zh-CN-XiaoxiaoNeural",
     "emotion": "cheerful"  # 指定情感
 }
@@ -56,20 +56,20 @@ payload = {
 - `gentle` - 温柔
 - `affectionate` - 深情
 - `calm` - 平静
-- `chat` - 闲聊（默认）
+- `chat` - 闲聊(默认)
 - `customerservice` - 客服
 - `whispering` - 耳语
 
 ## API 端点
 
-### 1. 合成语音（支持情感）
+### 1. 合成语音(支持情感)
 
 ```http
 POST /tts/synthesize
 Content-Type: application/json
 
 {
-  "text": "[happy]你好！",
+  "text": "[happy]你好!",
   "voice": "zh-CN-XiaoxiaoNeural",
   "emotion": "cheerful"  // 可选
 }
@@ -81,7 +81,7 @@ Content-Type: application/json
 GET /tts/emotions
 ```
 
-返回：
+返回:
 ```json
 {
   "engine": "Edge TTS",
@@ -128,20 +128,20 @@ def wrap_with_ssml(text: str, voice: str, style: Optional[str]):
 ### 3. 配置文件
 
 - `tts_emotion_styles.json` - 情感标签到 Edge TTS 样式的映射
-- `emotion_map.json` - Live2D 动作映射（前端使用）
+- `emotion_map.json` - Live2D 动作映射(前端使用)
 
 ## 测试
 
-运行测试脚本：
+运行测试脚本:
 
 ```bash
 python python_backend/test_tts_emotion.py
 ```
 
-测试内容：
+测试内容:
 1. 获取情感列表
 2. 测试不同情感的语音合成
-3. 生成示例音频文件（test_*.mp3）
+3. 生成示例音频文件(test_*.mp3)
 
 ## 前端集成示例
 
@@ -162,14 +162,14 @@ audioElement.src = audioUrl;
 audioElement.play();
 ```
 
-## 未来扩展：其他 TTS 引擎
+## 未来扩展:其他 TTS 引擎
 
 ### 架构设计
 
-代码已预留接口，未来可添加其他 TTS 引擎：
+代码已预留接口,未来可添加其他 TTS 引擎:
 
 ```python
-# 示例：GPT-SoVITS 引擎
+# 示例:GPT-SoVITS 引擎
 @app.post("/tts/synthesize/gptsovits")
 async def synthesize_with_gptsovits(request: TTSRequest):
     """使用 GPT-SoVITS 引擎进行情感语音合成"""
@@ -177,7 +177,7 @@ async def synthesize_with_gptsovits(request: TTSRequest):
     clean_text, emotion = parse_emotion_tags(request.text)
     
     # 2. 调用 GPT-SoVITS API
-    # （需要安装和配置 GPT-SoVITS）
+    # (需要安装和配置 GPT-SoVITS)
     
     # 3. 返回音频流
     pass
@@ -185,17 +185,17 @@ async def synthesize_with_gptsovits(request: TTSRequest):
 
 ### 推荐的替代引擎
 
-1. **GPT-SoVITS** - 开源克隆 TTS，情感丰富
-   - 优点：本地部署、情感自然
-   - 缺点：需要训练、配置复杂
+1. **GPT-SoVITS** - 开源克隆 TTS,情感丰富
+   - 优点:本地部署、情感自然
+   - 缺点:需要训练、配置复杂
 
 2. **VITS** - 高质量端到端 TTS
-   - 优点：音质好、延迟低
-   - 缺点：情感控制有限
+   - 优点:音质好、延迟低
+   - 缺点:情感控制有限
 
 3. **Bark** - AI 生成多情感语音
-   - 优点：情感丰富、支持笑声/叹气
-   - 缺点：稍慢、显存需求高
+   - 优点:情感丰富、支持笑声/叹气
+   - 缺点:稍慢、显存需求高
 
 ### 引擎选择建议
 
@@ -218,7 +218,7 @@ async def synthesize_with_gptsovits(request: TTSRequest):
 }
 ```
 
-### emotion_map.json（前端 Live2D 动作）
+### emotion_map.json(前端 Live2D 动作)
 
 ```json
 {
@@ -231,11 +231,11 @@ async def synthesize_with_gptsovits(request: TTSRequest):
 
 ## 调试日志
 
-服务会输出详细日志：
+服务会输出详细日志:
 
 ```
 [TTS] Emotion: happy -> Style: cheerful
-[TTS] Streaming synthesis: '哇，今天天气真好呀！' (Style: cheerful)
+[TTS] Streaming synthesis: '哇,今天天气真好呀!' (Style: cheerful)
 [TTS] Connection established (Chunk 1: 8192 bytes)
 [TTS] Stream completed (15 chunks)
 ```
@@ -246,13 +246,13 @@ async def synthesize_with_gptsovits(request: TTSRequest):
 
 **原因**: 音色不支持该样式
 
-**解决**: 使用 `zh-CN-XiaoxiaoNeural`（小小）或 `zh-CN-YunxiNeural`（云希）
+**解决**: 使用 `zh-CN-XiaoxiaoNeural`(小小)或 `zh-CN-YunxiNeural`(云希)
 
 ### 问题 2: SSML 格式错误
 
 **原因**: 文本包含特殊字符
 
-**解决**: 需要转义 XML 特殊字符（`<`, `>`, `&`, `'`, `"`）
+**解决**: 需要转义 XML 特殊字符(`<`, `>`, `&`, `'`, `"`)
 
 ### 问题 3: 映射配置未加载
 
@@ -262,8 +262,8 @@ async def synthesize_with_gptsovits(request: TTSRequest):
 
 ## 更新日志
 
-- **2026-01-05**: 初始版本，支持 Edge TTS 情感标签
-  - 添加 13 种情感标签（中英文）
+- **2026-01-05**: 初始版本,支持 Edge TTS 情感标签
+  - 添加 13 种情感标签(中英文)
   - 支持文本内嵌和参数两种方式
   - 预留其他 TTS 引擎接口
 

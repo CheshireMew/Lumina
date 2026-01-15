@@ -1,25 +1,47 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict
 from PIL import Image
 import io
 import base64
 import logging
-from vision.providers.moondream import MoondreamProvider
+from core.interfaces.driver import BaseVisionDriver
+# Concrete drivers loaded dynamically
+
 
 logger = logging.getLogger("VisionService")
 
 router = APIRouter(prefix="/vision", tags=["Vision"])
 
-# Global instance (Singleton pattern)
-_provider: Optional[MoondreamProvider] = None
+class VisionPluginManager:
+    def __init__(self):
+        self.drivers: Dict[str, BaseVisionDriver] = {}
+        self.active_driver_id: str = "moondream"
+        
+        # Dynamic Loading
+        try:
+            from services.plugin_loader import PluginLoader
+            import os
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            drivers_dir = os.path.join(base_dir, "plugins", "drivers", "vision")
+            
+            loaded = PluginLoader.load_plugins(drivers_dir, BaseVisionDriver)
+            for d in loaded:
+                self.drivers[d.id] = d
+                
+        except Exception as e:
+            logger.error(f"Failed to load dynamic Vision drivers: {e}")
+            
+        if not self.drivers:
+            logger.warning("No Vision drivers found.")
+        
+    def get_active_provider(self) -> BaseVisionDriver:
+        if self.active_driver_id not in self.drivers:
+            raise RuntimeError(f"Active vision driver '{self.active_driver_id}' not found.")
+        return self.drivers[self.active_driver_id]
 
-def get_provider():
-    global _provider
-    if _provider is None:
-        _provider = MoondreamProvider()
-        # _provider.load() # Lazy loading is better for startup time
-    return _provider
+# Singleton Manager Removed - Use ServiceContainer
+# manager = VisionPluginManager()
 
 class AnalyzeRequest(BaseModel):
     image_base64: Optional[str] = None
@@ -35,7 +57,8 @@ async def analyze_image(
     Analyze an image (from file upload or base64) and return text description.
     """
     try:
-        provider = get_provider()
+        from services.container import services
+        provider = services.get_vision().get_active_provider()
         
         image_data = None
         
@@ -63,7 +86,7 @@ async def analyze_image(
         
         return {
             "status": "ok",
-            "provider": provider.provider_id,
+            "provider": provider.id,
             "description": description
         }
 
@@ -76,13 +99,13 @@ async def analyze_image(
 @router.post("/load")
 async def load_model(background_tasks: BackgroundTasks):
     """Explicitly load the model into memory."""
-    provider = get_provider()
+    provider = manager.get_active_provider()
     background_tasks.add_task(provider.load)
     return {"status": "loading_started"}
 
 @router.post("/unload")
 async def unload_model():
     """Unload the model to free memory."""
-    provider = get_provider()
+    provider = manager.get_active_provider()
     provider.unload()
     return {"status": "unloaded"}

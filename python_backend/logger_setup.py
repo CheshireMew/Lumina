@@ -8,7 +8,7 @@ ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 class TeeOutput:
     """
-    双重输出流：同时写入 stdout/stderr 和 文件。
+    双重输出流:同时写入 stdout/stderr 和 文件。
     写入文件时会自动去除 ANSI 颜色代码。
     """
     def __init__(self, stream, file_handle):
@@ -16,7 +16,7 @@ class TeeOutput:
         self.file_handle = file_handle
 
     def write(self, data):
-        # 写入原始流 (通常是控制台，保留颜色)
+        # 写入原始流 (通常是控制台,保留颜色)
         try:
             self.stream.write(data)
             self.stream.flush()
@@ -69,14 +69,41 @@ def setup_logger(log_filename="server.log"):
     sys.stderr = TeeOutput(sys.stderr, log_file)
 
     # 配置 logging 模块
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
+    # [Observability] Request ID Filter
+    # [Observability] LogRecordFactory Injection
+    old_factory = logging.getLogRecordFactory()
+    def record_factory(*args, **kwargs):
+        record = old_factory(*args, **kwargs)
+        if not hasattr(record, "request_id"):
+            record.request_id = request_id_ctx.get()
+        return record
+    logging.setLogRecordFactory(record_factory)
+
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] [%(request_id)s] %(name)s: %(message)s')
+    
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
+        
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
     
     logger = logging.getLogger("LuminaCore")
     logger.info(f"Logger initialized. Writing to {log_path}")
     return logger
+
+import contextvars
+
+# Global Context ContextVar for Request ID
+request_id_ctx = contextvars.ContextVar("request_id", default="-")
+
+class RequestIdFilter(logging.Filter):
+    """
+    Log Filter that injects the current Request ID from ContextVar.
+    """
+    def filter(self, record):
+        record.request_id = request_id_ctx.get()
+        return True

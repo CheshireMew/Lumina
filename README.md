@@ -1,24 +1,24 @@
 # Lumina - 智能桌面伴侣
 
-Lumina 是一个先进的智能桌面伴侣应用，拥有生动的 Live2D 形象、实时语音交互能力以及沉浸式的 GalGame 恋爱养成系统。她不仅能倾听你的声音，还能记住你的喜好，随着互动加深而建立羁绊。
+Lumina 是一个先进的智能桌面伴侣应用,拥有生动的 Live2D 形象、实时语音交互能力以及沉浸式的 GalGame 恋爱养成系统。她不仅能倾听你的声音,还能记住你的喜好,随着互动加深而建立羁绊。
 
 ![Lumina 预览图](https://via.placeholder.com/800x450?text=Lumina+AI+Preview)
 
 ## ✨ 核心功能
 
-- **Live2D 沉浸交互**: 完全可交互的动画角色，能响应触摸、视线跟随，并根据情绪改变表情。
+- **Live2D 沉浸交互**: 完全可交互的动画角色,能响应触摸、视线跟随,并根据情绪改变表情。
 - **全链路语音交互**:
-  - **STT (听)**: 本地化 Whisper/SenseVoice 模型，精准识别中英文。支持 VAD 自动断句。
-  - **TTS (说)**: 集成 Edge TTS (在线) 和 GPT-SoVITS (本地)，声音自然动听，支持情感表达。
+  - **STT (听)**: 本地化 Whisper/SenseVoice 模型,精准识别中英文。支持 VAD 自动断句。
+  - **TTS (说)**: 集成 Edge TTS (在线) 和 GPT-SoVITS (本地),声音自然动听,支持情感表达。
 - **长短期记忆系统**:
   - **SurrealDB**: 存储对话历史、事实记忆和向量知识库。
-  - **Dreaming Engine**: 在后台自动整理记忆、提取羁绊值，并模拟"做梦"来演化性格。
-- **GalGame HUD**: 实时显示好感度、能量值、当前心情（Mood）和关系等级。
-- **隐私优先**: 所有核心 AI 逻辑（STT/LLM/记忆）均可本地部署，API 密钥仅保存在本地。
+  - **Dreaming Engine**: 在后台自动整理记忆、提取羁绊值,并模拟"做梦"来演化性格。
+- **GalGame HUD**: 实时显示好感度、能量值、当前心情(Mood)和关系等级。
+- **隐私优先**: 所有核心 AI 逻辑(STT/LLM/记忆)均可本地部署,API 密钥仅保存在本地。
 
 ## 🛠️ 技术架构
 
-Lumina 采用分离式微服务架构以最大化性能：
+Lumina 采用分离式微服务架构以最大化性能:
 
 1.  **Frontend (UI)**: Electron + React + Vite + TypeScript (Live2D 渲染, HUD, 音频采集).
 2.  **Backend (Core)**: Python (FastAPI) 微服务集群:
@@ -31,7 +31,7 @@ Lumina 采用分离式微服务架构以最大化性能：
 
 ### 1. 环境准备 (Prerequisites)
 
-请确保你的电脑已安装以下软件：
+请确保你的电脑已安装以下软件:
 
 - **Node.js** (v18+): [下载](https://nodejs.org/)
 - **Python** (v3.10 - v3.12): [下载](https://www.python.org/)
@@ -39,13 +39,13 @@ Lumina 采用分离式微服务架构以最大化性能：
   - Windows (PowerShell): `iwr https://windows.surrealdb.com -useb | iex`
   - _必须确保 `surreal` 命令已添加到系统环境变量 PATH 中。_
 - **FFmpeg**: [下载](https://ffmpeg.org/download.html)
-  - 需将 `ffmpeg/bin` 添加到系统 PATH，用于音频转码。
+  - 需将 `ffmpeg/bin` 添加到系统 PATH,用于音频转码。
 
 ---
 
 ### 2. 安装依赖 (Installation)
 
-克隆项目后，打开终端执行以下步骤。
+克隆项目后,打开终端执行以下步骤。
 
 **Step A: 安装前端依赖**
 
@@ -69,7 +69,7 @@ pip install -r requirements.txt
 ```
 
 **Step C: 配置 API Key**
-在项目根目录创建 `.env` 文件，填入你的 LLM 服务商 Key (推荐 DeepSeek):
+在项目根目录创建 `.env` 文件,填入你的 LLM 服务商 Key (推荐 DeepSeek):
 
 ```env
 DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
@@ -80,7 +80,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 
 ### 3. 启动应用 (Running)
 
-我们提供了一键启动脚本（推荐）：
+我们提供了一键启动脚本(推荐):
 
 **Windows PowerShell:**
 
@@ -94,12 +94,12 @@ _该脚本会自动检查 SurrealDB、启动 Python 后端集群、并运行 Ele
 
 ### 🔧 手动启动模式 (Developer)
 
-如果你需要分别调试各个服务，可以打开三个终端窗口：
+如果你需要分别调试各个服务,可以打开三个终端窗口:
 
 **Terminal 1: 数据库**
 
 ```bash
-surreal start --log info --user root --pass root --bind 0.0.0.0:8000 --allow-all file:lumina_surreal.db
+surreal start --log info --user root --pass root --bind 0.0.0.0:8001 --allow-all file:lumina_surreal.db
 ```
 
 **Terminal 2: Python 后端**
@@ -119,7 +119,7 @@ npm run dev
 
 ## 📦 模型下载说明
 
-应用首次启动时会尝试自动下载所需模型，但为了加速，你可以手动下载并放入 `python_backend/models/` 目录：
+应用首次启动时会尝试自动下载所需模型,但为了加速,你可以手动下载并放入 `python_backend/models/` 目录:
 
 1.  **Embedding 模型**: `paraphrase-multilingual-MiniLM-L12-v2`
 2.  **STT 模型**: `faster-whisper-small` (或其他尺寸)
@@ -129,10 +129,75 @@ npm run dev
 - **端口冲突 (Port 8000/8001/8765/8766 is busy)**:
   - 请检查是否有残留的 `python.exe` 或 `surreal.exe` 进程并结束它们。
 - **Live2D 加载失败**:
-  - 确保网络可以访问 GitHub (用于下载模型)，或手动下载 Live2D 模型放入 `public/live2d`。
+  - 确保网络可以访问 GitHub (用于下载模型),或手动下载 Live2D 模型放入 `public/live2d`。
 - **声音无法播放**:
-  - 检查系统音频输出设置。如果使用 GPT-SoVITS，确保已安装 FFmpeg。
+  - 检查系统音频输出设置。如果使用 GPT-SoVITS,确保已安装 FFmpeg。
 
-## 📜 许可证
+---
+
+## 🧩 插件系统 (Plugin System)
+
+Lumina 采用微内核架构,核心功能通过插件实现:
+
+| 插件                  | 功能                       | 状态    |
+| --------------------- | -------------------------- | ------- |
+| **HeartbeatManager**  | 主动聊天 + 番茄钟          | ✅ 内置 |
+| **GalgameManager**    | 恋爱养成系统 (好感度/能量) | ✅ 内置 |
+| **DreamingManager**   | "做梦"记忆整合             | ✅ 内置 |
+| **EvolutionManager**  | 灵魂/性格演化              | ✅ 内置 |
+| **VoiceprintManager** | 声纹安全验证               | ✅ 内置 |
+| **MCP Servers**       | 外部服务集成 (Bilibili 等) | ✅ 内置 |
+
+### 第三方插件开发
+
+插件放入 `python_backend/plugins/system/` 目录即可自动加载:
+
+```
+plugins/system/
+└── my_plugin/
+    ├── manifest.yaml   # 插件元数据
+    └── manager.py      # 插件入口
+```
+
+详细开发文档见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+
+---
+
+## 🏗️ 架构参考
+
+完整的系统架构文档请参阅:
+
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - 系统架构概览
+- **[FEATURE_INVENTORY.md](FEATURE_INVENTORY.md)** - 功能清单
+- **[docs/ARCHITECTURE_MCP.md](docs/ARCHITECTURE_MCP.md)** - MCP 协议规范
+
+---
+
+## �️ 路线图 (Roadmap)
+
+### 已完成 ✅
+
+- [x] Live2D 沉浸交互
+- [x] 全链路语音交互 (STT/TTS)
+- [x] 3 层记忆系统 (SurrealDB)
+- [x] GalGame HUD 界面
+- [x] 插件系统基础架构
+- [x] EventBus 事件总线
+
+### 进行中 🚧
+
+- [ ] 插件权限系统
+- [ ] 插件热加载/卸载
+- [ ] 第三方插件市场
+
+### 规划中 📋
+
+- [ ] 插件沙箱隔离
+- [ ] 多角色支持
+- [ ] 跨平台 (macOS/Linux)
+
+---
+
+## �📜 许可证
 
 [MIT](LICENSE)

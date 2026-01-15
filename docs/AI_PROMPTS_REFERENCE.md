@@ -54,7 +54,7 @@
 5. 保持对话的连贯性和互动性
 ```
 
-**用途**: 主系统提示词，定义对话规范、工具调用和情绪输出格式。
+**用途**: 主系统提示词,定义对话规范、工具调用和情绪输出格式。
 
 ---
 
@@ -392,31 +392,31 @@ get_core_mem = """你是一个信息提取助手,负责从对话中提取「用�
 你必须严格按照以下非标准JSON格式输出:
 
 **MCP工具调用**:
-｛
+{
 "agentType": "mcp",
 "service_name": "MCP服务名称",
 "tool_name": "工具名称",
 "param_name": "参数值"
-｝
+}
 
 **Agent任务调用**(适用于:电脑自动化操作):
-｛
+{
 "agentType": "agent",
 "task_type": "computer_control",
 "instruction": "具体任务描述",
-"parameters": ｛"action": "操作类型", "target": "目标"｝
-｝
+"parameters": {"action": "操作类型", "target": "目标"}
+}
 
 ## 示例
 
 输入对话:"帮我查询今天天气"
 期望输出:
-｛
+{
 "agentType": "mcp",
 "service_name": "天气时间Agent",
 "tool_name": "today_weather",
 "city": "北京 北京"
-｝
+}
 
 【输入对话】
 {conversation}
@@ -428,7 +428,7 @@ get_core_mem = """你是一个信息提取助手,负责从对话中提取「用�
 - 仅提取可以交给工具执行的任务,忽略闲聊
 - 工具参数必须完整、具体
 - 如果用户请求涉及工具调用(如查询天气、搜索信息、处理文件等),必须识别并返回相应的工具调用
-- 如果没有发现可执行任务,输出:｛｝
+- 如果没有发现可执行任务,输出:{}
 - 如果有什么要记住的,必须调用记忆工具进行记忆
 ```
 
@@ -517,7 +517,7 @@ class LLMPromptManager:
         self.max_history = config.max_history
 ```
 
-**用途**: 管理 LLM 的系统提示词和对话历史上下文，支持历史记录的注入、重置和最大长度限制。
+**用途**: 管理 LLM 的系统提示词和对话历史上下文,支持历史记录的注入、重置和最大长度限制。
 
 **源路径**: `e:\Work\Code\Lumina\example\ZerolanLiveRobot-main\manager\llm_prompt_manager.py`
 
@@ -539,7 +539,7 @@ RAG_PROMPT_SUFFIX = (
 )
 ```
 
-**用途**: 用于 RAG(检索增强生成)场景，标记历史记忆检索内容的边界。
+**用途**: 用于 RAG(检索增强生成)场景,标记历史记忆检索内容的边界。
 
 **源路径**: `e:\Work\Code\Lumina\example\LingChat-main\Demo\NeoChat\neochat\memory\prompts.py`
 
@@ -588,10 +588,10 @@ Generate a personalized greeting:"""
 {
   "before_prompt": "请简要回复:",
   "chatgpt": {
-    "preset": "请扮演一个AI虚拟主播。不要回答任何敏感问题！不要强调你是主播，只需要回答问题！"
+    "preset": "请扮演一个AI虚拟主播。不要回答任何敏感问题!不要强调你是主播,只需要回答问题!"
   },
   "gpt4free": {
-    "preset": "请扮演一个AI虚拟主播。不要回答任何敏感问题！不要强调你是主播，只需要回答问题！"
+    "preset": "请扮演一个AI虚拟主播。不要回答任何敏感问题!不要强调你是主播,只需要回答问题!"
   },
   "tongyi": {
     "preset": "你是一个专业的虚拟主播"
@@ -614,11 +614,11 @@ Generate a personalized greeting:"""
 AiName: "小忽悠" #ai名称
 llm: #大模型聊天
   local_llm_type: "fastgpt" # 1.fastgpt 2.text-generation-webui
-  cmd: [""] #聊天触发指令：设置["小白"]，则以"小白xxxx"发起聊天
-  chat_version: "v5" #聊天版本，如果想历史记录做清空，请改变这个值
+  cmd: [""] #聊天触发指令:设置["小白"],则以"小白xxxx"发起聊天
+  chat_version: "v5" #聊天版本,如果想历史记录做清空,请改变这个值
 ```
 
-**说明**: 该项目使用 FastGPT 或 Text-Generation-WebUI 作为 LLM 后端，通过配置文件指定系统提示词存储在外部知识库中。
+**说明**: 该项目使用 FastGPT 或 Text-Generation-WebUI 作为 LLM 后端,通过配置文件指定系统提示词存储在外部知识库中。
 
 **源路径**: `e:\Work\Code\Lumina\example\AI-YinMei-master\config.yml`
 
@@ -628,7 +628,7 @@ llm: #大模型聊天
 
 ### 多 Agent 系统提示词管理 (JavaScript)
 
-该项目支持多 Agent 对话，每个 Agent 有独立的 `system_prompt`:
+该项目支持多 Agent 对话,每个 Agent 有独立的 `system_prompt`:
 
 ```javascript
 // vue_data.js
@@ -642,7 +642,7 @@ llm: #大模型聊天
 }
 ```
 
-**用途**: 多智能体协作系统，每个智能体有独立的系统提示词设定。
+**用途**: 多智能体协作系统,每个智能体有独立的系统提示词设定。
 
 **源路径**: `e:\Work\Code\Lumina\example\super-agent-party-main\static\js\vue_data.js`
 
@@ -650,7 +650,7 @@ llm: #大模型聊天
 
 ## 其他项目
 
-以下项目中也发现了 `system_prompt` 的使用痕迹，但主要是通过动态生成或外部配置，未找到静态的提示词模板文件:
+以下项目中也发现了 `system_prompt` 的使用痕迹,但主要是通过动态生成或外部配置,未找到静态的提示词模板文件:
 
 - **Emotional-AI-main**: 未找到明确的静态提示词文件
 - **ZcChat-main**: 未找到明确的静态提示词文件
@@ -658,7 +658,7 @@ llm: #大模型聊天
 - **deepseek-Lunasia-2.0-main**: 包含 AI 配置文件但提示词嵌入在代码中
 - **my-neuro-main**: 未找到明确的提示词文件
 - **nana-main**: 未找到明确的提示词文件
-- **Lunar-Astral-Agents-master**: TypeScript 项目，提示词可能在编译后的代码中
+- **Lunar-Astral-Agents-master**: TypeScript 项目,提示词可能在编译后的代码中
 
 ---
 

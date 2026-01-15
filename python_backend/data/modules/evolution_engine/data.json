@@ -1,0 +1,28 @@
+{
+    "personality": {
+        "big_five": {
+            "openness": 0.85,
+            "conscientiousness": 0.65,
+            "extraversion": 0.35,
+            "agreeableness": 0.75,
+            "neuroticism": 0.45
+        },
+        "pad_model": {
+            "pleasure": 1.0,
+            "arousal": 0.4,
+            "dominance": 0.3
+        },
+        "traits": [
+            "artistic",
+            "imaginative",
+            "introspective",
+            "sensitive",
+            "creative"
+        ]
+    },
+    "state": {
+        "current_mood": "neutral"
+    },
+    "last_updated": "2026-01-11T12:50:33.556093",
+    "enabled": true
+}

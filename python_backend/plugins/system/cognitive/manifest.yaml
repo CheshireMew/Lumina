@@ -1,0 +1,14 @@
+id: system.cognitive
+name: Cognitive Brain
+version: 1.0.0
+description: Advanced cognitive capabilities including Intent Classification and Task Planning (System 2 Thinking).
+author: Lumina Team
+type: system
+entrypoint: "plugin:CognitivePlugin"
+permissions:
+  - llm.invoke
+  - memory.read
+  - system.notification
+config:
+  enabled: false # Disabled in favor of Core Basic Chat
+  model: chat # Uses default chat model

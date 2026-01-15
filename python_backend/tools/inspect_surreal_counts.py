@@ -10,18 +10,18 @@ async def main():
         # note: surrealdb python sdk might not have direct 'info' wrapper, use query
         try:
              info_ns = await db.query("INFO FOR SU;")
-             print(f"🌍 Root Info: {info_ns}")
+             print(f"馃實 Root Info: {info_ns}")
         except Exception as e:
              print(f"Could not get root info: {e}")
 
         await db.use("lumina", "memory")
         
         info_db = await db.query("INFO FOR DB;")
-        print(f"📁 DB Info: {info_db}")
+        print(f"馃搧 DB Info: {info_db}")
         
         tables = ["character", "user", "fact", "observes", "about"]
         
-        print("\n📊 SurrealDB Database Inventory:")
+        print("\n馃搳 SurrealDB Database Inventory:")
         print("-" * 40)
         
         for table in tables:
@@ -41,9 +41,9 @@ async def main():
                          else:
                              item_count = "0 (Empty)"
                 
-                print(f"📦 {table.ljust(15)}: {item_count}")
+                print(f"馃摝 {table.ljust(15)}: {item_count}")
             except Exception as e:
-                print(f"❌ {table.ljust(15)}: Error ({e})")
+                print(f"鉂?{table.ljust(15)}: Error ({e})")
 
         print("-" * 40)
 

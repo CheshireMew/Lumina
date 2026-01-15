@@ -5,23 +5,35 @@ from queue import Queue
 from threading import Thread
 from typing import List, Dict, Optional, Any
 from app_config import config
-from memory.connection import DBConnection
 from memory.vector_store import VectorStore
+# from memory.connection import DBConnection # Deprecated
+from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+# Concrete drivers loaded dynamically
+
 
 logger = logging.getLogger("memory.core")
+
+
 
 class SurrealMemory:
     """
     Facade for Memory System.
-    Delegates to VectorStore and DBConnection.
+    Delegates to VectorStore and Driver.
     """
     
     def __init__(self, character_id: str = "default"):
-         # Note: connection is singleton, but we keep character_id context here
          self.character_id = character_id
          
+         try:
+             # Use Factory to get driver
+             self.driver = MemoryDriverFactory.create_driver()
+                     
+         except Exception as e:
+             logger.critical(f"Failed to load Memory Driver: {e}")
+             self.driver = NoOpDriver()
+         
          # Components
-         self.vector_store = VectorStore()
+         self.vector_store = VectorStore(self.driver)
          
          # Background Queue
          self.queue = Queue()
@@ -40,57 +52,28 @@ class SurrealMemory:
 
     @property
     def db(self):
-        # Helper to access DB directly if needed (AsyncSurreal object)
-        # Note: This property access is synchronous but returns the async client instance
-        # However, checking connection state usually requires await. 
-        # For backward compatibility with code access .db directly (e.g. self.memory.db.query)
-        return DBConnection._db 
+        # Compatibility property: Return driver's underlying db if needed
+        # But best to discourage direct access
+        return self.driver._db 
 
     async def connect(self):
         """Initialize connection and schema"""
-        await DBConnection.connect()
-        await self._initialize_schema()
+        if not self.driver:
+            logger.critical("Cannot interact with Database: No Driver Loaded.")
+            return
+
+        await self.driver.connect()
+        # Delegate schema init to driver
+        await self.driver.initialize_schema()
         self._start_worker()
         
     async def close(self):
         self.running = False
-        await DBConnection.close()
+        if self.driver:
+            await self.driver.close()
 
-    async def _initialize_schema(self):
-        """Define tables and indexes"""
-        try:
-            db = await DBConnection.get_db()
-            
-            # 1. Conversation Log
-            await db.query("DEFINE TABLE conversation_log SCHEMALESS;")
-            await db.query("DEFINE INDEX log_character ON conversation_log FIELDS character_id;")
-            await db.query("DEFINE INDEX log_time ON conversation_log FIELDS created_at;")
-            
-            # [Free Tier Opt] Vector Index for Logs
-            await db.query("""
-                DEFINE INDEX log_embedding ON conversation_log FIELDS embedding 
-                MTREE DIMENSION 384 DIST COSINE TYPE F32;
-            """)
-            
-            # 2. Episodic Memory
-            await db.query("DEFINE TABLE episodic_memory SCHEMALESS;")
-            await db.query("DEFINE INDEX mem_character ON episodic_memory FIELDS character_id;")
-            await db.query("DEFINE INDEX mem_status ON episodic_memory FIELDS status;")
-            await db.query("DEFINE INDEX mem_time ON episodic_memory FIELDS created_at;")
-            
-            # Vector Index (384 dim)
-            await db.query("""
-                DEFINE INDEX mem_embedding ON episodic_memory FIELDS embedding 
-                MTREE DIMENSION 384 DIST COSINE TYPE F32;
-            """)
-            
-            # FullText Index
-            await db.query("DEFINE ANALYZER my_analyzer TOKENIZERS blank, class FILTERS lowercase, snowball(english);")
-            await db.query("DEFINE INDEX mem_content_search ON episodic_memory FIELDS content SEARCH ANALYZER my_analyzer BM25;")
-            
-            logger.info("✅ Schema initialized")
-        except Exception as e:
-            logger.warning(f"⚠️ Schema initialization warning: {e}")
+    # async def _initialize_schema(self): 
+    #   [Removed] Moved to SurrealDriver.initialize_schema for abstraction.
 
     # ================= DEPENDENCY INJECTION =================
     
@@ -101,7 +84,7 @@ class SurrealMemory:
         self._hippocampus = hippocampus
         
     def set_dreaming(self, dreaming):
-        self._hippocampus = dreaming
+        self._dreaming = dreaming
         
     def set_batch_manager(self, manager):
         self.batch_manager = manager
@@ -134,7 +117,7 @@ class SurrealMemory:
     # ================= LOGGING & OPERATIONS =================
 
     async def log_conversation(self, character_id: str, narrative: str) -> str:
-        db = await DBConnection.get_db()
+        # db = await DBConnection.get_db() # Deprecated
         try:
             data = {
                 "character_id": character_id.lower(),
@@ -148,16 +131,23 @@ class SurrealMemory:
                 try:
                     # Embed the narrative for search
                     vec = self.encoder(narrative)
+                    # [Fix] Convert numpy array to list for JSON/CBOR serialization
+                    if hasattr(vec, "tolist"):
+                        vec = vec.tolist()
                     data["embedding"] = vec
                 except Exception as ex:
                     logger.warning(f"Failed to embed log: {ex}")
 
-            results = await db.create("conversation_log", data)
+            results = await self.driver.create("conversation_log", data)
             if not results: raise ValueError("Empty result")
-            return self.vector_store._extract_id(results) # reuse helper?
+            return str(results) # Driver returns ID string already
         except Exception as e:
             logger.error(f"Error logging conversation: {e}")
+            # Do NOT raise, just log error so chat flow continues even if memory fails?
+            # Or raise if critical?
+            # User saw 500 Error. Raising is consistent.
             raise
+
 
     # Delegate to VectorStore
     async def add_episodic_memory(self, *args, **kwargs):
@@ -186,16 +176,28 @@ class SurrealMemory:
 
     # ================= UTILITIES =================
     
+    async def execute_raw_query(self, sql: str, params: Optional[Dict] = None) -> Any:
+        """
+        Execute raw SQL query.
+        WARNING: Use only for debugging or admin tools.
+        """
+        if not self.driver._db:
+             await self.connect()
+        return await self.driver.query(sql, params)
+
     async def get_stats(self, character_id: str = None) -> Dict:
-        db = await DBConnection.get_db()
         try:
             filter_sql = f"WHERE character_id = '{character_id}'" if character_id else ""
-            mem = await db.query(f"SELECT count() FROM episodic_memory {filter_sql} GROUP ALL;")
-            log = await db.query(f"SELECT count() FROM conversation_log {filter_sql} GROUP ALL;")
+            mem = await self.driver.query(f"SELECT count() FROM episodic_memory {filter_sql} GROUP ALL;")
+            log = await self.driver.query(f"SELECT count() FROM conversation_log {filter_sql} GROUP ALL;")
             
             def get_cnt(res):
-                if res and isinstance(res, list) and res[0].get('result'):
+                # Using driver's parser logic implicitly or robustness here
+                if res and isinstance(res, list) and len(res) > 0 and 'result' in res[0]:
                      return res[0]['result'][0].get('count', 0)
+                # Fallback for driver response format which might just be list of dicts if parsed,
+                # but driver.query returns raw result usually? 
+                # SurrealDriver.query returns raw result unless parsed.
                 return 0
                 
             return {"entities": get_cnt(mem), "conversations": get_cnt(log)}
@@ -203,14 +205,13 @@ class SurrealMemory:
             return {"entities": 0, "conversations": 0}
 
     async def get_unprocessed_conversations(self, limit: int = 20, character_id: str = None) -> List[Dict]:
-        db = await DBConnection.get_db()
         try:
             if character_id:
                 sql = "SELECT * FROM conversation_log WHERE is_processed = false AND character_id = $cid LIMIT $limit;"
-                res = await db.query(sql, {"cid": character_id.lower(), "limit": limit})
+                res = await self.driver.query(sql, {"cid": character_id.lower(), "limit": limit})
             else:
                 sql = "SELECT * FROM conversation_log WHERE is_processed = false LIMIT $limit;"
-                res = await db.query(sql, {"limit": limit})
+                res = await self.driver.query(sql, {"limit": limit})
                 
             return self.vector_store._parse_query_result(res)
         except Exception as e:
@@ -218,14 +219,14 @@ class SurrealMemory:
             return []
 
     async def mark_conversations_processed(self, conversation_ids: List[str]):
-        db = await DBConnection.get_db()
         for cid in conversation_ids:
             try:
-                await db.query(f"UPDATE {cid} SET is_processed = true;")
-            except: pass
+                # Use driver update/merge or raw query
+                await self.driver.query(f"UPDATE {cid} SET is_processed = true;")
+            except Exception as e:
+                logger.warning(f"Failed to mark processed {cid}: {e}")
 
     async def get_all_conversations(self, character_id: str = None) -> List[Dict]:
-        db = await DBConnection.get_db()
         try:
             sql = "SELECT * FROM conversation_log"
             params = {}
@@ -233,19 +234,18 @@ class SurrealMemory:
                 sql += " WHERE character_id = $cid"
                 params["cid"] = character_id
             sql += " ORDER BY created_at DESC LIMIT 1000;"
-            res = await db.query(sql, params)
+            res = await self.driver.query(sql, params)
             return self.vector_store._parse_query_result(res)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching conversations: {e}")
             return []
             
     async def get_recent_conversations(self, character_id: str, limit: int = 20) -> List[Dict]:
-        db = await DBConnection.get_db()
         sql = "SELECT * FROM conversation_log WHERE character_id = $cid ORDER BY created_at DESC LIMIT $limit;"
-        res = await db.query(sql, {"cid": character_id, "limit": limit})
+        res = await self.driver.query(sql, {"cid": character_id, "limit": limit})
         return self.vector_store._parse_query_result(res)
 
     async def get_inspiration(self, character_id: str, limit: int = 3) -> List[Dict]:
-         db = await DBConnection.get_db()
          try:
              # Random Inspiration
              # Note: Surreal might not support RAND() efficiently on large sets, but fine for now
@@ -253,7 +253,7 @@ class SurrealMemory:
              # Old code fetched result and shuffled python side.
              
              sql = "SELECT * FROM episodic_memory WHERE character_id = $cid AND status = 'active' LIMIT 50;"
-             res = await db.query(sql, {"cid": character_id})
+             res = await self.driver.query(sql, {"cid": character_id})
              items = self.vector_store._parse_query_result(res)
              import random
              random.shuffle(items)

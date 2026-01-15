@@ -13,6 +13,15 @@ from pydantic import BaseModel, Field
 # Setup logging
 logger = logging.getLogger("ConfigManager")
 
+# Load .env (Phase 27)
+from dotenv import load_dotenv, find_dotenv
+env_file = find_dotenv(usecwd=True) 
+if env_file:
+    logger.info(f"Loading environment variables from: {env_file}")
+    load_dotenv(env_file)
+else:
+    logger.debug("No .env file found (Searching CWD)")
+
 # --- Constants ---
 
 IS_FROZEN = getattr(sys, 'frozen', False)
@@ -22,7 +31,13 @@ if IS_FROZEN:
     CONFIG_ROOT = Path(sys.executable).parent
 else:
     BASE_DIR = Path(__file__).parent.absolute()
-    BASE_DIR = Path(__file__).parent.absolute()
+    # In pure dev mode, config root might be project root or local data
+    # We default CONFIG_ROOT to RESOLVED DATA ROOT in next steps, but providing a default here:
+    CONFIG_ROOT = BASE_DIR # Fallback
+
+# Determine Environment
+ENV_VAR = os.getenv("LUMINA_ENV", "").lower()
+IS_DEV = (not IS_FROZEN) or (ENV_VAR == "dev") or (ENV_VAR == "development")
 
 # --- Data Path Resolution ---
 
@@ -89,11 +104,20 @@ CONFIG_ROOT = DATA_ROOT  # Configs now live in Data Root by default
 # --- Configuration Models ---
 
 class MemoryConfig(BaseModel):
-    url: str = Field(default="ws://127.0.0.1:8000/rpc")
-    user: str = Field(default="root")
-    password: str = Field(default="root")
+    provider: str = Field(default="surreal") # 'surreal' or 'postgres'
+    url: str = Field(default="ws://127.0.0.1:8001/rpc")
+    
+    # Root Credentials (Admin / Schema Migration)
+    root_user: str = Field(default="root")
+    root_password: str = Field(default="root")
+    
+    # Application Credentials (Least Privilege)
+    app_user: str = Field(default="lumina_app")
+    app_password: str = Field(default="lumina_secure_pass")
+    
     namespace: str = Field(default="lumina")
     database: str = Field(default="memory")
+    character_id: str = Field(default="hiyori")  # Default character
 
 class LLMConfig(BaseModel):
     api_key: str = Field(default="")
@@ -101,43 +125,102 @@ class LLMConfig(BaseModel):
     model: str = Field(default="deepseek-chat")
 
 class STTConfig(BaseModel):
+    provider: str = "sense-voice"
     model: str = "base"
     device: str = "cuda"
     compute_type: str = "float16"
     language: str = "zh"
 
+class TTSConfig(BaseModel):
+    provider: str = "edge-tts"
+    voice: str = "zh-CN-XiaoxiaoNeural"
+
 class AudioConfig(BaseModel):
     device_name: Optional[str] = None
     enable_voiceprint_filter: bool = False
-    voiceprint_threshold: float = 0.6
+    voiceprint_threshold: float = 0.45 
     voiceprint_profile: str = "default"
+    fish_audio_api_key: str = ""
+    fish_audio_api_url: str = "https://api.fish.audio/v1"
+    
+    api_key: str = Field(default="")
+    max_results: int = 5
 
+class SearchConfig(BaseModel):
+    provider: str = "brave" # or "duckduckgo"
+    enabled: bool = True
+
+class BilibiliConfig(BaseModel):
+    enabled: bool = False
+    room_id: int = 21743919 # Default room
+
+class PluginGroupsConfig(BaseModel):
+    # Mapping Plugin ID -> Group ID
+    # e.g. "mcp.obs": "recording_software", "system.cam": "recording_software"
+    assignments: Dict[str, str] = {}
+    
+    # Mapping Plugin ID -> Category (skill, tts, stt, system, other)
+    custom_categories: Dict[str, str] = {}
+
+    # Mapping Group ID -> Behavior ('exclusive' or 'independent')
+    group_behaviors: Dict[str, str] = {}
+
+class BraveConfig(BaseModel):
+    api_key: str = ""
+    
 class NetworkConfig(BaseModel):
+    host: str = "127.0.0.1"
     memory_port: int = 8010
     stt_port: int = 8765
     tts_port: int = 8766
-    surreal_port: int = 8000
-    host: str = "127.0.0.1"
+    surreal_port: int = 8001
+    bind_localhost_only: bool = True # Security Hardening: Default to Localhost only
+
+    @property
+    def stt_url(self) -> str:
+        return f"http://{self.host}:{self.stt_port}"
+
+    @property
+    def tts_url(self) -> str:
+        return f"http://{self.host}:{self.tts_port}"
+
+    @property
+    def memory_url(self) -> str:
+        return f"http://{self.host}:{self.memory_port}"
 
 class ModelsConfig(BaseModel):
-    embedding_model_name: str = "paraphrase-multilingual-MiniLM-L12-v2"
+    # Placeholder for standardized model paths
+    stt_model_path: Optional[str] = None
+    tts_model_path: Optional[str] = None
+    embedding_model_name: str = "text-embedding-3-small"
 
+    
 class ConfigManager:
     _instance = None
     
     def __new__(cls):
+
         if cls._instance is None:
             cls._instance = super(ConfigManager, cls).__new__(cls)
             cls._instance._initialize()
         return cls._instance
     
+    @property
+    def is_dev(self) -> bool:
+        return IS_DEV
+
     def _initialize(self):
         self._memory_config = MemoryConfig()
         self._llm_config = LLMConfig()
         self._stt_config = STTConfig()
+        self._tts_config = TTSConfig()
         self._audio_config = AudioConfig()
         self._network_config = NetworkConfig()
         self._models_config = ModelsConfig()
+        self._brave_config = BraveConfig()
+        self._search_config = SearchConfig()
+        self._bilibili_config = BilibiliConfig()
+        self._plugin_groups_config = PluginGroupsConfig()
         self.load_configs()
     
     def load_configs(self):
@@ -157,6 +240,8 @@ class ConfigManager:
             except Exception as e:
                 logger.error(f"Failed to load ports.json: {e}")
         
+
+        
         # 1. Load Memory Config
         # Try DATA_ROOT first, then bundle fallback (optional, skipping complexity for now)
         mem_path = CONFIG_ROOT / "memory_config.json"
@@ -171,6 +256,16 @@ class ConfigManager:
                         self._llm_config = LLMConfig(**data)
             except Exception as e:
                 logger.error(f"Failed to load memory_config.json: {e}")
+
+        # Sync memory URL to network/surreal_port to avoid mismatched defaults
+        # [FIX] Run AFTER loading config file so Network Config (Authority) overrides file staledata
+        try:
+            host = self._network_config.host
+            surreal_port = getattr(self._network_config, "surreal_port", None)
+            if surreal_port:
+                self._memory_config.url = f"ws://{host}:{surreal_port}/rpc"
+        except Exception as e:
+            logger.error(f"Failed to sync memory URL with network config: {e}")
 
         # 2. Load STT Config
         stt_path = CONFIG_ROOT / "stt_config.json"
@@ -192,8 +287,45 @@ class ConfigManager:
             except Exception as e:
                 logger.error(f"Failed to load audio_config.json: {e}")
                 
+        # 4. Plugin Groups (Independent)
+        groups_path = CONFIG_ROOT / "plugin_groups.json"
+        if groups_path.exists():
+            try:
+                with open(groups_path, "r", encoding="utf-8") as f:
+                    self._plugin_groups_config = PluginGroupsConfig(**json.load(f))
+            except Exception as e:
+                logger.error(f"Failed to load plugin_groups.json: {e}")
+
         # 3. Environment Overrides (Higher Priority)
         self._apply_env_overrides()
+
+    def save(self):
+        """
+        Save current configuration to JSON files in CONFIG_ROOT.
+        Supports: memory_config.json, stt_config.json, audio_config.json, plugin_groups.json
+        """
+        try:
+            # 1. Audio Config
+            audio_path = CONFIG_ROOT / "audio_config.json"
+            with open(audio_path, "w", encoding="utf-8") as f:
+                json.dump(self._audio_config.model_dump(), f, indent=4, ensure_ascii=False)
+            
+            # 2. STT Config
+            stt_path = CONFIG_ROOT / "stt_config.json"
+            with open(stt_path, "w", encoding="utf-8") as f:
+                json.dump(self._stt_config.model_dump(), f, indent=4, ensure_ascii=False)
+
+            # 3. Plugin Groups
+            groups_path = CONFIG_ROOT / "plugin_groups.json"
+            with open(groups_path, "w", encoding="utf-8") as f:
+                json.dump(self._plugin_groups_config.model_dump(), f, indent=4, ensure_ascii=False)
+
+            # 3. TTS Config? (If needed, currently just defaulting)
+            # 4. Search Config? (If needed)
+            
+            logger.info("Configuration saved successfully.")
+        except Exception as e:
+            logger.error(f"Failed to save configuration: {e}")
         
     def _apply_env_overrides(self):
         # LLM
@@ -207,7 +339,27 @@ class ConfigManager:
         # Memory
         if os.environ.get("SURREAL_URL"):
             self._memory_config.url = os.environ["SURREAL_URL"]
+        
+        # Root Creds
+        if os.environ.get("SURREAL_ROOT_USER"):
+            self._memory_config.root_user = os.environ["SURREAL_ROOT_USER"]
+        if os.environ.get("SURREAL_ROOT_PASS"):
+            self._memory_config.root_password = os.environ["SURREAL_ROOT_PASS"]
             
+        # App Creds
+        if os.environ.get("SURREAL_APP_USER"):
+            self._memory_config.app_user = os.environ["SURREAL_APP_USER"]
+        if os.environ.get("SURREAL_APP_PASS"):
+            self._memory_config.app_password = os.environ["SURREAL_APP_PASS"]
+
+        # Brave Search
+        if os.environ.get("BRAVE_API_KEY"):
+            self._brave_config.api_key = os.environ["BRAVE_API_KEY"]
+            
+        # Search Provider
+        if os.environ.get("SEARCH_PROVIDER"):
+            self._search_config.provider = os.environ["SEARCH_PROVIDER"]
+
     @property
     def memory(self) -> MemoryConfig:
         return self._memory_config
@@ -221,8 +373,29 @@ class ConfigManager:
         return self._stt_config
 
     @property
+    def tts(self) -> TTSConfig:
+        return self._tts_config
+
+    @property
     def audio(self) -> AudioConfig:
         return self._audio_config
+    
+    @property
+    def brave(self) -> BraveConfig:
+        return self._brave_config
+
+    @property
+    def search(self) -> SearchConfig:
+        return self._search_config
+
+
+    @property
+    def bilibili(self) -> BilibiliConfig:
+        return self._bilibili_config
+
+    @property
+    def plugin_groups(self) -> PluginGroupsConfig:
+        return self._plugin_groups_config
         
     @property
     def network(self) -> NetworkConfig:
@@ -258,7 +431,7 @@ class ConfigManager:
 config = ConfigManager()
 
 # Legacy Constants for Backward Compatibility
-# ⚡ Fix: Always use local project "models" directory if not frozen, to avoid C: drive bloat
+# 鈿?Fix: Always use local project "models" directory if not frozen, to avoid C: drive bloat
 if IS_FROZEN:
     MODELS_DIR = BASE_DIR / "models"
 else:

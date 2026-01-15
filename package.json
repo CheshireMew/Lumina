@@ -7,7 +7,9 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "verify-build": "python scripts/verify_build.py",
+    "gen-types": "powershell scripts/generate_api_client.ps1",
+    "build": "npm run verify-build && tsc && vite build && electron-builder",
     "preview": "vite preview",
     "lint": "eslint ."
   },
@@ -15,6 +17,12 @@
     "@langchain/community": "^1.1.1",
     "@langchain/core": "^1.1.8",
     "@langchain/openai": "^1.2.0",
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/drawing_utils": "^0.3.1675466124",
+    "@mediapipe/face_mesh": "^0.4.1633559619",
+    "@pixiv/three-vrm": "^3.4.5",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
     "axios": "^1.13.2",
     "electron-store": "^8.2.0",
     "eventemitter3": "^5.0.1",
@@ -22,7 +30,8 @@
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "three": "^0.182.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

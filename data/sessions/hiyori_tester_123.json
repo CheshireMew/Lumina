@@ -1,0 +1,18 @@
+{
+  "session_id": 0,
+  "phase": "idle",
+  "current_emotion": "neutral",
+  "arousal": 0.5,
+  "valence": 0.5,
+  "short_term_history": [
+    {
+      "role": "user",
+      "content": "My favorite color is Blue."
+    },
+    {
+      "role": "assistant",
+      "content": "data: {\"id\": \"chatcmpl-pollinations\", \"object\": \"chat.completion.chunk\", \"created\": 1768240959, \"model\": \"gpt-4o-mini\", \"choices\": [{\"index\": 0, \"delta\": {\"content\": \"\\u84dd\\u8272\\u771f\\u662f\"}, \"finish_reason\": null}]}\n\ndata: {\"id\": \"chatcmpl-pollinations\", \"object\": \"chat.completion.chunk\", \"created\": 1768240959, \"model\": \"gpt-4o-mini\", \"choices\": [{\"index\": 0, \"delta\": {\"content\": \"\\u8ba9\\u4eba\\u5fc3\\u60c5\"}, \"finish_reason\": null}]}\n\ndata: {\"id\": \"chatcmpl-pollinations\", \"object\": \"chat.completion.chunk\", \"created\": 1768240959, \"model\": \"gpt-4o-mini\", \"choices\": [{\"index\": 0, \"delta\": {\"content\": \"\\u5e73\\u9759\\u5462\\u3002\"}, \"finish_reason\": null}]}\n\ndata: {\"id\": \"chatcmpl-pollinations\", \"object\": \"chat.completion.chunk\", \"created\": 1768240959, \"model\": \"gpt-4o-mini\", \"choices\": [{\"index\": 0, \"delta\": {\"content\": \"[hap\"}, \"finish_reason\": null}]}\n\ndata: {\"id\": \"chatcmpl-pollinations\", \"object\": \"chat.completion.chunk\", \"created\": 1768240959, \"model\": \"gpt-4o-mini\", \"choices\": [{\"index\": 0, \"delta\": {\"content\": \"py]\"}, \"finish_reason\": null}]}\n\n"
+    }
+  ],
+  "pending_tool_outputs": []
+}

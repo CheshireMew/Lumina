@@ -1,0 +1,29 @@
+id: "system.avatar_server"
+type: "system"
+name: "Avatar Driver (VMC)"
+version: "1.0.0"
+description: "Broadcasts emotion and blendshape data via VMC Protocol (OSC) to external apps (VSeeFace, UE5)."
+entrypoint: "plugin:AvatarServerPlugin"
+
+# Capabilities provided by this plugin
+capabilities:
+  - "avatar.start_listening"
+  - "avatar.stop_listening"
+  - "avatar.set_emotion"
+
+# Permissions required by this plugin
+permissions:
+  - "network:udp"
+
+# Configuration schema
+config:
+  enabled: true
+  vmc_ip: "127.0.0.1" # Localhost
+  vmc_port: 39539 # VSeeFace default port
+  sync_frontend: true # Also emit websocket events for frontend Live2D
+  mappings:
+    joy: "Fun"
+    sad: "Sorrow"
+    angry: "Angry"
+    surprised: "Surprised"
+    neutral: "Neutral"

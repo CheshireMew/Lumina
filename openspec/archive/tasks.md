@@ -3,8 +3,8 @@
 - [ ] **提示词工程基础建设**
 
   - [ ] 创建 `python_backend/prompts/` 目录结构
-  - [ ] 实现 `PromptManager` 类，支持加载 YAML/TXT 模板和变量注入
-  - [ ] 在 `AppConfig` 中添加 Prompt 相关配置（如模板路径）
+  - [ ] 实现 `PromptManager` 类,支持加载 YAML/TXT 模板和变量注入
+  - [ ] 在 `AppConfig` 中添加 Prompt 相关配置(如模板路径)
 
 - [ ] **Persona (Chat) 提示词优化**
 

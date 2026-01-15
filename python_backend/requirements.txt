@@ -23,3 +23,6 @@ pillow>=10.0.0
 einops>=0.7.0
 torch>=2.1.0 --index-url https://download.pytorch.org/whl/pkgs/pypi/cpu
 torchvision>=0.16.0 --index-url https://download.pytorch.org/whl/pkgs/pypi/cpu
+
+# MCP
+mcp>=1.0.0

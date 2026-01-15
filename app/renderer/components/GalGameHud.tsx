@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ChevronLeft, Heart, Zap, Play, Search, X, Smile, Activity, Brain, User } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Heart, Zap, Play, Search, X, Smile, Activity, Brain, User, Book } from 'lucide-react';
 import { API_CONFIG } from '../config';
 
 
@@ -228,7 +228,7 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                     <Heart size={24} fill={isVisible && galgameEnabled ? "currentColor" : "none"} />
                 </button>
 
-                {/* Brain / Memory Inspector */}
+                {/* Book / Memory Inspector */}
                 <button
                     onClick={() => {
                         setIsVisible(false); 
@@ -249,9 +249,9 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                         justifyContent: 'center',
                         transition: 'all 0.3s ease'
                     }}
-                    title="Open Neural Interface"
+                    title="Open Memory Archive"
                 >
-                    <Brain size={24} />
+                    <Book size={24} />
                 </button>
             </div>
 

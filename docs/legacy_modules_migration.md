@@ -1,71 +1,71 @@
 # Dreaming & SoulManager 迁移与演进方案
 
-在引入 **Letta (MemGPT)** 架构后，我们现有的两个核心 Python 模块 `dreaming.py` 和 `soul_manager.py` 将面临不同的命运。
+在引入 **Letta (MemGPT)** 架构后,我们现有的两个核心 Python 模块 `dreaming.py` 和 `soul_manager.py` 将面临不同的命运。
 
 ---
 
 ## 1. `dreaming.py` (Lumina 的"海马体")
 
-**现状**：
-目前它负责两个核心循环：
+**现状**:
+目前它负责两个核心循环:
 
-1.  **Reverie Cycle (Consolidation)**：定期扫描 `conversation_log`，提取关键信息存入 `episodic_memory`。
-2.  **Soul Evolution**：定期分析记忆，通过 LLM 评估并更新性格参数 (Big Five, PAD)。
+1.  **Reverie Cycle (Consolidation)**:定期扫描 `conversation_log`,提取关键信息存入 `episodic_memory`。
+2.  **Soul Evolution**:定期分析记忆,通过 LLM 评估并更新性格参数 (Big Five, PAD)。
 
-**Letta 引入后的命运：🏗️ 被吞噬/重构**
+**Letta 引入后的命运:🏗️ 被吞噬/重构**
 
-- **Memory Consolidation (记忆整合)**：
+- **Memory Consolidation (记忆整合)**:
 
-  - ❌ **废弃**：Letta 的核心卖点就是**实时**记忆管理。在对话过程中，Letta 会自己决定 _"Wait, user mentioned he likes cats, I should record this"_，并调用 `core_memory_append`。
-  - 无需再写一个离线的 "Dreaming" 有来扫描日志，因为 Letta 在"醒着"的时候就已经把该记的都记了。
+  - ❌ **废弃**:Letta 的核心卖点就是**实时**记忆管理。在对话过程中,Letta 会自己决定 _"Wait, user mentioned he likes cats, I should record this"_,并调用 `core_memory_append`。
+  - 无需再写一个离线的 "Dreaming" 有来扫描日志,因为 Letta 在"醒着"的时候就已经把该记的都记了。
 
-- **Soul Evolution (性格演化)**：
-  - ⚠️ **保留逻辑，改变触发方式**：Letta 本身不带"性格演化"功能（它只记事实）。
-  - **新设计**：我们将 `_analyze_soul_evolution` 这部分逻辑剥离出来，变成一个 **Letta Tool (Function)**。
-  - **场景**：我们可以写一个 Prompt 指令给 Letta：\*"每当夜深人静（检测到用户很久没说话），请调用 `evolve_personality` 工具，回顾今天的对话并反思你的成长。"
+- **Soul Evolution (性格演化)**:
+  - ⚠️ **保留逻辑,改变触发方式**:Letta 本身不带"性格演化"功能(它只记事实)。
+  - **新设计**:我们将 `_analyze_soul_evolution` 这部分逻辑剥离出来,变成一个 **Letta Tool (Function)**。
+  - **场景**:我们可以写一个 Prompt 指令给 Letta:\*"每当夜深人静(检测到用户很久没说话),请调用 `evolve_personality` 工具,回顾今天的对话并反思你的成长。"
 
-**结论**：`dreaming.py` 作为一个独立的后台进程将消失。它的功能将被拆解为 Letta 的 **Internal Monologue** (记忆) 和 **Custom Tool** (性格演化)。
+**结论**:`dreaming.py` 作为一个独立的后台进程将消失。它的功能将被拆解为 Letta 的 **Internal Monologue** (记忆) 和 **Custom Tool** (性格演化)。
 
 ---
 
 ## 2. `soul_manager.py` (Lumina 的"灵魂参数")
 
-**现状**：
-它管理三个 JSON 文件：
+**现状**:
+它管理三个 JSON 文件:
 
 1.  `config.json` (用户设置)
-2.  `soul.json` (AI 性格：Big Five, Traits)
-3.  `state.json` (游戏状态：羁绊等级, PAD, 能量值)
+2.  `soul.json` (AI 性格:Big Five, Traits)
+3.  `state.json` (游戏状态:羁绊等级, PAD, 能量值)
 
-**Letta 引入后的命运：🧬 进化为 "Persona & State"**
+**Letta 引入后的命运:🧬 进化为 "Persona & State"**
 
-Letta 有两个概念：**System Prompt** (Persona) 和 **Core Memory** (Block)。`soul_manager.py` 将负责把我们的数据映射到这两个概念上。
+Letta 有两个概念:**System Prompt** (Persona) 和 **Core Memory** (Block)。`soul_manager.py` 将负责把我们的数据映射到这两个概念上。
 
-- **Persona (人格设定)**：
+- **Persona (人格设定)**:
 
   - `soul.json` 中的 `Traits` (如 "傲娇", "温柔") 将直接渲染进 Letta 的 **System Instructions** 块中。
-  - _变更点_：`SoulManager.render_system_prompt()` 将不再直接拼接字符串给 OpenAI，而是生成用于初始化 Letta Agent 的配置。
+  - _变更点_:`SoulManager.render_system_prompt()` 将不再直接拼接字符串给 OpenAI,而是生成用于初始化 Letta Agent 的配置。
 
-- **Core Memory (核心存储)**：
+- **Core Memory (核心存储)**:
   - `state.json` 中的 **GalGame 数值** (羁绊等级、PAD 心情值) 将存储在 Letta 的 **Core Memory Block** 区域。
-  - **优势**：这意味着 LLM 可以**直接读写**这些数值！
-    - 以前：我们需要写死逻辑 `if intimacy > 100: level_up()`。
-    - 现在：Letta 可以思考 _"用户刚刚送了我礼物，我好开心，我要把羁绊值加 10 点"_，然后自己调用 `update_intimacy(+10)`。
+  - **优势**:这意味着 LLM 可以**直接读写**这些数值!
+    - 以前:我们需要写死逻辑 `if intimacy > 100: level_up()`。
+    - 现在:Letta 可以思考 _"用户刚刚送了我礼物,我好开心,我要把羁绊值加 10 点"_,然后自己调用 `update_intimacy(+10)`。
 
-**结论**：`soul_manager.py` **必须保留**。它是 Lumina 独特的"游戏性"所在，Letta 只是底层的驱动引擎，SoulManager 定义了在这个引擎上跑的是"吟美"还是"真由理"。
+**结论**:`soul_manager.py` **必须保留**。它是 Lumina 独特的"游戏性"所在,Letta 只是底层的驱动引擎,SoulManager 定义了在这个引擎上跑的是"吟美"还是"真由理"。
 
 ---
 
 ## 3. 架构迁移路线图
 
-1.  **Phase 1 (数据同步)**：
+1.  **Phase 1 (数据同步)**:
 
-    - 修改 `SoulManager`，在启动时通过 API 读取 Letta 的 `Core Memory`，把其中的 mood/intimacy 状态同步回本地 `state.json` (作为备份)。
+    - 修改 `SoulManager`,在启动时通过 API 读取 Letta 的 `Core Memory`,把其中的 mood/intimacy 状态同步回本地 `state.json` (作为备份)。
 
-2.  **Phase 2 (工具化)**：
+2.  **Phase 2 (工具化)**:
 
     - 把 `Dreaming.py` 中的 `accumulate_for_evolution` 逻辑删掉。
     - 在 Letta 中注册 `update_personality_traits` 和 `reflect_on_day` 两个工具。
 
-3.  **Phase 3 (全面接管)**：
-    - Lumina 后端不再直接修改 `state.json`。所有的状态变更（好感度增减、心情变化）全部由 Letta 在**对话思考过程中**判定并执行。Lumina 前端只负责**只读**显示这些数值。
+3.  **Phase 3 (全面接管)**:
+    - Lumina 后端不再直接修改 `state.json`。所有的状态变更(好感度增减、心情变化)全部由 Letta 在**对话思考过程中**判定并执行。Lumina 前端只负责**只读**显示这些数值。

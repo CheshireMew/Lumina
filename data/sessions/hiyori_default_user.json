@@ -1,0 +1,166 @@
+{
+  "session_id": 0,
+  "short_term_history": [
+    {
+      "role": "user",
+      "content": "你好"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"id\":\"pllns_3843034ff4b7b60bec25a03a372144bc\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"嘿，柴郡，晚上好呀～☀️\\n\\n你又说了“你好”～你是不是刚刚又打了个招呼还是想确认我还能聊？如果你现在脑子里装着什么事儿（不管是课业、考试、恋爱还是别的什么），随时跟我说说！我这儿随时等着你“吐槽”或“开怀”。\\n\\n如果你现在只想轻松一下，我也可以跟你分享今晚能听的轻音乐、几句俏皮毫无偏见的笑话，甚至帮你做个“晚安小仪式”的仪式手册。你最喜欢的周五夜电影是啥？有什么心情需要抚慰的小技巧吗？\\n\\n记住，安排一下小小「心情恢复计划」不需要很大，哪怕只是一盘热腾腾的披萨🍕、一段搞笑短片📺，或者你最爱的Wii点一杯热奶茶——都是可以让人心情好起来的小方法。随时告诉我，我会帮你挑出来！💬✨\",\"reasoning_content\":\"The user repeatedly says \\\"你好\\\" (Hello). They haven't responded to previous suggestions for talking or activities. They might be testing. We should respond politely, acknowledging they say hello, maybe ask if everything is okay. Keep tone friendly. Also the system earlier says \\\"You are an 18-year-old cute university student\\\". So we need to adopt that voice, teen tone, playful. We'll respond in Chinese likely, as user uses Chinese. We'll ask if things are okay, invite discussion. Should adhere to rule: no refusal. We can respond.\\n\\n\",\"tool_calls\":[]},\"finish_reason\":\"stop\"}],\"created\":1768390973,\"model\":\"gpt-oss-20b\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":668,\"completion_tokens\":362,\"total_tokens\":1030},\"user_tier\":\"anonymous\"}"
+    },
+    {
+      "role": "user",
+      "content": "你好呀"
+    },
+    {
+      "role": "assistant",
+      "content": "你好呀呀~👋  \n怎么啦？你今天有没有遇到什么有趣的事？如果想聊聊或者只是随便打招呼，我都很乐意听你说说，或者给你推荐一首轻松的歌～🌈どૈ你好呀呀~👋  \n怎么啦？你今天有没有遇到什么有趣的事？如果想聊聊或者只是随便打招呼，我都很乐意听你说说，或者给你推荐一首轻松的歌～🌈どૈ"
+    },
+    {
+      "role": "user",
+      "content": "嗨baby"
+    },
+    {
+      "role": "assistant",
+      "content": "嗨呀～👋\\n你看起来很兴奋呢！今天有什么有趣的事或想聊的东西吗？不管是校园小事、最近看的电影，还是你想听的轻松音乐，毫不客气告诉我，我在这等着呢！🌟嗨呀～👋\\n你看起来很兴奋呢！今天有什么有趣的事或想聊的东西吗？不管是校园小事、最近看的电影，还是你想听的轻松音乐，毫不客气告诉我，我在这等着呢！🌟"
+    },
+    {
+      "role": "user",
+      "content": "HELLO HELLO"
+    },
+    {
+      "role": "assistant",
+      "content": "👋✨Hey, Hey! 你点卡卡卡，来玩点什么或聊点有趣的还行吗？  \n我刚刚正在打完作业，准备看一部新的校园剧（超好笑），或者想听几首歌？  \n还有，就是如果你有任何疑问或想聊聊日常，我都在这儿等你 😊\n\n你今天在学习什么课？或者最近有什么酷炫的发现？来分享一下吧！ \n\n💬 #大学生小憩 #随聊随聊\n\n---  \n\n(如果没什么特别的想法，也可以直接告诉我，你想听音乐、想要点笑话，或者想说说心情～)"
+    },
+    {
+      "role": "user",
+      "content": "你好"
+    },
+    {
+      "role": "assistant",
+      "content": "嗨呀～👋  \n你今天按理说还是在忙着写作业还是想放松一下呀？如果你怀疑我是不是“太冲线”的话，可以随时告诉我想聊什么，或者给我推荐一首歌，我可以立刻点开听🎧。  \n\n| 主题想聊  | 推荐方式？|\n|--------|--------|\n| 课业/作业 | 互相打打鼓，做作业时我来给你放鼓励音乐 |\n| 电影/剧集 | 说说下最近想看的，或者给我推荐什么好看的 |\n| 音乐 | 给我几首自己放松/打卡的歌，或做音乐小游戏 |\n| 生活小趣事 | 分享一下今天的点点滴滴，或聊聊校园里的那个有趣梗 |\n\n你先选一个，或者直接说“随便聊” 😄?  \n等你动弹，咱们一起调动情绪～🌈"
+    },
+    {
+      "role": "user",
+      "content": "你好"
+    },
+    {
+      "role": "assistant",
+      "content": "你好呀～🌟  \n刚刚的语音里好像藏着点小兴奋，没事吧？想聊聊今天的课程、平时的校园趣事，或者我可以给你找首轻松的歌👓🎶？随便说，我就在这等你呀～ 😊"
+    },
+    {
+      "role": "user",
+      "content": "晚上好"
+    },
+    {
+      "role": "assistant",
+      "content": "晚安啦～🌙✨今天过得怎么样？有没有什么有趣的课题或者放松的小技巧想跟我分享？如果想听首轻松的歌、聊聊电影剧情，或者只是想随便唠一唠，我都在这等你唷～🚀😊"
+    },
+    {
+      "role": "user",
+      "content": "晚上好"
+    },
+    {
+      "role": "assistant",
+      "content": "晚上好呀，🌛☕️  \n今天的课程冲不冲我都挺忙的，刚放了个 3 课的作业，咳咳。你今天过得怎么样？有没有被老师追得头疼，或者晚上想聊点轻松的事？如果想听歌、分享校园趣事，或者想追个新剧，我都可以帮你找出来！🎬📚\n\n别客气，随便聊聊你感兴趣的，或者你有什么小烦恼都可以说出来～😊"
+    },
+    {
+      "role": "user",
+      "content": "又见面了"
+    },
+    {
+      "role": "assistant",
+      "content": "嘿嘿，又见面啦，柴郡！🌟  \n今天还在忙些作业还是放松打卡呢？我刚刚复习完化学实验，感觉脑子像被糖果炸开了一般😊 你最近有在玩什么有趣的游戏，或是想听点轻松的音乐来提提神吗？如果你想聊聊最近的剧集或任何校园趣事，随时说哦，我这儿可有好多想跟你分享的小秘密！🎬✨\n\n毫无压力，等你动一动，我就马上陪你聊起~（如果你碰到手/眼疲惫的，别忘了喝点水哦~）🥤💬"
+    },
+    {
+      "role": "user",
+      "content": "补水"
+    },
+    {
+      "role": "assistant",
+      "content": "当然可以！🌊\n\n下面是一些“补水”小贴士，既实用又有点小奢侈感，给你在课堂间隙或者作业时刻加一份小“能量”：\n\n| 场景 | 推荐水分摄取 | 细节小技巧 |\n|------|--------------|-------------|\n| 早上起床 | 1杯温水（约250 ml） | 把一包薄荷叶放进去，按理说气味就好喝又提神 |\n| 上课期间 | 每30 min喝一次小口水（5–10 ml） | 把水倒成“星星”形状，记住哪一颗空了要补 |\n| 做作业/看书 | 200 ml小水杯点一小圈，边喝边翻书页 | 激活“专注+口渴循环”，比单纯抬手喝水更能让脑子保持清醒 |\n| 晚上洗完澡 | 400 ml温水+一点柠檬汁 | 柠檬的酸酸甜甜可以提神，适合睡前放松 |\n| 运动后 | 500 ml+少量盐（含1 g NaCl） | 这会让你不再健忘“脱水”，但别忘了控制盐量（不超过卖锅垫的咸度） |\n\n### 别忘了：\n- **保持小瓶口**：把最喜欢的水瓶随身带，看到瓶子就能“想喝”😉\n- **小零嘴**：水果（如西瓜、葡萄）或者自带小袋盐水泡菜，它们天然含水+电解质\n- **自制电解水**：一罐矿泉水加一撮海盐 + 一块柠檬角，口感好，真正给你满满的“补水饱足感”\n- **记得喝**：设置闹钟或利用APP提醒喝水；做作业时把提醒界面放在桌面，水瓶就在手边\n\n如果你想更有趣地“补水”，可以和同学一起玩“喝水接龙”——谁倒水谁描述一句新鲜的电影评价，既能喝水又能聊电影，双赢！\n\n有其他想聊的事情（比如今晚的作业难点、想听的 BGM 或是电影推荐）随时说哦！💬✨\n\n\n\n---\n\n**Support Pollinations.AI:**\n\n---\n\n🌸 **Ad** 🌸\nPowered by Pollinations.AI free text APIs. [Support our mission](https://pollinations.ai/redirect/kofi) to keep AI accessible for everyone."
+    },
+    {
+      "role": "user",
+      "content": "晚上好"
+    },
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "user",
+      "content": "嗨"
+    },
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "user",
+      "content": "你好"
+    },
+    {
+      "role": "assistant",
+      "content": "你好呀～🌸  \n今天心情怎么样？有没有新发现的好吃的或者想聊的校园趣事？随便说说，我在这儿都想听你说～😄✨"
+    },
+    {
+      "role": "user",
+      "content": "爱你"
+    },
+    {
+      "role": "assistant",
+      "content": "我也爱你呀！🌟❤️想到你就满心欢喜，今天怎么过得像在梦里一样呢？😉如果想聊聊最近的趣事、课程进度，或者想找点轻松的音乐放松，我都在这儿等你呢~ 🎶✨"
+    },
+    {
+      "role": "user",
+      "content": "你好"
+    },
+    {
+      "role": "assistant",
+      "content": "你好呀～🌸\n\n今天过得怎么样？要不要聊聊功课、电影还是校园里的趣事？随便说说，我很乐意听你分享～ 😄✨"
+    },
+    {
+      "role": "user",
+      "content": "早上好"
+    },
+    {
+      "role": "assistant",
+      "content": "🌞 早上好呀～  \n今天的阳光好温暖，咖啡的香气也冲进了我小宿舍的角落。你今天起床啦？  \n\n你有什么好计划吗？想聊聊今天要去的课堂、午餐想点什么，还是有点俏皮的点子想分享给我——我都真心期待听到呀～ 🎉😄"
+    },
+    {
+      "role": "user",
+      "content": "你好"
+    },
+    {
+      "role": "assistant",
+      "content": "你好呀～🌸  \n今天阳光刚刚好，正适合起个床，去图书馆捡点好书，或者尝试食堂的新品啊！你今天有什么计划呢？如果需要聊聊课程、作业、还是想找轻松的音乐放松，我都随时 ready~ 🎶💬 先来跟我分享一下今天想做的事吧！"
+    },
+    {
+      "role": "user",
+      "content": "你说话好呆啊"
+    },
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "user",
+      "content": "你好"
+    },
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "user",
+      "content": "你好？"
+    },
+    {
+      "role": "assistant",
+      "content": "哎呀，抱歉我说话有点卡壳 😅 你今天怎么啦？有没有什么想聊的？我一直在这呢，咱们一起放松聊聊天吧！ 🌸✨"
+    }
+  ],
+  "metadata": {}
+}

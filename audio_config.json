@@ -3,7 +3,7 @@
   "enable_voiceprint_filter": true,
   "voiceprint_threshold": 0.4,
   "voiceprint_profile": "Cheshire",
-  "speech_start_threshold": 0.3,
+  "speech_start_threshold": 0.45,
   "speech_end_threshold": 0.05,
   "min_speech_frames": 15
 }

@@ -14,7 +14,7 @@ $AppDataDB = "$env:APPDATA\Lumina\lumina.db"
 Write-Host "🚀 Starting Check on: $AppDataDB" -ForegroundColor Cyan
 
 # Start Surreal in background
-$proc = Start-Process -FilePath "surreal" -ArgumentList "start --log info --user root --pass root --bind 0.0.0.0:8000 --allow-all file:$AppDataDB" -PassThru -NoNewWindow
+$proc = Start-Process -FilePath "surreal" -ArgumentList "start --log info --user root --pass root --bind 0.0.0.0:8001 --allow-all file:$AppDataDB" -PassThru -NoNewWindow
 Start-Sleep -Seconds 5
 
 Write-Host "🔍 Inspecting Record Count..." -ForegroundColor Cyan

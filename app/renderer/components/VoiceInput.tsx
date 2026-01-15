@@ -28,7 +28,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
         let ws: WebSocket | null = null;
         const connectWS = async () => {
             try {
-                const wsUrl = await (window as any).stt.getWSUrl();
+                const wsUrl = await window.stt.getWSUrl();
                 ws = new WebSocket(wsUrl);
                 wsRef.current = ws;
 

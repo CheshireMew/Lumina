@@ -1,11 +1,10 @@
 import { Message } from "../llm/types";
 
-const MEMORY_SERVER_URL = "http://127.0.0.1:8010";
-
 export class MemoryService {
   private static instance: MemoryService;
   private isConfigured: boolean = false;
   private currentCharacterId: string = "hiyori"; // Default character
+  private baseUrl: string = "http://127.0.0.1:8010"; // Default, can be overridden
 
   private constructor() {}
 
@@ -15,6 +14,14 @@ export class MemoryService {
     }
     return MemoryService.instance;
   }
+
+  public setBaseUrl(url: string) {
+    // Remove trailing slash if present
+    this.baseUrl = url.replace(/\/$/, "");
+    console.log(`[MemoryService] Base URL updated to: ${this.baseUrl}`);
+  }
+
+  // ... (rest of methods using this.baseUrl)
 
   /**
    * Set the current character for memory operations
@@ -50,7 +57,7 @@ export class MemoryService {
     );
     console.log(`[MemoryService] Model: ${model}, BaseURL: ${baseUrl}`);
     try {
-      const response = await fetch(`${MEMORY_SERVER_URL}/configure`, {
+      const response = await fetch(`${this.baseUrl}/configure`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -111,7 +118,7 @@ export class MemoryService {
       };
       console.log("[MemoryService] Search Payload:", JSON.stringify(payload));
 
-      const response = await fetch(`${MEMORY_SERVER_URL}/search/hybrid`, {
+      const response = await fetch(`${this.baseUrl}/search/hybrid`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -206,7 +213,7 @@ export class MemoryService {
         messages: messages,
       };
 
-      await fetch(`${MEMORY_SERVER_URL}/add`, {
+      await fetch(`${this.baseUrl}/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -241,7 +248,7 @@ export class MemoryService {
       };
 
       // Using a new endpoint for bulk consolidation/archiving
-      await fetch(`${MEMORY_SERVER_URL}/consolidate_history`, {
+      await fetch(`${this.baseUrl}/consolidate_history`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -260,7 +267,7 @@ export class MemoryService {
 
     try {
       console.log("[MemoryService] Requesting memory reset...");
-      await fetch(`${MEMORY_SERVER_URL}/reset`, { method: "DELETE" });
+      await fetch(`${this.baseUrl}/reset`, { method: "DELETE" });
       console.log("[MemoryService] Memory reset successfully.");
     } catch (error) {
       console.error("[MemoryService] Reset error:", error);
@@ -287,7 +294,7 @@ export class MemoryService {
         char_name: charName,
       };
 
-      await fetch(`${MEMORY_SERVER_URL}/dream_on_idle`, {
+      await fetch(`${this.baseUrl}/dream_on_idle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

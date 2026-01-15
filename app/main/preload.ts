@@ -1,26 +1,8 @@
 import { ipcRenderer, contextBridge } from "electron";
 
 // --------- Expose some API to the Renderer process ---------
-contextBridge.exposeInMainWorld("ipcRenderer", {
-  on(...args: Parameters<typeof ipcRenderer.on>) {
-    const [channel, listener] = args;
-    return ipcRenderer.on(channel, (event, ...args) =>
-      listener(event, ...args)
-    );
-  },
-  off(...args: Parameters<typeof ipcRenderer.off>) {
-    const [channel, ...omit] = args;
-    return ipcRenderer.off(channel, ...omit);
-  },
-  send(...args: Parameters<typeof ipcRenderer.send>) {
-    const [channel, ...omit] = args;
-    return ipcRenderer.send(channel, ...omit);
-  },
-  invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
-    const [channel, ...omit] = args;
-    return ipcRenderer.invoke(channel, ...omit);
-  },
-});
+// [Phase 27 Security Hardening] Removed raw ipcRenderer exposure
+// Only use typed APIs below (llm, settings, etc.)
 
 // LLM API
 contextBridge.exposeInMainWorld("llm", {
@@ -45,7 +27,9 @@ contextBridge.exposeInMainWorld("llm", {
     temperature?: number,
     topP?: number,
     presencePenalty?: number,
-    frequencyPenalty?: number
+    frequencyPenalty?: number,
+    characterId?: string,
+    userId?: string
   ) =>
     ipcRenderer.send("llm:chatStreamWithHistory", {
       history,
@@ -62,6 +46,8 @@ contextBridge.exposeInMainWorld("llm", {
       topP,
       presencePenalty,
       frequencyPenalty,
+      characterId,
+      userId,
     }),
 
   // Summarization
@@ -98,4 +84,8 @@ contextBridge.exposeInMainWorld("settings", {
 // STT API
 contextBridge.exposeInMainWorld("stt", {
   getWSUrl: () => ipcRenderer.invoke("stt:get-ws-url"),
+});
+
+contextBridge.exposeInMainWorld("app", {
+  getPorts: () => ipcRenderer.invoke("app:get-ports"),
 });

@@ -120,6 +120,10 @@ export class TTSService implements ITTSProvider {
   setEngine(engine: string) {
     this.defaultEngine = engine;
   }
+
+  setBaseUrl(url: string) {
+    this.baseUrl = url.replace(/\/$/, "");
+  }
 }
 
 export const ttsService = new TTSService();
