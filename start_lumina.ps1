@@ -17,7 +17,7 @@ else {
         memory_port  = 8010
         stt_port     = 8765
         tts_port     = 8766
-        surreal_port = 8000
+        surreal_port = 8001
         host         = "127.0.0.1"
     }
 }

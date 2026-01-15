@@ -1,47 +1,33 @@
 {
-    "compilerOptions": {
-        "target": "ESNext",
-        "useDefineForClassFields": true,
-        "lib": [
-            "DOM",
-            "DOM.Iterable",
-            "ESNext"
-        ],
-        "allowJs": false,
-        "skipLibCheck": true,
-        "esModuleInterop": false,
-        "allowSyntheticDefaultImports": true,
-        "strict": true,
-        "forceConsistentCasingInFileNames": true,
-        "module": "ESNext",
-        "moduleResolution": "bundler",
-        "resolveJsonModule": true,
-        "isolatedModules": true,
-        "noEmit": true,
-        "jsx": "react-jsx",
-        "baseUrl": ".",
-        "paths": {
-            "@core/*": [
-                "core/*"
-            ],
-            "@app/*": [
-                "app/*"
-            ],
-            "@assets/*": [
-                "assets/*"
-            ]
-        }
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["core/*"],
+      "@app/*": ["app/*"],
+      "@assets/*": ["assets/*"]
     },
-    "include": [
-        "app/**/*.ts",
-        "app/**/*.tsx",
-        "core/**/*.ts",
-        "vite.config.ts"
-    ],
-    "exclude": [
-        "node_modules",
-        "example",
-        "**/archive/**",
-        "**/archive_legacy/**"
-    ]
+    "types": ["vite/client"]
+  },
+  "include": ["app/**/*.ts", "app/**/*.tsx", "core/**/*.ts", "vite.config.ts"],
+  "exclude": [
+    "node_modules",
+    "example",
+    "**/archive/**",
+    "**/archive_legacy/**"
+  ]
 }

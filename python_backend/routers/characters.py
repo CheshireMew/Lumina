@@ -1,6 +1,8 @@
 """
-Character 管理路由
-包含: /characters, /characters/{id}/config, DELETE /characters/{id}
+Character Management Router
+Includes: /characters, /characters/{id}/config, DELETE /characters/{id}
+
+Refactored: Removed inject_dependencies
 """
 import os
 import json
@@ -14,22 +16,17 @@ logger = logging.getLogger("CharacterRouter")
 
 router = APIRouter(prefix="/characters", tags=["Characters"])
 
-# 全局引用（由 main.py 注入）
-# 全局引用（由 main.py 注入）
-soul_client = None
 
-
-def inject_dependencies(soul):
-    """由 main.py 调用，注入全局依赖"""
-    global soul_client
-    soul_client = soul
+def _get_soul_client():
+    from services.container import services
+    return services.soul_client
 
 
 @router.get("")
 async def list_characters():
-    """列出所有可用角色"""
+    """List all available characters"""
     try:
-        # 使用相对于 python_backend 的路径
+        # Use relative path to python_backend
         chars_dir = Path(__file__).parent.parent / "characters"
         characters = []
         
@@ -52,10 +49,31 @@ async def list_characters():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/models")
+async def list_models():
+    """List available Live2D models via Avatar Server"""
+    try:
+        from services.container import services
+        # Try to get avatar_server plugin
+        if services.system_plugin_manager:
+            plugin = services.system_plugin_manager.get_plugin("system.avatar_server")
+            if plugin and hasattr(plugin, "scan_models"):
+                 return {"models": plugin.scan_models()}
+                 
+        return {"models": []}
+    except Exception as e:
+        logger.error(f"[API] Error listing models: {e}")
+        return {"models": []}
+
+
 @router.get("/{character_id}/config")
 async def get_character_config(character_id: str):
-    """获取角色配置"""
+    """Get character config"""
     try:
+        soul_client = _get_soul_client()
+        if soul_client and soul_client.character_id == character_id:
+             return soul_client.config
+
         from soul_manager import SoulManager
         soul = SoulManager(character_id)
         return soul.config
@@ -66,8 +84,8 @@ async def get_character_config(character_id: str):
 
 @router.post("/{character_id}/config")
 async def update_character_config(character_id: str, config: dict):
-    """更新角色配置"""
-    global soul_client
+    """Update character config"""
+    soul_client = _get_soul_client()
     try:
         logger.info(f"[API] update_character_config for: {character_id}")
         
@@ -96,8 +114,7 @@ async def update_character_config(character_id: str, config: dict):
 
 @router.delete("/{character_id}")
 async def delete_character(character_id: str):
-    """删除角色"""
-    global memory_clients
+    """Delete character"""
     try:
         # Prevent deleting default character
         if character_id == "hiyori":
@@ -109,10 +126,6 @@ async def delete_character(character_id: str):
             shutil.rmtree(char_dir)
             logger.info(f"[API] Deleted character directory: {char_dir}")
             
-            # Remove from memory clients if active
-            # if character_id in memory_clients:
-            #    del memory_clients[character_id]
-                
             return {"status": "ok", "message": f"Character {character_id} deleted"}
         else:
             return {"status": "skipped", "message": "Character not found"}

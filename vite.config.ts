@@ -54,13 +54,23 @@ export default defineConfig({
         }),
     ],
     optimizeDeps: {
-        entries: ['index.html', 'app/**/*.{ts,tsx}'],
+        // Limit scan scope to核心入口，避免预构建遍历大目录
+        entries: [
+            'index.html',
+            'app/renderer/main.tsx',
+            'app/main/main.ts',
+            'app/main/preload.ts',
+        ],
         // Explicitly include heavy packages that should be pre-bundled
         include: [
             'react',
             'react-dom',
             // LangChain removed
-            'axios', 
+            'axios',
+            'pixi.js',
+            'pixi-live2d-display',
+            'eventemitter3',
+            'lucide-react',
         ],
         // Exclude packages that don't work well with pre-bundling
         exclude: [
@@ -72,6 +82,23 @@ export default defineConfig({
             '@core': path.resolve(__dirname, 'core'),
             '@app': path.resolve(__dirname, 'app'),
             '@assets': path.resolve(__dirname, 'assets'),
+        },
+    },
+    server: {
+        // 加快 dev 启动与热更：忽略大体积/生成目录的文件监听
+        watch: {
+            ignored: [
+                '**/dist/**',
+                '**/dist-electron/**',
+                '**/dist_backend/**',
+                '**/release/**',
+                '**/logs/**',
+                '**/memory_backups/**',
+                '**/GPT-SoVITS/**',
+                '**/models/**',
+                '**/voiceprint_profiles/**',
+                '**/lumina_surreal.db*',
+            ],
         },
     },
 })

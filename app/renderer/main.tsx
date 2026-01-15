@@ -4,8 +4,15 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
+const isDev = import.meta.env.DEV
+const root = ReactDOM.createRoot(document.getElementById('root')!)
+
+root.render(
+    isDev ? (
         <App />
-    </React.StrictMode>,
+    ) : (
+        <React.StrictMode>
+            <App />
+        </React.StrictMode>
+    ),
 )

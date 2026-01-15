@@ -26,19 +26,19 @@
 			},
 			{
 				"Id": "PhysicsSetting3",
-				"Name": "リボン　髪"
+				"Name": "リボン 髪"
 			},
 			{
 				"Id": "PhysicsSetting4",
-				"Name": "スカート　横揺れ"
+				"Name": "スカート 横揺れ"
 			},
 			{
 				"Id": "PhysicsSetting5",
-				"Name": "スカート　縦揺れ"
+				"Name": "スカート 縦揺れ"
 			},
 			{
 				"Id": "PhysicsSetting6",
-				"Name": "リボン　体"
+				"Name": "リボン 体"
 			},
 			{
 				"Id": "PhysicsSetting7",
@@ -46,19 +46,19 @@
 			},
 			{
 				"Id": "PhysicsSetting8",
-				"Name": "サイドアップ　右"
+				"Name": "サイドアップ 右"
 			},
 			{
 				"Id": "PhysicsSetting9",
-				"Name": "サイドアップ　左"
+				"Name": "サイドアップ 左"
 			},
 			{
 				"Id": "PhysicsSetting10",
-				"Name": "横髪　右"
+				"Name": "横髪 右"
 			},
 			{
 				"Id": "PhysicsSetting11",
-				"Name": "横髪　左"
+				"Name": "横髪 左"
 			}
 		]
 	},

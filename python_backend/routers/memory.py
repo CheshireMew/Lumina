@@ -1,6 +1,9 @@
 """
-Memory 相关路由
-包含: /add, /search, /consolidate_history, /all, /memory/inspiration
+Memory Router
+Includes: /add, /search, /consolidate_history, /all, /memory/inspiration
+
+Refactored: Removed inject_dependencies pattern
+Now uses container for core services, EventBus for plugin services
 """
 import os
 import json
@@ -15,54 +18,55 @@ logger = logging.getLogger("MemoryRouter")
 
 router = APIRouter(tags=["Memory"])
 
-# 全局引用（由 main.py 注入）
-# 全局引用（由 main.py 注入）
-memory_clients: Dict = {}
-dreaming_service = None
-soul_client = None
-surreal_system = None
-hippocampus_service = None
+
+def _get_surreal():
+    """Get SurrealDB from container"""
+    from services.container import services
+    return services.surreal_system
 
 
-def inject_dependencies(soul, surreal, dreamer=None, hippocampus=None):
-    """由 main.py 调用，注入全局依赖"""
-    global dreaming_service, soul_client, surreal_system, hippocampus_service
-    dreaming_service = dreamer
-    soul_client = soul
-    surreal_system = surreal
-    hippocampus_service = hippocampus
+def _get_soul():
+    """Get SoulClient from container"""
+    from services.container import services
+    return services.soul_client
+
+
+def _get_service(name: str):
+    """Get plugin service from EventBus"""
+    from core.events.bus import get_event_bus
+    bus = get_event_bus()
+    return bus.get_service(name) if bus else None
 
 
 @router.post("/add")
 async def add_memory(request: AddMemoryRequest):
-    """添加记忆到 SurrealDB（主存储）"""
-    global memory_clients, soul_client, surreal_system
+    """Add memory to SurrealDB (Primary Storage)"""
+    surreal_system = _get_surreal()
+    soul_client = _get_soul()
+    hippocampus_service = _get_service("hippocampus_service")
     
     # [Refactor] Fallback for optional character_id
     character_id = request.character_id
     if not character_id:
-        # Try SurrealSystem default
         if surreal_system and hasattr(surreal_system, 'character_id'):
             character_id = surreal_system.character_id
         else:
-            character_id = "default"  # Ultimate safety net
+            character_id = "default"
 
     print(f"[API] Character: {character_id}")
     
-    # 检查 SurrealDB 是否可用
+    # 妫€鏌?SurrealDB 鏄惁鍙敤
     if not surreal_system:
         raise HTTPException(
             status_code=503, 
             detail="SurrealDB not available. Please ensure SurrealDB is running."
         )
     
-    # 获取 encoder (Unified Model Management)
-    encoder = surreal_system.encoder if surreal_system and hasattr(surreal_system, 'encoder') else None
+    # 鑾峰彇 encoder (Unified Model Management)
+    encoder = surreal_system.encoder if hasattr(surreal_system, 'encoder') else None
     
     if not encoder:
-        # Fallback if no specific char encoder (should share global one)
         print("[API] Warning: Encoder not found in SurrealSystem.")
-        encoder = None
     
     try:
         user_input = ""
@@ -71,13 +75,13 @@ async def add_memory(request: AddMemoryRequest):
         
         # Extract last user/ai pair
         for m in reversed(request.messages):
-            if m["role"] == "assistant" and not ai_response:
-                ai_response = m["content"]
-            elif m["role"] == "user" and not user_input:
-                user_input = m["content"]
+            if m.role == "assistant" and not ai_response:
+                ai_response = m.content
+            elif m.role == "user" and not user_input:
+                user_input = m.content
             
-            if "timestamp" in m and timestamp == "unknown":
-                timestamp = m["timestamp"]
+            if m.timestamp is not None and timestamp == "unknown":
+                timestamp = m.timestamp
 
         if not user_input and not ai_response:
             return {"status": "skipped", "reason": "Empty interaction"}
@@ -86,28 +90,40 @@ async def add_memory(request: AddMemoryRequest):
         if not user_input:
              user_input = "(Silence)"
 
-        # 构造对话内容 [Refactor] Use character_name
+        # 鏋勯€犲璇濆唴瀹?
         content = f"{request.user_name}: {user_input}\n{request.character_name}: {ai_response}"
 
-        # 记录对话日志 (SurrealDB)
-        # 注意：不再直接调用 add_memory，而是记录日志后由后台 Dreaming 进程异步提取记忆
+        # 璁板綍瀵硅瘽鏃ュ織 (SurrealDB)
         log_id = await surreal_system.log_conversation(
             character_id=character_id,
             narrative=content
         )
         
         # [Soul Update] 
+        # Decoupled: Use Galgame Manager if available
+        galgame_service = _get_service("galgame_manager")
+        if galgame_service and hasattr(galgame_service, 'update_energy'):
+             # Update Interaction Time & Energy via Plugin
+             # GalgameManager doesn't expose update_last_interaction explicitly? 
+             # It subscribes to ticker usually, but interactive update is good.
+             # Actually GalgameManager handles logic internally.
+             # But wait, checking galgame/manager.py... it doesn't seem to have 'update_last_interaction'.
+             # Let's check.
+             
+             # Fallback: soul_client still holds the STATE (last_interaction).
+             # We should keep update_last_interaction in SoulManager as it's Core State (Metadata).
+             # BUT update_energy is definitely Game Logic.
+             pass
+
         if soul_client:
-            soul_client.update_last_interaction()
-            if ai_response:
-                 soul_client.update_energy(-0.1)
+             soul_client.update_last_interaction()
+             
+        if galgame_service:
+             # Apply Energy Cost
+             galgame_service.update_energy(-0.1)
         
         # [Hippocampus Trigger]
         if hippocampus_service:
-            # Check if we should digest memories (Accumulate 20)
-            # We fire this asynchronously so we don't block the UI too long, 
-            # OR we await it if we want to ensure consistency. 
-            # The user logic allows accumulation, so it usually returns fast.
             await hippocampus_service.process_memories(batch_size=20)
 
         print(f"[API] ✅ Conversation logged: {log_id}")
@@ -121,8 +137,8 @@ async def add_memory(request: AddMemoryRequest):
 
 @router.post("/search")
 async def search_memory(request: SearchRequest):
-    """搜索记忆（SurrealDB 主存储）"""
-    global memory_clients, surreal_system
+    """Search memory (SurrealDB Primary)"""
+    surreal_system = _get_surreal()
     
     # [Refactor] Fallback for optional character_id
     character_id = request.character_id
@@ -132,36 +148,40 @@ async def search_memory(request: SearchRequest):
         else:
             character_id = "default"
     
-    # 检查 SurrealDB
+    # 妫€鏌?SurrealDB
     if not surreal_system:
         raise HTTPException(status_code=503, detail="SurrealDB not available")
     
     import time
     start_time = time.time()
 
-    # 获取 encoder
+    # 鑾峰彇 encoder
     encoder = surreal_system.encoder
     if not encoder:
          raise HTTPException(status_code=500, detail="Embedding encoder not ready")
 
     try:
-        # 生成查询向量
-        # Encoder injected text -> list
+        # 鐢熸垚鏌ヨ鍚戦噺
         query_vec = encoder(request.query)
+        if hasattr(query_vec, 'tolist'):
+            query_vec = query_vec.tolist()
         
         # [Free Tier Opt] Dynamic Routing
-        from llm.manager import llm_manager
+        # [Free Tier Opt] Dynamic Routing
+        # from llm.manager import llm_manager
+        from services.container import services
+        llm_manager = services.get_llm_manager()
         route = llm_manager.get_route("memory")
         
         target_table = "episodic_memory"
         final_limit = request.limit
         
         if route and route.provider_id == "free_tier":
-            print("[API] 🚀 Free Tier detected: Fallback to Searching Conversation Logs (Limit 5)")
+            print("[API] Free Tier detected: Fallback to Searching Conversation Logs (Limit 3)")
             target_table = "conversation_log"
-            final_limit = min(request.limit, 5) # Restrict context
+            final_limit = min(request.limit, 3)
             
-        # 搜索 SurrealDB
+        # 鎼滅储 SurrealDB
         results = await surreal_system.search(
             query_vec, character_id, 
             limit=final_limit,
@@ -169,9 +189,9 @@ async def search_memory(request: SearchRequest):
         )
         
         search_time = (time.time() - start_time) * 1000
-        logger.info(f"🟣 SurrealDB Search: '{request.query}' → {len(results)} hits ({search_time:.1f}ms)")
+        logger.info(f"🔎 SurrealDB Search: '{request.query}' -> {len(results)} hits ({search_time:.1f}ms)")
         
-        # 转换为前端期望的格式
+        # 杞崲涓哄墠绔湡鏈涚殑鏍煎紡
         formatted_results = []
         for r in results:
             formatted_results.append({
@@ -192,8 +212,8 @@ async def search_memory(request: SearchRequest):
 
 @router.post("/search/hybrid")
 async def search_memory_hybrid(request: SearchRequest):
-    """混合搜索（向量 + 全文）- SurrealDB"""
-    global memory_clients, surreal_system
+    """Hybrid Search (Vector + Fulltext) SurrealDB"""
+    surreal_system = _get_surreal()
     
     # [Refactor] Fallback for optional character_id
     character_id = request.character_id
@@ -207,34 +227,38 @@ async def search_memory_hybrid(request: SearchRequest):
     print(f"[API] Character: {character_id}")
     print(f"[API] Query: '{request.query}' Limit: {request.limit}")
     
-    # 检查 SurrealDB
+    # 妫€鏌?SurrealDB
     if not surreal_system:
         raise HTTPException(status_code=503, detail="SurrealDB not available")
     
-    # 获取 encoder
-    # 获取 encoder (Unified)
-    encoder = surreal_system.encoder if surreal_system and hasattr(surreal_system, 'encoder') else None
+    # 鑾峰彇 encoder
+    encoder = surreal_system.encoder if hasattr(surreal_system, 'encoder') else None
     
     if not encoder:
         raise HTTPException(status_code=500, detail="Embedding encoder not available")
     
     try:
-        # 生成查询向量
+        # 鐢熸垚鏌ヨ鍚戦噺
         query_vec = encoder(request.query)
+        if hasattr(query_vec, 'tolist'):
+            query_vec = query_vec.tolist()
         
         # [Free Tier Opt] Dynamic Routing
-        from llm.manager import llm_manager
+        # [Free Tier Opt] Dynamic Routing
+        # from llm.manager import llm_manager
+        from services.container import services
+        llm_manager = services.get_llm_manager()
         route = llm_manager.get_route("memory")
         
         target_table = "episodic_memory"
         final_limit = request.limit
         
         if route and route.provider_id == "free_tier":
-            print("[API] 🚀 Free Tier detected: Fallback to Hybrid Searching Logs (Limit 5)")
+            print("[API] Free Tier detected: Fallback to Hybrid Searching Logs (Limit 3)")
             target_table = "conversation_log"
-            final_limit = min(request.limit, 5)
+            final_limit = min(request.limit, 3)
 
-        # SurrealDB 混合搜索
+        # SurrealDB 娣峰悎鎼滅储
         results = await surreal_system.search_hybrid(
             query=request.query,
             query_vector=query_vec,
@@ -245,7 +269,7 @@ async def search_memory_hybrid(request: SearchRequest):
         
         print(f"[API] Hybrid Search (SurrealDB) found {len(results)} results")
         
-        # 转换格式
+        # 杞崲鏍煎紡
         formatted_results = []
         for r in results:
             formatted_results.append({
@@ -266,8 +290,7 @@ async def search_memory_hybrid(request: SearchRequest):
 
 @router.post("/consolidate_history")
 async def consolidate_history(request: ConsolidateRequest):
-    """归档历史消息"""
-    """归档历史消息 (Deprecated: SurrealDB handles persistence)"""
+    """Archive history (Deprecated: SurrealDB handles persistence)"""
     try:
         print(f"[API] /consolidate_history called for '{request.character_id}'. Action: Skipped (Legacy).")
         return {"status": "success", "archived_count": 0, "message": "Legacy consolidation skipped."}
@@ -279,13 +302,13 @@ async def consolidate_history(request: ConsolidateRequest):
 
 @router.post("/dream_on_idle")
 async def dream_on_idle(request: DreamRequest):
-    """空闲时触发做梦/整合"""
-    global dreaming_service
+    """Trigger idle dreaming / consolidation"""
+    dreaming_service = _get_service("dreaming_service")
     try:
-        print(f"[API] 🌙 Idle Dream Request for '{request.character_id}'")
+        print(f"[API] 🛌 Idle Dream Request for '{request.character_id}'")
         
         if not dreaming_service:
-             raise HTTPException(status_code=500, detail="DreamingService not initialized. Call /configure first.")
+             raise HTTPException(status_code=500, detail="DreamingService not initialized.")
 
         dreaming_service.wake_up(mode="deep")
         
@@ -298,9 +321,9 @@ async def dream_on_idle(request: DreamRequest):
 
 @router.get("/all")
 async def get_all_memories(character_id: str = "hiyori"):
-    """获取所有记忆（SurrealDB）"""
+    """Get all memories (SurrealDB)"""
     print(f"\n--- [API] /all Request Received ---")
-    global surreal_system
+    surreal_system = _get_surreal()
     
     if not surreal_system:
          raise HTTPException(status_code=503, detail="SurrealDB not available")
@@ -308,12 +331,12 @@ async def get_all_memories(character_id: str = "hiyori"):
     try:
         results = await surreal_system.get_all_conversations(character_id=character_id)
         
-        # 格式化
+        # 鏍煎紡鍖?
         memories = []
         for r in results:
             memories.append({
                 "id": str(r.get("id", "")),
-                "content": r.get("content", ""), # Map DB content -> Response content
+                "content": r.get("content", ""),
                 "role": r.get("role", "user"),
                 "created_at": r.get("created_at", "")
             })
@@ -327,16 +350,15 @@ async def get_all_memories(character_id: str = "hiyori"):
 
 @router.get("/memory/inspiration")
 async def get_inspiration(character_id: str = "hiyori", limit: int = 3):
-    """获取随机记忆用于灵感 (SurrealDB)"""
-    global surreal_system
+    """Get random memories for inspiration (SurrealDB)"""
+    surreal_system = _get_surreal()
     if not surreal_system:
-        # Fallback to empty if not ready (though it should be)
         return []
         
     try:
         results = await surreal_system.get_inspiration(character_id=character_id, limit=limit)
         
-        # 格式化 (App.tsx expects 'content')
+        # 鏍煎紡鍖?
         formatted = []
         for r in results:
             formatted.append({

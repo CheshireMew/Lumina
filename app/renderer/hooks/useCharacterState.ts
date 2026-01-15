@@ -15,7 +15,7 @@ export const useCharacterState = (initialActiveId: string = "") => {
   const fetchCharacters = async () => {
     setIsLoading(true);
     try {
-      const settings = (window as any).settings;
+      const settings = window.settings;
       // 1. Try fetching from Backend API (Single Source of Truth)
       const charRes = await fetch(`${API_CONFIG.BASE_URL}/characters`);
 
@@ -55,7 +55,7 @@ export const useCharacterState = (initialActiveId: string = "") => {
     } catch (e) {
       console.error("[useCharacterState] Error fetching characters:", e);
       // Fallback to cache
-      const settings = (window as any).settings;
+      const settings = window.settings;
       const cached = await settings.get("characters");
       if (cached) setCharacters(cached);
     } finally {
@@ -100,7 +100,7 @@ export const useCharacterState = (initialActiveId: string = "") => {
 
     // Configure Memory Service
     try {
-      const settings = (window as any).settings;
+      const settings = window.settings;
       const apiKey = await settings.get("apiKey");
       const baseUrl = await settings.get("apiBaseUrl");
       const model = await settings.get("modelName");
@@ -111,10 +111,44 @@ export const useCharacterState = (initialActiveId: string = "") => {
     }
 
     // Persist
-    const settings = (window as any).settings;
+    const settings = window.settings;
     await settings.set("activeCharacterId", newId);
 
     return true;
+  };
+
+  /**
+   * Update the model path for a character
+   */
+  const updateCharacterModel = async (
+    characterId: string,
+    modelPath: string
+  ) => {
+    // 1. Optimistic Update (Frontend)
+    setCharacters((prev) =>
+      prev.map((c) => (c.id === characterId ? { ...c, modelPath } : c))
+    );
+
+    // 2. Persist to Backend
+    try {
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}/characters/${characterId}/config`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ live2d_model: modelPath }),
+        }
+      );
+
+      if (!response.ok) {
+        console.error(
+          "[useCharacterState] Failed to save model change:",
+          await response.text()
+        );
+      }
+    } catch (e) {
+      console.error("[useCharacterState] Network error saving model:", e);
+    }
   };
 
   // Initial Load
@@ -122,7 +156,7 @@ export const useCharacterState = (initialActiveId: string = "") => {
     fetchCharacters();
     // Load initial active ID from settings if not provided
     const init = async () => {
-      const settings = (window as any).settings;
+      const settings = window.settings;
       const savedId = await settings.get("activeCharacterId");
       if (savedId && !initialActiveId) {
         setActiveCharacterId(savedId);
@@ -139,5 +173,6 @@ export const useCharacterState = (initialActiveId: string = "") => {
     fetchCharacters,
     switchCharacter,
     setCharacters,
+    updateCharacterModel,
   };
 };

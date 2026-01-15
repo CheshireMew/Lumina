@@ -1,13 +1,22 @@
 """
-Pydantic 请求/响应模型
-从 memory_server.py 提取，供各路由模块共享
+Pydantic Request/Response Models
+Extracted from memory_server.py for shared use
 """
 from pydantic import BaseModel, Field, field_validator
 from typing import Dict, Any, List, Optional
 
 
+
+class MessageModel(BaseModel):
+    """Strict Chat Message Model"""
+    role: str  # user, assistant, system
+    content: str
+    timestamp: Optional[float] = None
+    name: Optional[str] = None
+
+
 class ConfigRequest(BaseModel):
-    """Memory 服务配置请求"""
+    """Memory Service Config Request"""
     base_url: str
     api_key: str
     model: Optional[str] = "deepseek-chat"
@@ -18,12 +27,14 @@ class ConfigRequest(BaseModel):
     proactive_threshold_minutes: Optional[float] = None
     proactive_chat_enabled: Optional[bool] = None # Added for completeness/future explicit explicit use
     galgame_mode_enabled: Optional[bool] = None
-    soul_evolution_enabled: Optional[bool] = None # ⚡ New toggle
+    soul_evolution_enabled: Optional[bool] = None # ⚙️ New toggle
+    history_limit: Optional[int] = Field(default=20, ge=0, le=50) # 📜 New: Max context turns
+    overflow_strategy: Optional[str] = Field(default="slide", pattern="^(slide|reset)$") # 🌊 slide=FIFO, reset=ClearAll
     
     @field_validator('base_url')
     @classmethod
     def validate_base_url(cls, v):
-        """验证 base_url 格式"""
+        """Validate base_url format"""
         if not v:
             raise ValueError('base_url cannot be empty')
         if not v.startswith(('http://', 'https://')):
@@ -33,26 +44,26 @@ class ConfigRequest(BaseModel):
     @field_validator('api_key')
     @classmethod
     def validate_api_key(cls, v):
-        """验证 api_key 非空且长度合理"""
+        """Validate api_key length"""
         if not v or len(v.strip()) < 8:
             raise ValueError('api_key must be at least 8 characters')
         return v.strip()
 
 
 class AddMemoryRequest(BaseModel):
-    """添加记忆请求"""
+    """Add Memory Request"""
     user_id: str = "user"
     character_id: Optional[str] = None
     user_name: str = "User"
     character_name: str = Field(default="AI", alias="char_name")
-    messages: List[Dict[str, Any]]
+    messages: List[MessageModel]
 
     class Config:
         populate_by_name = True
 
 
 class SearchRequest(BaseModel):
-    """记忆搜索请求"""
+    """Search Memory Request"""
     user_id: str
     character_id: Optional[str] = None
     query: str
@@ -61,19 +72,19 @@ class SearchRequest(BaseModel):
 
 
 class ConsolidateRequest(BaseModel):
-    """历史整合请求"""
+    """Consolidate History Request"""
     user_id: str = "user"
     character_id: Optional[str] = None
     user_name: str = "User"
     character_name: str = Field(default="AI", alias="char_name")
-    messages: List[Dict[str, Any]]
+    messages: List[MessageModel]
 
     class Config:
         populate_by_name = True
 
 
 class DreamRequest(BaseModel):
-    """深度整合/做梦请求"""
+    """Deep Dreaming Request"""
     user_id: str = "user"
     character_id: Optional[str] = None
     user_name: str = "User"
@@ -84,11 +95,11 @@ class DreamRequest(BaseModel):
 
 
 class UpdateIdentityRequest(BaseModel):
-    """更新身份信息请求"""
+    """Update Identity Request"""
     name: str
     description: str
 
 
 class UpdateUserNameRequest(BaseModel):
-    """更新用户名请求"""
+    """Update User Name Request"""
     user_name: str

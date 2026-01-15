@@ -20,7 +20,8 @@ if os.name == 'nt':
         print(f"[Init] Failed to add DLL directory: {e}")
 
 # --- Custom Logger & Model Manager ---
-from logger_setup import setup_logger
+# --- Custom Logger & Model Manager ---
+from logger_setup import setup_logger, request_id_ctx
 from model_manager import model_manager
 from app_config import config as app_settings
 
@@ -31,34 +32,40 @@ logger = setup_logger("stt_server.log")
 import numpy as np
 import threading
 import json
+import uuid
 import queue
 from typing import Optional, Dict
 from pathlib import Path
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
 # Engines
 from faster_whisper import WhisperModel
-# Lazy import for SenseVoice to avoid hard crash if dependencies missing
-try:
-    from stt_engine_sensevoice import SenseVoiceEngine
-    SENSEVOICE_AVAILABLE = True
-except ImportError:
-    logger.warning("SenseVoiceEngine import failed. SenseVoice will be unavailable.")
-    SENSEVOICE_AVAILABLE = False
+from services.audio_manager import AudioManager
 
-try:
-    from stt_engine_paraformer import ParaformerEngine
-    PARAFORMER_AVAILABLE = True
-except ImportError:
-    logger.warning("ParaformerEngine import failed. Paraformer will be unavailable.")
-    PARAFORMER_AVAILABLE = False
+# Voiceprint import removed. Loaded dynamically in startup_event.
+VoiceprintManager = None
 
-from audio_manager import AudioManager
-from voiceprint_manager import VoiceprintManager
+# Driver Imports (Core)
+from core.interfaces.driver import BaseSTTDriver
+# Drivers are loaded dynamically by STTPluginManager
 
 app = FastAPI(title="Lumina STT Service")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "stt"}
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    token = request_id_ctx.set(request_id)
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+    finally:
+        request_id_ctx.reset(token)
 
 app.add_middleware(
     CORSMiddleware,
@@ -76,193 +83,28 @@ message_queue = queue.Queue()
 
 # --- Model Engine Management ---
 
-MODEL_SIZES = {
-    "tiny": "75MB",
-    "base": "150MB",
-    "small": "500MB",
-    "medium": "1.5GB",
-    "large-v3": "3GB",
-    "sense-voice": "Sherpa-ONNX (SenseVoiceSmall)",
-    "paraformer-zh": "Sherpa-ONNX (Paraformer-Large-ZH)",
-    "paraformer-en": "Sherpa-ONNX (Paraformer-EN)"
-}
+# MODEL_SIZES moved to plugins.stt.manager
+# from plugins.stt.manager import MODEL_SIZES
+
+# from plugins.stt.manager import STTPluginManager, MODEL_SIZES
+# But we need services
+from services.container import services
+# from plugins.stt.manager import WHISPER_MODELS # Dynamic now!
 
 CONFIG_FILE = app_settings.config_root / "stt_config.json"
 
-class STTEngineManager:
-    def __init__(self):
-        self.current_model_name: str = "base"
-        self.engine_type: str = "faster_whisper" # 'faster_whisper' or 'sense_voice'
-        self.model = None # Can be WhisperModel or SenseVoiceEngine
-        self.lock = threading.Lock()
-        self.download_status: Dict[str, str] = {name: "idle" for name in MODEL_SIZES}
-        self.loading_status = "idle"
-        
-        self.load_config()
-
-    def load_config(self):
-        # Use centralized config (app_settings.stt)
-        self.current_model_name = app_settings.stt.model
-        
-        # Auto-detect engine type based on name
-        if self.current_model_name == "sense-voice":
-            self.engine_type = "sense_voice"
-        elif self.current_model_name.startswith("paraformer"):
-            self.engine_type = self.current_model_name.replace("-", "_")
-        else:
-            self.engine_type = "faster_whisper"
-
-
-    def save_config(self):
-        try:
-            with open(CONFIG_FILE, "w") as f:
-                json.dump({"model": self.current_model_name}, f)
-        except Exception as e:
-            logger.error(f"Failed to save config: {e}")
-
-    def load_model(self, name: str):
-        with self.lock:
-            self.loading_status = "loading"
-            logger.info(f"Switching engine to model: {name}...")
-            
-            try:
-                # Cleanup previous model to free VRAM/RAM
-                if self.model:
-                    logger.info("Unloading previous model...")
-                    del self.model
-                    import gc
-                    gc.collect()
-                    self.model = None
-
-                if name == "sense-voice":
-                    if not SENSEVOICE_AVAILABLE:
-                        raise ImportError("SenseVoice is not available (missing dependencies).")
-                    
-                    self.engine_type = "sense_voice"
-                    engine = SenseVoiceEngine()
-                    engine.initialize() # Handles download internally via model_manager
-                    self.model = engine
-                    logger.info("SenseVoice Engine loaded successfully.")
-
-                elif name == "paraformer-zh":
-                    if not PARAFORMER_AVAILABLE:
-                         raise ImportError("Paraformer is not available.")
-                    self.engine_type = "paraformer_zh"
-                    engine = ParaformerEngine(language="zh")
-                    engine.initialize()
-                    self.model = engine
-                    logger.info("Paraformer-ZH Engine loaded successfully.")
-
-                elif name == "paraformer-en":
-                    if not PARAFORMER_AVAILABLE:
-                         raise ImportError("Paraformer is not available.")
-                    self.engine_type = "paraformer_en"
-                    engine = ParaformerEngine(language="en")
-                    engine.initialize()
-                    self.model = engine
-                    logger.info("Paraformer-EN Engine loaded successfully.")
-                    
-                else:
-                    self.engine_type = "faster_whisper"
-                    # Use model_manager to handle path/download for Whisper too?
-                    # Faster-Whisper has its own download logic, but we can direct it to our models dir
-                    
-                    model_dir = model_manager.base_dir
-                    # Note: faster_whisper's download_model(name, output_dir=...) does the job.
-                    # We just need to point it to e:\Work\Code\Lumina\models\
-                    
-                    from faster_whisper import download_model as fw_download
-                    
-                    # We want each model in its own subdir? faster_whisper handles this if we give it the root?
-                    # Actually faster_whisper download_model returns the path to the specific model folder.
-                    # Let's keep existing logic: ../models/{name}
-                    
-                    target_dir = os.path.join(model_manager.base_dir, name)
-                    
-                    if not os.path.exists(target_dir) or not os.listdir(target_dir):
-                        logger.info(f"Downloading Whisper model '{name}' to {target_dir}...")
-                        # Use our robust downloader or fw's? FW's is decent but relies on HF.
-                        # For robustness, we could use model_manager hook, but let's stick to FW for now
-                        # but hijack the env vars just in case it uses cache.
-                        model_manager.setup_model_env(name)
-                        try:
-                            # We deliberately pass 'output_dir' so it downloads HERE
-                            model_path = fw_download(name, output_dir=str(target_dir))
-                        finally:
-                            model_manager.restore_model_env()
-                    else:
-                        logger.info(f"Found local Whisper files in {target_dir}")
-                        model_path = str(target_dir)
-
-                    logger.info(f"Loading Whisper from {model_path}...")
-                    
-                    # Try CPU first with comprehensive error handling
-                    try:
-                        self.model = WhisperModel(model_path, device="cpu", compute_type="int8")
-                        logger.info(f"Whisper model '{name}' loaded on device='cpu'")
-                    except Exception as cpu_error:
-                        logger.error(f"CPU initialization also failed: {cpu_error}")
-                        raise cpu_error
-                    
-                    # Warm-up (Separate Step)
-                    # 即使 Warm-up 失败，也不弃让加载失败，只暂时模型对象还在执行
-                    try:
-                        logger.info("Running warm-up inference to verify backend...")
-                        dummy_audio = np.zeros(16000, dtype=np.float32)
-                        # 暂时不检查结果，只看能不能跑通
-                        self.model.transcribe(dummy_audio, beam_size=1)
-                        logger.info("Warm-up successful.")
-                    except Exception as warmup_err:
-                        logger.warning(f"Warm-up failed (non-fatal): {warmup_err}")
-                        # 继续，因为可能是 dummy_audio 的问题，不代表模型不能用
-                        # If warm-up fails, try to reinitialize with GPU fallback
-                        try:
-                            self.model = WhisperModel(model_path, device="auto", compute_type="int8")
-                            logger.info(f"Whisper model '{name}' loaded on device='auto'")
-                        except Exception as e:
-                            logger.warning(f"GPU Init failed ({e}), fallback to CPU...")
-                            self.model = WhisperModel(model_path, device="cpu", compute_type="int8")
-
-                self.current_model_name = name
-                self.loading_status = "idle"
-                self.save_config()
-                
-            except Exception as e:
-                self.loading_status = "error"
-                logger.error(f"CRITICAL: Failed to load model {name}. Error: {e}", exc_info=True)
-                # Recover to base if failed? No, let user know.
-
-    def switch_model_background(self, name: str):
-        self.download_status[name] = "downloading"
-        try:
-            self.load_model(name)
-            self.download_status[name] = "completed"
-        except Exception as e:
-            self.download_status[name] = "failed"
-    
-    def get_info(self):
-        return {
-            "current_model": self.current_model_name,
-            "engine_type": self.engine_type,
-            "loading_status": self.loading_status,
-            "models": [    
-                {
-                    "name": name,
-                    "desc": desc,
-                    "download_status": self.download_status.get(name, "idle")
-                }
-                for name, desc in MODEL_SIZES.items()
-            ]
-        }
-
-engine_manager = STTEngineManager()
+# Manager removed (Use services.get_stt())
+# manager = STTPluginManager()
+# engine_manager = manager
 
 @app.on_event("startup")
 async def startup_event():
     global audio_manager, voiceprint_manager
     
-    # Load model in background
-    threading.Thread(target=engine_manager.load_model, args=(engine_manager.current_model_name,)).start()
+    # Load model and register drivers (Async)
+    # threading.Thread(target=engine_manager.load_model, args=(engine_manager.current_model_name,)).start()
+    # await engine_manager.register_drivers() # Handled by Lifecycle
+    logger.info("STT Drivers registered via Lifecycle.")
     
     # Load Audio Config from centralized config
     enable_voiceprint = app_settings.audio.enable_voiceprint_filter
@@ -272,17 +114,33 @@ async def startup_event():
     
     if enable_voiceprint:
         try:
-            voiceprint_manager = VoiceprintManager()
-            if voiceprint_manager.load_voiceprint(voiceprint_profile):
-                logger.info(f"✓ Voiceprint enabled. Profile: {voiceprint_profile}")
-            else:
-                logger.warning(f"⚠️ Profile '{voiceprint_profile}' not found. Voiceprint disabled.")
-                enable_voiceprint = False
+             # Dynamic Loading based on convention or config
+             # We assume standard plugin location unless configured otherwise
+             from importlib import import_module
+             vp_module = import_module("plugins.system.voiceprint.manager")
+             VoiceprintManagerClass = getattr(vp_module, "VoiceprintManager")
+             
+             logger.info("[Startup] Dynamically loaded VoiceprintManager for STT.")
+             
+             voiceprint_manager = VoiceprintManagerClass()
+             await voiceprint_manager.ensure_driver_loaded()
+             
+             if voiceprint_profile in voiceprint_manager.profiles:
+                 logger.info(f"Voiceprint enabled. Current Profile: {voiceprint_profile}")
+             else:
+                 logger.warning(f"⚠️ Profile '{voiceprint_profile}' not found in {list(voiceprint_manager.profiles.keys())}. Voiceprint disabled.")
+                 enable_voiceprint = False
+                 
         except Exception as e:
-            logger.error(f"Voiceprint Init Failed: {e}")
+            logger.error(f"Voiceprint Dynamic Load Failed: {e}")
             enable_voiceprint = False
+            voiceprint_manager = None
             
     # Define Audio Callbacks
+    # stt_manager = services.get_stt() # Retrieved when needed or global referencing is hard
+    # Since audio callbacks need it, and they are defined here...
+    stt_manager = services.get_stt()
+
     def on_speech_start():
         logger.info("[AudioManager] Speech started")
         message_queue.put({"type": "vad_status", "status": "listening"})
@@ -291,23 +149,33 @@ async def startup_event():
         logger.info(f"[AudioManager] Speech ended. Length: {len(audio_data)}")
         message_queue.put({"type": "vad_status", "status": "thinking"})
         
-        if engine_manager.model is None:
+        # Call Transcribe
+        try:
+            # result = engine_manager.transcribe(audio_data)
+            result = stt_manager.transcribe(audio_data)
+        
+        if stt_manager.model is None:
             logger.warning("STT Model not ready.")
             message_queue.put({"type": "vad_status", "status": "idle"})
             return
         
         try:
             # === ENGINE DISPATCH ===
-            if engine_manager.engine_type == "sense_voice":
+            print(f"[DEBUG] Engine Type: {stt_manager.engine_type}")
+            if stt_manager.engine_type == "sense_voice":
                 # SenseVoice Logic - returns (segments, info)
-                segments, info = engine_manager.model.transcribe(audio_data)
+                print(f"[DEBUG] Calling SenseVoice transcribe with {len(audio_data)} samples")
+                segments, info = stt_manager.model.transcribe(audio_data)
+                print(f"[DEBUG] Transcribe returned. Segments: {len(segments)}")
                 
                 full_transcript = ""
                 for segment in segments:
                     segment_text = segment.text.strip()
+                    print(f"[DEBUG] Segment: {segment_text}")
                     if segment_text:
                         full_transcript += segment_text
                 
+                print(f"[DEBUG] Full Transcript: '{full_transcript}'")
                 if full_transcript:
                     # Check for emotion tag from SenseVoice
                     emotion = getattr(info, 'emotion', None)
@@ -326,6 +194,37 @@ async def startup_event():
                     message_queue.put(response)
                 else:
                     logger.warning("SenseVoice returned empty text.")
+                    print("[DEBUG] SenseVoice returned empty text.")
+
+            elif engine_manager.engine_type == "plugin_asr":
+                # Plugin ASR Logic
+                import asyncio
+                import concurrent.futures
+                
+                # Plugin expects bytes
+                audio_int16 = (audio_data * 32767).astype(np.int16)
+                audio_bytes = audio_int16.tobytes()
+                
+                text = ""
+                try:
+                    # Run async plugin in sync context safely
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    text = loop.run_until_complete(engine_manager.model.transcribe(audio_bytes, language="zh"))
+                    loop.close()
+                except Exception as e:
+                    logger.error(f"Plugin transcribe failed: {e}")
+                
+                if text:
+                    logger.info(f"Plugin ASR Result: {text}")
+                    message_queue.put({
+                        "type": "transcription",
+                        "text": text,
+                        "language": "zh", # Plugin interface should probably return this too
+                        "is_final": True
+                    })
+                else:
+                    logger.warning("Plugin ASR returned empty text.")
                     
             elif engine_manager.engine_type in ["paraformer_zh", "paraformer_en"]:
                 # Paraformer Logic - returns (segments, info)
@@ -354,7 +253,7 @@ async def startup_event():
                     
             else:
                 # Faster-Whisper Logic
-                segments, info = engine_manager.model.transcribe(
+                segments, info = stt_manager.model.transcribe(
                     audio_data,
                     beam_size=1,
                     best_of=1,
@@ -406,7 +305,7 @@ async def startup_event():
         aggressiveness=1 if enable_voiceprint else 3
     )
     
-    # audio_manager.start() # ⚡ Defer start to WebSocket connection
+    # audio_manager.start() # Defer start to WebSocket connection
     logger.info("AudioManager initialized (Waiting for WS connection to start)")
 
 # --- API Endpoints ---
@@ -414,22 +313,36 @@ async def startup_event():
 @app.get("/models/list")
 async def get_models():
     """List available STT models and their status"""
+    stt_manager = services.get_stt()
+    
     # Define available models
-    models = [
-        # SenseVoice
-        {"name": "sense-voice", "desc": "多语言/情感识别", "engine": "sense_voice", "is_whisper": False},
-        
-        # Paraformer
-        {"name": "paraformer-zh", "desc": "中文/高并发/会议", "engine": "paraformer_zh", "is_whisper": False},
-        {"name": "paraformer-en", "desc": "English Only", "engine": "paraformer_en", "is_whisper": False},
-
-        # Faster-Whisper
-        {"name": "tiny", "desc": "Minimal (v3)", "engine": "faster_whisper", "is_whisper": True},
-        {"name": "base", "desc": "Balanced (v3)", "engine": "faster_whisper", "is_whisper": True},
-        {"name": "small", "desc": "Accurate (v3)", "engine": "faster_whisper", "is_whisper": True},
-        {"name": "medium", "desc": "Very Accurate", "engine": "faster_whisper", "is_whisper": True},
-        {"name": "large-v3", "desc": "Most Accurate (Slow)", "engine": "faster_whisper", "is_whisper": True},
-    ]
+    models = []
+    
+    # Dynamically populate supported models based on loaded drivers
+    if hasattr(stt_manager, "drivers"):
+        for drv_id, driver in stt_manager.drivers.items():
+            
+            if hasattr(driver, "supported_models"):
+                # Driver explicitly supports multiple sub-models (e.g. FasterWhisper)
+                for code, size in driver.supported_models.items():
+                     models.append({
+                        "name": code,
+                        "desc": f"{size} ({driver.name})",
+                        "engine": driver.id, # Map back to driver ID? No better to engine type logic?
+                                             # Actually stt_server logic expects 'engine' field to match somewhat.
+                                             # But let's stick to simple:
+                        "is_whisper": driver.id == "faster-whisper", # Heuristic or property?
+                        "download_status": "idle" # To be checked later
+                     })
+            else:
+                # Generic Single-Model Driver (e.g., SenseVoice)
+                models.append({
+                    "name": driver.id,
+                    "desc": driver.name,
+                    "engine": "plugin_asr", # standardized type
+                    "is_whisper": False,
+                    "download_status": "completed" # Drivers usually self-manage or are pre-installed
+                })
     
     # Check status
     for m in models:
@@ -450,14 +363,14 @@ async def get_models():
              path = os.path.join(model_manager.base_dir, m["name"])
              if os.path.exists(path) and os.listdir(path): m["download_status"] = "completed"
 
-        if engine_manager.loading_status == "loading" and engine_manager.current_model_name == m["name"]:
+        if stt_manager.loading_status == "loading" and stt_manager.current_model_name == m["name"]:
              m["download_status"] = "downloading"
 
     return {
         "models": models,
-        "current_model": engine_manager.current_model_name,
-        "engine_type": engine_manager.engine_type,
-        "loading_status": engine_manager.loading_status
+        "current_model": stt_manager.current_model_name,
+        "engine_type": stt_manager.engine_type,
+        "loading_status": stt_manager.loading_status
     }
 
 class SwitchModelRequest(BaseModel):
@@ -465,15 +378,35 @@ class SwitchModelRequest(BaseModel):
 
 @app.post("/models/switch")
 async def switch_model(request: SwitchModelRequest, background_tasks: BackgroundTasks):
-    if request.model_name not in MODEL_SIZES:
-        raise HTTPException(status_code=400, detail="Invalid model name")
+    stt_manager = services.get_stt()
+
+    # Allow Whisper models AND Plugin models
+    # Dynamic Validation: Check if model_name is a known Whisper size OR a registered driver ID
+    
+    # [Dynamic Check]
+    is_valid = False
+    
+    # 1. Is it a direct driver ID?
+    if request.model_name in stt_manager.drivers:
+        is_valid = True
+        
+    # 2. Is it a sub-model of any driver?
+    if not is_valid:
+        for drv in stt_manager.drivers.values():
+            if hasattr(drv, "supported_models") and request.model_name in drv.supported_models:
+                is_valid = True
+                break
+
+    if not is_valid:
+        logger.warning(f"Switching to unknown model name: {request.model_name}")
+        raise HTTPException(status_code=400, detail=f"Invalid model name: {request.model_name}")
     
     # Check if already loading
-    if engine_manager.loading_status == "loading":
+    if stt_manager.loading_status == "loading":
          raise HTTPException(status_code=409, detail="A model is already loading")
 
     # Load in background
-    background_tasks.add_task(engine_manager.switch_model_background, request.model_name)
+    background_tasks.add_task(stt_manager.switch_model_background, request.model_name)
     return {"status": "pending", "message": f"Switching to {request.model_name}..."}
 
 
@@ -620,22 +553,26 @@ async def websocket_endpoint(websocket: WebSocket):
     active_websockets[connection_id] = websocket
     logger.info(f"Client connected: {connection_id} (Total: {len(active_websockets)})")
     
-    # ⚡ Auto-Start Audio Manager if first client
+    # Auto-Start Audio Manager if first client
     if len(active_websockets) == 1 and audio_manager:
         if not audio_manager.is_running:
             logger.info("[Auto-Start] Starting AudioManager (First Client)")
             audio_manager.start()
             
-            # ⚡ Clear queue to prevent stale messages from previous sessions
+            # Clear queue to prevent stale messages from previous sessions
             while not message_queue.empty():
-                try: message_queue.get_nowait()
-                except: pass
+                try: 
+                    message_queue.get_nowait()
+                except queue.Empty: 
+                    break
+                except Exception: 
+                    pass # Only pass if truly irrelevant
 
     try:
         while True:
             # 1. Check outbound queue
             try:
-                # ⚡ Only send if running (prevent leakage)
+                # Only send if running (prevent leakage)
                 if audio_manager and audio_manager.is_running:
                     message = message_queue.get_nowait()
                     await websocket.send_json(message)
@@ -666,7 +603,7 @@ async def websocket_endpoint(websocket: WebSocket):
             del active_websockets[connection_id]
         logger.info(f"Client disconnected: {connection_id} (Remaining: {len(active_websockets)})")
         
-        # ⚡ Auto-Stop Audio Manager if no clients
+        # Auto-Stop Audio Manager if no clients
         if len(active_websockets) == 0 and audio_manager and audio_manager.is_running:
             logger.info("[Auto-Stop] Stopping AudioManager (No Clients)")
             audio_manager.stop()

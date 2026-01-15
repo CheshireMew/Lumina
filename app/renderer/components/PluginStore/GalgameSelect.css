@@ -1,0 +1,86 @@
+.galgame-select-container {
+    position: relative;
+    width: 100%;
+    min-width: 150px;
+    font-size: 13px;
+    font-family: 'Segoe UI', sans-serif;
+    user-select: none;
+}
+
+.galgame-select-trigger {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #e0e0e0;
+    transition: all 0.2s;
+}
+
+.galgame-select-trigger:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 105, 180, 0.4);
+    box-shadow: 0 0 8px rgba(255, 105, 180, 0.1);
+}
+
+.galgame-select-container.is-open .galgame-select-trigger {
+    border-color: #ff69b4;
+    background: rgba(20, 20, 24, 0.8);
+}
+
+.arrow-icon {
+    font-size: 10px;
+    margin-left: 8px;
+    transition: transform 0.3s;
+    color: #ff69b4;
+}
+
+.galgame-select-container.is-open .arrow-icon {
+    transform: rotate(180deg);
+}
+
+.galgame-select-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 100%;
+    background: rgba(30, 30, 35, 0.95);
+    border: 1px solid rgba(255, 105, 180, 0.3);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    z-index: 1001; /* Above modal overlay/content */
+    overflow: hidden;
+    animation: fadeInSlide 0.2s ease-out;
+}
+
+.select-option {
+    padding: 10px 12px;
+    cursor: pointer;
+    color: #bbb;
+    transition: all 0.15s;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.select-option:last-child {
+    border-bottom: none;
+}
+
+.select-option:hover {
+    background: rgba(255, 105, 180, 0.15);
+    color: #fff;
+    padding-left: 16px; /* Slide effect */
+}
+
+.select-option.selected {
+    background: rgba(255, 105, 180, 0.1);
+    color: #ff69b4;
+    font-weight: 600;
+}
+
+@keyframes fadeInSlide {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}

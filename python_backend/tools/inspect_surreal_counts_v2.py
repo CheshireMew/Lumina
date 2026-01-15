@@ -5,7 +5,7 @@ import os
 # Add parent dir to path to import backend modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from surreal_memory import SurrealMemory
+from memory.core import SurrealMemory
 
 async def main():
     print("Initializing SurrealMemory...")
@@ -13,7 +13,7 @@ async def main():
     mem = SurrealMemory()
     await mem.connect()
     
-    print("✅ Connected. Querying 'fact' table...")
+    print("鉁?Connected. Querying 'fact' table...")
     
     try:
         # 1. Count Facts
@@ -26,31 +26,31 @@ async def main():
              # BUT the previous debug showed: DEBUG RAW RESPONSE: [{'count': 90}]
              # This means the SDK is indeed unwrapping.
              count = res_count[0].get('count', 0)
-        print(f"📊 Total Facts: {count}")
+        print(f"馃搳 Total Facts: {count}")
         
         # 2. Sample Data
         res_sample = await mem.db.query("SELECT * FROM fact LIMIT 3;")
         if isinstance(res_sample, list) and len(res_sample) > 0:
-            print("\n📝 Sample Entries:")
+            print("\n馃摑 Sample Entries:")
             for s in res_sample:
                 txt = s.get('text', 'N/A')
                 print(f" - [{s['id']}] {txt[:50]}...")
         else:
-            print("\n⚠️ No data found in 'fact' table via query.")
+            print("\n鈿狅笍 No data found in 'fact' table via query.")
 
         # 3. Verify Graph Edges
         res_edges = await mem.db.query("SELECT count() FROM observes GROUP ALL;")
         edge_count = 0
         if isinstance(res_edges, list) and len(res_edges) > 0:
              edge_count = res_edges[0].get('count', 0)
-        print(f"\n🔗 Graph Connections (Edges): {edge_count}")
+        print(f"\n馃敆 Graph Connections (Edges): {edge_count}")
         if edge_count > 0:
-            print("   ✅ Graph structure is ACTIVE. Memories are linked to characters.")
+            print("   鉁?Graph structure is ACTIVE. Memories are linked to characters.")
         else:
-            print("   ⚠️ Graph structure MISSING. Memories are isolated nodes.")
+            print("   鈿狅笍 Graph structure MISSING. Memories are isolated nodes.")
 
     except Exception as e:
-        print(f"❌ Query Error: {e}")
+        print(f"鉂?Query Error: {e}")
     finally:
         await mem.close()
 

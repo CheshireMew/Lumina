@@ -12,26 +12,35 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, r
 
     useEffect(() => {
         if (isStreaming) {
-            // 流式模式：直接同步显示
+            // Streaming mode: Sync immediately
             setDisplayedText(message);
             wasStreamingRef.current = true;
-        } else if (wasStreamingRef.current) {
-            // 流式刚结束：保持当前文本，不重新触发
-            wasStreamingRef.current = false;
-        } else if (message) {
-            // 非流式模式：打字机效果
-            setDisplayedText('');
-            let i = 0;
-            const timer = setInterval(() => {
-                if (i < message.length) {
-                    setDisplayedText((prev) => prev + message.charAt(i));
-                    i++;
+        } else {
+            // Not streaming
+            if (wasStreamingRef.current) {
+                // Just ended streaming: Sync final
+                setDisplayedText(message);
+                wasStreamingRef.current = false;
+            } else if (message) {
+                // Static message update
+                if (displayedText && message.startsWith(displayedText)) {
+                    // Just an append (late packet?), don't typewriter, just show
+                    setDisplayedText(message);
                 } else {
-                    clearInterval(timer);
+                    // New message (Typewriter effect)
+                    setDisplayedText('');
+                    let i = 0;
+                    const timer = setInterval(() => {
+                        if (i < message.length) {
+                            setDisplayedText((prev) => prev + message.charAt(i));
+                            i++;
+                        } else {
+                            clearInterval(timer);
+                        }
+                    }, 50);
+                    return () => clearInterval(timer);
                 }
-            }, 50);
-
-            return () => clearInterval(timer);
+            }
         }
     }, [message, isStreaming]);
 
@@ -60,7 +69,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, r
             backdropFilter: 'blur(12px)',
             border: '1px solid rgba(255,255,255,0.8)',
             animation: 'fadeIn 0.3s ease-out',
-            zIndex: 2000,
+            zIndex: 100,
         }}>
             {/* 🧠 Thinking Process Block */}
             {reasoning && (

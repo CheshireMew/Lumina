@@ -32,12 +32,24 @@ class PromptManager:
             base_dir = Path(__file__).parent.absolute()
             
         self.prompts_dir = base_dir / "prompts"
-        logger.info(f"[PromptManager] Initialized with prompts dir: {self.prompts_dir}")
+        self.search_paths = [str(self.prompts_dir)]
         
-        # Configure Jinja2 Env
+        logger.info(f"[PromptManager] Initialized with base prompts dir: {self.prompts_dir}")
+        self._reload_env()
+        
+    def add_template_path(self, path: Union[str, Path]):
+        """Registers a new search path for templates (e.g. from Plugins)"""
+        p_str = str(path)
+        if p_str not in self.search_paths:
+            self.search_paths.append(p_str)
+            logger.info(f"[PromptManager] Added search path: {p_str}")
+            self._reload_env()
+            
+    def _reload_env(self):
+        """Reloads Jinja2 environment with current search paths"""
         self.env = Environment(
-            loader=FileSystemLoader(str(self.prompts_dir)),
-            autoescape=False # Prompts are text, not HTML
+            loader=FileSystemLoader(self.search_paths),
+            autoescape=False
         )
         
     def render(self, template_name: str, context: Dict[str, Any] = {}) -> str:

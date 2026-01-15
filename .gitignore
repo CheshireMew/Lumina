@@ -141,3 +141,17 @@ build_backend/
 
 # Portable Mode Data
 Lumina_Data/
+
+# Agentic Workspace
+.agent/
+.agent
+
+# Project Archives
+archive/
+openspec/
+
+# Local Config Overrides (Safety Net)
+config/local.json
+secrets.json
+*.key
+*.pem

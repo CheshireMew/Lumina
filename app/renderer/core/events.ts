@@ -1,4 +1,5 @@
 import EventEmitter from "eventemitter3";
+import { FaceTrackingData } from "./avatar/types";
 
 // 1. Define Event Map
 // Explicitly format payloads. Use 'undefined' for no payload.
@@ -10,6 +11,9 @@ export type AppEvents = {
 
   // --- Vision Layer ---
   "vision:analyzed": string; // Image description ready
+
+  // --- Avatar Layer ---
+  "avatar:face_tracking": FaceTrackingData;
 
   // --- Control Layer ---
   "core:interrupt": undefined; // Global Interrupt Signal

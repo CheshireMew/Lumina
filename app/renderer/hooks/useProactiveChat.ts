@@ -61,40 +61,39 @@ export const useProactiveChat = ({
           if (res.ok) {
             const stateData = await res.json();
 
-            // ⚡ Sync Prompts from Character-Specific Endpoint (More Reliable)
+            // ⚡ Sync Prompts
             if (stateData.dynamic_instruction) {
               dynamicInstructionRef.current = stateData.dynamic_instruction;
             }
             if (stateData.system_prompt) {
               currentSystemPromptRef.current = stateData.system_prompt;
-              (window as any).llm.setSystemPrompt(stateData.system_prompt);
+              window.llm.setSystemPrompt(stateData.system_prompt);
             }
 
             // Check for 'pending_interaction'
             if (stateData.pending_interaction) {
               console.log(
-                "[ProactiveChat] ⚡ Proactive Trigger Detected from Backend!",
+                "[ProactiveChat] ⚡ Proactive Trigger Detected!",
                 stateData.pending_interaction
               );
 
-              // 1. 先上锁，防止下一次轮询进入
+              // 1. Lock
               if (isProactiveProcessing.current) return;
 
-              // ⚡ Duplicate Check: Prevent handling same interaction twice
+              // 2. Dedup
               const interactionTs =
                 stateData.pending_interaction.timestamp || "unknown";
               if (lastProcessedInteractionRef.current === interactionTs) {
                 console.log(
-                  "[ProactiveChat] Skipping duplicate proactive interaction:",
+                  "[ProactiveChat] Skipping duplicate interaction:",
                   interactionTs
                 );
                 return;
               }
               lastProcessedInteractionRef.current = interactionTs;
 
+              // 3. Mark Processing & Clear Backend
               isProactiveProcessing.current = true;
-
-              // 2. 只有在成功清除后台标记后，才让 AI 说话
               try {
                 await fetch(`${backendUrl}/soul/mutate?clear_pending=true`, {
                   method: "POST",
@@ -107,7 +106,7 @@ export const useProactiveChat = ({
                 return;
               }
 
-              // ⚡ 获取关系信息
+              // ⚡ Context Extraction
               const relationship = stateData.relationship || {};
               const level = relationship.level || 0;
               const currentStageLabel =
@@ -116,23 +115,7 @@ export const useProactiveChat = ({
                 characters.find((c) => c.id === activeCharacterId)?.name ||
                 "AI";
 
-              // ⚡ Build Rich Prompt with History + Inspiration
-              // 1. Get recent conversation history
-              const recentHistory = conversationHistory
-                .filter(
-                  (m) =>
-                    !m.content.trim().startsWith("(Private System Instruction")
-                ) // 🛡️ Prevent recursion!
-                .slice(-5)
-                .map(
-                  (m) =>
-                    `${
-                      m.role === "user" ? userName : charName
-                    }: ${m.content.substring(0, 100)}...`
-                )
-                .join("\n");
-
-              // 2. Fetch random inspiration from memories (SurrealDB)
+              // ⚡ Inspiration (Random Memories)
               let inspirationText = "";
               try {
                 const inspirationRes = await fetch(
@@ -141,31 +124,23 @@ export const useProactiveChat = ({
                 if (inspirationRes.ok) {
                   const inspirations = await inspirationRes.json();
                   if (inspirations.length > 0) {
-                    // ⚡ Support both SQLite (content) and SurrealDB (context) formats
                     inspirationText = inspirations
                       .map((i: any) => {
-                        if (i.context) return `- ${i.context}`; // SurrealDB
-                        if (i.content) return `- ${i.content}`; // SQLite
-                        // Fallback for edge format: Subject VERB Object
-                        if (i.subject && i.relation && i.object)
-                          return `- ${i.subject} ${i.relation} ${i.object}`;
-                        return "";
+                        // Simplify inspiration text extraction
+                        return i.content ? `- ${i.content}` : "";
                       })
                       .filter((s: string) => s !== "")
                       .join("\n");
-
                     console.log(
-                      `[ProactiveChat] 🎲 Loaded ${inspirations.length} inspirations for proactive chat`
+                      `[ProactiveChat] 🎲 Loaded ${inspirations.length} inspirations`
                     );
                   }
                 }
               } catch (e) {
-                console.warn(
-                  "[ProactiveChat] Failed to fetch inspiration, proceeding without"
-                );
+                console.warn("[ProactiveChat] Failed to load inspiration", e);
               }
 
-              // 3. Build enhanced instruction with time and relationship info
+              // ⚡ Build Instruction
               const nowStr = new Date().toLocaleString();
               const dynamicInstruction = dynamicInstructionRef.current || "";
               const reason = stateData.pending_interaction.reason || "";
@@ -173,10 +148,23 @@ export const useProactiveChat = ({
 
               let instruction = "";
 
-              if (reason === "bilibili_danmaku") {
-                // 🎥 Live Stream Mode
-                const viewerName = eventData.user || "Viewer";
-                const danmakuContent = eventData.content || "";
+              if (reason === "bilibili") {
+                // 🎥 Live Stream Mode (Bilibili Danmaku)
+                // Note: 'reason' was 'bilibili_danmaku' in snippet, checking convention.
+                // Backend mcp_host.py sets reason="bilibili" (see mcp_host.py view earlier)
+
+                // Parse message from format "[Bilibili] User: Content"
+                // Actually mcp_host.py sends full msg string in eventData?
+                // Wait, mcp_host.py: self.soul_client.set_pending_interaction(full_msg, "bilibili")
+                // So eventData might be just string? Or dict?
+                // SoulManager.set_pending_interaction(self, trigger_data, reason="manual")
+                // -> self.profile["state"]["galgame"]["pending_interaction"] = { "reason": reason, "timestamp": iso, "data": trigger_data }
+                // So trigger_data is the full string "[Bilibili] User: Content".
+
+                const rawMsg =
+                  typeof eventData === "string"
+                    ? eventData
+                    : JSON.stringify(eventData);
 
                 instruction = `(Private System Instruction - DO NOT EXPOSE THIS TO USER)
 [SYSTEM NOTICE]
@@ -184,13 +172,13 @@ Current Time: ${nowStr}
 Context: You are currently LIVE STREAMING on Bilibili.
 Event: 🔴 New Danmaku Received.
 
-User [${viewerName}] said: "${danmakuContent}"
+Content: "${rawMsg}"
 
 ${dynamicInstruction}
 
 GUIDELINES:
 - You are a VTuber/Streamer.
-- Respond directly to ${viewerName}'s comment.
+- Respond directly to the comment.
 - Keep it short, engaging, and in-character.
 - If it's a gift, thank them excitedly!
 - Do not mention you are an AI.`;
@@ -200,11 +188,12 @@ GUIDELINES:
 [SYSTEM NOTICE]
 Current Time: ${nowStr}
 Relationship: Lv.${level} (${currentStageLabel})
-Task:对方已经沉默了很久，Continue a conversation naturally.
+Reason: ${reason} (Silence or Trigger)
 
 ${dynamicInstruction}
 
 ${inspirationText ? `## Related Topics (Memory)\n${inspirationText}\n` : ""}
+
 GUIDELINES:
 - Use the [Related Topics] as a topic starter IF they seem interesting, or just continue the conversation.
 - Keep it natural, casual, and brief.
@@ -212,7 +201,7 @@ GUIDELINES:
 - Based on your personality and the silence, initiate a brand new natural conversation topic. Do NOT repeat previous greetings.`;
               }
 
-              // ⚡ 获取主动对话专用的参数 (Separate params for Proactive)
+              // ⚡ Fetch Proactive Params
               let proactiveParams: any = {};
               try {
                 const paramsRes = await fetch(
@@ -220,48 +209,34 @@ GUIDELINES:
                 );
                 if (paramsRes.ok) {
                   proactiveParams = await paramsRes.json();
-                  console.log(
-                    "[ProactiveChat] ⚙️ Applying Proactive LLM Params:",
-                    proactiveParams
-                  );
                 }
               } catch (e) {
-                console.warn(
-                  "[ProactiveChat] Failed to fetch proactive params, using defaults"
-                );
+                console.warn("[ProactiveChat] Failed to fetch params", e);
               }
 
-              // Use Ref to call handleSend
-              await onSendRef.current(instruction, {
-                temperature: proactiveParams.temperature,
-                topP: proactiveParams.top_p,
-                presencePenalty: proactiveParams.presence_penalty,
-                frequencyPenalty: proactiveParams.frequency_penalty,
-              });
+              // ⚡ Execution
+              try {
+                await onSendRef.current(instruction, {
+                  temperature: proactiveParams.temperature,
+                  topP: proactiveParams.top_p,
+                  presencePenalty: proactiveParams.presence_penalty,
+                  frequencyPenalty: proactiveParams.frequency_penalty,
+                });
+              } finally {
+                isProactiveProcessing.current = false;
+              }
 
-              // 释放锁（在 handleSend 完成后）
-              isProactiveProcessing.current = false;
+              return;
             }
           }
         } catch (e) {
-          // silent fail for network issues
-          isProactiveProcessing.current = false;
+          // console.error("[ProactiveChat] Sync failed", e);
         }
       }
     };
 
-    // ⚡ Run immediately on mount/change
-    syncState();
-
-    const interval = setInterval(syncState, 5000); // Check every 5 seconds
-    return () => clearInterval(interval);
-  }, [
-    activeCharacterId,
-    isProcessing,
-    isStreaming,
-    characters,
-    conversationHistory,
-    userName,
-    backendUrl,
-  ]); // Added dependencies for safety
+    // Poll every 1s for Signals
+    const timer = setInterval(syncState, 1000);
+    return () => clearInterval(timer);
+  }, [activeCharacterId, isProcessing, isStreaming, backendUrl, onSend]);
 };

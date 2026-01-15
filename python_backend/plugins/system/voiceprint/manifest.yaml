@@ -1,0 +1,13 @@
+id: "system.voiceprint"
+version: "1.0.0"
+name: "Voiceprint Security"
+description: "Biometric authentication using voiceprints."
+entrypoint: "manager:VoiceprintManager"
+category: "system"
+tags: ["security", "auth"]
+author: "Lumina Core Team"
+dependencies: []
+permissions:
+  - "filesystem.read"
+  - "filesystem.write"
+  # - "audio.capture" # Future permission

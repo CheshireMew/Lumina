@@ -1,7 +1,7 @@
 import requests
 from requests.auth import HTTPBasicAuth
 
-def query_sql(sql, endpoint="http://localhost:8000", ns="test", db="test"):
+def query_sql(sql, endpoint="http://localhost:8001", ns="test", db="test"):
     url = f"{endpoint}/sql"
     headers = {
         "Accept": "application/json",
@@ -17,7 +17,7 @@ def query_sql(sql, endpoint="http://localhost:8000", ns="test", db="test"):
         print(f"Exception: {e}")
     return None
 
-def scan_all(endpoint="http://localhost:8000"):
+def scan_all(endpoint="http://localhost:8001"):
     print(f"🔍 Scanning SurrealDB at {endpoint}...")
     
     # 1. Get Namespaces

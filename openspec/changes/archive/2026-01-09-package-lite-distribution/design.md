@@ -6,7 +6,7 @@
 
 ### 1. The "Sidecar" Pattern
 
-Electron (Main Process) 充当 Process Manager，不再依赖用户系统中的 Python 环境。
+Electron (Main Process) 充当 Process Manager,不再依赖用户系统中的 Python 环境。
 
 - **Before (Dev)**:
   `Electron` -> `spawn("python", ["main.py"])` -> `System Python Environment`
@@ -16,7 +16,7 @@ Electron (Main Process) 充当 Process Manager，不再依赖用户系统中的 
 
 ### 2. Dependency Management Strategy
 
-为了实现 <500MB 的目标，必须激进地剪裁依赖。
+为了实现 <500MB 的目标,必须激进地剪裁依赖。
 
 | 组件    | Dev 依赖                      | Prod (Lite) 策略                                                      |
 | :------ | :---------------------------- | :-------------------------------------------------------------------- |
@@ -43,6 +43,6 @@ Electron (Main Process) 充当 Process Manager，不再依赖用户系统中的 
 ## Risks & Mitigations
 
 1.  **Anti-Virus False Positives**: PyInstaller 打包的 exe 常被误报。
-    - _Mitigation_: 使用干净环境编译，提交给 Microsoft 分析，或提示用户添加白名单。
+    - _Mitigation_: 使用干净环境编译,提交给 Microsoft 分析,或提示用户添加白名单。
 2.  **Path Resolution**: `_MEIPASS` 临时目录路径问题。
-    - _Mitigation_: 在 Python 后端代码中添加 `sys.frozen` 检测逻辑，动态修正资源路径。
+    - _Mitigation_: 在 Python 后端代码中添加 `sys.frozen` 检测逻辑,动态修正资源路径。

@@ -2,7 +2,7 @@
 
 ## 📊 项目概览
 
-本报告深入分析了 example 目录下 12 个 AI 伴侣项目的长期记忆实现，总结各自的架构特点、技术选型和优缺点。
+本报告深入分析了 example 目录下 12 个 AI 伴侣项目的长期记忆实现,总结各自的架构特点、技术选型和优缺点。
 
 ---
 
@@ -29,11 +29,11 @@ settings_manager = ImportantSettingsManager()
 
 **核心特性**:
 
-1. **LLM 智能压缩**: 使用 GPT/Qwen 总结对话，保留关键信息
-2. **双层时间存储**: SQLite 存储原始+压缩对话，可按时间范围查询
+1. **LLM 智能压缩**: 使用 GPT/Qwen 总结对话,保留关键信息
+2. **双层时间存储**: SQLite 存储原始+压缩对话,可按时间范围查询
 3. **自动审核机制**: `review_history()` 检测矛盾、冗余、复读
 4. **取消机制**: asyncio.Event 控制长时间 LLM 调用
-5. **配置热重载**: 支持新角色动态创建，无需重启
+5. **配置热重载**: 支持新角色动态创建,无需重启
 
 **技术亮点**:
 
@@ -42,8 +42,8 @@ settings_manager = ImportantSettingsManager()
 - **文件路径动态**: 角色不存在时自动创建默认路径
 
 **优点**:
-✅ 架构最完整，四层记忆互补  
-✅ 智能压缩节省 token，保留摘要  
+✅ 架构最完整,四层记忆互补  
+✅ 智能压缩节省 token,保留摘要  
 ✅ 自动纠错能力强  
 ✅ 支持多角色隔离存储
 
@@ -53,7 +53,7 @@ settings_manager = ImportantSettingsManager()
 ❌ Semantic 模块当前不可用  
 ❌ 审核功能消耗大量 token
 
-**适用场景**: **长期陪伴型 AI 伴侣，需要长期记忆一致性**
+**适用场景**: **长期陪伴型 AI 伴侣,需要长期记忆一致性**
 
 ---
 
@@ -78,13 +78,13 @@ memorys/2025-01-01.yaml:
 
 **核心特性**:
 
-1. **纯文件存储**: 无需数据库，易于备份和迁移
+1. **纯文件存储**: 无需数据库,易于备份和迁移
 2. **手动编辑**: Web 界面直接修改/删除记忆
 3. **关键词标签**: `text_tag` 用于快速检索
 4. **时间索引**: 按日期文件夹组织
 
 **优点**:
-✅ 极简设计，无数据库依赖  
+✅ 极简设计,无数据库依赖  
 ✅ 人工可读可编辑 (YAML)  
 ✅ 迁移成本低  
 ✅ Web UI 友好
@@ -95,7 +95,7 @@ memorys/2025-01-01.yaml:
 ❌ 无自动压缩/总结  
 ❌ 搜索只支持关键词匹配
 
-**适用场景**: **小规模项目，需要人工管理记忆**
+**适用场景**: **小规模项目,需要人工管理记忆**
 
 ---
 
@@ -124,7 +124,7 @@ query_graph_by_keywords(["小明"])
 
 1. **结构化知识**: 将对话转为 (实体-关系-实体)
 2. **图查询**: 利用 Neo4j 多跳关系推理
-3. **并发提取**: TaskManager 队列化处理，避免阻塞
+3. **并发提取**: TaskManager 队列化处理,避免阻塞
 4. **回退机制**: Neo4j 连接失败时使用文件存储
 
 **技术亮点**:
@@ -145,7 +145,7 @@ query_graph_by_keywords(["小明"])
 ❌ LLM 提取准确率依赖模型  
 ❌ 小型对话效果不明显
 
-**适用场景**: **知识密集型对话，需要复杂推理**
+**适用场景**: **知识密集型对话,需要复杂推理**
 
 ---
 
@@ -177,7 +177,7 @@ class RAGMemory:
 
 **核心特性**:
 
-1. **NetworkX 图**: 轻量级图存储，无需 Neo4j
+1. **NetworkX 图**: 轻量级图存储,无需 Neo4j
 2. **三层检索**: 实体 + 关系 + 时间记忆
 3. **余弦相似度**: 使用 embedding 计算相关性
 4. **分支管理**: 支持对话树多分支
@@ -200,7 +200,7 @@ class RAGMemory:
 ❌ 无事务保证  
 ❌ Embedding 需外部调用
 
-**适用场景**: **中小规模项目，需要关系推理但不想部署数据库**
+**适用场景**: **中小规模项目,需要关系推理但不想部署数据库**
 
 ---
 
@@ -238,7 +238,7 @@ similarities = cosine_similarity(question_embedding, knowledge_embeddings)
 ❌ 无时间索引  
 ❌ 功能过于简单
 
-**适用场景**: **FAQ/文档问答，静态知识库**
+**适用场景**: **FAQ/文档问答,静态知识库**
 
 ---
 
@@ -273,7 +273,7 @@ class ConversationHistory:
 **核特性**:
 
 1. **自动归档**: 超过 20 轮自动存储前 10 轮
-2. **ChromaDB 持久化**: SQLite 后端，轻量级
+2. **ChromaDB 持久化**: SQLite 后端,轻量级
 3. **语义检索**: query_texts 自动匹配相关记忆
 
 **优点**:
@@ -288,13 +288,13 @@ class ConversationHistory:
 ❌ 单 collection 无分类  
 ❌ 检索策略固定
 
-**适用场景**: **需要快速语义检索，不想复杂架构**
+**适用场景**: **需要快速语义检索,不想复杂架构**
 
 ---
 
 ### 7. **ZcChat** - Qt 桌面应用 (无明显记忆模块) ⭐⭐
 
-**说明**: 主要是 Qt GUI 应用，未发现结构化记忆系统，可能仅保存对话历史到本地文件。
+**说明**: 主要是 Qt GUI 应用,未发现结构化记忆系统,可能仅保存对话历史到本地文件。
 
 ---
 
@@ -302,8 +302,8 @@ class ConversationHistory:
 
 | 项目                    | 记忆类型   | 存储方案 | 特点                          |
 | ----------------------- | ---------- | -------- | ----------------------------- |
-| **Lunar-Astral-Agents** | 未明显实现 | -        | 多 Agent 框架，记忆模块不明显 |
-| **ai_virtual_mate_web** | 未明显实现 | -        | Web 端，可能使用 session      |
+| **Lunar-Astral-Agents** | 未明显实现 | -        | 多 Agent 框架,记忆模块不明显 |
+| **ai_virtual_mate_web** | 未明显实现 | -        | Web 端,可能使用 session      |
 | **deepseek-Lunasia**    | 未明显实现 | -        | 需进一步检查                  |
 | **super-agent-party**   | 未明显实现 | -        | Party 协作框架                |
 | **ten-framework**       | 未明显实现 | -        | 框架性质项目                  |
@@ -405,7 +405,7 @@ class TimeIndexedMemory:
 async def review_recent_memory(self):
     \"\"\"检测矛盾、复读、冗余\"\"\"
     history = self.get_recent_history()
-    prompt = f"审核以下对话，找出矛盾/冗余: {history}"
+    prompt = f"审核以下对话,找出矛盾/冗余: {history}"
     corrections = await llm.ainvoke(prompt)
     self.apply_corrections(corrections)
 ```
@@ -414,7 +414,7 @@ async def review_recent_memory(self):
 
 1. **保留 Qdrant** → 比 Chroma 更适合生产环境
 2. **添加 SQLite 时间层** → 低成本长期存储
-3. **LLM 可选压缩** → 配置开关，避免强制消耗
+3. **LLM 可选压缩** → 配置开关,避免强制消耗
 4. **多 character 隔离** → 参考 N.E.K.O 的 per-character 路径
 5. **异步任务队列** → 参考 NagaAgent 的 TaskManager
 
@@ -438,7 +438,7 @@ async def review_recent_memory(self):
 ### 后续优化
 
 - [ ] Web UI 记忆浏览器 (参考 MoeChat 的 Flask UI)
-- [ ] 知识图谱实验 (可选，视需求)
+- [ ] 知识图谱实验 (可选,视需求)
 - [ ] 记忆导入导出功能
 ```
 
@@ -473,7 +473,7 @@ async def review_recent_memory(self):
 
 ## ⚠️ 避坑指南
 
-1. **不要过度依赖 LLM**: 压缩/审核应可选，避免成本失控
+1. **不要过度依赖 LLM**: 压缩/审核应可选,避免成本失控
 2. **不要过早引入 Neo4j**: 小规模用 NetworkX/SQLite 足够
 3. **不要忽视备份**: YAML/SQLite 比纯内存安全
 4. **不要阻塞主流程**: 压缩/提取必须异步
@@ -496,7 +496,7 @@ async def review_recent_memory(self):
 
 ## 🎓 结论
 
-**N.E.K.O 的四层架构** 是目前最完整和实用的设计，建议**Lumina 在 LiteMemory 基础上参考其思路**：
+**N.E.K.O 的四层架构** 是目前最完整和实用的设计,建议**Lumina 在 LiteMemory 基础上参考其思路**:
 
 1. ✅ **保留 Qdrant 层** (LiteMemory 已有)
 2. 🆕 **添加 SQLite 时间索引层**

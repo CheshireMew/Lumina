@@ -12,6 +12,8 @@ interface ServiceConfig {
   args?: string[];
   process?: ChildProcess | null;
   ready?: boolean;
+  restartCount?: number;
+  lastExitTime?: number;
 }
 
 /**
@@ -22,16 +24,16 @@ export class PythonSTTService {
   private services: ServiceConfig[] = [
     {
       name: "surreal",
-      port: 8000,
+      port: 0, // [Phase 19] Dynamic Load
       type: "binary",
-      // Args determined at runtime for paths
     },
-    { name: "memory", port: 8010, type: "python" },
-    { name: "stt", port: 8765, type: "python" },
-    { name: "tts", port: 8766, type: "python" },
+    { name: "memory", port: 0, type: "python" }, // Will load 8010
+    { name: "stt", port: 0, type: "python" }, // Will load 8765
+    { name: "tts", port: 0, type: "python" }, // Will load 8766
   ];
 
   private host: string = "127.0.0.1";
+  private isShuttingDown: boolean = false;
 
   /**
    * Start all backend services
@@ -91,8 +93,8 @@ export class PythonSTTService {
           "--pass",
           "root",
           "--bind",
-          "127.0.0.1:8000",
-          "--allow-all",
+          "127.0.0.1:8001",
+          // "--allow-all", // REMOVED for Security: Enforce auth
           `file:${dbPath}`,
         ];
         cwd = path.dirname(executable); // bin
@@ -126,7 +128,7 @@ export class PythonSTTService {
         // Current policy: "Detached Mode" is preferred.
         // If checkHealth failed above, it means it's NOT running.
         console.warn(
-          '[BackendManager] SurrealDB is NOT running on port 8000. Please start it manually: "surreal start ..."'
+          '[BackendManager] SurrealDB is NOT running on port 8001. Please start it manually: "surreal start ..."'
         );
         // We interrupt startup because app needs it?
         // Or we try to spawn 'surreal' from PATH?
@@ -143,8 +145,8 @@ export class PythonSTTService {
           "--pass",
           "root",
           "--bind",
-          "127.0.0.1:8000",
-          "--allow-all",
+          "127.0.0.1:8001",
+          // "--allow-all",
           `file:${dbPath}`,
         ];
         cwd = process.cwd();
@@ -177,7 +179,12 @@ export class PythonSTTService {
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
       windowsHide: true,
-      env: { ...process.env, LITE_MODE: app.isPackaged ? "true" : "false" },
+      env: {
+        ...process.env,
+        LITE_MODE: app.isPackaged ? "true" : "false",
+        LUMINA_DATA_PATH: app.getPath("userData"),
+        LUMINA_ENV: app.isPackaged ? "production" : "development",
+      },
     });
 
     service.process = child;
@@ -205,6 +212,38 @@ export class PythonSTTService {
       console.log(`[${service.name}] Process exited with code ${code}`);
       service.process = null;
       service.ready = false;
+
+      if (this.isShuttingDown) return;
+
+      if (code !== 0 && code !== null) {
+        const now = Date.now();
+        // Reset count if last exit was long ago (stable for > 60s)
+        if (service.lastExitTime && now - service.lastExitTime > 60000) {
+          service.restartCount = 0;
+        }
+
+        service.restartCount = (service.restartCount || 0) + 1;
+        service.lastExitTime = now;
+
+        if (service.restartCount > 5) {
+          console.error(
+            `[${service.name}] 🚨 Crashing too frequently (${service.restartCount} times in <60s). Giving up.`
+          );
+          return;
+        }
+
+        const delay = Math.min(1000 * Math.pow(2, service.restartCount), 30000);
+        console.log(
+          `[${service.name}] 🔄 Auto-restarting in ${delay}ms... (Attempt ${service.restartCount})`
+        );
+
+        setTimeout(() => {
+          if (!this.isShuttingDown)
+            this.startService(service).catch((e) =>
+              console.error(`[${service.name}] Restart failed:`, e)
+            );
+        }, delay);
+      }
     });
 
     // Wait for ready
@@ -213,9 +252,7 @@ export class PythonSTTService {
 
   private async checkServiceHealth(service: ServiceConfig): Promise<boolean> {
     try {
-      const url = `http://${this.host}:${service.port}/${
-        service.name === "memory" ? "" : "health"
-      }`;
+      const url = `http://${this.host}:${service.port}/health`;
       await axios.get(url, { timeout: 3000, validateStatus: () => true });
       return true;
     } catch (error) {
@@ -240,6 +277,7 @@ export class PythonSTTService {
   }
 
   public stop(): void {
+    this.isShuttingDown = true;
     console.log("[BackendManager] Stopping all services...");
     this.services.forEach((service) => {
       if (service.process) {
@@ -260,6 +298,14 @@ export class PythonSTTService {
     return `ws://${this.host}:${port}/ws/stt`;
   }
 
+  public getServicePorts(): Record<string, number> {
+    const ports: Record<string, number> = {};
+    this.services.forEach((s) => {
+      ports[s.name] = s.port;
+    });
+    return ports;
+  }
+
   private loadPortsConfig() {
     try {
       // In Dev, config is at config/ports.json relative to CWD
@@ -267,9 +313,32 @@ export class PythonSTTService {
       let configPath = path.join(process.cwd(), "config", "ports.json");
 
       if (!fs.existsSync(configPath) && app.isPackaged) {
+        // If packaged and not in CWD, check resources
+        // But strict config means we should look in UserData if we want it writable,
+        // or resources if read-only. Ports usually static in prod unless multiple instances.
+        // Let's stick to reading from resources/config if packaged.
         configPath = path.join(process.resourcesPath, "config", "ports.json");
       }
 
+      // [Phase 19] Single Source of Truth: Auto-generate if missing
+      if (!fs.existsSync(configPath)) {
+        console.log(
+          "[BackendManager] ports.json not found. Generating defaults..."
+        );
+        const defaults = {
+          surreal_port: 8001,
+          memory_port: 8010,
+          stt_port: 8765,
+          tts_port: 8766,
+        };
+        // Ensure dir exists
+        const dir = path.dirname(configPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+        fs.writeFileSync(configPath, JSON.stringify(defaults, null, 2));
+      }
+
+      // Load strictly
       if (fs.existsSync(configPath)) {
         const data = fs.readFileSync(configPath, "utf-8");
         const ports = JSON.parse(data);
@@ -285,14 +354,13 @@ export class PythonSTTService {
         if (ports.surreal_port) updatePort("surreal", ports.surreal_port);
 
         console.log("[BackendManager] Loaded dynamic ports:", ports);
-      } else {
-        console.log(
-          "[BackendManager] Config file not found, using defaults:",
-          configPath
-        );
       }
     } catch (e) {
-      console.warn("[BackendManager] Failed to load ports.json:", e);
+      console.error("[BackendManager] Failed to load/generate ports.json:", e);
+      // Fallback/Crash? For now log error.
+      // If ports are 0, services will fail to start or check health correctly.
+      // We can fallback to hardcoded safety net here if critical?
+      // But user asked for Strict.
     }
   }
 }

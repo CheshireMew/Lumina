@@ -1,6 +1,7 @@
 """
 Consolidation Batch Manager
-管理检索-整合周期的记忆 ID 跟踪
+Consolidation Batch Manager
+Manage retrieval/consolidation cycle IDs
 """
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -14,27 +15,27 @@ logger = logging.getLogger("ConsolidationBatch")
 @dataclass
 class ConsolidationBatch:
     """
-    跟踪一次检索-整合周期的记忆 ID
+    Track IDs for one retrieval/consolidation cycle
     
-    生命周期:
-    1. 创建时：记录 retrieved_ids（检索命中）
-    2. 发送 LLM 时：记录 sent_to_llm_ids（实际发送）
-    3. 整合完成：删除/归档 sent_to_llm_ids 中的旧记忆
+    Lifecycle:
+    1. Created: Record retrieved_ids (Search hits)
+    2. Sent to LLM: Record sent_to_llm_ids
+    3. Completed: Delete/Archive old memories
     """
     
     batch_id: str = field(default_factory=lambda: f"batch_{uuid.uuid4().hex[:8]}")
     character_id: str = ""
     
-    # 阶段 1：检索命中的记忆 ID
+    # Stage 1: Retrieved IDs
     retrieved_ids: List[str] = field(default_factory=list)
     
-    # 阶段 2：实际发送给 LLM 的记忆 ID（用于后续删除/归档）
+    # Stage 2: Sent to LLM IDs
     sent_to_llm_ids: List[str] = field(default_factory=list)
     
-    # 时间戳
+    # Timestamp
     created_at: datetime = field(default_factory=datetime.now)
     
-    # 状态：pending / processing / completed / failed
+    # Status: pending / processing / completed / failed
     status: str = "pending"
     
     def __repr__(self):
@@ -43,12 +44,12 @@ class ConsolidationBatch:
 
 class BatchManager:
     """
-    管理所有待处理的整合批次
+    Manage all pending consolidation batches
     
-    使用场景:
-    1. search_hybrid() 检索后创建批次
-    2. Consolidator 处理批次中的记忆
-    3. 整合完成后清理批次
+    Usage:
+    1. search_hybrid() creates batch
+    2. Consolidator processes batch
+    3. Cleanup on completion
     """
     
     def __init__(self):
@@ -57,14 +58,14 @@ class BatchManager:
     
     def create_batch(self, character_id: str, retrieved_ids: List[str]) -> ConsolidationBatch:
         """
-        创建新的整合批次
+        Create new batch
         
         Args:
-            character_id: 角色 ID
-            retrieved_ids: 检索命中的记忆 ID 列表
+            character_id: Character ID
+            retrieved_ids: List of retrieved IDs
             
         Returns:
-            新创建的 ConsolidationBatch
+            Created ConsolidationBatch
         """
         batch = ConsolidationBatch(
             character_id=character_id.lower(),
@@ -76,11 +77,11 @@ class BatchManager:
     
     def mark_sent_to_llm(self, batch_id: str, sent_ids: List[str]):
         """
-        记录发送给 LLM 的记忆 ID
+        Record IDs sent to LLM
         
         Args:
-            batch_id: 批次 ID
-            sent_ids: 实际发送给 LLM 的记忆 ID 列表
+            batch_id: 鎵规 ID
+            sent_ids: 瀹為檯鍙戦€佺粰 LLM 鐨勮蹇?ID 鍒楄〃
         """
         if batch_id in self.pending_batches:
             self.pending_batches[batch_id].sent_to_llm_ids = sent_ids
@@ -88,18 +89,18 @@ class BatchManager:
             logger.debug(f"[BatchManager] Batch {batch_id} marked as processing with {len(sent_ids)} sent IDs")
     
     def get_batch(self, batch_id: str) -> Optional[ConsolidationBatch]:
-        """获取指定批次"""
+        """Get specific batch"""
         return self.pending_batches.get(batch_id)
     
     def get_pending_batches(self, character_id: str) -> List[ConsolidationBatch]:
         """
-        获取某角色的所有待处理批次
+        Get all pending batches for character
         
         Args:
-            character_id: 角色 ID
+            character_id: Character ID
             
         Returns:
-            待处理批次列表（按创建时间排序）
+            List of pending batches (sorted)
         """
         batches = [
             b for b in self.pending_batches.values() 
@@ -108,16 +109,16 @@ class BatchManager:
         return sorted(batches, key=lambda x: x.created_at)
     
     def get_oldest_pending_batch(self, character_id: str) -> Optional[ConsolidationBatch]:
-        """获取某角色最旧的待处理批次"""
+        """Get oldest pending batch"""
         batches = self.get_pending_batches(character_id)
         return batches[0] if batches else None
     
     def complete_batch(self, batch_id: str):
         """
-        标记批次为完成并移除
+        Mark batch as complete and remove
         
         Args:
-            batch_id: 批次 ID
+            batch_id: 鎵规 ID
         """
         if batch_id in self.pending_batches:
             batch = self.pending_batches.pop(batch_id)
@@ -126,13 +127,13 @@ class BatchManager:
         return None
     
     def fail_batch(self, batch_id: str, reason: str = ""):
-        """标记批次失败"""
+        """Mark batch as failed"""
         if batch_id in self.pending_batches:
             self.pending_batches[batch_id].status = "failed"
             logger.warning(f"[BatchManager] Batch {batch_id} failed: {reason}")
     
     def get_stats(self) -> Dict:
-        """获取批次统计信息"""
+        """Get batch statistics"""
         stats = {
             "total_batches": len(self.pending_batches),
             "by_status": {},

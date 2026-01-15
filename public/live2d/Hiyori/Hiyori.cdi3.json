@@ -24,22 +24,22 @@
 		{
 			"Id": "ParamEyeLOpen",
 			"GroupId": "ParamGroupEyes",
-			"Name": "左目　開閉"
+			"Name": "左目 開閉"
 		},
 		{
 			"Id": "ParamEyeLSmile",
 			"GroupId": "ParamGroupEyes",
-			"Name": "左目　笑顔"
+			"Name": "左目 笑顔"
 		},
 		{
 			"Id": "ParamEyeROpen",
 			"GroupId": "ParamGroupEyes",
-			"Name": "右目　開閉"
+			"Name": "右目 開閉"
 		},
 		{
 			"Id": "ParamEyeRSmile",
 			"GroupId": "ParamGroupEyes",
-			"Name": "右目　笑顔"
+			"Name": "右目 笑顔"
 		},
 		{
 			"Id": "ParamEyeBallX",
@@ -54,67 +54,67 @@
 		{
 			"Id": "ParamBrowLY",
 			"GroupId": "ParamGroupBrows",
-			"Name": "左眉　上下"
+			"Name": "左眉 上下"
 		},
 		{
 			"Id": "ParamBrowRY",
 			"GroupId": "ParamGroupBrows",
-			"Name": "右眉　上下"
+			"Name": "右眉 上下"
 		},
 		{
 			"Id": "ParamBrowLX",
 			"GroupId": "ParamGroupBrows",
-			"Name": "左眉　左右"
+			"Name": "左眉 左右"
 		},
 		{
 			"Id": "ParamBrowRX",
 			"GroupId": "ParamGroupBrows",
-			"Name": "右眉　左右"
+			"Name": "右眉 左右"
 		},
 		{
 			"Id": "ParamBrowLAngle",
 			"GroupId": "ParamGroupBrows",
-			"Name": "左眉　角度"
+			"Name": "左眉 角度"
 		},
 		{
 			"Id": "ParamBrowRAngle",
 			"GroupId": "ParamGroupBrows",
-			"Name": "右眉　角度"
+			"Name": "右眉 角度"
 		},
 		{
 			"Id": "ParamBrowLForm",
 			"GroupId": "ParamGroupBrows",
-			"Name": "左眉　変形"
+			"Name": "左眉 変形"
 		},
 		{
 			"Id": "ParamBrowRForm",
 			"GroupId": "ParamGroupBrows",
-			"Name": "右眉　変形"
+			"Name": "右眉 変形"
 		},
 		{
 			"Id": "ParamMouthForm",
 			"GroupId": "ParamGroupMouth",
-			"Name": "口　変形"
+			"Name": "口 変形"
 		},
 		{
 			"Id": "ParamMouthOpenY",
 			"GroupId": "ParamGroupMouth",
-			"Name": "口　開閉"
+			"Name": "口 開閉"
 		},
 		{
 			"Id": "ParamBodyAngleX",
 			"GroupId": "ParamGroupBody",
-			"Name": "体の回転　X"
+			"Name": "体の回転 X"
 		},
 		{
 			"Id": "ParamBodyAngleY",
 			"GroupId": "ParamGroupBody",
-			"Name": "体の回転　Y"
+			"Name": "体の回転 Y"
 		},
 		{
 			"Id": "ParamBodyAngleZ",
 			"GroupId": "ParamGroupBody",
-			"Name": "体の回転　Z"
+			"Name": "体の回転 Z"
 		},
 		{
 			"Id": "ParamBreath",
@@ -124,7 +124,7 @@
 		{
 			"Id": "ParamShoulder",
 			"GroupId": "ParamGroupBody",
-			"Name": "肩　すくみ"
+			"Name": "肩 すくみ"
 		},
 		{
 			"Id": "ParamLeg",
@@ -174,22 +174,22 @@
 		{
 			"Id": "ParamBustY",
 			"GroupId": "ParamGroupSway",
-			"Name": "胸　揺れ"
+			"Name": "胸 揺れ"
 		},
 		{
 			"Id": "ParamHairAhoge",
 			"GroupId": "ParamGroupSway",
-			"Name": "髪揺れ　アホ毛"
+			"Name": "髪揺れ アホ毛"
 		},
 		{
 			"Id": "ParamHairFront",
 			"GroupId": "ParamGroupSway",
-			"Name": "髪揺れ　前"
+			"Name": "髪揺れ 前"
 		},
 		{
 			"Id": "ParamHairBack",
 			"GroupId": "ParamGroupSway",
-			"Name": "髪揺れ　後"
+			"Name": "髪揺れ 後"
 		},
 		{
 			"Id": "ParamSideupRibbon",
@@ -396,22 +396,22 @@
 		{
 			"Id": "ParamGroup2",
 			"GroupId": "",
-			"Name": "揺れ　サイドアップ左"
+			"Name": "揺れ サイドアップ左"
 		},
 		{
 			"Id": "ParamGroup",
 			"GroupId": "",
-			"Name": "揺れ　サイドアップ右"
+			"Name": "揺れ サイドアップ右"
 		},
 		{
 			"Id": "ParamGroup4",
 			"GroupId": "",
-			"Name": "揺れ　前髪左"
+			"Name": "揺れ 前髪左"
 		},
 		{
 			"Id": "ParamGroup3",
 			"GroupId": "",
-			"Name": "揺れ　前髪右"
+			"Name": "揺れ 前髪右"
 		}
 	],
 	"Parts": [

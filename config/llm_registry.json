@@ -1,0 +1,70 @@
+{
+    "providers": {
+        "free_tier": {
+            "id": "free_tier",
+            "type": "pollinations",
+            "base_url": "",
+            "api_key": "none",
+            "models": [
+                "gpt-4o-mini",
+                "claude-3-haiku"
+            ],
+            "enabled": true
+        },
+        "custom_provider": {
+            "id": "custom_provider",
+            "type": "openai",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "",
+            "models": [],
+            "enabled": true
+        }
+    },
+    "routes": {
+        "chat": {
+            "feature": "chat",
+            "provider_id": "free_tier",
+            "model": "gpt-4o-mini",
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "presence_penalty": 0.0,
+            "frequency_penalty": 0.0
+        },
+        "memory": {
+            "feature": "memory",
+            "provider_id": "free_tier",
+            "model": "gpt-4o-mini",
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "presence_penalty": 0.0,
+            "frequency_penalty": 0.0
+        },
+        "dreaming": {
+            "feature": "dreaming",
+            "provider_id": "free_tier",
+            "model": "gpt-4o-mini",
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "presence_penalty": 0.0,
+            "frequency_penalty": 0.0
+        },
+        "evolution": {
+            "feature": "evolution",
+            "provider_id": "free_tier",
+            "model": "gpt-4o-mini",
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "presence_penalty": 0.0,
+            "frequency_penalty": 0.0
+        },
+        "proactive": {
+            "feature": "proactive",
+            "provider_id": "free_tier",
+            "model": "gpt-4o-mini",
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "presence_penalty": 0.0,
+            "frequency_penalty": 0.0
+        }
+    }
+}
