@@ -15,16 +15,9 @@ logger = logging.getLogger("FreeLLMRouter")
 from app_config import config as app_config
 from services.container import services
 
-# Search Skill Imports
-try:
-    from plugins.skills.brave_search import BraveSearch
-except ImportError:
-    BraveSearch = None
-
-try:
-    from plugins.skills.ddg_search import DuckDuckGoSearch
-except ImportError:
-    DuckDuckGoSearch = None
+# Search Imports removed. Uses dynamic lookup in handle_tool_call.
+BraveSearch = None
+DuckDuckGoSearch = None
 
 router = APIRouter(
     # prefix="/free-llm", # ⚙️ Disabled prefix to serve as default /v1 handler
@@ -75,29 +68,19 @@ WEB_SEARCH_TOOL = {
 async def handle_tool_call(tool_name: str, args: dict) -> str:
     """Execute tool and return string result"""
     if tool_name == "web_search":
-        provider = app_config.search.provider # "brave" or "duckduckgo"
-        logger.info(f"[UnifiedLLM] Web Search requested via provider: {provider}")
+        from services.container import services
+        provider_id = app_config.search.provider # "brave" or "duckduckgo"
         
-        # 1. Brave Search
-        if provider == "brave":
-            if not app_config.brave.api_key:
-                 return "Error: Brave Search is configured but BRAVE_API_KEY is missing."
-            if not BraveSearch:
-                 return "Error: BraveSearch plugin not loaded."
-            
-            searcher = BraveSearch(api_key=app_config.brave.api_key, max_results=3)
-            return await searcher.search(args.get("query", ""))
-            
-        # 2. DuckDuckGo (No Key)
-        elif provider == "duckduckgo":
-            if not DuckDuckGoSearch:
-                 return "Error: duckduckgo-search library not found. System cannot perform search."
-            
-            searcher = DuckDuckGoSearch(max_results=3)
-            return await searcher.search(args.get("query", ""))
-            
-        else:
-            return f"Error: Unknown search provider '{provider}' configured."
+        provider = services.get_search_provider(provider_id)
+        if not provider:
+             return f"Error: Search provider '{provider_id}' is not active or installed."
+
+        logger.info(f"[UnifiedLLM] Web Search requested via provider: {provider_id}")
+        
+        try:
+             return await provider.search(args.get("query", ""))
+        except Exception as e:
+             return f"Error executing search with {provider_id}: {e}"
     
     return f"Error: Unknown tool '{tool_name}'"
 
@@ -124,6 +107,19 @@ async def chat_completions(request: ChatCompletionRequest):
     """
     soul_client = _get_soul_client()
     
+    # [Security] Input Guardrails
+    from core.security.guardrails import InputGuard
+    
+    # Check User Permissions? (Checking headers first?)
+    # ...
+    
+    # Check Content
+    messages_dicts = [{"role": m.role, "content": m.content} for m in request.messages]
+    is_safe, reason = InputGuard.validate_messages(messages_dicts)
+    if not is_safe:
+        logger.warning(f"🛡️ Blocked Unsafe Request: {reason}")
+        raise HTTPException(status_code=400, detail=f"Content Policy Error: {reason}")
+
     # Update Heartbeat
     if soul_client:
         soul_client.update_last_interaction()

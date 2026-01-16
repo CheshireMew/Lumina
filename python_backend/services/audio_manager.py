@@ -417,7 +417,7 @@ class AudioManager:
             logger.info("Audio capture started.")
             
         except Exception as e:
-            logger.error(f"Start capture failed: {e}")
+            logger.error(f"Start capture failed: {e}", exc_info=True)
             self.is_running = False
             self.stream = None
             
@@ -438,7 +438,7 @@ class AudioManager:
                     self.is_running = True
                     logger.info("Switched to system default device.")
                 except Exception as e2:
-                    logger.error(f"Default device also failed: {e2}")
+                    logger.error(f"Default device also failed: {e2}", exc_info=True)
     
     def stop(self):
         """Stop Audio Capture"""
@@ -459,7 +459,7 @@ class AudioManager:
             
             logger.info("Audio capture stopped.")
         except Exception as e:
-            logger.error(f"Stop capture failed: {e}")
+            logger.error(f"Stop capture failed: {e}", exc_info=True)
     
     def get_status(self) -> Dict:
         """Get Current Status"""

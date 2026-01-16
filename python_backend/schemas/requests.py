@@ -18,7 +18,7 @@ class MessageModel(BaseModel):
 class ConfigRequest(BaseModel):
     """Memory Service Config Request"""
     base_url: str
-    api_key: str
+    api_key: Optional[str] = "sk-dummy-key"
     model: Optional[str] = "deepseek-chat"
     embedder: Optional[str] = "paraphrase-multilingual-MiniLM-L12-v2"
     character_id: str = "hiyori"
@@ -36,18 +36,13 @@ class ConfigRequest(BaseModel):
     def validate_base_url(cls, v):
         """Validate base_url format"""
         if not v:
-            raise ValueError('base_url cannot be empty')
-        if not v.startswith(('http://', 'https://')):
-            raise ValueError('base_url must start with http:// or https://')
-        return v.rstrip('/')
-    
-    @field_validator('api_key')
-    @classmethod
-    def validate_api_key(cls, v):
-        """Validate api_key length"""
-        if not v or len(v.strip()) < 8:
-            raise ValueError('api_key must be at least 8 characters')
-        return v.strip()
+            # Allow empty base_url if we want? No, let's keep it required for now, or relax if needed.
+            # But the error was API Key.
+            # If user selects Custom but leaves URL empty?
+            pass 
+        return v
+        
+    # Removed validate_api_key to allow free/local usage
 
 
 class AddMemoryRequest(BaseModel):

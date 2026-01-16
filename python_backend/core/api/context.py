@@ -36,45 +36,36 @@ class LuminaContext:
         else:
             self.config = None
         
-    @property
-    def container(self) -> Any:
-        """
-        [DEPRECATED] Access to the raw ServiceContainer.
-        Plugins using this should be migrated to use specific Context APIs.
-        """
-        logger.warning(
-            "Plugin is accessing raw 'context.container'. "
-            "This is deprecated and will be removed in Phase 29. "
-            "Please migrate to 'context.bus' or other safe APIs."
-        )
-        return self._container
+    # @property
+    # def container(self) -> Any:
+    #     """
+    #     [REMOVED] Access to raw ServiceContainer is removed in Phase 10.
+    #     """
+    #     raise AttributeError("context.container is Removed. Use context.bus or other APIs.")
 
     # --- Persistence API (Wraps SoulClient) ---
     # Plugins should use these methods instead of accessing soul_client directly
     
     def load_data(self, plugin_id: str) -> Dict:
         """Loads plugin-specific JSON data."""
-        if self._container.soul_client:
-             return self._container.soul_client.load_module_data(plugin_id)
+        if self.soul:
+             return self.soul.load_module_data(plugin_id)
         return {}
 
     def save_data(self, plugin_id: str, data: Dict):
         """Saves plugin-specific JSON data."""
-        if self._container.soul_client:
-             self._container.soul_client.save_module_data(plugin_id, data)
+        if self.soul:
+             self.soul.save_module_data(plugin_id, data)
 
     def get_data_dir(self, plugin_id: str) -> Optional[str]:
         """Returns Path to plugin data directory for binary assets."""
-        if self._container.soul_client:
-             return self._container.soul_client.get_module_data_dir(plugin_id)
+        if self.soul:
+             return self.soul.get_module_data_dir(plugin_id)
         return None
 
     def register_service(self, name: str, instance: Any):
         """
         Register a service via EventBus for plugin discovery.
-        Also maintains backward compatibility by setting on container.
-        
-        Example: context.register_service('heartbeat_service', self)
         """
         # Register on EventBus (Phase 30 standard)
         self.bus.register_service(name, instance)
@@ -85,7 +76,7 @@ class LuminaContext:
     @property
     def soul(self) -> Any:
         """Access to Soul Manager (Personality/State)."""
-        return getattr(self._container, "soul_client", None)
+        return getattr(self._container, "soul", None)
 
     @property
     def ticker(self) -> Any:
@@ -106,34 +97,19 @@ class LuminaContext:
         """Get a standard logger instance."""
         return logging.getLogger(name)
 
-    # --- Strict API Boundary (Phase 30) ---
-    # Only allow access to explicitly defined public APIs.
-    # This prevents plugins from depending on internal implementation details.
-    
-    # Whitelist of legacy attributes that are still allowed (for migration period)
-    _ALLOWED_LEGACY_ATTRS = frozenset({"gateway"})
+    # --- Strict API Boundary (Phase 10 Hardening) ---
     
     def __getattr__(self, name: str):
         """
         Strict attribute access control.
-        Only allows access to whitelisted legacy attributes.
         """
-        # Private attributes are never accessible
         if name.startswith("_"):
             raise AttributeError(f"Private attribute '{name}' is not accessible")
         
-        # Check whitelist for legacy access
-        if name in self._ALLOWED_LEGACY_ATTRS:
-            logger.warning(
-                f"Plugin accessing legacy attribute '{name}'. "
-                f"Please migrate to context.bus or other public APIs."
-            )
-            return getattr(self._container, name, None)
-        
-        # Deny access to non-public attributes
+        # Deny access to everything else
         raise AttributeError(
             f"'{name}' is not a public LuminaContext API. "
-            f"Available APIs: bus, soul, ticker, memory, llm_manager, config, "
+            f"Available: bus, soul, ticker, memory, llm_manager, config, "
             f"load_data(), save_data(), get_data_dir(), register_service(), get_logger()"
         )
 

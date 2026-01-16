@@ -1,0 +1,71 @@
+# Lumina Unified Configuration
+# This file is the Single Source of Truth for system settings.
+# Override values here instead of editing disparate JSON files.
+
+network:
+  host: "127.0.0.1"
+  memory_port: 8010
+  stt_port: 8765
+  tts_port: 8766
+  surreal_port: 8001
+  bind_localhost_only: true
+
+memory:
+  provider: "surreal"
+  url: "ws://127.0.0.1:8001/rpc"
+  namespace: "lumina"
+  database: "memory"
+  character_id: "hiyori"
+  # Credentials (override with env vars in production)
+  root_user: "root"
+  root_password: "root"
+  app_user: "lumina_app"
+  app_password: "lumina_secure_pass"
+
+llm:
+  model: "deepseek-chat"
+  base_url: "http://localhost:11434/v1"
+  api_key: ""
+
+audio:
+  device_name: null
+  enable_voiceprint_filter: false
+  voiceprint_threshold: 0.45
+  voiceprint_profile: "default"
+  fish_audio_api_url: "https://api.fish.audio/v1"
+  fish_audio_api_key: ""
+  # Legacy STT/TTS params often used here
+  api_key: ""
+  max_results: 5
+
+stt:
+  provider: "sense-voice"
+  model: "base"
+  device: "cuda"
+  compute_type: "float16"
+  language: "zh"
+
+tts:
+  provider: "edge-tts"
+  voice: "zh-CN-XiaoxiaoNeural"
+
+search:
+  provider: "brave"
+  enabled: true
+
+brave:
+  api_key: ""
+
+bilibili:
+  enabled: false
+  room_id: 21743919
+
+models:
+  embedding_model_name: "text-embedding-3-small"
+  stt_model_path: null
+  tts_model_path: null
+
+plugin_groups:
+  assignments: {}
+  custom_categories: {}
+  group_behaviors: {}

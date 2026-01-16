@@ -319,6 +319,24 @@ async def dream_on_idle(request: DreamRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/context/clear")
+async def clear_context(request: AddMemoryRequest):
+    """Clear Short-Term Context (Session History)"""
+    from services.session_manager import session_manager
+    try:
+        # Using AddMemoryRequest structure for convenience (user_id, character_id)
+        # Or should we define a specific request schema? 
+        # AddMemoryRequest has character_id.
+        cid = request.character_id or "default"
+        uid = request.user_id or "default_user"
+        
+        session_manager.clear_history(uid, cid)
+        print(f"[API] Context cleared for {uid}:{cid}")
+        return {"status": "success", "message": "Short-term context cleared"}
+    except Exception as e:
+        logger.error(f"Context Clear Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/all")
 async def get_all_memories(character_id: str = "hiyori"):
     """Get all memories (SurrealDB)"""

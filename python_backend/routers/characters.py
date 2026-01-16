@@ -2,14 +2,14 @@
 Character Management Router
 Includes: /characters, /characters/{id}/config, DELETE /characters/{id}
 
-Refactored: Removed inject_dependencies
+Refactored: Removes SoulManager dependency. Uses direct file operations for config management.
 """
 import os
 import json
 import shutil
 import logging
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any
 from fastapi import APIRouter, HTTPException
 
 logger = logging.getLogger("CharacterRouter")
@@ -17,9 +17,48 @@ logger = logging.getLogger("CharacterRouter")
 router = APIRouter(prefix="/characters", tags=["Characters"])
 
 
-def _get_soul_client():
+def _get_soul_service():
     from services.container import services
-    return services.soul_client
+    return services.soul
+
+
+def _load_char_config(character_id: str) -> Dict[str, Any]:
+    """Helper to load config directly from disk without SoulManager"""
+    try:
+        # Use relative path to python_backend
+        base_dir = Path(__file__).parent.parent / "characters" / character_id
+        config_path = base_dir / "config.json"
+        
+        if not config_path.exists():
+             raise FileNotFoundError(f"Config not found for {character_id}")
+             
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load config for {character_id}: {e}")
+        raise
+
+def _save_char_config(character_id: str, new_config: Dict[str, Any]):
+    """Helper to save config directly to disk"""
+    try:
+        base_dir = Path(__file__).parent.parent / "characters" / character_id
+        base_dir.mkdir(parents=True, exist_ok=True)
+        config_path = base_dir / "config.json"
+        
+        # Merge if exists
+        current_config = {}
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                current_config = json.load(f)
+        
+        current_config.update(new_config)
+        
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(current_config, f, indent=4, ensure_ascii=False)
+            
+    except Exception as e:
+        logger.error(f"Failed to save config for {character_id}: {e}")
+        raise
 
 
 @router.get("")
@@ -38,6 +77,11 @@ async def list_characters():
                         try:
                             with open(config_path, 'r', encoding='utf-8') as f:
                                 config = json.load(f)
+                                # Ensure ID is present
+                                if "id" not in config:
+                                    config["id"] = char_dir.name
+                                if "character_id" not in config:
+                                    config["character_id"] = char_dir.name
                                 characters.append(config)
                         except Exception as e:
                             logger.error(f"[API] Error loading character config for {char_dir.name}: {e}")
@@ -70,13 +114,12 @@ async def list_models():
 async def get_character_config(character_id: str):
     """Get character config"""
     try:
-        soul_client = _get_soul_client()
-        if soul_client and soul_client.character_id == character_id:
-             return soul_client.config
-
-        from soul_manager import SoulManager
-        soul = SoulManager(character_id)
-        return soul.config
+        # Try to use helper
+        config = _load_char_config(character_id)
+        return config
+    except FileNotFoundError:
+         # Fallback default?
+         return {"identity": {"name": character_id}}
     except Exception as e:
         logger.error(f"[API] Error getting character config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -85,26 +128,13 @@ async def get_character_config(character_id: str):
 @router.post("/{character_id}/config")
 async def update_character_config(character_id: str, config: dict):
     """Update character config"""
-    soul_client = _get_soul_client()
+    soul_service = _get_soul_service()
     try:
         logger.info(f"[API] update_character_config for: {character_id}")
         
-        from soul_manager import SoulManager
-        soul = SoulManager(character_id)
+        # Save to Disk
+        _save_char_config(character_id, config)
         
-        # Ensure directory exists
-        if not soul.base_dir.exists():
-            logger.info(f"[API] {character_id} directory missing, creating...")
-            soul.base_dir.mkdir(parents=True, exist_ok=True)
-            
-        soul.config.update(config)
-        soul.save_config()
-        
-        # Sync with global soul_client if it's the active character
-        if soul_client and soul_client.character_id == character_id:
-             soul_client.config.update(config)
-             logger.info(f"[API] Synced config to active soul_client")
-
         logger.info(f"[API] Config saved for {character_id}")
         return {"status": "ok", "character_id": character_id}
     except Exception as e:
@@ -112,6 +142,26 @@ async def update_character_config(character_id: str, config: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/{character_id}/activate")
+async def activate_character(character_id: str):
+    """Switch active character"""
+    soul_service = _get_soul_service()
+    try:
+        if not soul_service:
+            raise HTTPException(status_code=503, detail="Soul Service unavailable")
+            
+        soul_service.set_active_character(character_id)
+        return {
+            "status": "ok", 
+            "message": f"Switched to {character_id}",
+            "character_id": character_id
+        }
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Character not found")
+    except Exception as e:
+        logger.error(f"[API] Error switching character: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
 @router.delete("/{character_id}")
 async def delete_character(character_id: str):
     """Delete character"""

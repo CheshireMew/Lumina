@@ -1,21 +1,21 @@
 {
-  "character_id": "hiyori",
-  "name": "hiyori",
-  "display_name": "hiyori",
-  "description": "女朋友",
-  "system_prompt": "你是一个18岁的可爱大学生\n",
-  "live2d_model": "/live2d/Hiyori/Hiyori.model3.json",
-  "voice_config": {
-    "service": "edge-tts",
-    "voiceId": "zh-CN-XiaoyiNeural"
-  },
-  "heartbeat_enabled": true,
-  "proactive_threshold_minutes": 5,
-  "proactive_chat_enabled": false,
-  "galgame_mode_enabled": true,
-  "soul_evolution_enabled": true,
-  "bilibili": {
-    "enabled": false,
-    "room_id": 0
-  }
+    "character_id": "hiyori",
+    "name": "hiyori",
+    "display_name": "hiyori",
+    "description": "女朋友",
+    "system_prompt": "你是一个18岁的可爱大学生\n",
+    "live2d_model": "/live2d/Hiyori/Hiyori.model3.json",
+    "voice_config": {
+        "service": "edge-tts",
+        "voiceId": "zh-CN-XiaoyiNeural"
+    },
+    "heartbeat_enabled": true,
+    "proactive_threshold_minutes": 5,
+    "proactive_chat_enabled": false,
+    "galgame_mode_enabled": true,
+    "soul_evolution_enabled": true,
+    "bilibili": {
+        "enabled": false,
+        "room_id": 0
+    }
 }

@@ -24,12 +24,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
     return (
         <div style={{ position: 'absolute', top: 30, right: 30, display: 'flex', flexDirection: 'column', gap: 15, zIndex: 100 }}>
             <VTuberModeToggle />
-            <ToolbarButton 
-                onClick={onToggleChatMode}
-                color={chatMode === 'voice' ? 'rgba(255,107,107,0.2)' : 'rgba(76,175,80,0.2)'}
-                icon={chatMode === 'text' ? <Mic size={24} /> : <Keyboard size={24} />}
-                title={chatMode === 'text' ? 'Voice Mode' : 'Text Mode'}
-            />
+            {/* Voice Toggle moved to InputBox */}
             <ToolbarButton onClick={onOpenAvatarSelector} color="rgba(255, 193, 7, 0.2)" icon={<User size={24} />} title="Switch Avatar" />
             <ToolbarButton onClick={onOpenLLMSettings} color="rgba(76, 175, 80, 0.2)" icon={<Brain size={24} />} title="LLM Configuration" />
             <ToolbarButton onClick={onOpenSettings} color="rgba(33,150,243,0.2)" icon={<SettingsIcon size={24} />} title="Settings" />

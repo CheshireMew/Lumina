@@ -20,16 +20,29 @@ class PluginLoader:
         Import the module and instantiate the plugin class.
         Returns the INITIALIZED instance.
         """
-        if getattr(manifest, "isolation_mode", "local") == "process":
+        # 1. Headless Check (Resource/Driver Packs)
+        if not manifest.entrypoint or manifest.entrypoint.lower() == "none":
+            return None
+
+        # 2. Isolation Check
+        isolation_mode = getattr(manifest, "isolation_mode", "local")
+        if isolation_mode == "process":
             try:
                 from core.isolation.proxy import RemotePluginProxy
                 # Path needs to be string for pickling/compat
-                manifest_data = manifest.dict() if hasattr(manifest, 'dict') else vars(manifest)
-                return RemotePluginProxy(manifest_data, str(manifest.path) + "/manifest.yaml")
+                if hasattr(manifest, 'dict'):
+                     manifest_data = manifest.dict() 
+                else: 
+                     manifest_data = vars(manifest)
+                
+                # Create Proxy
+                instance = RemotePluginProxy(manifest_data)
+                return instance
             except Exception as e:
                 logger.error(f"Failed to create RemotePluginProxy for {manifest.id}: {e}")
                 return None
 
+        # 3. Local Load
         if not hasattr(manifest, 'path') or not manifest.path:
             logger.error(f"Manifest for {manifest.id} has no path.")
             return None
@@ -51,12 +64,23 @@ class PluginLoader:
             logger.error(f"Entry file missing for {manifest.id}: {entry_file}")
             return None
 
-        module_name = f"plugins.system.{manifest.id}"
+        # Determine correct module prefix based on file location
+        # If in 'extensions', verify path exists.
+        
+        safe_id = manifest.id.replace("system.", "").replace("extensions.", "") # Normalize
+        
+        if "extensions" in str(plugin_dir):
+             prefix = "plugins.extensions"
+        else:
+             prefix = "plugins.system"
+             
+        module_name = f"{prefix}.{safe_id}.{entry_file.stem}"
         
         try:
-            # 1. Add to sys.path if needed (optional if structure is standard)
-            # but usually good to ensure sub-imports work
-            sys.path.insert(0, str(plugin_dir))
+            # 1. Spec & Module
+            # ensure 'plugins' is in path (it is), so we don't need to add plugin_dir to sys.path
+            # If we add plugin_dir to sys.path, imports like 'import utils' work, but absolute imports 'plugins.system.x' might break if names collide.
+            # Local imports 'from . import x' rely on __package__.
             
             # 2. Spec & Module
             spec = importlib.util.spec_from_file_location(module_name, entry_file)
@@ -81,18 +105,33 @@ class PluginLoader:
                 return None
                 
             # 4. Instantiate (No DI here yet, usually container passed later or in init)
-            # Assuming BaseSystemPlugin __init__ takes manifest? or just empty?
-            # Existing specific code suggests it might be simple.
             # We'll instantiate and let the Manager handle DI injection if needed.
             instance = plugin_cls()
             instance.manifest = manifest 
-            instance.id = manifest.id # Ensure ID matches
+            
+            # Only set ID if valid (and not a property preventing set)
+            try:
+                if getattr(instance, 'id', None) != manifest.id:
+                     # Warn if mismatch, but don't force if it's read-only
+                     # logger.warning(f"Plugin ID mismatch: Instance says '{instance.id}', Manifest says '{manifest.id}'")
+                     # instance.id = manifest.id 
+                     pass
+            except AttributeError:
+                pass # Read-only property
             
             return instance
 
+        except SyntaxError as e:
+             logger.error(f"❌ Syntax Error in plugin {manifest.id} (File: {entry_file}): {e}")
+             return None
+        except ImportError as e:
+             logger.error(f"❌ Import Error in plugin {manifest.id}: {e}")
+             return None
+        except AttributeError as e:
+             logger.error(f"❌ Plugin Class Error in {manifest.id}: Missing BaseSystemPlugin subclass or attribute? ({e})")
+             return None
         except Exception as e:
-            logger.error(f"Failed to load plugin {manifest.id}: {e}", exc_info=True)
+            logger.critical(f"🔥 Unexpected Crash loading plugin {manifest.id}: {e}", exc_info=True)
             return None
         finally:
-            if str(plugin_dir) in sys.path:
-                sys.path.remove(str(plugin_dir))
+            pass

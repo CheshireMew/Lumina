@@ -30,10 +30,10 @@ class ChatService:
         Unified Chat Stream Logic.
         Assembles: System Prompt + RAG + History + User Message
         """
-        soul = services.soul_client
+        soul = services.soul
         if not soul:
-            logger.error("Soul Client not ready")
-            yield "System Error: Soul Client not initialized"
+            logger.error("Soul Service not ready")
+            yield "System Error: Soul Service not initialized"
             return
 
         # 1. Get Driver
@@ -53,7 +53,9 @@ class ChatService:
         # We need to construct the soul_state dict here if we want dynamic params.
         
         soul_state = None
-        if soul.config.get("soul_evolution_enabled", True):
+        # [Use load_character_config]
+        char_config = soul.load_character_config()
+        if char_config.get("soul_evolution_enabled", True):
              soul_state = {
                 "pad": soul.profile.get("personality", {}).get("pad_model", {}),
                 "energy": soul.profile.get("state", {}).get("energy_level", 100),

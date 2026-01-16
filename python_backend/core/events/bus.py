@@ -233,6 +233,29 @@ class EventBus:
         """Emit plugin unloaded event."""
         await self.emit("plugin.unloaded", {"id": plugin_id})
 
+    # --- Utilities ---
+    
+    def throttle(self, event_type: str, interval: float = 1.0):
+        """
+        Decorator/Helper to throttle event emission.
+        Usage:
+            @bus.throttle("status.update", 0.5)
+            async def send_status(data): ...
+        """
+        # Limiter logic implementation requires state tracking per event/source.
+        # Simple implementation: Return a wrapper that checks last emit time.
+        last_emit = {}
+        
+        def decorator(func):
+            async def wrapper(*args, **kwargs):
+                import time
+                now = time.time()
+                if now - last_emit.get(event_type, 0) >= interval:
+                    last_emit[event_type] = now
+                    return await func(*args, **kwargs)
+            return wrapper
+        return decorator
+
 
 # Global singleton (initialized in main.py)
 _bus_instance: Optional[EventBus] = None

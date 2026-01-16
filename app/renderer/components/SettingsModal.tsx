@@ -4,16 +4,14 @@ import { CharacterProfile } from '@core/llm/types';
 import { API_CONFIG } from '../config';
 import { ProvidersTab } from './Settings/ProvidersTab';
 import { VoiceTab } from './Settings/VoiceTab';
-import { CharactersTab } from './Settings/CharactersTab';
+import { Settings, Mic, Puzzle, X, Save, Layers, Image as ImageIcon, Monitor } from 'lucide-react';
+
 import { useLlmManager } from '../hooks/useLlmManager';
 import { useVoiceManager } from '../hooks/useVoiceManager';
 
 // ⚡ Dynamic Architecture
 import { usePluginManager } from '../hooks/usePluginManager';
 import { PluginConfigRenderer } from './Settings/PluginConfigRenderer';
-import { LLMEngineConfig } from './Settings/LLMEngineConfig';
-
-import { inputStyle, labelStyle, buttonStyle } from './Settings/styles';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -26,35 +24,39 @@ interface SettingsModalProps {
     onLive2DHighDpiChange?: (enabled: boolean) => void;
     onCharacterSwitch?: (characterId: string) => void;
     onThinkingModeChange?: (enabled: boolean) => void;
+    onBackgroundImageChange?: (url: string) => void;
     activeCharacterId: string;
+    initialTab?: Tab;
+    
+    // Voice Props
+    edgeVoices?: any[];
+    gptVoices?: any[];
+    activeTtsEngines?: string[];
+    ttsPlugins?: any[];
 }
 
-type Tab = 'general' | 'voice' | 'memory' | 'characters' | 'interaction';
+type Tab = 'general' | 'voice' | 'characters' | 'interaction';
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
     isOpen, onClose, onClearHistory, onContextWindowChange, onLLMSettingsChange, onCharactersUpdated, onUserNameUpdated, onLive2DHighDpiChange, onCharacterSwitch,
-    activeCharacterId, onThinkingModeChange
+    activeCharacterId, onThinkingModeChange, initialTab, onBackgroundImageChange,
+    edgeVoices = [], gptVoices = [], activeTtsEngines = [], ttsPlugins = []
 }) => {
-    const [activeTab, setActiveTab] = useState<Tab>('general');
+    const [activeTab, setActiveTab] = useState<Tab>(initialTab || 'general');
     
-    // Core Settings (Not yet Plugins)
+    // Core Settings
     const [userName, setUserName] = useState('Master');
     const [highDpiEnabled, setHighDpiEnabled] = useState(false);
     const [contextWindow, setContextWindow] = useState(15);
     const [historyLimit, setHistoryLimit] = useState(100);
-    const [overflowStrategy, setOverflowStrategy] = useState<'slide' | 'reset'>('slide');
+    const [overflowStrategy, setOverflowStrategy] = useState<'slide' | 'reset'>('reset');
+    const [backgroundImage, setBackgroundImage] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
-    // Legacy Character Management (Preserved for now)
-    const [characters, setCharacters] = useState<CharacterProfile[]>([]);
-    const [isLoadingCharacters, setIsLoadingCharacters] = useState(false);
-    const [availableModels, setAvailableModels] = useState<{name:string, path:string}[]>([]);
-    const [deletedCharIds, setDeletedCharIds] = useState<string[]>([]);
-
-    // ⚡ Hooks
+    // Hooks
     const { plugins, refreshPlugins, updateConfig, togglePlugin } = usePluginManager();
     const { refreshData: fetchLlmManagerData } = useLlmManager();
-    const { edgeVoices, gptVoices, activeTtsEngines, ttsPlugins } = useVoiceManager(isOpen);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // Initial Load
     useEffect(() => {
@@ -62,7 +64,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             refreshPlugins();
             fetchLlmManagerData();
             loadCoreSettings();
-            fetchCharacters();
         }
     }, [isOpen]);
 
@@ -73,256 +74,285 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         setContextWindow(await settings.get('contextWindow') || 15);
         setHistoryLimit(await settings.get('historyLimit') || 100);
         setOverflowStrategy(await settings.get('overflowStrategy') || 'slide');
-    };
-
-    const fetchCharacters = async () => {
-        setIsLoadingCharacters(true);
-        try {
-            // Models
-            let models: {name:string, path:string}[] = [];
-            try {
-                const mRes = await fetch(`${API_CONFIG.BASE_URL}/characters/models`);
-                if (mRes.ok) {
-                    const mData = await mRes.json();
-                    models = mData.models || [];
-                    setAvailableModels(models);
-                }
-            } catch (err) {}
-
-            // Characters
-            const response = await fetch(`${API_CONFIG.BASE_URL}/characters`);
-            if (response.ok) {
-                const { characters: backendChars } = await response.json();
-                const converted = backendChars.map((char: any) => {
-                    const modelDef = models.find(m => m.name === char.live2d_model);
-                    const realPath = modelDef ? modelDef.path : 
-                                     (char.live2d_model.includes('/') ? char.live2d_model : `/live2d/${char.live2d_model}/${char.live2d_model}.model3.json`);
-                    return {
-                        id: char.character_id, 
-                        name: char.name, 
-                        description: char.description,
-                        systemPrompt: char.system_prompt,
-                        modelPath: realPath,
-                        voiceConfig: char.voice_config,
-                        heartbeatEnabled: char.heartbeat_enabled ?? true,
-                        proactiveChatEnabled: char.proactive_chat_enabled ?? true,
-                        galgameModeEnabled: char.galgame_mode_enabled ?? true,
-                        soulEvolutionEnabled: char.soul_evolution_enabled ?? true,
-                        proactiveThresholdMinutes: char.proactive_threshold_minutes ?? 15,
-                        bilibili: char.bilibili || { enabled: false, roomId: 0 }
-                    };
-                });
-                
-                // Sort active first
-                const sorted = converted.sort((a: any, b: any) => a.id === activeCharacterId ? -1 : (b.id === activeCharacterId ? 1 : 0));
-                setCharacters(sorted);
-                setDeletedCharIds([]);
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsLoadingCharacters(false);
-        }
+        setBackgroundImage(await settings.get('backgroundImage') || '');
     };
 
     const handleSave = async () => {
         setIsSaving(true);
         const settings = window.settings;
         
-        // Save Core
         await settings.set('userName', userName);
         await settings.set('contextWindow', contextWindow);
         await settings.set('activeCharacterId', activeCharacterId);
         await settings.set('live2d_high_dpi', highDpiEnabled);
         await settings.set('historyLimit', historyLimit);
         await settings.set('overflowStrategy', overflowStrategy);
+        await settings.set('backgroundImage', backgroundImage);
 
-        // Sync Characters (Legacy Sync for Voice/Paths)
-        // Note: Interaction settings are now Global System Plugin settings, 
-        // BUT Characters still have local overrides in database.
-        // For now, we assume System Plugin Settings override character settings in logic, 
-        // OR we should continue to sync them?
-        // Current compromise: We sync characters as they are in the 'characters' state.
-        // Since 'Interaction' tab now updates System Plugins directly, it doesn't touch 'characters' state.
-        // Ideally, backend should prefer System Plugin setting if enabled.
-        await syncCharacters();
-
-        // Notify Parent
         if (onUserNameUpdated) onUserNameUpdated(userName);
-        if (onLive2DHighDpiChange) onLive2DHighDpiChange(highDpiEnabled);
-        if (onContextWindowChange) onContextWindowChange(contextWindow);
         
-        // Propagate legacy LLM settings if callback exists (dummies to satisfy interface)
-        if (onLLMSettingsChange) onLLMSettingsChange("", "", "dynamic", 0.7, false, historyLimit, overflowStrategy, 1.0, 0, 0);
-
         setIsSaving(false);
         onClose();
     };
 
-    const syncCharacters = async () => {
-        try {
-            const savePromises = characters.map(char => {
-                // We perform a "Safe Save" - preserving existing interaction flags which might be managed elsewhere
-                // Or we accept that CharactersTab updates them.
-                const payload = {
-                    character_id: char.id,
-                    name: char.name,
-                    live2d_model: char.modelPath,
-                    system_prompt: char.systemPrompt,
-                    description: char.description,
-                    voice_config: char.voiceConfig,
-                    // Pass legacy flags as-is
-                    heartbeat_enabled: char.heartbeatEnabled,
-                    proactive_chat_enabled: char.proactiveChatEnabled,
-                    galgame_mode_enabled: char.galgameModeEnabled,
-                    soul_evolution_enabled: char.soulEvolutionEnabled,
-                    proactive_threshold_minutes: char.proactiveThresholdMinutes,
-                    bilibili: char.bilibili
-                };
-                return fetch(`${API_CONFIG.BASE_URL}/characters/${char.id}/config`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-            });
-
-            const deletePromises = deletedCharIds.map(id => fetch(`${API_CONFIG.BASE_URL}/characters/${id}`, { method: 'DELETE' }));
-            await Promise.all([...savePromises, ...deletePromises]);
-            
-            // Reload heartbeat
-            try { await fetch(`${API_CONFIG.BASE_URL}/heartbeat/reload`, { method: 'POST' }); } catch {}
-            
-            if (onCharactersUpdated) onCharactersUpdated(characters, activeCharacterId);
-        } catch (e) {
-            console.error("Character sync failed", e);
-        }
-    };
-
-    const handleActivateCharacter = (id: string) => {
-        if (onCharacterSwitch) onCharacterSwitch(id);
-    };
-
-    const handleDeleteCharacter = (id: string) => {
-        if (characters.length <= 1) return alert("Must keep at least one character!");
-        if (confirm('Delete character?')) {
-            setDeletedCharIds([...deletedCharIds, id]);
-            const newChars = characters.filter(c => c.id !== id);
-            setCharacters(newChars);
-            if (activeCharacterId === id && newChars.length > 0) {
-                if (onCharacterSwitch) onCharacterSwitch(newChars[0].id);
-            }
-        }
-    };
-
     if (!isOpen) return null;
+
+    // --- STYLES ---
+    const glassPanelStyle: React.CSSProperties = {
+        backgroundColor: 'rgba(255, 255, 255, 0.75)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '24px',
+        border: '1px solid rgba(255, 255, 255, 0.6)',
+        boxShadow: '0 20px 50px rgba(0,0,0,0.1), inset 0 0 20px rgba(255,255,255,0.5)',
+        width: '900px',
+        height: '700px',
+        display: 'flex',
+        overflow: 'hidden',
+        color: '#4B5563',
+        transform: 'translateY(0)',
+        animation: 'slideUp 0.3s ease-out'
+    };
+
+    const tabStyle = (isActive: boolean): React.CSSProperties => ({
+        padding: '12px 20px',
+        borderRadius: '16px',
+        cursor: 'pointer',
+        fontSize: '15px',
+        fontWeight: 600,
+        color: isActive ? '#fff' : '#6B7280',
+        background: isActive ? 'linear-gradient(135deg, #F472B6 0%, #DB2777 100%)' : 'transparent',
+        boxShadow: isActive ? '0 4px 12px rgba(219, 39, 119, 0.3)' : 'none',
+        transition: 'all 0.2s ease',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: '8px'
+    });
+
+    const inputStyle: React.CSSProperties = {
+        width: "100%",
+        padding: "10px 14px",
+        borderRadius: "12px",
+        border: "1px solid rgba(0,0,0,0.1)",
+        backgroundColor: "rgba(255,255,255,0.5)",
+        fontSize: "14px",
+        color: "#1f2937",
+        outline: "none",
+        transition: "all 0.2s",
+    };
 
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000,
-            backdropFilter: 'blur(3px)'
+            backgroundColor: 'rgba(0,0,0,0.3)', 
+            display: 'flex', justifyContent: 'center', alignItems: 'center', 
+            zIndex: 3000,
+            backdropFilter: 'blur(5px)'
         }}>
-            <div style={{
-                backgroundColor: 'white', borderRadius: '12px', width: '850px', height: '650px',
-                boxShadow: '0 8px 30px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column',
-                fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif', overflow: 'hidden'
-            }}>
-                {/* Header */}
-                <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-white">
-                    <h2 className="text-xl font-semibold text-gray-800">Settings</h2>
-                    <div className="flex gap-2">
-                        {(['general', 'voice', 'memory', 'characters', 'interaction'] as Tab[]).map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                    activeTab === tab ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
-                                }`}
-                            >
-                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                            </button>
-                        ))}
+            <div style={glassPanelStyle}>
+                
+                {/* SIDEBAR */}
+                <div style={{
+                    width: '240px',
+                    background: 'rgba(255,255,255,0.4)',
+                    borderRight: '1px solid rgba(255,255,255,0.5)',
+                    padding: '30px 20px',
+                    display: 'flex',
+                    flexDirection: 'column'
+                }}>
+                    <h2 style={{ 
+                        fontSize: '24px', fontWeight: 800, color: '#374151', 
+                        marginBottom: '30px', paddingLeft: '10px',
+                        background: 'linear-gradient(to right, #ec4899, #8b5cf6)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent'
+                    }}>
+                        Lumina <span style={{ fontSize: '14px', opacity: 0.6, fontWeight: 500 }}>Settings</span>
+                    </h2>
+
+                    <div style={{ flex: 1 }}>
+                        <div onClick={() => setActiveTab('general')} style={tabStyle(activeTab === 'general')}>
+                            <Settings size={18} /> <span>General</span>
+                        </div>
+                        <div onClick={() => setActiveTab('voice')} style={tabStyle(activeTab === 'voice')}>
+                            <Mic size={18} /> <span>Voice</span>
+                        </div>
+                        <div onClick={() => setActiveTab('interaction')} style={tabStyle(activeTab === 'interaction')}>
+                            <Puzzle size={18} /> <span>Plugins</span>
+                        </div>
                     </div>
+
+                    <button 
+                        onClick={onClose}
+                        style={{
+                            padding: '12px',
+                            marginTop: '20px',
+                            borderRadius: '16px',
+                            border: '1px solid rgba(0,0,0,0.1)',
+                            background: 'white',
+                            color: '#6B7280',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            transition: 'all 0.2s',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                    >
+                        <X size={18} /> Close
+                    </button>
+                    <button 
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        style={{
+                            marginTop: '10px',
+                            padding: '12px',
+                            borderRadius: '16px',
+                            background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+                            color: 'white',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                        }}
+                    >
+                        {isSaving ? <span className="spinner">⏳</span> : <Save size={18} />}
+                        {isSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-50 text-gray-800">
-                    
-                    {/* --- GENERAL TAB (Includes User & LLM) --- */}
+                {/* CONTENT AREA */}
+                <div style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#1f2937', marginBottom: '25px', paddingBottom: '10px', borderBottom: '2px solid rgba(0,0,0,0.05)' }}>
+                        {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Settings
+                    </h2>
+
+                    {/* --- GENERAL TAB --- */}
                     {activeTab === 'general' && (
-                        <div className="space-y-6">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
                             <section>
-                                <h3 className="text-sm font-semibold text-gray-700 mb-2">User Profile</h3>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Your Name</label>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: '#4B5563' }}>Your Name</label>
+                                <input 
+                                    value={userName} 
+                                    onChange={e => setUserName(e.target.value)}
+                                    style={inputStyle}
+                                    placeholder="Master"
+                                    onFocus={(e) => e.target.style.borderColor = '#ec4899'}
+                                    onBlur={(e) => e.target.style.borderColor = 'rgba(0,0,0,0.1)'}
+                                />
+                            </section>
+
+                            <section>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: '#4B5563' }}>Background Image</label>
+                                <div style={{ display: 'flex', gap: '10px' }}>
                                     <input 
-                                        value={userName} 
-                                        onChange={e => setUserName(e.target.value)}
-                                        className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:border-indigo-500"
-                                        placeholder="User"
+                                        value={backgroundImage} 
+                                        onChange={e => setBackgroundImage(e.target.value)}
+                                        style={inputStyle}
+                                        placeholder="Image URL or File Path..."
                                     />
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file && (file as any).path) {
+                                                const path = (file as any).path.replace(/\\/g, '/');
+                                                const savedUrl = `file:///${path}`;
+                                                setBackgroundImage(savedUrl);
+                                                const previewUrl = URL.createObjectURL(file);
+                                                if (onBackgroundImageChange) onBackgroundImageChange(previewUrl); 
+                                            }
+                                        }}
+                                        style={{ display: 'none' }}
+                                        accept="image/*"
+                                    />
+                                    <button 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        style={{
+                                            whiteSpace: 'nowrap',
+                                            padding: '0 20px',
+                                            borderRadius: '12px',
+                                            border: '1px solid rgba(0,0,0,0.1)',
+                                            background: 'white',
+                                            cursor: 'pointer',
+                                            fontWeight: 500
+                                        }}
+                                    >
+                                        Browse
+                                    </button>
                                 </div>
+                                <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '6px' }}>
+                                    Tip: Use a high-res image for best visual effect.
+                                </p>
                             </section>
-                            
-                            <div className="h-px bg-gray-200 my-4" />
-                            
-                             <section className='bg-gray-900 rounded-lg p-4 border border-gray-700 shadow-inner'>
-                                {/* ⚡ Configured for Dark Mode style inside the LLM Config component */}
-                                <LLMEngineConfig />
-                            </section>
-
-                            <div className="h-px bg-gray-200 my-4" />
 
                             <section>
-                                <h3 className="text-sm font-semibold text-gray-700 mb-2">Visual Settings</h3>
-                                <div className="flex items-center gap-2 bg-white p-3 rounded border border-gray-200">
+                                <div style={{ 
+                                    padding: '15px', 
+                                    background: 'rgba(255,255,255,0.5)', 
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(0,0,0,0.05)',
+                                    display: 'flex', alignItems: 'center', gap: '15px'
+                                }}>
                                     <input 
                                         type="checkbox" 
                                         checked={highDpiEnabled} 
                                         onChange={e => setHighDpiEnabled(e.target.checked)}
-                                        className="w-4 h-4 text-indigo-600"
+                                        style={{ width: '20px', height: '20px', accentColor: '#ec4899' }}
                                     />
                                     <div>
-                                        <div className="text-sm font-medium text-gray-800">High-DPI Rendering</div>
-                                        <div className="text-xs text-gray-500">Enable Retina/4K support for Live2D (Higher GPU usage)</div>
+                                        <div style={{ fontWeight: 600, color: '#374151' }}>High-DPI Rendering</div>
+                                        <div style={{ fontSize: '13px', color: '#6B7280' }}>Enable Retina/4K support for clearer avatars.</div>
                                     </div>
                                 </div>
                             </section>
                         </div>
                     )}
 
-                    {/* --- INTERACTION TAB (Dynamic Plugins) --- */}
+                    {/* --- INTERACTION TAB --- */}
                     {activeTab === 'interaction' && (
-                        <div className="space-y-6">
-                            <div className="bg-blue-50 border border-blue-100 rounded p-3 mb-4">
-                                <p className="text-xs text-blue-700">
-                                    ✨ These settings control global system plugins. They affect how the AI interacts across all characters.
-                                </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                             <div style={{ padding: '15px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #dbeafe', color: '#1e40af', fontSize: '14px' }}>
+                                ✨ Control system plugins and external tools.
                             </div>
 
-                            {/* Game / Logic Plugins */}
-                            <section>
-                                <h3 className="text-sm font-semibold text-gray-700 mb-3">Game Systems</h3>
-                                <div className="space-y-2">
-                                    {plugins.filter(p => p.category === 'game' || p.category === 'interaction').length === 0 && (
-                                        <div className="text-sm text-gray-400 italic">No game plugins loaded.</div>
-                                    )}
+                            {/* Game Systems */}
+                            <div>
+                                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '15px', color: '#374151' }}>Game Systems</h3>
+                                <div style={{ display: 'grid', gap: '15px' }}>
                                     {plugins.filter(p => p.category === 'game' || p.category === 'interaction').map(plugin => (
-                                         <div key={plugin.id} className="bg-gray-800 rounded-lg p-4 text-white">
-                                            <div className="flex justify-between items-start mb-2">
+                                         <div key={plugin.id} style={{
+                                             background: 'white',
+                                             padding: '20px',
+                                             borderRadius: '16px',
+                                             border: '1px solid rgba(0,0,0,0.05)',
+                                             boxShadow: '0 4px 6px rgba(0,0,0,0.02)'
+                                         }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                                                 <div>
-                                                    <h4 className="font-medium text-cyan-400">{plugin.name}</h4>
-                                                    <p className="text-xs text-gray-400">{plugin.description}</p>
+                                                    <h4 style={{ fontWeight: 700, color: '#111827' }}>{plugin.name}</h4>
+                                                    <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '4px' }}>{plugin.description}</p>
                                                 </div>
                                                 <button 
                                                     onClick={() => togglePlugin(plugin.id)}
-                                                    className={`text-xs px-2 py-1 rounded ${plugin.enabled ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        borderRadius: '20px',
+                                                        fontSize: '12px',
+                                                        fontWeight: 600,
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        background: plugin.enabled ? '#dcfce7' : '#fee2e2',
+                                                        color: plugin.enabled ? '#166534' : '#991b1b',
+                                                    }}
                                                 >
                                                     {plugin.enabled ? 'Enabled' : 'Disabled'}
                                                 </button>
                                             </div>
                                             {plugin.enabled && (
-                                                <div className="mt-3 pt-3 border-t border-gray-700">
+                                                <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '15px' }}>
                                                     <PluginConfigRenderer 
                                                         plugin={plugin} 
                                                         onUpdate={(key, val) => updateConfig(plugin.id, key, val)} 
@@ -332,126 +362,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                          </div>
                                     ))}
                                 </div>
-                            </section>
-
-                            {/* MCP / External Tools (Bilibili etc) */}
-                            <section>
-                                <h3 className="text-sm font-semibold text-gray-700 mb-3">External Tools (MCP)</h3>
-                                <div className="space-y-2">
-                                    {plugins.filter(p => p.id.startsWith('mcp.')).length === 0 && (
-                                        <div className="text-sm text-gray-400 italic">No external tools loaded.</div>
-                                    )}
-                                    {plugins.filter(p => p.id.startsWith('mcp.')).map(plugin => (
-                                         <div key={plugin.id} className="bg-gray-800 rounded-lg p-4 text-white">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                     <h4 className="font-medium text-purple-400">{plugin.name}</h4>
-                                                     <p className="text-xs text-gray-400">{plugin.description}</p>
-                                                </div>
-                                                {/* MCP can't be toggled via system plugin manager yet, usually auto-run */}
-                                            </div>
-                                            <div className="mt-3 pt-3 border-t border-gray-700">
-                                                 <PluginConfigRenderer 
-                                                    plugin={plugin} 
-                                                    onUpdate={(key, val) => updateConfig(plugin.id, key, val)} 
-                                                />
-                                            </div>
-                                         </div>
-                                    ))}
-                                </div>
-                            </section>
+                            </div>
                         </div>
                     )}
 
+                    {/* --- VOICE TAB --- */}
                     {activeTab === 'voice' && <VoiceTab />}
-                    {activeTab === 'characters' && (
-                        <CharactersTab
-                            characters={characters}
-                            setCharacters={setCharacters}
-                            activeCharacterId={activeCharacterId}
-                            onActivateCharacter={handleActivateCharacter}
-                            onDeleteCharacter={handleDeleteCharacter}
-                            edgeVoices={edgeVoices}
-                            gptVoices={gptVoices}
-                            activeTtsEngines={activeTtsEngines}
-                            availableModels={availableModels}
-                            ttsPlugins={ttsPlugins}
-                        />
-                    )}
-                    {activeTab === 'memory' && (
-                        <div className="space-y-6">
-                            <section>
-                                <h3 className="text-sm font-semibold text-gray-700 mb-2">Local Session Memory</h3>
-                                <div className="bg-white p-4 rounded border border-gray-200 space-y-4">
-                                    <div>
-                                        <div className="flex justify-between mb-1">
-                                            <label className="text-sm font-medium text-gray-700">Context Window</label>
-                                            <span className="text-xs font-bold text-indigo-600">{contextWindow} turns</span>
-                                        </div>
-                                        <input 
-                                            type="range" min="5" max="50" value={contextWindow} 
-                                            onChange={e => setContextWindow(Number(e.target.value))}
-                                            className="w-full accent-indigo-600"
-                                        />
-                                    </div>
-                                    <div>
-                                        <div className="flex justify-between mb-1">
-                                            <label className="text-sm font-medium text-gray-700">History Limit</label>
-                                            <span className="text-xs font-bold text-indigo-600">{historyLimit} msgs</span>
-                                        </div>
-                                        <input 
-                                            type="range" min="10" max="500" step="10" value={historyLimit} 
-                                            onChange={e => setHistoryLimit(Number(e.target.value))}
-                                            className="w-full accent-indigo-600"
-                                        />
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                         <label className="text-sm font-medium text-gray-700">Overflow Strategy</label>
-                                         <select 
-                                            value={overflowStrategy} 
-                                            onChange={e => setOverflowStrategy(e.target.value as any)}
-                                            className="px-2 py-1 text-sm border border-gray-300 rounded"
-                                         >
-                                            <option value="slide">Slide (Drop Oldest)</option>
-                                            <option value="reset">Reset</option>
-                                         </select>
-                                    </div>
-                                    <button 
-                                        onClick={() => { if(confirm('Clear history?')) onClearHistory?.(); }}
-                                        className="w-full mt-2 py-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100"
-                                    >
-                                        Clear History & Reset
-                                    </button>
-                                </div>
-                            </section>
-                        </div>
-                    )}
-                </div>
 
-                {/* Footer */}
-                <div className="p-5 border-t border-gray-100 bg-white flex justify-end gap-3">
-                    <button 
-                        onClick={onClose}
-                        className="px-4 py-2 rounded-md text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                        disabled={isSaving}
-                    >
-                        Cancel
-                    </button>
-                    <button 
-                        onClick={handleSave}
-                        className="px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                        disabled={isSaving}
-                    >
-                        {isSaving ? 'Saving...' : 'Save Changes'}
-                    </button>
                 </div>
             </div>
-            {/* Styles */}
+            
             <style>{`
+                @keyframes slideUp {
+                    from { transform: translateY(20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
                 ::-webkit-scrollbar { width: 6px; }
                 ::-webkit-scrollbar-track { background: transparent; }
-                ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-                ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+                ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+                ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
             `}</style>
         </div>
     );

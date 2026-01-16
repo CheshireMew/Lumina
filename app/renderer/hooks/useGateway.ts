@@ -211,6 +211,20 @@ export const useGateway = ({
                             }
                             break;
 
+                        case "ui:register_widget":
+                        case "ui:remove_widget":
+                            // Bridge Backend UI Events -> Frontend Window Events
+                            console.log(
+                                `[Gateway] Bridging ${packet.type}`,
+                                packet.payload
+                            );
+                            window.dispatchEvent(
+                                new CustomEvent(packet.type, {
+                                    detail: packet.payload,
+                                })
+                            );
+                            break;
+
                         default:
                             break;
                     }

@@ -89,7 +89,7 @@ async def get_table_data(table_name: str, limit: int = 50, character_id: Optiona
         return {"status": "success", "data": []}
 
     except Exception as e:
-        logger.error(f"[Admin] Read Error: {e}")
+        logger.error(f"[Admin] Read Error: {e}", exc_info=True)
         return {"status": "error", "data": []}
 
 @router.post("/query")
@@ -112,7 +112,7 @@ async def safe_query(request: SafeQueryRequest):
         results = await surreal_system.execute_raw_query(request.query)
         return {"status": "success", "result": results}
     except Exception as e:
-        logger.error(f"[Admin] Query Error: {e}")
+        logger.error(f"[Admin] Query Error: {e}", exc_info=True)
         return {"status": "error", "detail": str(e)}
 
 @router.delete("/record/{table_name}/{record_safe_id}")
@@ -140,7 +140,7 @@ async def delete_record(table_name: str, record_safe_id: str):
         await surreal_system.driver.delete(table_name, full_id) # Driver.delete(table, id)
         return {"status": "success", "id": full_id}
     except Exception as e:
-        logger.error(f"[Admin] Delete Error: {e}")
+        logger.error(f"[Admin] Delete Error: {e}", exc_info=True)
         raise HTTPException(500, str(e))
 
 @router.post("/record/{table_name}/new")
@@ -157,7 +157,7 @@ async def create_record(table_name: str, request: UpdateRecordRequest):
         new_id = await surreal_system.driver.create(table_name, request.data)
         return {"status": "success", "id": new_id}
     except Exception as e:
-        logger.error(f"[Admin] Create Error: {e}")
+        logger.error(f"[Admin] Create Error: {e}", exc_info=True)
         raise HTTPException(500, str(e))
 
 @router.put("/record/{table_name}/{record_safe_id}")

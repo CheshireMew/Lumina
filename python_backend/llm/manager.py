@@ -137,13 +137,27 @@ class LLMManager:
         
         # Construct path: python_backend/plugins/drivers/llm
         # We are in python_backend/llm/manager.py
+        # Construct path: python_backend/plugins/drivers/llm
+        # We are in python_backend/llm/manager.py
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        drivers_dir = os.path.join(base_dir, "..", "plugins", "drivers", "llm")
         
-        # Load prototypes to get the mapping of type -> class
-        # PluginLoader returns instances, we use them to get the class and default ID
+        # 1. Built-in Drivers
+        drivers_dir = os.path.join(base_dir, "..", "plugins", "drivers", "llm")
+        logger.info(f"Scanning Built-in LLM Drivers: {drivers_dir}")
         prototypes = PluginLoader.load_plugins(drivers_dir, BaseLLMDriver)
         
+        # 2. Extension Drivers (plugins/extensions/*/drivers/llm)
+        extensions_root = os.path.join(base_dir, "..", "plugins", "extensions")
+        if os.path.exists(extensions_root):
+             for ext_name in os.listdir(extensions_root):
+                 ext_drivers_dir = os.path.join(extensions_root, ext_name, "drivers", "llm")
+                 if os.path.exists(ext_drivers_dir):
+                     logger.info(f"Scanning Extension LLM Drivers: {ext_drivers_dir}")
+                     ext_protos = PluginLoader.load_plugins(ext_drivers_dir, BaseLLMDriver)
+                     prototypes.extend(ext_protos)
+                     for p in ext_protos:
+                         logger.info(f"📦 Discovered Extension LLM Driver from {ext_name}: {p.id}")
+
         driver_classes = {}
         for proto in prototypes:
             # key: default ID (e.g. "openai", "deepseek", "pollinations") -> value: Class

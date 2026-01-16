@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
     try:
         await manager.start(service_instance)
     except Exception as e:
-        logger.critical(f"Startup Failed: {e}")
+        logger.critical(f"Startup Failed: {e}", exc_info=True)
         sys.exit(1)
 
     # 4. Post-Bootstrap wiring (Router Mounting)
@@ -80,6 +80,14 @@ async def lifespan(app: FastAPI):
         logger.info("Lifecycle: Closing SurrealDB connection...")
         await service_instance.surreal_system.close()
         
+    if service_instance.system_plugin_manager:
+        logger.info("Lifecycle: Stopping System Plugins...")
+        for pid, plugin in service_instance.system_plugin_manager.plugins.items():
+            try:
+                plugin.terminate()
+            except Exception as e:
+                logger.error(f"Error terminating {pid}: {e}")
+
     if service_instance.ticker:
         service_instance.ticker.stop()
         

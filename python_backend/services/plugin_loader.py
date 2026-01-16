@@ -55,9 +55,9 @@ class PluginLoader:
                                     plugins.append(instance)
                                     logger.info(f"Loaded plugin: {name} from {filename}")
                                 except Exception as init_err:
-                                    logger.error(f"Failed to instantiate {name}: {init_err}")
+                                    logger.error(f"Failed to instantiate {name}: {init_err}", exc_info=True)
 
                 except Exception as e:
-                    logger.error(f"Failed to load module {filename}: {e}")
+                    logger.error(f"Failed to load module {filename}: {e}", exc_info=True)
                     
         return plugins
