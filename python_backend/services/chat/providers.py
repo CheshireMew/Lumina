@@ -15,20 +15,20 @@ class RAGContextProvider(ContextProvider):
             return None
             
         try:
-            return await self._retrieve_memory(ctx.original_messages, ctx.character_id)
+            return await self._retrieve_memory(ctx)
         except Exception as e:
             logger.warning(f"RAG Provider failed: {e}")
             return None
 
-    async def _retrieve_memory(self, messages, character_id) -> str:
+    async def _retrieve_memory(self, ctx) -> Optional[str]:
         # 1. Extract Query
         user_text = ""
-        for msg in reversed(messages):
+        for msg in reversed(ctx.original_messages):
             if msg.get("role") == "user":
                 user_text = msg.get("content", "")
                 break
         
-        if not user_text or len(user_text) < 3: return ""
+        if not user_text or len(user_text) < 3: return None
 
         # 2. Embedding + Search
         # Note: Ideally moving embedding logic out, but maintaining functionality for now
@@ -38,18 +38,37 @@ class RAGContextProvider(ContextProvider):
         
         vector = emb_model.encode(user_text).tolist()
         
+        llm_manager = services.get_llm_manager()
+        route = llm_manager.get_route("chat")
+        
+        # Default: Paid/Local Tier -> Episodic Memory (High Context)
+        target_table = "episodic_memory"
+        limit = 10
+        min_results = 3
+        
+        # Free Tier -> Conversation Logs (Low Context)
+        if route and route.provider_id == "free_tier":
+            target_table = "conversation_log"
+            limit = 3
+            min_results = 1
+        
         results = await services.surreal_system.search_hybrid(
             query=user_text,
             query_vector=vector,
-            character_id=character_id,
-            limit=5
+            character_id=ctx.character_id,
+            limit=limit,
+            target_table=target_table,
+            min_results=min_results
         )
         
         if results:
-            content = "\n".join([f"- {r.get('content','')} ({r.get('created_at','')})" for r in results])
-            return f"## Relevant Memories\n{content}"
+            content = "\n".join([f"- {r.get('content') or r.get('narrative', '')} ({r.get('created_at','')})" for r in results])
+            # Set into context for pipeline to format consistently
+            ctx.rag_context = content
+            # Return None so it's not double-added via 'prompts' list
+            return None
             
-        return ""
+        return None
 
 
 class SoulContextProvider(ContextProvider):
@@ -57,21 +76,12 @@ class SoulContextProvider(ContextProvider):
     Renders personality and dynamic state (Short-Term Mood/State).
     """
     async def provide(self, ctx: Any) -> Optional[str]:
-        if not services.soul_client:
+        if not services.soul:
             return None
             
         try:
-            # 1. Static Prompt
-            static = services.soul_client.render_static_prompt()
-            
-            # 2. Dynamic Instruction
-            dynamic = services.soul_client.render_dynamic_instruction()
-            
-            # Combine
-            final = static
-            if dynamic:
-                final += f"\n\n{dynamic}"
-            return final
+            # Use unified get_system_prompt which handles fallback to config
+            return await services.soul.get_system_prompt({'context': ctx})
             
         except Exception as e:
             logger.warning(f"Soul Provider failed: {e}")

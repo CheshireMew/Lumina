@@ -8,8 +8,8 @@ class GeminiDriver(OpenAIDriver):
     Gemini Driver using Google's OpenAI-compatible API.
     Docs: https://ai.google.dev/gemini-api/docs/openai
     """
-    def __init__(self):
-        super().__init__("gemini", "Gemini Provider", "Google Gemini API (OpenAI Compatible)")
+    def __init__(self, id: str = "gemini"):
+        super().__init__(id, "Gemini Provider", "Google Gemini API (OpenAI Compatible)")
         
     async def load(self):
         # Set default Gemini OpenAI-Compatible URL if not present

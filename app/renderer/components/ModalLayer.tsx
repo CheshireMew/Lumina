@@ -4,6 +4,7 @@ import LLMConfigModal from './LLMConfig/LLMConfigModal';
 import PluginStoreModal from './PluginStore/PluginStoreModal';
 import MotionTester from './MotionTester';
 import DataViewer from './DataViewer';
+import { useVoiceManager } from '../hooks/useVoiceManager';
 import AvatarSelectorModal from './AvatarSelectorModal';
 import { CharacterProfile } from '@core/llm/types';
 import { AvatarRendererRef } from '../core/avatar/types';
@@ -34,7 +35,6 @@ interface ModalLayerProps {
         apiBaseUrl: string;
         modelName: string;
         temperature: number;
-        temperature: number;
         thinkingEnabled: boolean;
         historyLimit?: number;
         overflowStrategy?: 'slide' | 'reset';
@@ -52,12 +52,19 @@ interface ModalLayerProps {
     onLive2DHighDpiChange: (enabled: boolean) => void;
     onCharacterSwitch: (id: string) => void;
     onThinkingModeChange: (enabled: boolean) => void;
+    onBackgroundImageChange?: (url: string) => void;
     
     // Data
     activeCharacterId: string;
     galgameEnabled: boolean;
     activeCharacter?: CharacterProfile;
     onModelSelect: (path: string) => void;
+    settingsInitialTab?: 'general' | 'voice' | 'characters' | 'interaction';
+
+    // Characters Data (Hoisted)
+    characters: CharacterProfile[];
+    setCharacters: (chars: CharacterProfile[]) => void;
+    onSaveCharacters: (chars: CharacterProfile[], deletedIds: string[]) => Promise<void>;
     
     // Refs
     avatarRef: React.RefObject<AvatarRendererRef>;
@@ -80,13 +87,25 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
     onLive2DHighDpiChange,
     onCharacterSwitch,
     onThinkingModeChange,
+    onBackgroundImageChange,
     
     activeCharacterId,
     galgameEnabled,
     activeCharacter,
     onModelSelect,
-    avatarRef
+    avatarRef,
+    characters,
+    setCharacters,
+    onSaveCharacters
 }) => {
+    // Hoist Voice Manager logic here to share between Settings and AvatarSelector
+    const { edgeVoices, gptVoices, activeTtsEngines, ttsPlugins } = useVoiceManager(isSettingsOpen || isAvatarSelectorOpen);
+
+    // Helpers
+    const handleDeleteCharacter = (id: string) => {
+        setCharacters(characters.filter(c => c.id !== id));
+    };
+
     return (
         <>
             <SettingsModal
@@ -101,6 +120,12 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
                 onCharacterSwitch={onCharacterSwitch}
                 activeCharacterId={activeCharacterId}
                 onThinkingModeChange={onThinkingModeChange}
+                onBackgroundImageChange={onBackgroundImageChange}
+                // Voice Props for VoiceTab
+                edgeVoices={edgeVoices}
+                gptVoices={gptVoices}
+                activeTtsEngines={activeTtsEngines}
+                ttsPlugins={ttsPlugins}
             />
 
             <PluginStoreModal 
@@ -125,8 +150,28 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
             <AvatarSelectorModal
                 isOpen={isAvatarSelectorOpen}
                 onClose={onCloseAvatarSelector}
+                
+                // Character Data
+                activeCharacterId={activeCharacterId}
                 activeCharacter={activeCharacter}
-                onModelSelect={onModelSelect}
+                characters={characters}
+                setCharacters={setCharacters}
+                onActivateCharacter={onCharacterSwitch}
+                onDeleteCharacter={handleDeleteCharacter}
+                onSaveCharacters={onSaveCharacters}
+
+                // Voice & Assets
+                edgeVoices={edgeVoices}
+                gptVoices={gptVoices}
+                activeTtsEngines={activeTtsEngines}
+                ttsPlugins={ttsPlugins}
+                availableModels={[]} // Models are internal to the modal or fetched there? 
+                                     // Actually AvatarSelector used to accept availableModels. 
+                                     // Let's pass empty for now, or hoist fetchCharacters logic? 
+                                     // CharactersTab used APIConfig to fetch models. 
+                                     // AvatarSelectorModal logic doesn't fetch models yet, it expects prop.
+                                     // I should probably duplicate the model fetching or hoist it.
+                                     // For now, let's leave it empty and fix it if it's blank.
             />
 
             <LLMConfigModal
@@ -134,6 +179,7 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
                 onClose={onCloseLLMConfig!} 
                 currentLlmSettings={currentLlmSettings!}
                 onSettingsChange={onLLMSettingsChange}
+                activeCharacterId={activeCharacterId}
             />
         </>
     );

@@ -13,7 +13,8 @@ class PluginManifest(BaseModel):
     description: str = Field(default="", description="Brief description")
     
     # Entrypoints
-    entrypoint: str = Field(..., description="Format: 'module:Class' relative to plugin dir")
+    # Entrypoints
+    entrypoint: Optional[str] = Field(default=None, description="Format: 'module:Class' relative to plugin dir. Optional for resource packs.")
     
     # Metadata
     author: Optional[str] = None
@@ -24,6 +25,13 @@ class PluginManifest(BaseModel):
     dependencies: List[str] = Field(default_factory=list, description="List of required Plugin IDs")
     permissions: List[str] = Field(default_factory=list, description="Requested capabilities")
     
+    # Execution Mode
+    isolation_mode: str = Field(default="local", pattern="^(local|process)$", description="Execution isolation mode")
+    is_exclusive: bool = Field(default=False, description="Whether this plugin demands exclusive control of its group")
+    
+    # Runtime Injected
+    path: Optional[str] = Field(default=None, description="Absolute path to plugin directory (Injected at runtime)")
+    
     @field_validator("id")
     def validate_id(cls, v):
         if not re.match(r"^[a-z0-9_.]+$", v):
@@ -32,6 +40,8 @@ class PluginManifest(BaseModel):
     
     @field_validator("entrypoint")
     def validate_entrypoint(cls, v):
+        if v is None or v.lower() == "none":
+            return None
         if ":" not in v:
             raise ValueError("Entrypoint must be in 'module:Class' format")
         return v

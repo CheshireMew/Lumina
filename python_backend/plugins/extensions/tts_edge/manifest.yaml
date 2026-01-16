@@ -1,0 +1,9 @@
+id: driver.tts.edge
+name: Edge TTS Driver
+version: 1.0.0
+description: Microsoft Edge TTS (Free, High Quality)
+entrypoint: none
+category: driver
+group_id: tts
+group_exclusive: true
+tags: [tts, free, online]

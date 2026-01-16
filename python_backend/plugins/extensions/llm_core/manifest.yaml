@@ -1,0 +1,10 @@
+id: system.llm_core
+name: LLM Core
+version: 2.0.0
+description: Core Intelligence Module. Manages connection to AI models (DeepSeek, OpenAI, Gemini, Pollinations) and conversation routing.
+entrypoint: plugin:LLMCorePlugin
+category: system
+group_id: system_core
+group_exclusive: false
+tags: [llm, ai, core, intelligence, mvp_kernel]
+author: Lumina Team

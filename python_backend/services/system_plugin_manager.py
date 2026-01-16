@@ -11,6 +11,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import inspect
+from app_config import config # Global Config
 
 logger = logging.getLogger("SystemPluginManager")
 
@@ -26,18 +27,47 @@ class SystemPluginManager:
     """
     def __init__(self, container=None):
         self.plugins: Dict[str, BaseSystemPlugin] = {}
+        self.disabled_manifests: Dict[str, PluginManifest] = {} # Track unloaded plugins
         self.container = container
+        # self._load_plugins() # Deferred to async start()
+
+    async def start(self):
+        """Async initialization of all plugins"""
         self._load_plugins()
+        
+        # Initialize plugins (Sync & Async)
+        import inspect
+        for plugin in self.plugins.values():
+             context = getattr(plugin, 'context', None)
+             try:
+                 if inspect.iscoroutinefunction(plugin.initialize):
+                     await plugin.initialize(context)
+                 else:
+                     plugin.initialize(context)
+             except Exception as e:
+                 logger.error(f"Failed to initialize plugin {plugin.id}: {e}")
 
     def _load_plugins(self):
         logger.info("🧩 Plugin System: Starting Discovery...")
         
         # 1. Discovery
+        # 1. Discovery
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        plugins_root_dir = Path(current_dir) / ".." / "plugins" / "system"
+        plugins_root = Path(current_dir) / ".." / "plugins"
         
-        scanner = PluginScanner(plugins_root_dir)
-        manifests = scanner.scan()
+        manifests = []
+        
+        # Scan Core System Plugins (Tier 0/1)
+        system_dir = plugins_root / "system"
+        if system_dir.exists():
+            scanner_system = PluginScanner(system_dir)
+            manifests.extend(scanner_system.scan())
+            
+        # Scan Extensions (Tier 2/3)
+        ext_dir = plugins_root / "extensions"
+        if ext_dir.exists():
+            scanner_ext = PluginScanner(ext_dir)
+            manifests.extend(scanner_ext.scan())
         logger.info(f"🧩 Discovered {len(manifests)} valid plugin manifests.")
         
         # 2. Dependency Sorting
@@ -53,7 +83,16 @@ class SystemPluginManager:
         loader = PluginLoader()
         loaded_count = 0
         
+        # [LAZY LOADING] Global Disabled List
+        disabled_ids = set(config.plugins.disabled_plugins)
+        
         for manifest in ordered_manifests:
+            # Check Global Disable
+            if manifest.id in disabled_ids:
+                logger.info(f"💤 Plugin {manifest.id} is globally disabled (Lazy Load). Skipping.")
+                self.disabled_manifests[manifest.id] = manifest
+                continue
+
             instance = loader.load_plugin_class(manifest)
             if instance:
                 # 4. Dependency Injection & Init
@@ -77,13 +116,10 @@ class SystemPluginManager:
                         else:
                             # Default Context
                             from core.api.context import LuminaContext
-                            context = LuminaContext(self.container, event_bus=event_bus)
-                        
-                        # Initialize with Context
-                        instance.initialize(context)
-                    else:
-                        # Fallback for no container (testing?)
-                        instance.initialize(None)
+                        # Defer Initialization to start()
+                        # We attach the context now so start() can use it
+                        instance.context = context 
+                        # instance.initialize(context) # REMOVED: Moved to async start()
 
                     self.plugins[manifest.id] = instance
                     loaded_count += 1
@@ -120,8 +156,24 @@ class SystemPluginManager:
         return None
 
     def list_plugins(self) -> List[dict]:
-        """Returns list of plugin status dicts."""
-        return [p.get_status() for p in self.plugins.values()]
+        """Returns list of plugin status dicts (Active + Disabled)."""
+        # 1. Active Plugins
+        active = [p.get_status() for p in self.plugins.values()]
+        
+        # 2. Disabled Plugins (Synthesis)
+        disabled = []
+        for pid, manifest in self.disabled_manifests.items():
+            disabled.append({
+                "id": pid,
+                "name": manifest.name if hasattr(manifest, 'name') else pid,
+                "description": manifest.description if hasattr(manifest, 'description') else "Disabled",
+                "version": manifest.version if hasattr(manifest, 'version') else "0.0.0",
+                "enabled": False, # Explicitly False
+                "status": "disabled_lazy", # Debug info
+                "group": "extension" # Default/Unknown
+            })
+            
+        return active + disabled
 
     def reload_plugin(self, plugin_id: str) -> bool:
         """
@@ -206,13 +258,90 @@ class SystemPluginManager:
             logger.error(f"Reload CRITICAL failure: {e}")
             return False
 
+    def disable_plugin(self, plugin_id: str) -> bool:
+        """
+        Runtime Disable (Hot Unload).
+        1. Terminate instance.
+        2. Remove from active list.
+        3. Add to global disabled list (Persistence).
+        """
+        logger.info(f"⛔ Disabling plugin: {plugin_id}")
+        
+        # 1. Update Config (Persistence)
+        if plugin_id not in config.plugins.disabled_plugins:
+            config.plugins.disabled_plugins.append(plugin_id)
+            config.save()
+            
+        # 2. Terminate Active Instance
+        plugin = self.plugins.get(plugin_id)
+        if plugin:
+            # Capture manifest for the "disabled list" view before destroying
+            if hasattr(plugin, 'manifest'):
+                self.disabled_manifests[plugin_id] = plugin.manifest
+            
+            try:
+                plugin.terminate()
+            except Exception as e:
+                logger.error(f"Error terminating {plugin_id}: {e}")
+            
+            # Remove from Active Registry
+            del self.plugins[plugin_id]
+            
+            # Cleanup sys.modules (Optional but good for memory)
+            safe_name = plugin_id.split(".")[-1]
+            prefix = f"plugins.system.{safe_name}"
+            to_delete = [m for m in sys.modules if m.startswith(prefix)]
+            for m in to_delete:
+                del sys.modules[m]
+                
+            logger.info(f"✅ Plugin {plugin_id} unloaded and disabled.")
+            return True
+        else:
+            # Already not running, just ensure config is updated
+            return True
+
+    def enable_plugin(self, plugin_id: str) -> bool:
+        """
+        Runtime Enable (Hot Load).
+        1. Remove from global disabled list.
+        2. Trigger Hot Load.
+        """
+        logger.info(f"🟢 Enabling plugin: {plugin_id}")
+        
+        # 1. Update Config
+        if plugin_id in config.plugins.disabled_plugins:
+            config.plugins.disabled_plugins.remove(plugin_id)
+            config.save()
+            
+        # 2. Check if already running
+        if plugin_id in self.plugins:
+            logger.warning(f"Plugin {plugin_id} already active.")
+            return True
+            
+        # 3. Hot Load
+        success = self._load_single_plugin_by_id(plugin_id)
+        if success:
+            # Remove from disabled view
+            if plugin_id in self.disabled_manifests:
+                del self.disabled_manifests[plugin_id]
+        
+        return success
+
     def _load_single_plugin_by_id(self, plugin_id: str) -> bool:
         """Helper to load a brand new plugin by ID (guessing path)"""
         safe_name = plugin_id.split(".")[-1]
         plugin_path = Path(os.path.dirname(os.path.abspath(__file__))) / ".." / "plugins" / "system" / safe_name / "manifest.yaml"
         
         if not plugin_path.exists():
-            return False
+            # Try finding it in disabled_manifests first (more reliable source of path)
+            if plugin_id in self.disabled_manifests:
+                manifest = self.disabled_manifests[plugin_id]
+                if hasattr(manifest, 'path') and manifest.path:
+                    plugin_path = Path(manifest.path) / "manifest.yaml"
+
+        if not plugin_path.exists():
+             logger.error(f"Could not locate manifest for {plugin_id}")
+             return False
             
         # Manually trigger load logic to avoid recursion loop with reload_plugin
         # This duplicates logic from reload_plugin but skips termination/module cleanup (as it's new)

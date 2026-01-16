@@ -1,0 +1,9 @@
+id: driver.stt.sensevoice
+name: SenseVoice Driver
+version: 1.0.0
+description: Accurate Multilingual STT (Sherpa-ONNX)
+entrypoint: none
+category: driver
+group_id: stt
+group_exclusive: true
+tags: [stt, local, multilingual]

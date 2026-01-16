@@ -38,7 +38,8 @@ class EventPacket(BaseModel):
     source: str = Field(..., description="Plugin Name or Component ID")
     
     # 2. Payload Layer (Flexible)
-    payload: Any = Field(default_factory=dict)
+    # [Protocol Hardening] Enforce Dict for better serialization safety
+    payload: Dict[str, Any] = Field(default_factory=dict)
     
     # 3. Governance Layer
     timestamp: float = Field(default_factory=time.time)

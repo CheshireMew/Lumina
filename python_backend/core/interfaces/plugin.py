@@ -89,24 +89,18 @@ class BaseSystemPlugin(ABC):
         """Loads plugin-specific JSON data via Context API"""
         if hasattr(self, "context") and self.context:
             return self.context.load_data(self.id)
-        # Fallback for legacy plugins not yet updated
-        if hasattr(self, "container") and self.container and hasattr(self.container, "soul_client"):
-             return self.container.soul_client.load_module_data(self.id)
+        # No fallback: Enforcement
         return {}
 
     def save_data(self, data: dict):
         """Saves plugin-specific JSON data via Context API"""
         if hasattr(self, "context") and self.context:
             self.context.save_data(self.id, data)
-        elif hasattr(self, "container") and self.container and hasattr(self.container, "soul_client"):
-            self.container.soul_client.save_module_data(self.id, data)
 
     def get_data_dir(self):
         """Returns Path to characters/{id}/data/{plugin_id}/ for binary assets."""
         if hasattr(self, "context") and self.context:
             return self.context.get_data_dir(self.id)
-        elif hasattr(self, "container") and self.container and hasattr(self.container, "soul_client"):
-            return self.container.soul_client.get_module_data_dir(self.id)
         return None
 
     # ================= Config System (Phase 13) =================
@@ -153,5 +147,6 @@ class BaseSystemPlugin(ABC):
             "group_id": getattr(self, "group_id", getattr(getattr(self, "_manifest", None), "group_id", None)),
             "group_exclusive": getattr(self, "group_exclusive", getattr(getattr(self, "_manifest", None), "group_exclusive", True)),
             "func_tag": getattr(self, "func_tag", "System Plugin"),
-            "llm_routes": getattr(self, "llm_routes", []) # ⚡ New: Expose LLM routes to Frontend
+            "llm_routes": getattr(self, "llm_routes", []), # ⚡ New: Expose LLM routes to Frontend
+            "tags": getattr(self, "_manifest", None).tags if getattr(self, "_manifest", None) else []
         }

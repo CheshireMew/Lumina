@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            body {
+                margin: 0;
+                background: linear-gradient(45deg, #ff00cc, #333399);
+                color: white;
+                font-family: sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                overflow: hidden;
+            }
+            .container {
+                text-align: center;
+            }
+            h1 {
+                margin: 0;
+                font-size: 24px;
+            }
+            p {
+                opacity: 0.8;
+                font-size: 12px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Hello Plugins!</h1>
+            <p id="time">Loading...</p>
+        </div>
+        <script>
+            setInterval(() => {
+                document.getElementById("time").textContent =
+                    new Date().toLocaleTimeString();
+            }, 1000);
+        </script>
+    </body>
+</html>

@@ -13,14 +13,18 @@ class CoreServicesBootstrapper(Bootstrapper):
         from llm.manager import LLMManager
         container.llm_manager = LLMManager()
         
-        # 2. Soul
-        from soul_manager import SoulManager
-        cid = container.config.memory.character_id
-        container.soul_client = SoulManager(character_id=cid, auto_create=(cid=="lumina_default"))
+        # 2. Soul (Service)
+        from services.soul_service import SoulService
+        container.soul = SoulService() # No more character_id hardcoding here!
         
         # 3. Session
         from services.session_manager import SessionManager
         container.session_manager = SessionManager()
+        
+        # 4. Skills (Framework)
+        from services.skill_manager import SkillManager
+        container.skill_manager = SkillManager()
+
         
         # 4. Ticker
         from services.global_ticker import TimeTicker
@@ -57,7 +61,7 @@ class PluginServicesBootstrapper(Bootstrapper):
 
         # STT
         try:
-            from plugins.stt.manager import STTPluginManager
+            from services.stt_manager import STTPluginManager
             sm = STTPluginManager()
             # ⚠️ Lazy Mode: Do not load models in Main Process
             if self.name == "Plugin Services (Vision/TTS/STT)": # Defensive check if needed, or just standard
@@ -93,5 +97,6 @@ class SystemPluginsBootstrapper(Bootstrapper):
     async def bootstrap(self, container):
         from services.system_plugin_manager import SystemPluginManager
         spm = SystemPluginManager(container=container)
+        await spm.start() # Async Load & Init
         container.system_plugin_manager = spm
         logger.info("✅ System Plugin Manager Initialized")

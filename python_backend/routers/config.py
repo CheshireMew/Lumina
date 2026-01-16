@@ -34,7 +34,7 @@ def _get_service(name: str):
 @router.post("/configure")
 async def configure_memory(config: ConfigRequest):
     """Configure Memory Service"""
-    from soul_manager import SoulManager
+
     
     character_id = config.character_id
     
@@ -56,20 +56,31 @@ async def configure_memory(config: ConfigRequest):
         # Update timestamp
         _config_timestamps[character_id] = current_time
         
-        # Soul Reload
-        logger.info(f"Switching SoulManager to '{character_id}'...")
-        soul_client = SoulManager(character_id=character_id)
+        # Access SoulService
+        from services.container import services
+        soul_service = services.soul
         
-        # Update Soul Config with Heartbeat Settings (if provided)
+        if not soul_service:
+             raise ValueError("SoulService not available in Container")
+
+        # Switch Character
+        logger.info(f"Switching Active Character to '{character_id}'...")
+        soul_service.set_active_character(character_id)
+        
+        # Load existing config to update it
+        char_config = soul_service.load_character_config()
+        
+        # Update Config
         if config.heartbeat_enabled is not None:
-            soul_client.config["heartbeat_enabled"] = config.heartbeat_enabled
+            char_config["heartbeat_enabled"] = config.heartbeat_enabled
         if config.proactive_threshold_minutes is not None:
-            soul_client.config["proactive_threshold_minutes"] = config.proactive_threshold_minutes
+            char_config["proactive_threshold_minutes"] = config.proactive_threshold_minutes
         if config.galgame_mode_enabled is not None:
-            soul_client.config["galgame_mode_enabled"] = config.galgame_mode_enabled
+            char_config["galgame_mode_enabled"] = config.galgame_mode_enabled
         if config.soul_evolution_enabled is not None:
-            soul_client.config["soul_evolution_enabled"] = config.soul_evolution_enabled
-        soul_client.save_config()
+            char_config["soul_evolution_enabled"] = config.soul_evolution_enabled
+            
+        soul_service.save_character_config(char_config)
         
         # Get services via EventBus
         heartbeat_service = _get_service("heartbeat_service")
@@ -78,7 +89,10 @@ async def configure_memory(config: ConfigRequest):
         # Update Heartbeat Service (In-place)
         if heartbeat_service:
             logger.info("Updating Heartbeat Service for new character...")
-            heartbeat_service.soul = soul_client
+            try:
+                heartbeat_service.soul = soul_service
+            except Exception as e:
+                logger.warning(f"Could not update heartbeat_service.soul: {e}")
 
         # Update Dreaming Service LLM Config
         if dreaming_service:
@@ -123,7 +137,7 @@ async def health_check():
     from services.container import services
     return {
         "status": "healthy",
-        "soul_client": services.soul_client is not None
+        "soul_client": services.soul is not None
     }
 
 @router.get("/network")

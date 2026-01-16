@@ -1,0 +1,8 @@
+id: "system.hello_widget"
+name: "Hello Widget"
+version: "1.0.0"
+description: "A verification widget for Phase 20."
+entrypoint: "plugin:HelloWidgetPlugin"
+permissions:
+  - "ui:register_widget"
+  - "ui:remove_widget"

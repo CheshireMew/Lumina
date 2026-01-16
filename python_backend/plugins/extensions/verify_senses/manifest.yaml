@@ -1,0 +1,8 @@
+id: verify_senses
+name: Verification Senses
+version: 0.1.0
+description: A mock extension containing dummy drivers to verify the Universal Plugin Architecture.
+entrypoint: app:VerificationSensesApp
+author: Antigravity
+category: system
+permissions: []

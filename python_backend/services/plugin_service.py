@@ -371,14 +371,34 @@ class PluginService:
 
         # System Manager
         if self.system_plugin_manager:
+            # 1. Check Active (Running)
             plugin = self.system_plugin_manager.get_plugin(provider_id)
             if plugin:
-                new_state = not plugin.enabled
-                success = self.system_plugin_manager.set_plugin_state(provider_id, new_state)
+                # Disable it (Runtime Unload)
+                success = self.system_plugin_manager.disable_plugin(plugin.id)
                 if success:
-                    return {"status": "ok", "state": new_state}
+                    return {"status": "ok", "state": False}
                 else:
-                    raise RuntimeError("Failed to toggle plugin state (Manager refused)")
+                    raise RuntimeError("Failed to disable plugin")
+            
+            # 2. Check Disabled (Lazy)
+            # Try to find exact ID from disabled manifests if possible
+            target_id = provider_id
+            if provider_id in self.system_plugin_manager.disabled_manifests:
+                 target_id = provider_id
+            else:
+                 # Fallback: Check if any disabled manifest ends with this ID
+                 for pid in self.system_plugin_manager.disabled_manifests:
+                     if pid == provider_id or pid.endswith(f".{provider_id}"):
+                         target_id = pid
+                         break
+            
+            # Enable it (Hot Load)
+            success = self.system_plugin_manager.enable_plugin(target_id)
+            if success:
+                return {"status": "ok", "state": True}
+            
+            raise ValueError(f"Plugin {provider_id} not found or failed to load")
 
         # Heartbeat
         if self.heartbeat_service:

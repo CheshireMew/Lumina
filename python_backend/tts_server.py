@@ -7,11 +7,12 @@ import os
 import re
 import asyncio
 import httpx
-from typing import Optional, Dict
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import Optional, Dict, Any
+from routers.deps import get_tts_service
 
 # Plugin System
 from core.interfaces.driver import BaseTTSDriver
@@ -43,7 +44,11 @@ async def request_id_middleware(request: Request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://127.0.0.1", "http://localhost",
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "tauri://localhost", "electron://altair"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,24 +78,39 @@ class TTSPluginManager:
         # Dynamic Loading via PluginLoader
         try:
             from services.plugin_loader import PluginLoader
-            # Construct path: python_backend/plugins/drivers/tts
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            drivers_dir = os.path.join(base_dir, "plugins", "drivers", "tts")
+            from pathlib import Path
             
-            logger.info(f"Scanning for TTS plugins in: {drivers_dir}")
-            loaded_drivers = PluginLoader.load_plugins(drivers_dir, BaseTTSDriver)
+            base_dir = Path(__file__).parent.resolve()
             
-            for driver in loaded_drivers:
-                self.drivers[driver.id] = driver
-                logger.info(f"Registered TTS Driver: {driver.name} ({driver.id})")
-                
+            # 1. Built-in Drivers (Legacy: python_backend/plugins/drivers/tts)
+            drivers_dir = base_dir / "plugins" / "drivers" / "tts"
+            if drivers_dir.exists():
+                logger.info(f"Scanning Built-in TTS Drivers: {drivers_dir}")
+                loaded = PluginLoader.load_plugins(str(drivers_dir), BaseTTSDriver)
+                for d in loaded: self.drivers[d.id] = d
+            
+            # 2. Extension Drivers (python_backend/plugins/extensions/*/drivers/tts)
+            extensions_root = base_dir / "plugins" / "extensions"
+            
+            if extensions_root.exists():
+                logger.info(f"Scanning Extensions for TTS Drivers in: {extensions_root}")
+                for ext_path in extensions_root.iterdir():
+                    if ext_path.is_dir():
+                         ext_drivers_dir = ext_path / "drivers" / "tts"
+                         if ext_drivers_dir.exists():
+                             logger.info(f"Scanning Extension Drivers: {ext_drivers_dir}")
+                             ext_loaded = PluginLoader.load_plugins(str(ext_drivers_dir), BaseTTSDriver)
+                             for d in ext_loaded:
+                                 logger.info(f"📦 Loaded Extension Driver from {ext_path.name}: {d.id} ({d.name})")
+                                 self.drivers[d.id] = d
+            
         except Exception as e:
             logger.error(f"Failed to load dynamic TTS drivers: {e}")
 
         # Load Config
         saved_provider = app_settings.tts.provider 
         if not saved_provider or saved_provider not in self.drivers:
-             # Fallback logic if preferred is missing
+             # Fallback logic
              if "edge-tts" in self.drivers: saved_provider = "edge-tts"
              elif self.drivers: saved_provider = list(self.drivers.keys())[0]
         
@@ -125,21 +145,29 @@ async def startup_event():
     global http_client
     http_client = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
     
-    # Initialization moved to lifecycle.py
-    # await manager.register_drivers()
-    logger.info(f"TTS Service Ready.")
+    # Initialization
+    from services.container import services
+    
+    # 1. Create Manager
+    manager = TTSPluginManager()
+    
+    # 2. Register with Container (So Depends(get_tts_service) works)
+    services.register_tts(manager)
+    
+    # 3. Initialize Drivers
+    await manager.register_drivers()
+    logger.info(f"TTS Service Ready. Active Driver: {manager.active_driver_id}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     if http_client: await http_client.aclose()
 
 @app.post("/generate")
-async def generate_tts(request: TTSRequest):
+async def generate_tts(request: TTSRequest, manager: Any = Depends(get_tts_service)):
     """
     Unified Endpoint delegating to active driver.
     """
-    from services.container import services
-    manager = services.get_tts()
+    # manager injected via DI
 
     if not manager.active_driver:
         raise HTTPException(status_code=503, detail="No active TTS driver")
@@ -165,8 +193,9 @@ async def generate_tts(request: TTSRequest):
         # Fix: Properly close character set and use standard Chinese brackets
         clean_text = re.sub(r'[()\[\]（）【】]', '', clean_text)
         
-        # 2. Remove emojis (Basic Range)
-        clean_text = re.sub(r'[\U00010000-\U0010ffff]', '', clean_text) 
+        # 2. Remove emojis and symbols (Expanded Range)
+        # Covers: Spec. chars, Dingbats, Emoji, Transport, Symbols
+        clean_text = re.sub(r'[\U00010000-\U0010ffff\u2600-\u26ff\u2700-\u27bf\u1f300-\u1f9ff\u1f600-\u1f64f]', '', clean_text) 
         
         # 3. Fix All-Caps words (LUMINA -> Lumina) to prevent spelling out
         def fix_caps(m):
@@ -175,6 +204,11 @@ async def generate_tts(request: TTSRequest):
         
         # 4. Remove symbols like '&' and normalize whitespace
         clean_text = re.sub(r'[&]', ' ', clean_text)
+        
+        # 5. Remove Markdown symbols (*, #, `, ~)
+        # Avoid reading out "asterisks" or "hashtags"
+        clean_text = re.sub(r'[*#`~]', '', clean_text)
+        
         clean_text = re.sub(r'\s+', ' ', clean_text).strip()
         
         # Stream response
@@ -191,14 +225,15 @@ async def generate_tts(request: TTSRequest):
         raise HTTPException(status_code=500, detail=str(e))
         
 @app.post("/tts/synthesize")
-async def synthesize_proxy(request: TTSRequest):
-    return await generate_tts(request)
+async def synthesize_proxy(request: TTSRequest, manager: Any = Depends(get_tts_service)):
+    # Proxy also needs DI if it calls generate_tts? 
+    # Actually generate_tts expects 'request' and 'manager'.
+    # Proxy logic:
+    return await generate_tts(request, manager)
 
 @app.get("/models/list")
-async def list_models():
+async def list_models(manager: Any = Depends(get_tts_service)):
     """List available drivers and their status."""
-    from services.container import services
-    manager = services.get_tts()
     return {
         "active": manager.active_driver_id,
         "engines": [
@@ -214,13 +249,10 @@ async def list_models():
     }
 
 @app.post("/models/switch")
-async def switch_model(req: SwitchRequest):
+async def switch_model(req: SwitchRequest, manager: Any = Depends(get_tts_service)):
     driver_id = req.driver_id or req.model_name
     if not driver_id:
          raise HTTPException(status_code=400, detail="Missing driver_id or model_name")
-    
-    from services.container import services
-    manager = services.get_tts()
     
     if driver_id not in manager.drivers:
         raise HTTPException(404, "Driver not found")
@@ -228,14 +260,10 @@ async def switch_model(req: SwitchRequest):
     return {"status": "ok", "active": driver_id}
 
 @app.get("/tts/voices")
-async def list_voices(engine: Optional[str] = None):
+async def list_voices(engine: Optional[str] = None, manager: Any = Depends(get_tts_service)):
     """
     Proxy to get voices from specific engine or active driver.
-    Compatibility endpoint for frontend.
     """
-    from services.container import services
-    manager = services.get_tts()
-
     target_driver = manager.active_driver
     if engine and engine in manager.drivers:
         target_driver = manager.drivers[engine]
@@ -252,8 +280,6 @@ async def list_voices(engine: Optional[str] = None):
             logger.error(f"Error fetching voices from {target_driver.id}: {e}")
             return []
     
-    # Fallback for drivers without voices list (like GPT-SoVITS dynamic?)
-    # or return empty list
     return []
 
 @app.get("/health/reset_pool")

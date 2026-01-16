@@ -30,7 +30,9 @@ class GatewayService:
             EventType.COGNITIVE_STATE,
             EventType.SYSTEM_STATUS,
             EventType.CONTROL_SESSION,
-            "emotion:changed"
+            "emotion:changed",
+            "ui:register_widget",
+            "ui:remove_widget"
         ]
         
         for evt in outbound_events:
@@ -71,7 +73,7 @@ class GatewayService:
             payload_to_send = event.data.dict()
         # 2. If data is dict, wrap it
         elif isinstance(event.data, dict):
-            # Try to extract session_id
+            # Try to extract session_id from the dict data
             sid = event.data.get("session_id", 0)
             payload_to_send = EventPacket(
                 session_id=sid,
@@ -81,8 +83,15 @@ class GatewayService:
                 timestamp=event.timestamp
             ).dict()
         else:
-            logger.warning(f"Gateway received unknown data type for {event.type}: {type(event.data)}")
-            return
+            # Fallback for other types (e.g. strings)
+            # Create a generic packet
+            payload_to_send = EventPacket(
+                session_id=0,
+                type=event.type,
+                source=event.source,
+                payload={"data": str(event.data)},
+                timestamp=event.timestamp
+            ).dict()
 
         # Broadcast
         # logger.debug(f"Broadcasting {event.type} to {len(self.active_connections)} clients")

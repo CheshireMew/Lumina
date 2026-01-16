@@ -58,10 +58,11 @@ class ServiceContainer:
         self._system_plugin_manager: Optional[Any] = None
         
         # === UTILITY SERVICES ===
-        self._soul_client: Optional[Any] = None
+        self._soul: Optional[Any] = None # SoulService
         self._mcp_host: Optional[Any] = None
         self._batch_manager: Optional[Any] = None
         self._session_manager: Optional[Any] = None
+        self._skill_manager: Optional[Any] = None # Framework V1
         self._vision: Optional[Any] = None
         self._tts: Optional[Any] = None
         self._stt: Optional[Any] = None
@@ -168,6 +169,13 @@ class ServiceContainer:
     def set_tts(self, instance: Any):
         self._tts = instance
 
+    # Aliases for explicit registration
+    def register_tts(self, instance: Any):
+        self._tts = instance
+
+    def register_stt(self, instance: Any):
+        self._stt = instance
+
     # ==================== LEGACY PROPERTIES (Backward Compat) ====================
     # These are kept for existing code that uses services.xxx syntax
     
@@ -220,13 +228,12 @@ class ServiceContainer:
         self._system_plugin_manager = value
     
     @property
-    def soul_client(self):
-        return self._soul_client
-    
-    @soul_client.setter
-    def soul_client(self, value):
-        self._soul_client = value
-    
+    def soul(self) -> Optional[Any]:
+        return self._soul
+
+    @soul.setter
+    def soul(self, value: Any):
+        self._soul = value   
     @property
     def mcp_host(self):
         return self._mcp_host
@@ -250,6 +257,14 @@ class ServiceContainer:
     @session_manager.setter
     def session_manager(self, value):
         self._session_manager = value
+
+    @property
+    def skill_manager(self):
+        return self._skill_manager
+
+    @skill_manager.setter
+    def skill_manager(self, value):
+        self._skill_manager = value
     
     @property
     def vision(self):

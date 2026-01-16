@@ -60,7 +60,7 @@ class PluginScanner:
                          except Exception as e:
                              logger.warning(f"Failed to create synthetic manifest for {item.name}: {e}")
             
-            elif item.is_file() and item.suffix == ".py":
+            elif item.is_file() and item.suffix == ".py" and not item.name.startswith("__"):
                 # Legacy single-file plugin
                 try:
                      logger.info(f"Detected Legacy Single-File Plugin: {item.stem}")

@@ -16,7 +16,9 @@ import { memoryService } from '@core/memory/memory_service'
 import { ttsService } from '@core/voice/tts_service'
 
 // Core Hooks
+// Core Hooks
 import { useGateway } from './hooks/useGateway';
+import { useCoreSystem } from './hooks/useCoreSystem';
 import { useCharacterState } from './hooks/useCharacterState';
 import { useAudioPipeline } from './hooks/useAudioPipeline';
 import { useChatStream } from './hooks/useChatStream';
@@ -29,17 +31,22 @@ import { AvatarRendererRef } from './core/avatar/types';
 // UI Components
 import { AppToolbar } from './components/AppToolbar';
 import { ModalLayer } from './components/ModalLayer';
+import { WidgetContainer } from './components/plugins/WidgetContainer';
 
 function App() {
     // ==================== HOOKS ====================
-    const { characters, activeCharacterId, activeCharacter, switchCharacter, setCharacters, updateCharacterModel } = useCharacterState();
-    const { settings, isLoaded: isSettingsLoaded, updateLLMSettings, saveSetting } = useSettings();
-    const { initPipeline, enqueueSynthesis, feedToken, flush, clear: clearAudio } = useAudioPipeline();
-    const { displayMessage, reasoningContent, reset: resetStream, processToken, getFinalContent } = useChatStream();
+    // Refs
+    const avatarRef = useRef<AvatarRendererRef>(null);
+    
+    // Core System Hook (Unified)
+    const {
+        activeCharacter, activeCharacterId, characters, setCharacters, updateCharacterModel, switchCharacter,
+        settings, isSettingsLoaded, updateLLMSettings, saveSetting,
+        isProcessing, isStreaming, displayMessage, reasoningContent,
+        sendMessage, interrupt, saveCharacters
+    } = useCoreSystem(avatarRef);
     
     // ==================== LOCAL STATE ====================
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [isStreaming, setIsStreaming] = useState(false);
     const [chatMode, setChatMode] = useState<'text' | 'voice'>('text');
     
     // Modals State
@@ -49,106 +56,37 @@ function App() {
     const [isSurrealViewerOpen, setIsSurrealViewerOpen] = useState(false);
     const [isAvatarSelectorOpen, setIsAvatarSelectorOpen] = useState(false);
     const [isLLMConfigOpen, setIsLLMConfigOpen] = useState(false);
+    const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'voice' | 'characters' | 'interaction'>('general');
+    const [backgroundImage, setBackgroundImage] = useState<string>('');
     
-    // Refs
-    const avatarRef = useRef<AvatarRendererRef>(null);
-    const conversationHistoryRef = useRef<Message[]>([]);
+    // Sync background from settings
+    useEffect(() => {
+        if (settings?.backgroundImage) {
+            setBackgroundImage(settings.backgroundImage);
+        }
+    }, [settings.backgroundImage]);
+    
+    // Other Refs
     const currentSystemPromptRef = useRef<string>('');
-    const isProcessingRef = useRef(false); // Synchronous lock
-
-    // ==================== GATEWAY CALLBACKS ====================
-    const handleChatStart = useCallback((mode: string) => {
-        console.log(`[App] Chat Start (mode: ${mode})`);
-        isProcessingRef.current = true;
-        setIsProcessing(true);
-        setIsStreaming(true);
-        resetStream();
-        
-        if (settings.isTTSEnabled) {
-            initPipeline((sentence, index) => {
-                enqueueSynthesis(sentence, index);
-            });
-        }
-    }, [settings.isTTSEnabled, resetStream, initPipeline, enqueueSynthesis]);
-
-    const handleChatStream = useCallback((token: string) => {
-        processToken(token, 'content', (emotion) => {
-            avatarRef.current?.setEmotion?.(emotion);
-        });
-        
-        if (settings.isTTSEnabled) {
-            feedToken(token);
-        }
-    }, [processToken, settings.isTTSEnabled, feedToken]);
-
-    const handleChatEnd = useCallback(() => {
-        console.log('[App] Chat End');
-        isProcessingRef.current = false;
-        setIsProcessing(false);
-        setIsStreaming(false);
-        
-        if (settings.isTTSEnabled) {
-            flush();
-        }
-        
-        const finalContent = getFinalContent();
-        if (finalContent) {
-            const msg: Message = { role: 'assistant', content: finalContent, timestamp: Date.now() };
-            conversationHistoryRef.current.push(msg);
-            
-            // memoryService.add([msg], settings.userName, activeCharacter?.name || 'Assistant')
-            //    .catch(e => console.error('[Memory] Save failed:', e));
-        }
-    }, [settings.isTTSEnabled, settings.userName, activeCharacter, flush, getFinalContent]);
-
-    const handleEmotion = useCallback((emotion: string) => {
-        console.log('[App] Emotion:', emotion);
-        avatarRef.current?.setEmotion?.(emotion);
-    }, []);
-
-    // Gateway Hook
-    const { isConnected, send } = useGateway({
-        onChatStart: handleChatStart,
-        onChatStream: handleChatStream,
-        onChatEnd: handleChatEnd,
-        onEmotion: handleEmotion,
-        baseUrl: API_CONFIG.BASE_URL
-    });
 
     // ==================== HANDLERS ====================
-    const handleSend = useCallback(async (text: string) => {
-        if (!text.trim() || isProcessingRef.current) return;
-        
-        const userMsg: Message = { role: 'user', content: text, timestamp: Date.now() };
-        conversationHistoryRef.current.push(userMsg);
-        
-        // Lock immediately (Synchronous)
-        isProcessingRef.current = true;
-        setIsProcessing(true); 
-        
-        send('chat', { 
-            text, 
-            character_id: activeCharacterId,
-            user_name: settings.userName,
-            model: settings.llm.model // Pass current model selection
-        });
-    }, [activeCharacterId, settings.userName, send]);
+    const handleSend = useCallback((text: string) => {
+        sendMessage(text);
+    }, [sendMessage]);
 
     const handleUserSpeechStart = useCallback(() => {
-        console.log('[TTS] User speaking, clearing queue');
-        clearAudio();
-    }, [clearAudio]);
+        console.log('[App] User speaking, interrupting...');
+        interrupt();
+    }, [interrupt]);
 
-    const handleCharacterSwitch = useCallback(async (newCharacterId: string) => {
-        console.log('[App] Switching character:', newCharacterId);
-        await switchCharacter(newCharacterId);
-        conversationHistoryRef.current = [];
-        resetStream();
-    }, [switchCharacter, resetStream]);
+    const handleCharacterSwitch = useCallback(async (newId: string) => {
+        console.log('[App] Switching character:', newId);
+        await switchCharacter(newId);
+    }, [switchCharacter]);
 
     const handleClearHistory = useCallback(() => {
-        conversationHistoryRef.current = [];
-        console.log('[Memory] History cleared');
+        console.log('[Memory] History cleared (via System Prompt reset or manual action)');
+        // history clearing logic is inside core system ref usually, or we expose a clear method
     }, []);
 
     const handleLLMSettingsChange = useCallback((apiKey: string, baseUrl: string, model: string, temperature: number, thinkingEnabled: boolean, historyLimit: number, overflowStrategy: 'slide' | 'reset', topP?: number, presencePenalty?: number, frequencyPenalty?: number) => {
@@ -168,9 +106,12 @@ function App() {
 
     const handleModelSelect = useCallback(async (modelPath: string) => {
         if (!activeCharacter) return;
-        console.log('[App] Switching Model to:', modelPath);
         await updateCharacterModel(activeCharacterId, modelPath);
     }, [activeCharacter, activeCharacterId, updateCharacterModel]);
+
+    const handleSaveCharacters = useCallback(async (chars: CharacterProfile[], deletedIds: string[]) => {
+        await saveCharacters(chars, deletedIds);
+    }, [saveCharacters]);
     
     const toggleChatMode = useCallback(() => {
         setChatMode(prev => prev === 'text' ? 'voice' : 'text');
@@ -178,10 +119,7 @@ function App() {
 
     // ==================== EFFECTS ====================
     useEffect(() => {
-        const handleInterruption = () => {
-            clearAudio();
-            avatarRef.current?.stopExpression?.();
-        };
+        const handleInterruption = () => interrupt();
         
         const handleFaceData = (data: any) => {
              if (avatarRef.current?.setBlendShapes) {
@@ -194,14 +132,14 @@ function App() {
         const u3 = events.on('avatar:face_tracking', handleFaceData);
         
         return () => { u1(); u2(); u3(); };
-    }, [clearAudio]);
+    }, [interrupt]);
 
     useEffect(() => {
         if (activeCharacter) {
             if (activeCharacter.voiceConfig?.voiceId) {
                 ttsService.setDefaultVoice(activeCharacter.voiceConfig.voiceId);
             }
-            
+            // Fetch soul prompt...
             fetch(`${API_CONFIG.BASE_URL}/soul`)
                 .then(res => res.ok ? res.json() : null)
                 .then(soul => {
@@ -218,11 +156,17 @@ function App() {
     const modelPath = activeCharacter?.modelPath || API_CONFIG.DEFAULT_MODEL_PATH;
 
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundImage: 'url(/bg.png)',
-            backgroundSize: 'cover', backgroundPosition: 'center',
-            overflow: 'hidden', margin: 0, padding: 0
+        <div style={{ 
+            height: '100vh', 
+            width: '100vw', 
+            position: 'relative', 
+            overflow: 'hidden',
+            backgroundColor: '#f3f4f6', // Fallback color
+            backgroundImage: backgroundImage ? `url("${backgroundImage}")` : 'linear-gradient(135deg, #eef2ff 0%, #fae8ff 50%, #f0fdf4 100%)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            transition: 'background-image 0.5s ease-in-out'
         }}>
             {/* Avatar */}
             {isSettingsLoaded ? (
@@ -246,22 +190,71 @@ function App() {
                 />
             )}
 
-            {/* Chat */}
-            <ChatBubble message={displayMessage} isStreaming={isStreaming} reasoning={reasoningContent} />
+            {/* ================= Unified Chat Panel ================= */}
+            {(
+                <div style={{
+                    position: 'absolute',
+                    bottom: '50px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '90%',
+                    maxWidth: '800px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                    backdropFilter: 'blur(16px)',
+                    borderRadius: '24px',
+                    border: '1px solid rgba(255, 255, 255, 0.4)',
+                    boxShadow: '0 8px 32px rgba(31, 38, 135, 0.15)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    zIndex: 100,
+                    overflow: 'hidden', // Contain children
+                    transition: 'all 0.3s ease',
+                    // Auto-hide top part if no message
+                    height: displayMessage ? 'auto' : 'auto' 
+                }}>
+                    
+                    {/* 1. Chat Area (Scrollable) */}
+                    {displayMessage && (
+                        <div style={{
+                            maxHeight: '25vh', // Limit height (Reduced from 40vh)
+                            overflowY: 'auto',
+                            padding: '16px 24px',
+                            borderBottom: '1px solid rgba(0,0,0,0.05)',
+                        }}>
+                            <ChatBubble 
+                                message={displayMessage} 
+                                isStreaming={isStreaming} 
+                                reasoning={reasoningContent}
+                                embedded={true}
+                            />
+                        </div>
+                    )}
 
-            {/* Input */}
-            {chatMode === 'text' ? (
-                <InputBox onSend={handleSend} disabled={isProcessing} />
-            ) : (
-                <VoiceInput onSend={handleSend} disabled={isProcessing} onSpeechStart={handleUserSpeechStart} />
+                    {/* 2. Input Area (Fixed at bottom of panel) */}
+                    <div style={{ width: '100%' }}>
+                        <InputBox 
+                            onSend={handleSend} 
+                            disabled={isProcessing && !isStreaming}
+                            embedded={true}
+                            chatMode={chatMode}
+                            onToggleChatMode={toggleChatMode}
+                            onSpeechStart={handleUserSpeechStart}
+                        />
+                    </div>
+                </div>
             )}
 
             {/* UI Layer */}
             <AppToolbar 
                 chatMode={chatMode}
                 onToggleChatMode={toggleChatMode}
-                onOpenAvatarSelector={() => setIsAvatarSelectorOpen(true)}
-                onOpenSettings={() => setIsSettingsOpen(true)}
+                onOpenAvatarSelector={() => {
+                    setIsAvatarSelectorOpen(true);
+                }}
+                onOpenSettings={() => {
+                    setSettingsInitialTab('general');
+                    setIsSettingsOpen(true);
+                }}
                 onOpenLLMSettings={() => setIsLLMConfigOpen(true)}
                 onOpenPlugins={() => setIsPluginStoreOpen(true)}
                 onOpenMotionTester={() => setIsMotionTesterOpen(true)}
@@ -303,14 +296,30 @@ function App() {
                 onUserNameUpdated={handleUserNameUpdated}
                 onLive2DHighDpiChange={(e) => saveSetting('live2dHighDpi', 'live2d_high_dpi', e)}
                 onCharacterSwitch={handleCharacterSwitch}
-                onThinkingModeChange={(e) => updateLLMSettings({ ...settings.llm, thinkingEnabled: e })}
+                onThinkingModeChange={enable => updateLLMSettings({ ...settings.llm, thinkingEnabled: enable })}
+                onBackgroundImageChange={url => {
+                    setBackgroundImage(url);
+                    saveSetting('backgroundImage', 'backgroundImage', url);
+                }}
                 
+                // Character Props (Passed to AvatarSelectorModal)
+                characters={characters}
+                setCharacters={setCharacters}
+                onSaveCharacters={handleSaveCharacters}
+
                 activeCharacter={activeCharacter}
                 activeCharacterId={activeCharacterId}
                 galgameEnabled={activeCharacter?.galgameModeEnabled ?? true}
                 onModelSelect={handleModelSelect}
                 avatarRef={avatarRef}
+                settingsInitialTab={settingsInitialTab}
             />
+
+            {/* Plugin Widgets Layer */}
+            <div className="fixed top-24 right-4 z-40 w-80 pointer-events-none flex flex-col gap-4">
+                 <WidgetContainer location="sidebar_right" className="w-full" />
+            </div>
+            
         </div>
     );
 }

@@ -13,6 +13,12 @@ from pydantic import BaseModel, Field
 # Setup logging
 logger = logging.getLogger("ConfigManager")
 
+try:
+    import yaml
+except ImportError:
+    yaml = None
+    logger.warning("PyYAML not installed. YAML config support disabled.")
+
 # Load .env (Phase 27)
 from dotenv import load_dotenv, find_dotenv
 env_file = find_dotenv(usecwd=True) 
@@ -64,6 +70,15 @@ def _resolve_data_root() -> Path:
     if portable_dir.exists():
         logger.info(f"Portable Mode Detected: {portable_dir}")
         return portable_dir
+    
+    # [DEV MODE DEFAULT] Auto-create local data in dev
+    if not IS_FROZEN:
+        try:
+            portable_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Dev Mode: Auto-created local data dir: {portable_dir}")
+            return portable_dir
+        except Exception:
+            pass # Fallback to AppData if write permission fails
         
     # 2. Env Var
     if os.environ.get("LUMINA_DATA_PATH"):
@@ -91,9 +106,11 @@ def _resolve_data_root() -> Path:
             # Fallback to temp if strictly read-only system (unlikely but safe)
             import tempfile
             return Path(tempfile.gettempdir()) / "Lumina"
+            return Path(tempfile.gettempdir()) / "Lumina"
             
     return app_data
 
+# Global Data Root Constant (Exported)
 DATA_ROOT = _resolve_data_root()
 CONFIG_ROOT = DATA_ROOT  # Configs now live in Data Root by default
 
@@ -165,6 +182,11 @@ class PluginGroupsConfig(BaseModel):
     # Mapping Group ID -> Behavior ('exclusive' or 'independent')
     group_behaviors: Dict[str, str] = {}
 
+class PluginsConfig(BaseModel):
+    """Global Plugin State Configuration"""
+    disabled_plugins: list[str] = Field(default_factory=list)
+    # Future: pinned_plugins, startup_priority etc.
+
 class BraveConfig(BaseModel):
     api_key: str = ""
     
@@ -220,7 +242,9 @@ class ConfigManager:
         self._brave_config = BraveConfig()
         self._search_config = SearchConfig()
         self._bilibili_config = BilibiliConfig()
+        self._bilibili_config = BilibiliConfig()
         self._plugin_groups_config = PluginGroupsConfig()
+        self._plugins_config = PluginsConfig()
         self.load_configs()
     
     def load_configs(self):
@@ -229,8 +253,41 @@ class ConfigManager:
         # 0. Load Network Config (New)
         # Look in project_root/config/ports.json (Dev) or DATA_ROOT/ports.json (Prod/Fallback)
         ports_path = BASE_DIR.parent / "config" / "ports.json"
+        
+        # [NEW] Unified Config (YAML)
+        # Priority 1: config.yaml in CONFIG_ROOT
+        yaml_path = CONFIG_ROOT / "config.yaml"
+        yaml_data = {}
+        
+        if yaml_path.exists() and yaml:
+            try:
+                with open(yaml_path, "r", encoding="utf-8") as f:
+                    yaml_data = yaml.safe_load(f) or {}
+                logger.info(f"📄 Loaded unified config from {yaml_path}")
+                
+                # Hydrate Models from YAML
+                if "network" in yaml_data: self._network_config = NetworkConfig(**yaml_data["network"])
+                if "memory" in yaml_data: self._memory_config = MemoryConfig(**yaml_data["memory"])
+                if "llm" in yaml_data: self._llm_config = LLMConfig(**yaml_data["llm"])
+                if "stt" in yaml_data: self._stt_config = STTConfig(**yaml_data["stt"])
+                if "tts" in yaml_data: self._tts_config = TTSConfig(**yaml_data["tts"])
+                if "audio" in yaml_data: self._audio_config = AudioConfig(**yaml_data["audio"])
+                if "search" in yaml_data: self._search_config = SearchConfig(**yaml_data["search"])
+                if "brave" in yaml_data: self._brave_config = BraveConfig(**yaml_data["brave"])
+                if "bilibili" in yaml_data: self._bilibili_config = BilibiliConfig(**yaml_data["bilibili"])
+                if "models" in yaml_data: self._models_config = ModelsConfig(**yaml_data["models"])
+                if "models" in yaml_data: self._models_config = ModelsConfig(**yaml_data["models"])
+                if "plugin_groups" in yaml_data: self._plugin_groups_config = PluginGroupsConfig(**yaml_data["plugin_groups"])
+                if "plugins" in yaml_data: self._plugins_config = PluginsConfig(**yaml_data["plugins"])
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to load config.yaml: {e}")
+
+        # Check for ports.json (Legacy Priority? Or Deprecated?)
+        # Keeping it for now as a dev override if it exists
         if not ports_path.exists():
              ports_path = CONFIG_ROOT / "ports.json"
+
              
         if ports_path.exists():
             try:
@@ -301,29 +358,38 @@ class ConfigManager:
 
     def save(self):
         """
-        Save current configuration to JSON files in CONFIG_ROOT.
-        Supports: memory_config.json, stt_config.json, audio_config.json, plugin_groups.json
+        Save current configuration to Unified config.yaml.
+        Legacy JSON files are NO LONGER updated.
         """
+        if not yaml:
+            logger.error("Cannot save config: PyYAML not installed.")
+            return
+
         try:
-            # 1. Audio Config
-            audio_path = CONFIG_ROOT / "audio_config.json"
-            with open(audio_path, "w", encoding="utf-8") as f:
-                json.dump(self._audio_config.model_dump(), f, indent=4, ensure_ascii=False)
+            yaml_path = CONFIG_ROOT / "config.yaml"
             
-            # 2. STT Config
-            stt_path = CONFIG_ROOT / "stt_config.json"
-            with open(stt_path, "w", encoding="utf-8") as f:
-                json.dump(self._stt_config.model_dump(), f, indent=4, ensure_ascii=False)
-
-            # 3. Plugin Groups
-            groups_path = CONFIG_ROOT / "plugin_groups.json"
-            with open(groups_path, "w", encoding="utf-8") as f:
-                json.dump(self._plugin_groups_config.model_dump(), f, indent=4, ensure_ascii=False)
-
-            # 3. TTS Config? (If needed, currently just defaulting)
-            # 4. Search Config? (If needed)
+            # Construct dictionary
+            data = {
+                "network": self._network_config.model_dump(),
+                "memory": self._memory_config.model_dump(),
+                "llm": self._llm_config.model_dump(),
+                "stt": self._stt_config.model_dump(),
+                "tts": self._tts_config.model_dump(),
+                "audio": self._audio_config.model_dump(),
+                "search": self._search_config.model_dump(),
+                "brave": self._brave_config.model_dump(),
+                "bilibili": self._bilibili_config.model_dump(),
+                "models": self._models_config.model_dump(),
+                "models": self._models_config.model_dump(),
+                "plugin_groups": self._plugin_groups_config.model_dump(),
+                "plugins": self._plugins_config.model_dump()
+            }
             
-            logger.info("Configuration saved successfully.")
+            with open(yaml_path, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+            
+            logger.info(f"✅ Configuration saved to {yaml_path}")
+            
         except Exception as e:
             logger.error(f"Failed to save configuration: {e}")
         
@@ -396,6 +462,10 @@ class ConfigManager:
     @property
     def plugin_groups(self) -> PluginGroupsConfig:
         return self._plugin_groups_config
+        
+    @property
+    def plugins(self) -> PluginsConfig:
+        return self._plugins_config
         
     @property
     def network(self) -> NetworkConfig:

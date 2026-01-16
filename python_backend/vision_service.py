@@ -1,11 +1,13 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from PIL import Image
 import io
 import base64
 import logging
 from core.interfaces.driver import BaseVisionDriver
+from routers.deps import get_vision_service
+
 # Concrete drivers loaded dynamically
 
 
@@ -51,14 +53,15 @@ class AnalyzeRequest(BaseModel):
 async def analyze_image(
     file: Optional[UploadFile] = File(None),
     image_base64: Optional[str] = Form(None),
-    prompt: str = Form("Describe this image.")
+    prompt: str = Form("Describe this image."),
+    vision_service: Any = Depends(get_vision_service)
 ):
     """
     Analyze an image (from file upload or base64) and return text description.
     """
     try:
-        from services.container import services
-        provider = services.get_vision().get_active_provider()
+        # DI: vision_service is injected
+        provider = vision_service.get_active_provider()
         
         image_data = None
         
@@ -97,15 +100,17 @@ async def analyze_image(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/load")
-async def load_model(background_tasks: BackgroundTasks):
+async def load_model(background_tasks: BackgroundTasks, vision_service: Any = Depends(get_vision_service)):
     """Explicitly load the model into memory."""
-    provider = manager.get_active_provider()
+    # [FIX] Use injected service, not 'manager' global
+    provider = vision_service.get_active_provider()
     background_tasks.add_task(provider.load)
     return {"status": "loading_started"}
 
 @router.post("/unload")
-async def unload_model():
+async def unload_model(vision_service: Any = Depends(get_vision_service)):
     """Unload the model to free memory."""
-    provider = manager.get_active_provider()
+    # [FIX] Use injected service, not 'manager' global
+    provider = vision_service.get_active_provider()
     provider.unload()
     return {"status": "unloaded"}

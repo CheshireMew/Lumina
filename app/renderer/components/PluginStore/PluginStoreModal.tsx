@@ -26,6 +26,7 @@ interface PluginItem {
   group_id?: string; 
   group_exclusive?: boolean; 
   permissions?: string[]; // [NEW]
+  tags?: string[]; // [NEW] Dynamic Styling
 }
 
 interface PluginStoreModalProps {
@@ -352,7 +353,9 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
 
                             // MVP Core Identification
                             // Dreaming/Reverie removed from Kernel as per user request (Optional)
-                            const isMvpCore = ['LLM Intelligence', 'Emotion Broker'].includes(plugin.name);
+                            // MVP Core Identification
+                            // Dynamic Tag-based check
+                            const isMvpCore = plugin.tags?.includes('mvp_kernel') || ['LLM Intelligence', 'LLM Core', 'Emotion Broker'].includes(plugin.name);
 
                             return (
                             <div 
@@ -365,7 +368,7 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
                                     // Only allow opening settings if plugin is enabled
                                     if (!isSelected) return;
 
-                                    if (plugin.name === 'LLM Intelligence') {
+                                    if (plugin.name === 'LLM Intelligence' || plugin.name === 'LLM Core') {
                                         if (onOpenLLMSettings) {
                                             onOpenLLMSettings();
                                         }

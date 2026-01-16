@@ -22,6 +22,7 @@ export interface AppSettings {
     contextWindow: number;
     live2dHighDpi: boolean;
     isTTSEnabled: boolean;
+    backgroundImage: string; // Add this
     // isThinkingEnabled is now part of LLMSettings
 }
 
@@ -42,6 +43,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     contextWindow: 50,
     live2dHighDpi: false,
     isTTSEnabled: true,
+    backgroundImage: "", // Add default
 };
 
 /**
@@ -100,17 +102,19 @@ export function useSettings() {
                     historyLimit,
                     overflowStrategy,
                     contextWindow,
+                    backgroundImage, // Load this
                 ] = await Promise.all([
                     store.get("apiKey"),
                     store.get("apiBaseUrl"),
                     store.get("modelName"),
                     store.get("llm_temperature"),
                     store.get("thinking_enabled"),
-                    store.get("history_limit"),
-                    store.get("overflow_strategy"),
-                    store.get("userName"),
-                    store.get("contextWindow"),
-                    store.get("live2d_high_dpi"),
+                    store.get("userName"), // 5: userName
+                    store.get("live2d_high_dpi"), // 6: highDpi
+                    store.get("history_limit"), // 7: historyLimit
+                    store.get("overflow_strategy"), // 8: overflowStrategy
+                    store.get("contextWindow"), // 9: contextWindow
+                    store.get("backgroundImage"), // Fetch this
                 ]);
 
                 const loaded: AppSettings = {
@@ -134,6 +138,7 @@ export function useSettings() {
                         contextWindow || DEFAULT_SETTINGS.contextWindow,
                     live2dHighDpi: highDpi || false,
                     isTTSEnabled: DEFAULT_SETTINGS.isTTSEnabled,
+                    backgroundImage: backgroundImage || "", // Assign
                 };
 
                 prevLLMRef.current = loaded.llm;

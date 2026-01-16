@@ -89,12 +89,31 @@ async def request_id_middleware(request: Request, call_next):
     finally:
         request_id_ctx.reset(token)
 
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    """Business Logic / Validation Errors -> 400"""
+    logger.warning(f"⚠️ Bad Request on {request.url}: {exc}") # No stack trace for usage errors
+    return JSONResponse(
+        status_code=400,
+        content={"message": "Bad Request", "detail": str(exc)},
+    )
+
+@app.exception_handler(PermissionError)
+async def permission_error_handler(request: Request, exc: PermissionError):
+    """Security Errors -> 403"""
+    logger.warning(f"🚫 Forbidden Access on {request.url}: {exc}")
+    return JSONResponse(
+        status_code=403,
+        content={"message": "Forbidden", "detail": str(exc)},
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global Exception on {request.url}: {exc}", exc_info=True)
+    """Catch-all for 500s"""
+    logger.critical(f"🔥 Global Panic on {request.url}: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"message": "Internal Server Error", "detail": str(exc)},
+        content={"message": "Internal Server Error", "detail": str(exc) if app_settings.is_dev else "Internal Error"},
     )
 
 app.add_middleware(
@@ -120,7 +139,8 @@ from routers import (
     llm_mgmt, 
     characters, 
     completions,
-    admin
+    admin,
+    plugin_assets
 )
 from fastapi.staticfiles import StaticFiles
 
@@ -137,6 +157,7 @@ app.include_router(characters.router)
 app.include_router(completions.router)
 app.include_router(admin.router) # Free LLM / V1 API
 app.include_router(vision_router) # Vision API
+app.include_router(plugin_assets.router, prefix="/api") # /api/plugins/{id}/assets/...
 
 
 # Removed deprecated chat.router (duplicate, use /v1/chat/completions)

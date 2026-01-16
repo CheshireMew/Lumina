@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import time
 from typing import List, Callable, Awaitable, Optional
 from datetime import datetime
 
@@ -58,7 +57,7 @@ class TimeTicker:
                         # Better to spawn task to not block ticker
                         asyncio.create_task(sub(now))
                     except Exception as e:
-                        logger.error(f"Error in second subscriber: {e}")
+                        logger.error(f"Error in second subscriber: {e}", exc_info=True)
 
                 # 1b. EventBus Tick Event (Phase 30)
                 if self._event_bus:
@@ -71,7 +70,7 @@ class TimeTicker:
                         try:
                             asyncio.create_task(sub(now))
                         except Exception as e:
-                            logger.error(f"Error in minute subscriber: {e}")
+                            logger.error(f"Error in minute subscriber: {e}", exc_info=True)
                     
                     # 2b. EventBus Minute Event
                     if self._event_bus:
@@ -83,6 +82,6 @@ class TimeTicker:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Global Ticker Error: {e}")
+                logger.error(f"Global Ticker Error: {e}", exc_info=True)
                 await asyncio.sleep(1.0)
 

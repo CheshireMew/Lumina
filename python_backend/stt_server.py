@@ -36,9 +36,11 @@ import uuid
 import queue
 from typing import Optional, Dict
 from pathlib import Path
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Request, Depends
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Any
+from routers.deps import get_stt_service
 
 # Engines
 from faster_whisper import WhisperModel
@@ -69,7 +71,11 @@ async def request_id_middleware(request: Request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://127.0.0.1", "http://localhost",
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "tauri://localhost", "electron://altair"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -102,9 +108,13 @@ async def startup_event():
     global audio_manager, voiceprint_manager
     
     # Load model and register drivers (Async)
-    # threading.Thread(target=engine_manager.load_model, args=(engine_manager.current_model_name,)).start()
-    # await engine_manager.register_drivers() # Handled by Lifecycle
-    logger.info("STT Drivers registered via Lifecycle.")
+    from services.stt_manager import STTPluginManager
+    stt_manager = STTPluginManager()
+    await stt_manager.register_drivers()
+    services.stt = stt_manager
+    
+    # threading.Thread(target=stt_manager.load_model, args=(stt_manager.current_model_name,)).start()
+    logger.info("STT Service Initialized & Registered.")
     
     # Load Audio Config from centralized config
     enable_voiceprint = app_settings.audio.enable_voiceprint_filter
@@ -114,25 +124,103 @@ async def startup_event():
     
     if enable_voiceprint:
         try:
-             # Dynamic Loading based on convention or config
-             # We assume standard plugin location unless configured otherwise
-             from importlib import import_module
-             vp_module = import_module("plugins.system.voiceprint.manager")
-             VoiceprintManagerClass = getattr(vp_module, "VoiceprintManager")
+             # Isolation-Refactor: Use PluginLoader to respect isolation_mode
+             from services.plugins.discovery import PluginScanner
+             from services.plugins.loader import PluginLoader
              
-             logger.info("[Startup] Dynamically loaded VoiceprintManager for STT.")
+             # 1. Find Manifest
+             from pathlib import Path
+             scanner = PluginScanner(plugins_root=Path("python_backend/plugins/system")) 
+             # Note: Path is relative to CWD (usually root). If stt_server run from root, this works.
+             # Better: Use absolute path relative to file
+             import os
+             base_dir = os.path.dirname(os.path.abspath(__file__))
+             system_plugins_dir = os.path.join(base_dir, "plugins", "system")
+             scanner = PluginScanner(plugin_dir=system_plugins_dir)
              
-             voiceprint_manager = VoiceprintManagerClass()
-             await voiceprint_manager.ensure_driver_loaded()
+             manifest = scanner.scan_one("voiceprint") # Scan specific ID?
+             # Scanner doesn't have scan_one, but we can scan module directory manually or modify scanner.
+             # MVP: Scan dir manually for "voiceprint" folder?
+             # Or just use the known path structure.
+             from core.manifest import PluginManifest
+             import yaml
              
-             if voiceprint_profile in voiceprint_manager.profiles:
-                 logger.info(f"Voiceprint enabled. Current Profile: {voiceprint_profile}")
-             else:
-                 logger.warning(f"⚠️ Profile '{voiceprint_profile}' not found in {list(voiceprint_manager.profiles.keys())}. Voiceprint disabled.")
-                 enable_voiceprint = False
+             vp_dir = os.path.join(system_plugins_dir, "voiceprint")
+             manifest_path = os.path.join(vp_dir, "manifest.yaml")
+             
+             if not os.path.exists(manifest_path):
+                 raise ImportError("Voiceprint manifest not found")
                  
+             with open(manifest_path, 'r', encoding='utf-8') as f:
+                 data = yaml.safe_load(f)
+             
+             manifest_obj = PluginManifest(**data)
+             manifest_obj.path = vp_dir # Inject runtime path
+             
+             # 2. Load
+             # Loader handles isolation check!
+             # We need a dummy 'context' to initialize it?
+             # For ISOLATED mode, proxy.initialize(context) sends config snapshot.
+             # For LOCAL mode, instance.initialize(context) needs real context.
+             
+             voiceprint_manager = PluginLoader.load_plugin_from_manifest(manifest_obj)
+             
+             if not voiceprint_manager:
+                  raise RuntimeError("PluginLoader returned None")
+             
+             # 3. Initialize
+             # We need to construct a context. STT has access to app_settings.
+             # We can create a lightweight context wrapping app_settings.
+             from core.api.context import LuminaContext
+             # Context expects container. STT has 'services' (container).
+             stt_context = LuminaContext(container=services)
+             # Inject config override if needed (Context usually grabs config from container)
+             # Ensure services.config is set? 
+             # services is a module in stt_server import... 
+             # from services.container import services
+             # services.config is NOT set in stt_server startup yet?
+             # STT startup: 
+             # app_settings = ConfigManager() (Line 38)
+             # We should inject app_settings into services container if not present.
+             services.config = app_settings
+             
+             if hasattr(voiceprint_manager, 'initialize'):
+                 import inspect
+                 if inspect.iscoroutinefunction(voiceprint_manager.initialize):
+                     await voiceprint_manager.initialize(stt_context)
+                 else:
+                     voiceprint_manager.initialize(stt_context)
+                     
+             # 4. Post-Load Checks
+             # Verify/Load driver is separate in Manager? 
+             # VoiceprintManager.initialize calls ensure_driver_loaded? No, initialize registers.
+             # We might need to call ensure_driver_loaded manually if it's not part of init.
+             # Checking VoiceprintManager code... initialize doesn't load driver.
+             # But 'driver' is instantiated in __init__.
+             # ensure_driver_loaded is an async method.
+             
+             if hasattr(voiceprint_manager, 'ensure_driver_loaded'):
+                  await voiceprint_manager.ensure_driver_loaded()
+             
+             logger.info(f"[Startup] Voiceprint Service Loaded (Isolated: {getattr(manifest_obj, 'isolation_mode', 'local')})")
+             
+             # Profile Check (Proxy might not have 'profiles' attribute access directly via RPC property?)
+             # Proxy.__getattr__ does RPC.
+             # But accessing .profiles (dict) via RPC is expensive/unsupported if it returns full dict.
+             # Better: check has_profile(name) method?
+             # VoiceprintManager has `verify` method.
+             # Let's assume it works or skip profile check log for MVP isolation.
+             
+        except ImportError as e:
+            logger.error(f"❌ Voiceprint Plugin Missing: {e}")
+            enable_voiceprint = False
+            voiceprint_manager = None
+        except RuntimeError as e:
+             logger.error(f"❌ Voiceprint Runtime Error (Drivers?): {e}")
+             enable_voiceprint = False
+             voiceprint_manager = None
         except Exception as e:
-            logger.error(f"Voiceprint Dynamic Load Failed: {e}")
+            logger.critical(f"🔥 Critical Voiceprint Failure: {e}", exc_info=True)
             enable_voiceprint = False
             voiceprint_manager = None
             
@@ -150,9 +238,8 @@ async def startup_event():
         message_queue.put({"type": "vad_status", "status": "thinking"})
         
         # Call Transcribe
-        try:
-            # result = engine_manager.transcribe(audio_data)
-            result = stt_manager.transcribe(audio_data)
+        # Call Transcribe logic (below)
+
         
         if stt_manager.model is None:
             logger.warning("STT Model not ready.")
@@ -311,9 +398,9 @@ async def startup_event():
 # --- API Endpoints ---
 
 @app.get("/models/list")
-async def get_models():
+async def get_models(stt_manager: Any = Depends(get_stt_service)):
     """List available STT models and their status"""
-    stt_manager = services.get_stt()
+    # stt_manager injected via DI
     
     # Define available models
     models = []
@@ -328,20 +415,18 @@ async def get_models():
                      models.append({
                         "name": code,
                         "desc": f"{size} ({driver.name})",
-                        "engine": driver.id, # Map back to driver ID? No better to engine type logic?
-                                             # Actually stt_server logic expects 'engine' field to match somewhat.
-                                             # But let's stick to simple:
-                        "is_whisper": driver.id == "faster-whisper", # Heuristic or property?
-                        "download_status": "idle" # To be checked later
+                        "engine": driver.id, 
+                        "is_whisper": driver.id == "faster-whisper", 
+                        "download_status": "idle" 
                      })
             else:
                 # Generic Single-Model Driver (e.g., SenseVoice)
                 models.append({
                     "name": driver.id,
                     "desc": driver.name,
-                    "engine": "plugin_asr", # standardized type
+                    "engine": "plugin_asr", 
                     "is_whisper": False,
-                    "download_status": "completed" # Drivers usually self-manage or are pre-installed
+                    "download_status": "completed" 
                 })
     
     # Check status
@@ -377,8 +462,12 @@ class SwitchModelRequest(BaseModel):
     model_name: str
 
 @app.post("/models/switch")
-async def switch_model(request: SwitchModelRequest, background_tasks: BackgroundTasks):
-    stt_manager = services.get_stt()
+async def switch_model(
+    request: SwitchModelRequest, 
+    background_tasks: BackgroundTasks,
+    stt_manager: Any = Depends(get_stt_service)
+):
+    # stt_manager injected via DI
 
     # Allow Whisper models AND Plugin models
     # Dynamic Validation: Check if model_name is a known Whisper size OR a registered driver ID

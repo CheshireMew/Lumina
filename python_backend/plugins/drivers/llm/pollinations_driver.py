@@ -41,7 +41,7 @@ class PollinationsDriver(BaseLLMDriver):
             "messages": messages,
             "seed": 42,
             "model": target_model,
-            "jsonMode": kwargs.get("response_format", {}).get("type") == "json_object"
+            "jsonMode": False # kwargs.get("response_format", {}).get("type") == "json_object"
         }
 
         if stream:
@@ -55,17 +55,16 @@ class PollinationsDriver(BaseLLMDriver):
                     if resp.status_code != 200:
                         raise Exception(f"Pollinations Error {resp.status_code}: {resp.text}")
                     
-                    # Pollinations returns straight content string usually, or OpenAI JSON if configured?
-                    # Current observation: It often returns OpenAI format OR raw string depending on endpoint ver.
-                    # Let's standardize: The current implementation handles both.
-                    
                     try:
                         data = resp.json()
                         if isinstance(data, str):
                             yield data
                             return
                         # OpenAI format
-                        yield data['choices'][0]['message']['content']
+                        if 'choices' in data:
+                             yield data['choices'][0]['message']['content']
+                        else:
+                             yield str(data)
                     except:
                         yield resp.text
                         
@@ -103,8 +102,6 @@ class PollinationsDriver(BaseLLMDriver):
                 if not resp or resp.status_code != 200:
                     status = resp.status_code if resp else "timeout"
                     logger.error(f"Pollinations Request Failed after retries. Status: {status}")
-                    # SILENT FAIL: Do NOT yield error message to user.
-                    # yield "（AI 思考中遇到了点拥堵，请稍后再试...）" 
                     return
 
                 # Attempt to parse as JSON (Direct or Mixed Content)
@@ -114,23 +111,18 @@ class PollinationsDriver(BaseLLMDriver):
                 content = ""
                 try:
                     data = resp.json()
-                    # ... [Standard parsing logic] ...
                 except ValueError:
-                    # JSON parse failed (likely mixed text + JSON or raw text)
                     text = resp.text
-                    # Try to find a JSON block at the end (Pollinations metadata)
                     json_match = re.search(r'(\{.*"choices".*\})$', text, re.DOTALL)
                     if json_match:
                         try:
                             data = json.loads(json_match.group(1))
-                            logger.info("Recovered JSON from mixed response tail.")
                         except:
                             data = None
                     else:
                         data = None
                         
                     if data is None:
-                        # Assume Raw Text
                         content = text
                 
                 # Process Data if we have it (Direct or Recovered)
@@ -144,31 +136,19 @@ class PollinationsDriver(BaseLLMDriver):
                     else:
                         if "content" in data:
                             content = data["content"]
-                        elif not content: # meaningful text already set if fallback was used
+                        elif not content: 
                              content = resp.text
 
                 if not content: 
                      content = ""
                 
                 # Robust Deduplication (Finds S+S pattern)
-                # Logic: If string S is composed of repeating pattern P, then (S+S).find(S, 1) will return len(P).
-                # If len(P) < len(S), it means S is repeating.
                 if len(content) > 10:
                     doubled = content + content
-                    # Search for 'content' in 'doubled' starting from index 1 (to skip index 0 match)
-                    # We only care if it finds it BEFORE the appended copy (i.e., < len(content))
                     idx = doubled.find(content, 1)
                     if idx != -1 and idx < len(content):
                         logger.warning(f"Detected repetitive content (Period: {idx}). Deduplicating.")
-                        # Check strictly if it's a clean repeat (it usually is if find works)
                         content = content[:idx]
-                
-                # Cleanup: If content still looks like it has JSON at the end ...
-                # Sometimes Pollinations sends "Hello {json}".
-                # If we failed to parse JSON, content="Hello {json}".
-                # We should strip the JSON part if we can't parse it?
-                # Actually, our regex above tried to extract JSON. If we succeeded, content = Clean.
-                # If we failed regex, we yield raw.
                 
                 logger.info(f"Pollinations Final Content ({len(content)} chars)")
                 
@@ -178,24 +158,8 @@ class PollinationsDriver(BaseLLMDriver):
                     yield chunk
                     await asyncio.sleep(0.05)
 
-
-
             except Exception as e:
                 yield f"Stream Failed: {e}"
-    
-    def _mock_chunk(self, content: str, model: str) -> str:
-        # Return OpenAI Chunk Format String
-        return "data: " + json.dumps({
-            "id": "chatcmpl-pollinations",
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": model,
-            "choices": [{
-                "index": 0,
-                "delta": {"content": content},
-                "finish_reason": None
-            }]
-        }) + "\n\n"
 
     async def list_models(self) -> List[str]:
         return ["gpt-4o-mini", "claude-3-haiku", "llama-3-70b", "mistral-large"]

@@ -4,30 +4,25 @@ interface ChatBubbleProps {
     message: string;
     isStreaming?: boolean;
     reasoning?: string;
+    embedded?: boolean; // New prop
 }
 
-const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, reasoning }) => {
+const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, reasoning, embedded = false }) => {
     const [displayedText, setDisplayedText] = useState('');
     const wasStreamingRef = useRef(false);
 
     useEffect(() => {
         if (isStreaming) {
-            // Streaming mode: Sync immediately
             setDisplayedText(message);
             wasStreamingRef.current = true;
         } else {
-            // Not streaming
             if (wasStreamingRef.current) {
-                // Just ended streaming: Sync final
                 setDisplayedText(message);
                 wasStreamingRef.current = false;
             } else if (message) {
-                // Static message update
                 if (displayedText && message.startsWith(displayedText)) {
-                    // Just an append (late packet?), don't typewriter, just show
                     setDisplayedText(message);
                 } else {
-                    // New message (Typewriter effect)
                     setDisplayedText('');
                     let i = 0;
                     const timer = setInterval(() => {
@@ -44,6 +39,51 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, r
         }
     }, [message, isStreaming]);
 
+    if (!message && !embedded) return null; // In embedded mode, maybe we still want to show the area? Or just empty? 
+
+    // If embedded, we strip the container styles
+    if (embedded) {
+        return (
+            <div style={{
+                position: 'relative',
+                width: '100%',
+                padding: '10px 0', 
+                overflowWrap: 'break-word',
+                wordBreak: 'break-word',
+                whiteSpace: 'pre-wrap',
+                fontSize: '16px',
+                lineHeight: '1.6',
+                color: '#374151', // Dark Gray text
+                fontFamily: '"Microsoft YaHei", "Segoe UI", sans-serif',
+                animation: 'fadeIn 0.3s ease-out',
+            }}>
+                {/* 🧠 Thinking Process Block */}
+                {reasoning && (
+                    <div style={{ 
+                        marginBottom: '16px', 
+                        padding: '12px', 
+                        backgroundColor: 'rgba(255, 255, 255, 0.5)', 
+                        borderRadius: '12px',
+                        borderLeft: '4px solid #8b5cf6', 
+                        fontSize: '0.9em',
+                        color: '#6b7280'
+                    }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px', color: '#7c3aed' }}>
+                            <span>🧠</span> DeepSeek Thinking...
+                        </div>
+                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', opacity: 0.9, maxHeight: '200px', overflowY: 'auto' }}>
+                            {reasoning}
+                        </div>
+                    </div>
+                )}
+                
+                {/* Main Content */}
+                {displayedText}
+            </div>
+        );
+    }
+
+    // Legacy Standalone Mode
     if (!message) return null;
 
     return (
@@ -52,10 +92,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, r
             top: '20%',
             left: '20px',
             transform: 'none',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            backgroundColor: 'rgba(255, 255, 255, 0.75)', // White Frosted
             padding: '16px 24px',
             borderRadius: '24px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            boxShadow: '0 8px 32px rgba(31, 38, 135, 0.15)', // Softer shadow
             maxWidth: '450px',
             maxHeight: '70vh',
             overflowY: 'auto',
@@ -64,41 +104,28 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, r
             whiteSpace: 'pre-wrap',
             fontSize: '16px',
             lineHeight: '1.6',
-            color: '#1f2937',
+            color: '#374151', // Dark Gray text
             fontFamily: '"Microsoft YaHei", "Segoe UI", sans-serif',
             backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255,255,255,0.8)',
+            border: '1px solid rgba(255, 255, 255, 0.4)', // Subtle white border
             animation: 'fadeIn 0.3s ease-out',
             zIndex: 100,
         }}>
-            {/* 🧠 Thinking Process Block */}
+            {/* Same reasoning block for standalone - duplicated for clarity or extractable */}
             {reasoning && (
                 <div style={{ 
                     marginBottom: '16px', 
                     padding: '12px', 
-                    backgroundColor: 'rgba(243, 244, 246, 0.8)', 
+                    backgroundColor: 'rgba(255, 255, 255, 0.5)', 
                     borderRadius: '12px',
-                    borderLeft: '4px solid #8b5cf6', // Purple accent for "Thinking"
+                    borderLeft: '4px solid #8b5cf6', 
                     fontSize: '0.9em',
-                    color: '#4b5563'
+                    color: '#6b7280'
                 }}>
-                    <div style={{ 
-                        fontWeight: 'bold', 
-                        marginBottom: '4px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '6px',
-                        color: '#7c3aed'
-                    }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px', color: '#7c3aed' }}>
                         <span>🧠</span> DeepSeek Thinking...
                     </div>
-                    <div style={{ 
-                        whiteSpace: 'pre-wrap', 
-                        fontFamily: 'Consolas, monospace',
-                        opacity: 0.9,
-                        maxHeight: '200px',
-                        overflowY: 'auto'
-                    }}>
+                    <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', opacity: 0.9, maxHeight: '200px', overflowY: 'auto' }}>
                         {reasoning}
                     </div>
                 </div>

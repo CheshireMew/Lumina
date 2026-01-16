@@ -48,16 +48,34 @@ class MemoryDriverFactory:
             # 2. Locate Drivers Directory
             # Assuming this file is in python_backend/memory/factory.py
             # Drivers are in python_backend/plugins/drivers/memory
+            # 2. Locate Drivers Directories (Support Extensions)
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            drivers_dir = os.path.abspath(os.path.join(current_dir, "..", "plugins", "drivers", "memory"))
+            base_plugins_dir = os.path.abspath(os.path.join(current_dir, "..", "plugins"))
             
-            if not os.path.exists(drivers_dir):
-                logger.error(f"Drivers directory not found: {drivers_dir}")
-                raise FileNotFoundError(f"Drivers directory missing: {drivers_dir}")
+            drivers_dirs = []
+            
+            # Legacy Path
+            legacy_dir = os.path.join(base_plugins_dir, "drivers", "memory")
+            if os.path.exists(legacy_dir):
+                drivers_dirs.append(legacy_dir)
+                
+            # Extensions Path
+            extensions_dir = os.path.join(base_plugins_dir, "extensions")
+            if os.path.exists(extensions_dir):
+                for ext_name in os.listdir(extensions_dir):
+                    mem_driver_path = os.path.join(extensions_dir, ext_name, "drivers", "memory")
+                    if os.path.isdir(mem_driver_path):
+                        drivers_dirs.append(mem_driver_path)
+
+            if not drivers_dirs:
+                # logger.error(f"No memory driver directories found.")
+                # Don't raise yet, list will be empty
+                pass
 
             # 3. Load All Drivers
-            # Note: PluginLoader returns INSTANCES, not classes
-            loaded_drivers = PluginLoader.load_plugins(drivers_dir, BaseMemoryDriver)
+            loaded_drivers = []
+            for d_dir in drivers_dirs:
+                loaded_drivers.extend(PluginLoader.load_plugins(d_dir, BaseMemoryDriver))
             
             if not loaded_drivers:
                 logger.error("No valid memory drivers found in plugins directory.")

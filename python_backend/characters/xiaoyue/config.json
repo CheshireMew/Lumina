@@ -1,22 +1,23 @@
 {
-  "character_id": "xiaoyue",
-  "name": "小月",
-  "display_name": "小月",
-  "description": "3D VRM 角色示例",
-  "system_prompt": "你是小月,一个活泼可爱的虚拟偶像。",
-  "model_path": "/vrm/XiaoYue.vrm",
-  "renderer_type": "vrm",
-  "voice_config": {
-    "service": "edge-tts",
-    "voiceId": "zh-CN-XiaoyiNeural"
-  },
-  "heartbeat_enabled": true,
-  "proactive_threshold_minutes": 5,
-  "proactive_chat_enabled": false,
-  "galgame_mode_enabled": true,
-  "soul_evolution_enabled": true,
-  "bilibili": {
-    "enabled": false,
-    "room_id": 0
-  }
+    "character_id": "xiaoyue",
+    "name": "小月",
+    "display_name": "小月",
+    "description": "3D VRM 角色示例",
+    "system_prompt": "你是小月,一个活泼可爱的虚拟偶像。",
+    "model_path": "/vrm/XiaoYue.vrm",
+    "renderer_type": "vrm",
+    "voice_config": {
+        "service": "edge-tts",
+        "voiceId": "zh-CN-XiaoyiNeural"
+    },
+    "heartbeat_enabled": true,
+    "proactive_threshold_minutes": 5,
+    "proactive_chat_enabled": false,
+    "galgame_mode_enabled": true,
+    "soul_evolution_enabled": true,
+    "bilibili": {
+        "enabled": false,
+        "room_id": 0
+    },
+    "live2d_model": ""
 }

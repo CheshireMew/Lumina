@@ -4,8 +4,8 @@ from .openai_driver import OpenAIDriver
 logger = logging.getLogger("DeepSeekDriver")
 
 class DeepSeekDriver(OpenAIDriver):
-    def __init__(self):
-        super().__init__("deepseek", "DeepSeek Provider", "DeepSeek API (OpenAI Compatible)")
+    def __init__(self, id: str = "deepseek"):
+        super().__init__(id, "DeepSeek Provider", "DeepSeek API (OpenAI Compatible)")
         
     async def load(self):
         # Set default DeepSeek URL if not present

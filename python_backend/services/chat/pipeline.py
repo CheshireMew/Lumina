@@ -64,10 +64,10 @@ class ContextBuilderStep(PipelineStep):
         # Assemble System Prompt
         base_system = "You are a helpful AI assistant."
         
-        if services.soul_client:
+        if services.soul:
              try:
-                 # Static prompt is still foundational for now
-                 base_system = services.soul_client.render_static_prompt()
+                 # Use unified prompt system
+                 base_system = await services.soul.get_system_prompt({"pipeline": "context_builder"})
              except: pass
              
         ctx.system_prompt = base_system
@@ -78,9 +78,16 @@ class ContextBuilderStep(PipelineStep):
             
         # Finalize Messages
         ctx.final_messages = [{"role": "system", "content": ctx.system_prompt}]
-        for msg in ctx.original_messages:
+        
+        # Add History
+        for i, msg in enumerate(ctx.original_messages):
             if msg.get("role") != "system":
-                ctx.final_messages.append(msg)
+                # Inject RAG Context into the LAST User Message
+                if ctx.rag_context and i == len(ctx.original_messages) - 1 and msg.get("role") == "user":
+                    enhanced_content = f"{msg.get('content')}\n\n## Relevant Memories/Context:\n{ctx.rag_context}"
+                    ctx.final_messages.append({"role": "user", "content": enhanced_content})
+                else: 
+                    ctx.final_messages.append(msg)
 
 
 
@@ -223,8 +230,9 @@ class ChatPipeline:
         )
         
         # 2. Run Preparation Steps
-        await self.context_step.execute(ctx)
+        # Run Tool Step first to resolve LLM Driver & Target Model (needed for RAG Tier logic)
         await self.tool_step.execute(ctx)
+        await self.context_step.execute(ctx)
         
         # 3. Yield Execution
         async for token in self.exec_step.run_stream(ctx):

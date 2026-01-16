@@ -1,0 +1,9 @@
+id: driver.memory.surreal
+name: SurrealDB Memory Driver
+version: 1.0.0
+description: Core Memory System Driver
+entrypoint: none
+category: driver
+group_id: memory
+group_exclusive: true
+tags: [memory, core, database]
