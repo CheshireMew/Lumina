@@ -1,0 +1,311 @@
+"""
+Pytest configuration and shared fixtures for Lumina testing
+"""
+import sys
+import os
+import asyncio
+import tempfile
+from pathlib import Path
+from typing import AsyncGenerator, Generator
+from unittest.mock import MagicMock, AsyncMock, patch
+import pytest
+
+# ============================================================================
+# Path Configuration
+# ============================================================================
+
+AUTOMATION_ROOT = Path(__file__).parent
+PROJECT_ROOT = AUTOMATION_ROOT.parent
+PYTHON_BACKEND = PROJECT_ROOT / "python_backend"
+
+# Add to path
+sys.path.insert(0, str(PYTHON_BACKEND))
+sys.path.insert(0, str(PROJECT_ROOT))
+
+
+# ============================================================================
+# Service Fixtures
+# ============================================================================
+
+@pytest.fixture(scope="function")
+def mock_container():
+    """Provide a mocked ServiceContainer"""
+    from services.container import ServiceContainer
+    ServiceContainer._instance = None
+    container = ServiceContainer()
+
+    # Add common mocks
+    container._config = MagicMock()
+    container._event_bus = MagicMock()
+    container._llm_manager = MagicMock()
+    container._gateway = MagicMock()
+
+    return container
+
+
+@pytest.fixture(scope="function")
+def services(mock_container):
+    """Alias for mock_container for convenience"""
+    return mock_container
+
+
+@pytest.fixture(scope="function")
+def reset_container():
+    """Reset ServiceContainer singleton before/after test"""
+    from services.container import ServiceContainer
+    original = ServiceContainer._instance
+    ServiceContainer._instance = None
+    yield
+    ServiceContainer._instance = original
+
+
+# ============================================================================
+# Mock Service Fixtures
+# ============================================================================
+
+@pytest.fixture
+def mock_llm_manager():
+    """Mock LLM Manager with common methods"""
+    manager = MagicMock()
+    manager.get_driver = AsyncMock()
+    manager.get_parameters = MagicMock(return_value={
+        "temperature": 0.7,
+        "max_tokens": 2000
+    })
+    manager.get_model_name = MagicMock(return_value="test-model")
+    return manager
+
+
+@pytest.fixture
+def mock_soul_service():
+    """Mock Soul Service with profile data"""
+    soul = MagicMock()
+    soul.profile = {
+        "personality": {"pad_model": {}},
+        "state": {"energy_level": 100},
+        "relationship": {"level": 0}
+    }
+    soul.load_character_config = MagicMock(return_value={"soul_evolution_enabled": False})
+    return soul
+
+
+@pytest.fixture
+def mock_llm_driver():
+    """Mock LLM driver with streaming response"""
+    driver = AsyncMock()
+
+    async def mock_stream():
+        yield "Hello"
+        yield " World"
+
+    driver.chat_completion = AsyncMock(return_value=mock_stream())
+    return driver
+
+
+# ============================================================================
+# Database Fixtures
+# ============================================================================
+
+@pytest.fixture(scope="function")
+def temp_db_path():
+    """Provide a temporary database file path"""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        path = f.name
+    yield path
+    try:
+        os.unlink(path)
+    except:
+        pass
+
+
+@pytest.fixture(scope="function")
+def mock_surreal_driver():
+    """Mock SurrealDB driver"""
+    driver = MagicMock()
+    driver._db = MagicMock()
+    driver._db.query = MagicMock(return_value=[])
+    driver._db.close = AsyncMock()
+    return driver
+
+
+# ============================================================================
+# HTTP Client Fixtures
+# ============================================================================
+
+@pytest.fixture
+async def async_http_client():
+    """Provide async HTTP client for integration tests"""
+    import httpx
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        yield client
+
+
+@pytest.fixture
+def service_urls():
+    """Provide service endpoint URLs"""
+    return {
+        "memory": "http://127.0.0.1:8010",
+        "stt": "http://127.0.0.1:8765",
+        "tts": "http://127.0.0.1:8766",
+        "surreal": "http://127.0.0.1:8001"
+    }
+
+
+# ============================================================================
+# Test Data Fixtures
+# ============================================================================
+
+@pytest.fixture
+def sample_user_input():
+    """Sample user input for chat tests"""
+    return {
+        "user_input": "Hello, how are you?",
+        "user_id": "test_user_001",
+        "character_id": "hiyori"
+    }
+
+
+@pytest.fixture
+def sample_message_history():
+    """Sample message history"""
+    return [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "content": "Hello!"},
+        {"role": "user", "content": "How are you?"}
+    ]
+
+
+@pytest.fixture
+def sample_memory_data():
+    """Sample memory/test data"""
+    return {
+        "id": "mem_001",
+        "content": "Test memory content",
+        "embedding": [0.1] * 512,
+        "metadata": {"source": "test", "timestamp": "2024-01-20"}
+    }
+
+
+# ============================================================================
+# Plugin Fixtures
+# ============================================================================
+
+@pytest.fixture
+def sample_plugin_manifest():
+    """Sample plugin manifest YAML content"""
+    return """
+id: test.plugin
+name: Test Plugin
+version: 1.0.0
+description: A test plugin for testing
+author: Test Author
+permissions:
+  - event.subscribe
+  - ui.register_widget
+entry_point: plugin.py
+"""
+
+
+@pytest.fixture
+def temp_plugin_dir(sample_plugin_manifest):
+    """Create a temporary plugin directory with manifest"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        manifest_path = Path(tmpdir) / "manifest.yaml"
+        with open(manifest_path, 'w') as f:
+            f.write(sample_plugin_manifest)
+
+        # Create entry point
+        plugin_file = Path(tmpdir) / "plugin.py"
+        plugin_file.write_text("# Test plugin\n")
+
+        yield tmpdir
+
+
+# ============================================================================
+# Event Loop Fixtures
+# ============================================================================
+
+@pytest.fixture(scope="session")
+def event_loop_policy():
+    """Set up event loop policy for Windows"""
+    if sys.platform == "win32":
+        import asyncio
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+
+# ============================================================================
+# Configuration Hooks
+# ============================================================================
+
+def pytest_configure(config):
+    """Configure pytest with custom markers and settings"""
+    # Register custom markers
+    config.addinivalue_line("markers", "unit: Unit tests")
+    config.addinivalue_line("markers", "integration: Integration tests")
+    config.addinivalue_line("markers", "e2e: End-to-end tests")
+    config.addinivalue_line("markers", "slow: Slow-running tests")
+    config.addinivalue_line("markers", "security: Security tests")
+    config.addinivalue_line("markers", "performance: Performance tests")
+
+
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """Automatically reset singletons before each test"""
+    from services.container import ServiceContainer
+    original = ServiceContainer._instance
+    ServiceContainer._instance = None
+    yield
+    ServiceContainer._instance = original
+
+
+# ============================================================================
+# Skipif Conditions
+# ============================================================================
+
+skip_if_no_services = pytest.mark.skipif(
+    True,  # Set to False when running with services
+    reason="Services not running. Use 'pytest -m integration' when services are up."
+)
+
+
+def check_service_running(port: int) -> bool:
+    """Check if a service is running on the given port"""
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1)
+    try:
+        result = sock.connect_ex(('127.0.0.1', port))
+        sock.close()
+        return result == 0
+    except:
+        return False
+
+
+# ============================================================================
+# Pytest Hooks
+# ============================================================================
+
+def pytest_collection_modifyitems(config, items):
+    """Modify test collection to add markers automatically"""
+    for item in items:
+        # Add 'slow' marker to tests that take > 1 second (heuristic)
+        if "e2e" in str(item.fspath):
+            item.add_marker(pytest.mark.slow)
+            item.add_marker(pytest.mark.integration)
+
+        # Add 'integration' to backend tests
+        if "backend" in str(item.fspath):
+            item.add_marker(pytest.mark.integration)
+
+        # Add 'unit' to core/services tests
+        if any(x in str(item.fspath) for x in ["core", "services", "plugins"]):
+            item.add_marker(pytest.mark.unit)
+
+
+def pytest_report_header(config):
+    """Add custom header to pytest output"""
+    return [
+        f"Lumina Test Suite",
+        f"Project Root: {PROJECT_ROOT}",
+        f"Python Backend: {PYTHON_BACKEND}",
+    ]

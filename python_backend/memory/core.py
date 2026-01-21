@@ -15,10 +15,10 @@ logger = logging.getLogger("memory.core")
 
 
 
-class SurrealMemory:
+class MemoryService:
     """
-    Facade for Memory System.
-    Delegates to VectorStore and Driver.
+    Service for Memory System.
+    Delegates to VectorStore and Driver (Postgres, Surreal, etc.).
     """
     
     def __init__(self, character_id: str = "default"):
@@ -107,7 +107,7 @@ class SurrealMemory:
             
         self._worker_thread = Thread(target=worker_loop, daemon=True)
         self._worker_thread.start()
-        logger.info("[SurrealMemory] Worker started")
+        logger.info("[MemoryService] Worker started")
 
     async def _process_task(self, task: Dict):
         task_type = task.get("type", "add")
@@ -122,7 +122,7 @@ class SurrealMemory:
             data = {
                 "character_id": character_id.lower(),
                 "narrative": narrative,
-                "created_at": datetime.now().isoformat(),
+                "created_at": datetime.now(),  # [Fix] asyncpg expects datetime object, not string
                 "is_processed": False
             }
             
@@ -186,21 +186,37 @@ class SurrealMemory:
         return await self.driver.query(sql, params)
 
     async def get_stats(self, character_id: str = None) -> Dict:
+        """Get memory statistics with parallel query execution."""
         try:
-            filter_sql = f"WHERE character_id = '{character_id}'" if character_id else ""
-            mem = await self.driver.query(f"SELECT count() FROM episodic_memory {filter_sql} GROUP ALL;")
-            log = await self.driver.query(f"SELECT count() FROM conversation_log {filter_sql} GROUP ALL;")
+            # [Optimization] Use parameterized query to prevent SQL injection
+            if character_id:
+                mem_sql = "SELECT count(*) as count FROM episodic_memory WHERE character_id = $1;"
+                log_sql = "SELECT count(*) as count FROM conversation_log WHERE character_id = $1;"
+                params = {"cid": character_id}
+            else:
+                mem_sql = "SELECT count(*) as count FROM episodic_memory;"
+                log_sql = "SELECT count(*) as count FROM conversation_log;"
+                params = {}
+            
+            # [Optimization] Parallel query execution instead of sequential
+            mem_result, log_result = await asyncio.gather(
+                self.driver.query(mem_sql, params),
+                self.driver.query(log_sql, params),
+                return_exceptions=True
+            )
             
             def get_cnt(res):
-                # Using driver's parser logic implicitly or robustness here
-                if res and isinstance(res, list) and len(res) > 0 and 'result' in res[0]:
-                     return res[0]['result'][0].get('count', 0)
-                # Fallback for driver response format which might just be list of dicts if parsed,
-                # but driver.query returns raw result usually? 
-                # SurrealDriver.query returns raw result unless parsed.
+                if isinstance(res, Exception):
+                    return 0
+                if res and isinstance(res, list) and len(res) > 0:
+                    # Handle asyncpg Record format
+                    if hasattr(res[0], 'get'):
+                        return res[0].get('count', 0)
+                    elif isinstance(res[0], dict):
+                        return res[0].get('count', 0)
                 return 0
                 
-            return {"entities": get_cnt(mem), "conversations": get_cnt(log)}
+            return {"entities": get_cnt(mem_result), "conversations": get_cnt(log_result)}
         except Exception:
             return {"entities": 0, "conversations": 0}
 
@@ -219,12 +235,27 @@ class SurrealMemory:
             return []
 
     async def mark_conversations_processed(self, conversation_ids: List[str]):
-        for cid in conversation_ids:
-            try:
-                # Use driver update/merge or raw query
-                await self.driver.query(f"UPDATE {cid} SET is_processed = true;")
-            except Exception as e:
-                logger.warning(f"Failed to mark processed {cid}: {e}")
+        """Mark multiple conversations as processed in a single batch query."""
+        if not conversation_ids:
+            return
+            
+        try:
+            # [Optimization] Batch UPDATE instead of N+1 loop
+            # Build IN clause with proper parameter binding
+            placeholders = ", ".join([f"${i+1}" for i in range(len(conversation_ids))])
+            sql = f"UPDATE conversation_log SET is_processed = true WHERE id IN ({placeholders});"
+            
+            # Execute single batch query
+            await self.driver.query(sql, {"ids": conversation_ids})
+            logger.debug(f"Batch marked {len(conversation_ids)} conversations as processed")
+        except Exception as e:
+            logger.warning(f"Batch mark_processed failed: {e}, falling back to individual updates")
+            # Fallback to individual updates if batch fails
+            for cid in conversation_ids:
+                try:
+                    await self.driver.query(f"UPDATE conversation_log SET is_processed = true WHERE id = $1;", {"id": cid})
+                except Exception as ex:
+                    logger.warning(f"Failed to mark processed {cid}: {ex}")
 
     async def get_all_conversations(self, character_id: str = None) -> List[Dict]:
         try:
@@ -260,3 +291,63 @@ class SurrealMemory:
              return items[:limit]
          except:
              return []
+    async def retrieve_context(self, query: str, character_id: str = "default", limit: int = 3) -> str:
+        """
+        High-Level RAG Retrieval.
+        Handles embedding generation and hybrid search internally.
+        """
+        import asyncio
+        try:
+            vector = None
+            # 1. Internal Embedding Generation (Cached + Non-blocking)
+            if self.encoder:
+                try:
+                    from services.embedding_cache import get_embedding_cache
+                    cache = get_embedding_cache()
+                    
+                    # Check cache first
+                    cached = cache.get(query, model_name="memory_encoder")
+                    if cached is not None:
+                        vector = cached
+                    else:
+                        # Run sync encoder in thread pool to avoid blocking
+                        def _encode():
+                            vec = self.encoder(query)
+                            if hasattr(vec, "tolist"):
+                                vec = vec.tolist()
+                            return vec
+                        
+                        vector = await asyncio.to_thread(_encode)
+                        # Cache the result
+                        cache.put(query, vector, model_name="memory_encoder")
+                        
+                except Exception as ex:
+                    logger.warning(f"Failed to generate embedding for retrieval: {ex}")
+
+            # 2. Hybrid Search
+            results = []
+            if vector:
+                results = await self.search_hybrid(
+                    query=query, 
+                    query_vector=vector,  
+                    limit=limit, 
+                    character_id=character_id
+                )
+            else:
+                # Fallback to full-text only if embedding fails/missing
+                logger.warning("Retrieving context without vector (Full-Text fallback)")
+                results = await self.search_fulltext(
+                    query=query,
+                    character_id=character_id,
+                    limit=limit
+                )
+
+            # 3. Format as String
+            if results:
+                return "\n".join([r.get('content', '') for r in results])
+            
+            return ""
+
+        except Exception as e:
+            logger.error(f"Context retrieval failed: {e}")
+            return ""

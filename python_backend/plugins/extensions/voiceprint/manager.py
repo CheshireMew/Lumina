@@ -55,33 +55,47 @@ class VoiceprintManager(BaseSystemPlugin):
              return getattr(self.context.config.audio, "voiceprint_threshold", 0.6)
         return 0.6
 
-    def initialize(self, context: Any):
+    async def initialize(self, context: Any):
         """
         Auto-register with container and router.
         """
         # LuminaContext Standard API
         self.context = context
 
-        # [NEW] Attach Router for Auto-Mounting
-        # [NEW] Attach Router for Auto-Mounting
-        from .router import router
-        self._router = router
+        # [Scheme C] Routes now handled by Main Process (routers/voiceprint.py)
+        # No longer need to attach router here.
+        self._router = None
 
-        # Resolve Data Directory
-        new_dir = self.get_data_dir() # Uses self.context via BaseSystemPlugin
-        if new_dir:
-            if not any(new_dir.iterdir()):
-                 self._migrate_profiles(self.profiles_dir, new_dir)
-            
-            self.profiles_dir = new_dir
-            logger.info(f"馃帳 Voiceprint profiles path: {self.profiles_dir}")
+        # Resolve Global Data Directory (System-Wide Voiceprints)
+        # Bypass default character-scoped get_data_dir()
+        from app_config import DATA_ROOT
+        global_vp_dir = DATA_ROOT / "system" / "plugins" / "system.voiceprint"
+        global_vp_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Migration: Check if we have data in the character-specific legacy path
+        # (This handles the case where user just registered heavily in Hiyori)
+        try:
+            legacy_char_dir = self.get_data_dir() # Default scoped path
+            if legacy_char_dir and legacy_char_dir.exists() and any(legacy_char_dir.iterdir()):
+                # Only migrate if global is empty to avoid overwrite conflicts?
+                # Or simplistic copy. Let's do simple copy for now.
+                if not any(global_vp_dir.iterdir()):
+                     logger.info(f"📦 Migrating Character-Scoped Voiceprints -> Global System Storage")
+                     self._migrate_profiles(legacy_char_dir, global_vp_dir)
+        except Exception as e:
+            logger.warning(f"Migration check failed: {e}")
+
+        self.profiles_dir = global_vp_dir
+        logger.info(f"📁 Voiceprint Storage: {self.profiles_dir} (Global)")
         
         self.reload_profiles()
 
         # Register as 'voiceprint_manager' via explicit API
         context.register_service("voiceprint_manager", self)
+
+        # Load Driver
+        await self.ensure_driver_loaded()
         
-        # Inject into Plugins Router (Legacy Shim - Removed)
         # Verify Registration
         logger.info(f"✅ VoiceprintManager initialized and registered as 'system.voiceprint'")
 
@@ -135,17 +149,14 @@ class VoiceprintManager(BaseSystemPlugin):
         # State
         self.profiles: Dict[str, np.ndarray] = {}
         self.profile_status: Dict[str, bool] = {} # Enabled status
+        self.profiles_meta_cache: Dict[str, float] = {} # [Cache] name -> timestamp
         self.loaded_count = 0
         self._router = None # Backing field for router property
+        self.default_threshold = 0.6 
 
     @property
     def router(self):
         return self._router
-        
-        # Config
-        self.default_threshold = 0.6 
-        
-        # Defer Loading to initialize()
 
     async def ensure_driver_loaded(self):
         await self.driver.load()
@@ -161,6 +172,8 @@ class VoiceprintManager(BaseSystemPlugin):
                 name = p.stem
                 if emb.ndim > 0:
                     self.profiles[name] = emb
+                    # Cache Timestamp (Optimization)
+                    self.profiles_meta_cache[name] = p.stat().st_mtime * 1000
                     logger.debug(f"Loaded voice profile: {name}")
             except Exception as e:
                 logger.error(f"Failed to load profile {p}: {e}")
@@ -186,9 +199,9 @@ class VoiceprintManager(BaseSystemPlugin):
         self.loaded_count = len(self.profiles)
         logger.info(f"VoiceprintManager Ready. Loaded {self.loaded_count} profiles.")
 
-    async def verify(self, audio: np.ndarray, threshold: float = None) -> Tuple[bool, str, float]:
+    def verify(self, audio: np.ndarray, threshold: float = None, sample_rate: int = 16000) -> Tuple[bool, str, float]:
         """
-        Verify if audio matches ANY enrolled user (Async Wrapper).
+        Verify if audio matches ANY enrolled user (Synchronous).
         Returns: (is_match, matched_name, score)
         """
         if not self.profiles:
@@ -203,28 +216,39 @@ class VoiceprintManager(BaseSystemPlugin):
             else:
                 threshold = self.default_threshold
 
-        # Async Defense: Offload CPU-bound numpy work to thread pool
-        # driver.verify is synchronous
-        loop = asyncio.get_running_loop()
         try:
-            is_match, matched_name, score = await loop.run_in_executor(
-                None, 
-                self.driver.verify, 
+            # Call driver directly (Blocking/Sync)
+            is_match, matched_name, score = self.driver.verify(
                 audio, 
                 # Filter enabled profiles only
                 {k:v for k,v in self.profiles.items() if self.profile_status.get(k, True)}, 
-                threshold
+                threshold,
+                sample_rate
             )
             
             if is_match:
                 logger.info(f"Voice Verified: {matched_name} (Score: {score:.2f})")
                 
             return is_match, matched_name, score
+            return is_match, matched_name, score
         except Exception as e:
-            logger.error(f"Async Verification Failed: {e}")
+            logger.error(f"Verification Failed: {e}")
             return False, "", 0.0
 
-    async def register_voiceprint(self, audio: np.ndarray, profile_name: str = "default") -> bool:
+    async def load_profile(self, profile_name: str) -> bool:
+        """
+        Ensure a specific profile is loaded/active.
+        Since we load all profiles on startup, we just check existence 
+        or reload if missing.
+        """
+        if profile_name in self.profiles:
+            return True
+        
+        # Try reloading to see if it appeared on disk
+        self.reload_profiles()
+        return (profile_name in self.profiles)
+
+    async def register_voiceprint(self, audio: np.ndarray, profile_name: str = "default", sample_rate: int = 16000) -> bool:
         """
         Register a new user profile (Async Wrapper).
         """
@@ -235,7 +259,8 @@ class VoiceprintManager(BaseSystemPlugin):
             embedding = await loop.run_in_executor(
                 None,
                 self.driver.extract_embedding,
-                audio
+                audio,
+                sample_rate
             )
 
             if embedding.size == 0:
@@ -247,6 +272,8 @@ class VoiceprintManager(BaseSystemPlugin):
             
             # Update Memory
             self.profiles[profile_name] = embedding
+            # Update Cache
+            self.profiles_meta_cache[profile_name] = save_path.stat().st_mtime * 1000
             
             # Update Metadata json (optional)
             self._update_metadata(profile_name, enabled=True)
@@ -260,15 +287,13 @@ class VoiceprintManager(BaseSystemPlugin):
     async def get_all_profiles(self) -> List[Dict[str, Any]]:
         """
         Async accessor for router state (compatible with IPC).
+        Using cached metadata to be instant.
         """
-        # Ensure profiles are loaded (optional, usually loaded at init)
         profiles_list = []
         for name, embedding in self.profiles.items():
             enabled = self.profile_status.get(name, True)
-            path = self.profiles_dir / f"{name}.npy"
-            created_at = 0
-            if path.exists():
-                created_at = path.stat().st_mtime * 1000
+            # Use cached timestamp if available, else 0 (High Perf)
+            created_at = self.profiles_meta_cache.get(name, 0)
                 
             profiles_list.append({
                 "name": name,
@@ -296,8 +321,13 @@ class VoiceprintManager(BaseSystemPlugin):
                 logger.warning(f"Failed to load profile metadata, starting fresh: {e}")
             
         # Merge existing metadata with updates
+        # Merge existing metadata with updates
         if name not in data: data[name] = {}
-        data[name]["created_at"] = str(Path(self.profiles_dir / f"{name}.npy").stat().st_mtime)
+        
+        npy_path = self.profiles_dir / f"{name}.npy"
+        if npy_path.exists():
+            data[name]["created_at"] = str(npy_path.stat().st_mtime)
+            
         data[name]["enabled"] = enabled
         
         with open(meta_path, 'w', encoding='utf-8') as f:

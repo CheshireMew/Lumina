@@ -25,9 +25,10 @@ app_settings = ConfigManager()
 # 确保可以导入本地模块
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from vision_service import router as vision_router # Vision API
+# from routers.vision import router as vision_router # Vision API (Migrated to separate Worker)
 from routers import gateway # Gateway
-from services.vision_service import vision_service, VisionService # Vision
+from routers.voiceprint import router as voiceprint_router  # [Scheme C] Voiceprint Management
+# from services.vision_service import vision_service, VisionService # Vision (Migrated)
 from services.mcp_host import MCPHost
 
 
@@ -43,7 +44,7 @@ from services.lifecycle import lifespan
 # ========== 创建应用 ==========
 app = FastAPI(
     title="Lumina Memory Server",
-    description="模块化记忆管理服务",
+    description="Modular Memory Management Service",
     version="2.0.0",
     lifespan=lifespan
 )
@@ -57,6 +58,11 @@ async def health_check():
 
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
+from services.middleware.resource_cleanup import resource_cleanup_middleware
+
+@app.middleware("http")
+async def resource_cleanup_bridge(request: Request, call_next):
+    return await resource_cleanup_middleware(request, call_next)
 
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
@@ -68,7 +74,7 @@ async def security_middleware(request: Request, call_next):
     client_host = request.client.host if request.client else ""
     
     # Restricted Zones
-    RESTRICTED_PREFIXES = ["/debug", "/llm-mgmt", "/admin"]
+    RESTRICTED_PREFIXES = ["/debug", "/llm-mgmt", "/admin", "/plugins/assets", "/api/plugins/assets", "/plugins/slots", "/plugins/registry", "/plugins/upload"]
     
     if any(path.startswith(p) for p in RESTRICTED_PREFIXES):
         # Strict Localhost Check (IPv4 & IPv6)
@@ -77,6 +83,15 @@ async def security_middleware(request: Request, call_next):
              return JSONResponse(status_code=403, content={"detail": "Access Denied: Localhost only."})
 
     return await call_next(request)
+
+# [Architecture 5.0] Plugin Guard Middleware
+# Must run AFTER security_middleware (IP Check) but BEFORE business logic
+# Note: add_middleware adds to the OUTER layer (Last added runs First)
+from services.middleware.scope_guard import ScopeGuardMiddleware
+from services.middleware.plugin_guard import PluginGuardMiddleware
+
+app.add_middleware(ScopeGuardMiddleware) # First: Identify Token
+app.add_middleware(PluginGuardMiddleware, container=service_instance) # Second: Check Status
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
@@ -118,7 +133,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if app_settings.is_dev else [
+    allow_origins=[
         "http://127.0.0.1", "http://localhost",
         "http://localhost:5173", "http://127.0.0.1:5173",
         "tauri://localhost", "electron://altair"
@@ -129,35 +144,34 @@ app.add_middleware(
 )
 
 # ========== 注册路由 ==========
-from routers import (
-    debug, 
-    memory, 
-    soul, 
-    config, 
-    gateway, 
-    plugins, 
-    llm_mgmt, 
-    characters, 
-    completions,
-    admin,
-    plugin_assets
-)
+from routers import memory
+from routers import soul
+from routers import config as config_router
+from routers import gateway
+from routers import plugins
+from routers import llm_mgmt
+from routers import characters
+from routers import completions
+from routers import admin
+from routers import plugin_assets
+from routers import stt_routes # Audio/STT
 from fastapi.staticfiles import StaticFiles
-
 # [Removed] chat.router - DEPRECATED, use completions.router
-app.include_router(memory.router)
-app.include_router(soul.router)
-# app.include_router(debug.router) # Keep debug for brain_dump? Yes, task says clean up endpoints, not file.
-app.include_router(debug.router) 
-app.include_router(config.router)
 app.include_router(gateway.router)
-app.include_router(plugins.router)
 app.include_router(llm_mgmt.router)
-app.include_router(characters.router)
+app.include_router(llm_mgmt.models_router) # ✅ New /models router
 app.include_router(completions.router)
-app.include_router(admin.router) # Free LLM / V1 API
-app.include_router(vision_router) # Vision API
+app.include_router(admin.router)
+app.include_router(config_router.router)
+app.include_router(soul.router)
+app.include_router(memory.router, prefix="/memory")
+app.include_router(plugins.router)
+app.include_router(plugin_assets.router) # ✅ New Router
+# app.include_router(vision_router) # Vision API (Migrated to Generic Worker)
 app.include_router(plugin_assets.router, prefix="/api") # /api/plugins/{id}/assets/...
+app.include_router(characters.router) # ✅ Fix 404
+app.include_router(voiceprint_router) # [Scheme C] Voiceprint Management
+app.include_router(stt_routes.router) # STT/Audio Management
 
 
 # Removed deprecated chat.router (duplicate, use /v1/chat/completions)
@@ -193,8 +207,7 @@ async def root():
             "config": "/configure, /health",
             "memory": "/add, /search, /search/hybrid, /all",
             "characters": "/characters/*",
-            "soul": "/soul/*, /galgame/*, /dream/*",
-            "debug": "/debug/brain_dump, /debug/processing_status, /debug/surreal/*"
+            "soul": "/soul/*, /galgame/*, /dream/*"
         }
     }
 
@@ -205,4 +218,4 @@ if __name__ == "__main__":
     host = "127.0.0.1" if config.network.bind_localhost_only else config.network.host
     logger.info(f"🚀 Starting Server on {host}:{config.network.memory_port} (Localhost Only: {config.network.bind_localhost_only})")
     
-    uvicorn.run(app, host=host, port=config.network.memory_port)
+    uvicorn.run(app, host=host, port=config.network.memory_port, log_config=None)

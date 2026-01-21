@@ -5,12 +5,12 @@ import os
 # Add parent dir to path to import backend modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from memory.core import SurrealMemory
+from memory.core import MemoryService
 
 async def main():
-    print("Initializing SurrealMemory...")
+    print("Initializing MemoryService...")
     # Use exact same defaults: lumina/memory
-    mem = SurrealMemory()
+    mem = MemoryService()
     await mem.connect()
     
     print("鉁?Connected. Querying 'fact' table...")

@@ -2,7 +2,7 @@ import logging
 import asyncio
 from core.protocol import EventType, EventPacket
 from core.events.bus import get_event_bus
-from services.unified_chat import unified_chat
+from services.chat.instance import chat_pipeline
 
 logger = logging.getLogger("ChatBridge")
 
@@ -99,15 +99,24 @@ class BasicChatBridge:
             # 3. Stream Response
             final_response = ""
             
+            # [Smart Context] If history is empty (Fresh Session), disable RAG 
+            # to prevent "leaking" immediate previous conversation via database logs.
+            # Only enable RAG once we have established a new context.
+            enable_rag_for_turn = len(messages) > 1 
+
             try:
-                async for token in unified_chat.process(
+                token_count = 0
+                async for token in chat_pipeline.run(
                     messages,
                     user_id=user_id,
                     character_id=char_id,
                     stream=True,
-                    model=model
+                    model=model,
+                    enable_rag=enable_rag_for_turn
                 ):
+                    token_count += 1
                     final_response += token
+                    logger.info(f"[Token #{token_count}]: {token!r}")  # Debug stutter
                     await self.bus.emit(EventType.BRAIN_RESPONSE, EventPacket(
                         session_id=session_id,
                         type=EventType.BRAIN_RESPONSE,
@@ -115,27 +124,27 @@ class BasicChatBridge:
                         payload={"content": token}
                     ))
                 
-                await self.bus.emit("brain_response_end", EventPacket(
+                await self.bus.emit(EventType.BRAIN_RESPONSE_END, EventPacket(
                     session_id=session_id,
-                    type="brain_response_end",
+                    type=EventType.BRAIN_RESPONSE_END,
                     source="core.chat_bridge",
                     payload={}
                 ))
                 
-                if session_manager:
-                    session_manager.add_turn(user_id, char_id, text, final_response)
+                # History is now auto-saved by ChatPipeline
+                # if session_manager:
+                #     session_manager.add_turn(user_id, char_id, text, final_response)
 
-                # 4. Log to SurrealDB (Permanent Memory)
+                # 4. Log to Memory (Conversation Log)
                 try:
-                    surreal = services.surreal_system
-                    if surreal:
-                        # Use user_name or user_id for label, and char_id for AI label
+                    memory_service = getattr(services, 'memory', None)
+                    if memory_service:
                         u_label = packet.payload.get("user_name", user_id)
                         narrative = f"{u_label}: {text}\n{char_id}: {final_response}"
-                        await surreal.log_conversation(char_id, narrative)
-                        logger.info("✅ Conversation logged to SurrealDB")
+                        await memory_service.log_conversation(char_id, narrative)
+                        logger.info("✅ Conversation logged to Memory")
                 except Exception as log_e:
-                    logger.error(f"Failed to log to SurrealDB: {log_e}")
+                    logger.error(f"Failed to log conversation: {log_e}")
 
             except asyncio.CancelledError:
                 logger.info("⚠️ Chat Task Cancelled by User Interrupt")

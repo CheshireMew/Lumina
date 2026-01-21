@@ -25,7 +25,8 @@ class RemoteContext:
         """Helper to push event to queue"""
         evt = PluginEvent(type=event_type, plugin_id=self.plugin_id, payload=payload)
         # Assuming event_queue is a multiprocessing.Queue
-        self.event_queue.put(evt)
+        # Serialize to dict to ensure compatibility with Proxy consumers logic
+        self.event_queue.put(evt.dict())
 
     # --- EventBus Proxy ---
 

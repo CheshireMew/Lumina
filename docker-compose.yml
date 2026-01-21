@@ -1,0 +1,32 @@
+# Compose file for Lumina Infrastructure
+
+services:
+  # 🧠 The Control & Data Plane
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: lumina_brain
+    restart: always
+    environment:
+      POSTGRES_USER: lumina_user
+      POSTGRES_PASSWORD: lumina_password
+      POSTGRES_DB: lumina_db
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persist data to local 'data/postgres' folder so it survives restarts
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumina_user -d lumina_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 🛠️ Database GUI (Optional, like PHPMyAdmin but for Postgres)
+  # Access at: http://localhost:8080
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db

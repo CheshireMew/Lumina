@@ -21,14 +21,24 @@ class Permission(str, Enum):
     """
     
     # File System Access
-    FILESYSTEM_READ = "filesystem.read"       # Read files from plugin data directory
-    FILESYSTEM_WRITE = "filesystem.write"     # Write files to plugin data directory
+    FILESYSTEM_READ = "filesystem.read"       # Read files from plugin data directory (Legacy)
+    FILESYSTEM_WRITE = "filesystem.write"     # Write files to plugin data directory (Legacy)
     FILESYSTEM_EXTERNAL = "filesystem.external"  # Access files outside plugin directory
+    FILESYSTEM_ASSETS = "filesystem.read_assets" # Read own assets [Mapped from filesystem:read_assets]
+    FILESYSTEM_USER = "filesystem.read_user"     # Read user documents [Mapped from filesystem:read_user]
+    FILESYSTEM_SYSTEM = "filesystem.write_system" # Write to system folders [Mapped from filesystem:write_system]
     
     # Network Access
-    NETWORK_OUTBOUND = "network.outbound"     # Make outbound HTTP/WebSocket requests
+    NETWORK_OUTBOUND = "network.outbound"     # Make outbound HTTP/WebSocket requests (Legacy)
     NETWORK_LISTEN = "network.listen"         # Listen on network ports
+    NETWORK_INTERNAL = "network.lumina_internal" # Access internal Lumina APIs [Mapped from network:lumina_internal]
+    NETWORK_EXTERNAL = "network.external"        # Access public internet [Mapped from network:external]
     
+    # OS / Input
+    OS_PROCESS = "os.process"             # Read process list [Mapped from os:process]
+    OS_EXEC = "os.exec"                   # Execute system commands [Mapped from os:exec]
+    INPUT_SIMULATE = "input.simulate"     # Simulate Keyboard/Mouse [Mapped from input:simulate]
+
     # Memory System
     MEMORY_READ = "memory.read"               # Read from memory system (SurrealDB)
     MEMORY_WRITE = "memory.write"             # Write to memory system
@@ -48,24 +58,64 @@ class Permission(str, Enum):
 
     # System Interactions
     SYSTEM_NOTIFICATION = "system.notification" # Send user notifications
+    
+    # UI / Widgets
+    UI_REGISTER = "ui.register_widget"        # Register UI widgets
+    UI_REMOVE = "ui.remove_widget"            # Remove UI widgets
+
+    # A/V Capability
+    AUDIO_CAPTURE = "audio_capture"           # Record Audio (Microphone) [Legacy]
+
+    # Legacy EventBus
+    EVENTBUS_SUBSCRIBE = "eventbus.subscribe" # Legacy alias
+    EVENTBUS_EMIT = "eventbus.emit"           # Legacy alias
+    
+    # Network Extras
+    NETWORK_UDP = "network.udp"               # UDP Socket access
 
     # Soul/Character Access
     SOUL_MODIFY = "soul.modify"           # Modify character personality/mood
 
 
-# Default permissions granted to all plugins
-DEFAULT_PERMISSIONS: Set[str] = {
-    Permission.EVENT_SUBSCRIBE,
-    Permission.EVENT_EMIT,
-    Permission.PLUGIN_DISCOVERY,
+# --- Permission Tiers (SSOT) ---
+
+TIER_SAFE: Set[str] = {
+    Permission.NETWORK_INTERNAL.value,
+    Permission.FILESYSTEM_ASSETS.value,
+    Permission.EVENT_SUBSCRIBE.value,
+    Permission.EVENT_EMIT.value,
+    Permission.PLUGIN_DISCOVERY.value,
+    # Legacy/Aliases
+    Permission.EVENTBUS_SUBSCRIBE.value,
+    Permission.EVENTBUS_EMIT.value,
+    Permission.UI_REGISTER.value,
+    Permission.UI_REMOVE.value,
 }
 
-# Dangerous permissions that require explicit user approval
-DANGEROUS_PERMISSIONS: Set[str] = {
-    Permission.FILESYSTEM_EXTERNAL,
-    Permission.NETWORK_OUTBOUND,
-    Permission.NETWORK_LISTEN,
+TIER_TRUSTED: Set[str] = {
+    Permission.NETWORK_EXTERNAL.value,
+    Permission.FILESYSTEM_USER.value,
+    Permission.FILESYSTEM_READ.value,  # Legacy
+    Permission.FILESYSTEM_WRITE.value, # Legacy
+    Permission.NETWORK_OUTBOUND.value, # Legacy
+    Permission.NETWORK_UDP.value,      # Legacy
 }
+
+TIER_SYSTEM: Set[str] = {
+    Permission.OS_PROCESS.value,
+    Permission.OS_EXEC.value,
+    Permission.FILESYSTEM_SYSTEM.value,
+    Permission.INPUT_SIMULATE.value,
+    Permission.FILESYSTEM_EXTERNAL.value, # Legacy
+    Permission.NETWORK_LISTEN.value,      # Legacy
+    Permission.AUDIO_CAPTURE.value,       # Legacy
+}
+
+# Default permissions granted to all plugins (Alias to SAFE)
+DEFAULT_PERMISSIONS: Set[str] = TIER_SAFE
+
+# Dangerous permissions that require explicit user approval (Union of TRUSTED and SYSTEM)
+DANGEROUS_PERMISSIONS: Set[str] = TIER_TRUSTED | TIER_SYSTEM
 
 
 def validate_permissions(requested: List[str]) -> List[str]:

@@ -26,7 +26,7 @@ def get_llm_service(c: ServiceContainer = Depends(get_container)) -> Any:
 
 def get_memory_service(c: ServiceContainer = Depends(get_container)) -> Any:
     """Get the SurrealDB Memory System."""
-    return c.get_surreal()
+    return c.get_memory()
 
 def get_config_service(c: ServiceContainer = Depends(get_container)) -> Any:
     """Get the Config Manager."""

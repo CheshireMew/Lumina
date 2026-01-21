@@ -10,7 +10,7 @@ logger = logging.getLogger("SenseVoiceDriver")
 class SenseVoiceDriver(BaseSTTDriver):
     def __init__(self):
         super().__init__(
-            id="sense-voice",
+            id="driver.stt.sensevoice",
             name="SenseVoice (Sherpa-ONNX)",
             description="Ultra-fast, high-accuracy model from Alibaba. Optimized for CPU."
         )
@@ -38,8 +38,10 @@ class SenseVoiceDriver(BaseSTTDriver):
             # 3. Import Engine
             try:
                 # Try relative import (Standard in Micro-Kernel)
+                logger.info("DEBUG: Attempting relative import of engine...")
                 from .sensevoice.engine import SenseVoiceEngine
-            except ImportError:
+            except ImportError as e:
+                logger.warning(f"DEBUG: Relative import failed ({e}). Attempting dynamic load...")
                 # Fallback: Dynamic load from file (If package context is missing)
                 # This is normal when loaded via generic PluginLoader which might not set __package__
                 # logger.debug("Relative import failed. Attempting dynamic load from file.")
@@ -48,6 +50,7 @@ class SenseVoiceDriver(BaseSTTDriver):
                 if not os.path.exists(engine_path):
                     raise FileNotFoundError(f"SenseVoice engine not found at {engine_path}")
                 
+                logger.info(f"DEBUG: Loading engine from {engine_path}")
                 spec = importlib.util.spec_from_file_location("sensevoice_engine", engine_path)
                 mod = importlib.util.module_from_spec(spec)
                 sys.modules["sensevoice_engine"] = mod 
@@ -56,17 +59,24 @@ class SenseVoiceDriver(BaseSTTDriver):
             
             # We assume model path is managed by app_config or passed here.
             # For now, let the engine handle its internal paths as before.
+            logger.info("DEBUG: Instantiating SenseVoiceEngine...")
             self.engine = SenseVoiceEngine()
             
             logger.info("SenseVoice Driver Loaded")
         except Exception as e:
-            logger.error(f"Failed to load SenseVoice: {e}")
+            logger.error(f"Failed to load SenseVoice: {e}", exc_info=True)
             raise e
 
-    def transcribe(self, audio_data, **kwargs) -> str:
+    def transcribe(self, audio_data, **kwargs) -> dict:
         if not self.engine:
-            # Sync load if needed (warning: might block event loop if not careful, but transcribed usually in thread)
-            # Since load is async, this method should strictly be called after load, or we hack sync load.
             raise RuntimeError("Driver not loaded")
             
-        return self.engine.transcribe(audio_data)
+        segments, info = self.engine.transcribe(audio_data)
+        full_text = "".join([s.text.strip() for s in segments])
+        
+        return {
+            "text": full_text,
+            "language": info.language,
+            "emotion": getattr(info, 'emotion', None),
+            "confidence": 1.0 # SenseVoice doesn't give confidence yet?
+        }

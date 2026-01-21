@@ -14,6 +14,7 @@ capabilities:
 # Permissions required by this plugin
 permissions:
   - "network:udp"
+  - "filesystem.read"
 
 # Configuration schema
 config:

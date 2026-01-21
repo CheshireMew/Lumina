@@ -3,8 +3,6 @@ import { Mic, Keyboard, Settings as SettingsIcon, Activity, Puzzle, User, Brain 
 import VTuberModeToggle from './VTuberModeToggle';
 
 interface AppToolbarProps {
-    chatMode: 'text' | 'voice';
-    onToggleChatMode: () => void;
     onOpenAvatarSelector: () => void;
     onOpenSettings: () => void;
     onOpenPlugins: () => void;
@@ -13,8 +11,6 @@ interface AppToolbarProps {
 }
 
 export const AppToolbar: React.FC<AppToolbarProps> = ({
-    chatMode,
-    onToggleChatMode,
     onOpenAvatarSelector,
     onOpenSettings,
     onOpenPlugins,

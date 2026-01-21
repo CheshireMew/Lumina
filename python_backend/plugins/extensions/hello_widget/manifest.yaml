@@ -6,3 +6,4 @@ entrypoint: "plugin:HelloWidgetPlugin"
 permissions:
   - "ui:register_widget"
   - "ui:remove_widget"
+  - "filesystem.read"

@@ -1,194 +1,269 @@
 # Lumina - 智能桌面伴侣
 
-Lumina 是一个先进的智能桌面伴侣应用,拥有生动的 Live2D 形象、实时语音交互能力以及沉浸式的 GalGame 恋爱养成系统。她不仅能倾听你的声音,还能记住你的喜好,随着互动加深而建立羁绊。
-
-![Lumina 预览图](https://via.placeholder.com/800x450?text=Lumina+AI+Preview)
+Lumina 是一个先进的智能桌面伴侣应用，拥有生动的 Live2D 形象、实时语音交互能力以及沉浸式的 GalGame 恋爱养成系统。她不仅能倾听你的声音，还能记住你的喜好，随着互动加深而建立羁绊。
 
 ## ✨ 核心功能
 
-- **Live2D 沉浸交互**: 完全可交互的动画角色,能响应触摸、视线跟随,并根据情绪改变表情。
+- **Live2D 沉浸交互**: 完全可交互的动画角色，能响应触摸、视线跟随，并根据情绪改变表情。
 - **全链路语音交互**:
-  - **STT (听)**: 本地化 Whisper/SenseVoice 模型,精准识别中英文。支持 VAD 自动断句。
-  - **TTS (说)**: 集成 Edge TTS (在线) 和 GPT-SoVITS (本地),声音自然动听,支持情感表达。
+  - **STT (听)**: 本地化 SenseVoice 模型，精准识别中英日多语言。支持 VAD 自动断句。
+  - **TTS (说)**: 集成 Edge TTS (在线) 和 GPT-SoVITS (本地)，声音自然动听，支持情感表达。
 - **长短期记忆系统**:
-  - **SurrealDB**: 存储对话历史、事实记忆和向量知识库。
-  - **Dreaming Engine**: 在后台自动整理记忆、提取羁绊值,并模拟"做梦"来演化性格。
+  - **PostgreSQL + pgvector**: 存储对话历史、事实记忆和向量知识库。
+  - **Dreaming Engine**: 在后台自动整理记忆、提取羁绊值，并模拟"做梦"来演化性格。
 - **GalGame HUD**: 实时显示好感度、能量值、当前心情(Mood)和关系等级。
-- **隐私优先**: 所有核心 AI 逻辑(STT/LLM/记忆)均可本地部署,API 密钥仅保存在本地。
+- **隐私优先**: 所有核心 AI 逻辑(STT/LLM/记忆)均可本地部署，API 密钥仅保存在本地。
+
+---
 
 ## 🛠️ 技术架构
 
-Lumina 采用分离式微服务架构以最大化性能:
+Lumina 采用**分布式微服务架构**以最大化性能与可扩展性:
 
-1.  **Frontend (UI)**: Electron + React + Vite + TypeScript (Live2D 渲染, HUD, 音频采集).
-2.  **Backend (Core)**: Python (FastAPI) 微服务集群:
-    - `main.py`: 记忆服务 (SurrealDB 交互), Soul Management (性格演化).
-    - `stt_server.py`: 语音识别 (Faster-Whisper/FunASR).
-    - `tts_server.py`: 语音合成 (EdgeTTS/GPT-SoVITS).
-3.  **User Flow**: 麦克风 -> 前端 VAD -> 后端 STT -> LLM (DeepSeek) -> 后端 TTS -> 前端播放.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Electron + React + Vite                  │
+│              (Live2D 渲染, HUD, 音频采集, 安全沙箱)          │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ IPC / HTTP
+┌───────────────────────────┴─────────────────────────────────┐
+│                  Python FastAPI 微服务集群                   │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ Memory (8010)│  │ STT (8765) │  │ TTS (8766)          │  │
+│  │ Chat/Soul    │  │ SenseVoice │  │ EdgeTTS/GPT-SoVITS  │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+│                            │                                 │
+│  ┌─────────────────────────┴─────────────────────────────┐  │
+│  │              PostgreSQL + pgvector                     │  │
+│  │         (LifecycleBus, Memory, Plugin State)           │  │
+│  └────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
 
-## 🚀 快速开始 (Getting Started)
+### 核心组件
 
-### 1. 环境准备 (Prerequisites)
+| 服务            | 端口   | 职责                                 |
+| :-------------- | :----- | :----------------------------------- |
+| **Memory/Core** | `8010` | 对话、记忆、Soul 管理、插件协调      |
+| **STT Server**  | `8765` | 语音识别 (SenseVoice/Whisper)        |
+| **TTS Server**  | `8766` | 语音合成 (EdgeTTS/GPT-SoVITS)        |
+| **PostgreSQL**  | `5432` | 持久化存储、向量检索、分布式状态同步 |
+
+---
+
+## 🚀 快速开始
+
+### 1. 环境准备
 
 请确保你的电脑已安装以下软件:
 
 - **Node.js** (v18+): [下载](https://nodejs.org/)
 - **Python** (v3.10 - v3.12): [下载](https://www.python.org/)
-- **SurrealDB** (v2.0+): [下载与安装指南](https://surrealdb.com/install)
-  - Windows (PowerShell): `iwr https://windows.surrealdb.com -useb | iex`
-  - _必须确保 `surreal` 命令已添加到系统环境变量 PATH 中。_
+- **PostgreSQL** (v15+): [下载](https://www.postgresql.org/download/)
+  - 需要安装 `pgvector` 扩展用于向量检索
 - **FFmpeg**: [下载](https://ffmpeg.org/download.html)
-  - 需将 `ffmpeg/bin` 添加到系统 PATH,用于音频转码。
+  - 需将 `ffmpeg/bin` 添加到系统 PATH，用于音频转码
 
----
+### 2. 数据库配置
 
-### 2. 安装依赖 (Installation)
+```sql
+-- 创建数据库和用户
+CREATE DATABASE lumina_db;
+CREATE USER lumina_app WITH PASSWORD 'your_password';
+GRANT ALL PRIVILEGES ON DATABASE lumina_db TO lumina_app;
 
-克隆项目后,打开终端执行以下步骤。
+-- 安装 pgvector 扩展 (需要超级用户)
+\c lumina_db
+CREATE EXTENSION IF NOT EXISTS vector;
+```
 
-**Step A: 安装前端依赖**
+### 3. 安装依赖
+
+**Step A: 前端依赖**
 
 ```bash
 npm install
 ```
 
-**Step B: 安装后端依赖**
+**Step B: 后端依赖**
 
 ```bash
-# 推荐创建虚拟环境
 cd python_backend
 python -m venv venv
-# Windows 激活
+# Windows
 venv\Scripts\activate
-# Mac/Linux 激活
+# Mac/Linux
 # source venv/bin/activate
 
-# 安装 Python 库
 pip install -r requirements.txt
 ```
 
-**Step C: 配置 API Key**
-在项目根目录创建 `.env` 文件,填入你的 LLM 服务商 Key (推荐 DeepSeek):
+**Step C: 配置环境变量**
+
+在项目根目录创建 `.env` 文件:
 
 ```env
+# LLM 配置 (推荐 DeepSeek 或 Gemini)
 DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+
+# PostgreSQL (可选，默认值见 config/lumina_config.yaml)
+# LUMINA_PG_HOST=localhost
+# LUMINA_PG_PORT=5432
+# LUMINA_PG_USER=lumina_app
+# LUMINA_PG_PASSWORD=your_password
+# LUMINA_PG_DATABASE=lumina_db
 ```
 
----
+### 4. 启动应用
 
-### 3. 启动应用 (Running)
-
-我们提供了一键启动脚本(推荐):
-
-**Windows PowerShell:**
+**一键启动 (推荐):**
 
 ```powershell
 .\start_lumina.ps1
 ```
 
-_该脚本会自动检查 SurrealDB、启动 Python 后端集群、并运行 Electron 前端。_
-
----
-
-### 🔧 手动启动模式 (Developer)
-
-如果你需要分别调试各个服务,可以打开三个终端窗口:
-
-**Terminal 1: 数据库**
+**手动启动 (开发者模式):**
 
 ```bash
-surreal start --log info --user root --pass root --bind 0.0.0.0:8001 --allow-all file:lumina_surreal.db
-```
+# Terminal 1: PostgreSQL (如果未作为服务运行)
+# pg_ctl start -D /path/to/data
 
-**Terminal 2: Python 后端**
-
-```bash
-# 确保已激活 venv
+# Terminal 2: Python 后端
 cd python_backend
-# 启动入口 (会自动拉起 STT/TTS 子进程)
 python main.py
-```
 
-**Terminal 3: 前端**
-
-```bash
+# Terminal 3: 前端
 npm run dev
 ```
 
-## 📦 模型下载说明
-
-应用首次启动时会尝试自动下载所需模型,但为了加速,你可以手动下载并放入 `python_backend/models/` 目录:
-
-1.  **Embedding 模型**: `paraphrase-multilingual-MiniLM-L12-v2`
-2.  **STT 模型**: `faster-whisper-small` (或其他尺寸)
-
-## ⚠️ 常见问题 (Troubleshooting)
-
-- **端口冲突 (Port 8000/8001/8765/8766 is busy)**:
-  - 请检查是否有残留的 `python.exe` 或 `surreal.exe` 进程并结束它们。
-- **Live2D 加载失败**:
-  - 确保网络可以访问 GitHub (用于下载模型),或手动下载 Live2D 模型放入 `public/live2d`。
-- **声音无法播放**:
-  - 检查系统音频输出设置。如果使用 GPT-SoVITS,确保已安装 FFmpeg。
-
 ---
 
-## 🧩 插件系统 (Plugin System)
+## 🧩 插件系统 (Plugin System V3)
 
-Lumina 采用微内核架构,核心功能通过插件实现:
+Lumina 采用**混合微内核架构**，核心功能通过插件实现:
 
-| 插件                  | 功能                       | 状态    |
-| --------------------- | -------------------------- | ------- |
-| **HeartbeatManager**  | 主动聊天 + 番茄钟          | ✅ 内置 |
-| **GalgameManager**    | 恋爱养成系统 (好感度/能量) | ✅ 内置 |
-| **DreamingManager**   | "做梦"记忆整合             | ✅ 内置 |
-| **EvolutionManager**  | 灵魂/性格演化              | ✅ 内置 |
-| **VoiceprintManager** | 声纹安全验证               | ✅ 内置 |
-| **MCP Servers**       | 外部服务集成 (Bilibili 等) | ✅ 内置 |
+### 内置插件
 
-### 第三方插件开发
+| 插件                 | 类型      | 功能                       |
+| :------------------- | :-------- | :------------------------- |
+| **HeartbeatManager** | Extension | 主动聊天 + 番茄钟          |
+| **GalgameManager**   | Extension | 恋爱养成系统 (好感度/能量) |
+| **DreamingManager**  | Extension | "做梦"记忆整合             |
+| **EvolutionManager** | Extension | 灵魂/性格演化              |
+| **WebSearchTool**    | Tool      | 联网搜索能力               |
 
-插件放入 `python_backend/plugins/system/` 目录即可自动加载:
+### 驱动插件 (Worker Plugins)
+
+| 驱动                      | 运行进程 | 功能                |
+| :------------------------ | :------- | :------------------ |
+| **driver.stt.sensevoice** | STT      | SenseVoice 语音识别 |
+| **driver.tts.edge**       | TTS      | Edge TTS 语音合成   |
+
+### 插件开发
+
+插件放入 `python_backend/plugins/` 目录即可自动加载:
 
 ```
-plugins/system/
-└── my_plugin/
-    ├── manifest.yaml   # 插件元数据
-    └── manager.py      # 插件入口
+plugins/
+├── system/           # 系统级插件 (需要 manifest.yaml)
+├── extensions/       # 扩展插件 (可选 manifest.yaml)
+└── drivers/          # 驱动插件 (STT/TTS 等)
+    └── stt/
+        └── sensevoice/
+            ├── manifest.yaml
+            └── driver.py
+```
+
+**Manifest 示例:**
+
+```yaml
+id: my_plugin
+name: My Plugin
+version: 1.0.0
+permissions:
+  - network.outbound
+  - filesystem.read
 ```
 
 详细开发文档见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ---
 
-## 🏗️ 架构参考
+## 🧪 测试
 
-完整的系统架构文档请参阅:
+Lumina 拥有完善的自动化测试体系:
 
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - 系统架构概览
-- **[FEATURE_INVENTORY.md](FEATURE_INVENTORY.md)** - 功能清单
-- **[docs/ARCHITECTURE_MCP.md](docs/ARCHITECTURE_MCP.md)** - MCP 协议规范
+```bash
+# 运行所有后端测试
+pytest automation/tests_pytest/ -v
+
+# 运行性能基准测试
+pytest automation/tests_pytest/performance/ -v --benchmark-only
+
+# 运行前端单元测试
+npx vitest run
+```
+
+### 测试类型
+
+| 类型            | 目录                                   | 说明                   |
+| :-------------- | :------------------------------------- | :--------------------- |
+| **Backend**     | `automation/tests_pytest/backend/`     | 后端服务单元/集成测试  |
+| **E2E**         | `automation/tests_pytest/e2e/`         | 端到端 API 测试        |
+| **Performance** | `automation/tests_pytest/performance/` | 压力测试、内存泄漏检测 |
+| **Chaos**       | `automation/tests_pytest/chaos/`       | 故障注入、资源耗尽测试 |
+| **Frontend**    | `app/renderer/**/*.test.tsx`           | React 组件 Vitest 测试 |
 
 ---
 
-## �️ 路线图 (Roadmap)
+## 📦 模型下载
+
+应用首次启动时会尝试自动下载所需模型，也可手动下载放入 `python_backend/models/`:
+
+- **Embedding**: `paraphrase-multilingual-MiniLM-L12-v2`
+- **STT**: `SenseVoiceSmall` (推荐) 或 `faster-whisper-small`
+
+---
+
+## ⚠️ 常见问题
+
+- **端口冲突 (8010/8765/8766)**:
+  - 检查并结束残留的 `python.exe` 进程
+- **PostgreSQL 连接失败**:
+  - 确保 PostgreSQL 服务已启动
+  - 检查 `config/lumina_config.yaml` 中的凭据配置
+- **Live2D 加载失败**:
+  - 确保网络可访问 GitHub，或手动下载模型放入 `public/live2d`
+
+---
+
+## 🏗️ 架构参考
+
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - 系统架构概览
+- **[FEATURE_INVENTORY.md](FEATURE_INVENTORY.md)** - 功能清单
+- **[REPO_MAP.md](docs/REPO_MAP.md)** - 代码库导航图
+
+---
+
+## 🗺️ 路线图
 
 ### 已完成 ✅
 
 - [x] Live2D 沉浸交互
 - [x] 全链路语音交互 (STT/TTS)
-- [x] 3 层记忆系统 (SurrealDB)
+- [x] PostgreSQL + pgvector 记忆系统
 - [x] GalGame HUD 界面
-- [x] 插件系统基础架构
+- [x] 插件系统 V3 (Manifest 驱动 + 权限隔离)
 - [x] EventBus 事件总线
+- [x] 分布式状态同步 (LifecycleBus)
+- [x] 自动化测试体系 (Pytest + Vitest + Chaos)
 
 ### 进行中 🚧
 
-- [ ] 插件权限系统
 - [ ] 插件热加载/卸载
 - [ ] 第三方插件市场
+- [ ] 多模型路由优化
 
 ### 规划中 📋
 
@@ -198,6 +273,6 @@ plugins/system/
 
 ---
 
-## �📜 许可证
+## 📜 许可证
 
 [MIT](LICENSE)

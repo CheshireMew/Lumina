@@ -99,7 +99,7 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
     onSaveCharacters
 }) => {
     // Hoist Voice Manager logic here to share between Settings and AvatarSelector
-    const { edgeVoices, gptVoices, activeTtsEngines, ttsPlugins } = useVoiceManager(isSettingsOpen || isAvatarSelectorOpen);
+    const voiceManagerData = useVoiceManager(isSettingsOpen || isAvatarSelectorOpen);
 
     // Helpers
     const handleDeleteCharacter = (id: string) => {
@@ -121,11 +121,8 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
                 activeCharacterId={activeCharacterId}
                 onThinkingModeChange={onThinkingModeChange}
                 onBackgroundImageChange={onBackgroundImageChange}
-                // Voice Props for VoiceTab
-                edgeVoices={edgeVoices}
-                gptVoices={gptVoices}
-                activeTtsEngines={activeTtsEngines}
-                ttsPlugins={ttsPlugins}
+                // Voice Data
+                voiceManagerData={voiceManagerData}
             />
 
             <PluginStoreModal 
@@ -144,7 +141,6 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
                 isOpen={isSurrealViewerOpen} 
                 onClose={onCloseSurrealViewer} 
                 activeCharacterId={activeCharacterId}
-                dataSource="surreal"
             />
             
             <AvatarSelectorModal
@@ -161,10 +157,10 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
                 onSaveCharacters={onSaveCharacters}
 
                 // Voice & Assets
-                edgeVoices={edgeVoices}
-                gptVoices={gptVoices}
-                activeTtsEngines={activeTtsEngines}
-                ttsPlugins={ttsPlugins}
+                edgeVoices={voiceManagerData.edgeVoices}
+                gptVoices={voiceManagerData.gptVoices}
+                activeTtsEngines={voiceManagerData.activeTtsEngines}
+                ttsPlugins={voiceManagerData.ttsPlugins}
                 availableModels={[]} // Models are internal to the modal or fetched there? 
                                      // Actually AvatarSelector used to accept availableModels. 
                                      // Let's pass empty for now, or hoist fetchCharacters logic? 

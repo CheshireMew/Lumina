@@ -131,27 +131,36 @@ class LLMExecutionStep(PipelineStep):
         # 1. First Pass
         collected_response = ""
         
-        async for chunk in ctx.llm_driver.chat_completion(
-            ctx.final_messages,
-            model=ctx.target_model,
-            stream=ctx.stream,
-            temperature=ctx.temperature,
-            tools=ctx.tools_def if ctx.enable_tools else None
-        ):
-            if isinstance(chunk, dict):
-                if "tool_calls" in chunk:
-                    ctx.tool_calls_buffer.extend(chunk["tool_calls"])
-                    continue
-                content = chunk.get("content", "")
-                if content:
-                    collected_response += content
-                    yield content
-            else:
-                collected_response += chunk
-                yield chunk
-        
-        # --- LOGGING: OUTPUT ---
-        logger.info(f"\n========= 📥 LLM OUTPUT ({ctx.target_model}) =========\n{collected_response}\n================================================")
+        try:
+            async for chunk in await ctx.llm_driver.chat_completion(
+                ctx.final_messages,
+                model=ctx.target_model,
+                stream=ctx.stream,
+                temperature=ctx.temperature,
+                tools=ctx.tools_def if ctx.enable_tools else None
+            ):
+                if isinstance(chunk, dict):
+                    if "tool_calls" in chunk:
+                        ctx.tool_calls_buffer.extend(chunk["tool_calls"])
+                        continue
+                    
+                    # Handle DeepSeek/Reasoning Models
+                    content = chunk.get("content", "")
+                    reasoning = chunk.get("reasoning", "")
+                    
+                    # Capture reasoning in logs, but don't stream to user
+                    if reasoning:
+                         collected_response += f" [THINK: {reasoning}] "
+                         
+                    if content:
+                        collected_response += content
+                        yield content
+                else:
+                    collected_response += chunk
+                    yield chunk
+        finally:
+            # --- LOGGING: OUTPUT (Always Log even if stream interrupted) ---
+            logger.info(f"\n========= 📥 LLM OUTPUT ({ctx.target_model}) =========\n{collected_response}\n================================================")
         
         # 2. Tool Execution Loop
         if ctx.tool_calls_buffer:
@@ -173,7 +182,7 @@ class LLMExecutionStep(PipelineStep):
                 })
             
             # 3. Second Pass (Final Answer)
-            async for chunk in ctx.llm_driver.chat_completion(
+            async for chunk in await ctx.llm_driver.chat_completion(
                 ctx.final_messages,
                 model=ctx.target_model,
                 stream=ctx.stream,
@@ -234,6 +243,20 @@ class ChatPipeline:
         await self.tool_step.execute(ctx)
         await self.context_step.execute(ctx)
         
-        # 3. Yield Execution
+        # 3. Yield Execution & Persist History
+        full_response = ""
+        user_msg = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), None)
+        save_history = kwargs.get("save_history", True)
+
         async for token in self.exec_step.run_stream(ctx):
+            full_response += token
             yield token
+
+        # 4. Auto-Save to SessionManager
+        if save_history and user_msg and full_response:
+            try:
+                sm = getattr(services, "session_manager", None)
+                if sm:
+                    sm.add_turn(ctx.user_id, ctx.character_id, user_msg, full_response)
+            except Exception as e:
+                logger.error(f"Failed to auto-save session history: {e}")

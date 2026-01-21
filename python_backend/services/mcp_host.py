@@ -14,8 +14,9 @@ class MCPHost:
     Orchestrator for multiple MCP Satellite Services.
     Uses MCPClient for protocol handling.
     """
-    def __init__(self, soul_client):
+    def __init__(self, soul_client, process_manager=None):
         self.soul_client = soul_client
+        self.process_manager = process_manager # [Architecture 5.0] Governance
         self.clients: Dict[str, MCPClient] = {} 
         self.running = False
         self.servers_dir = os.path.join(BASE_DIR, "mcp_servers")
@@ -77,6 +78,10 @@ class MCPHost:
             
             self.clients[name] = client
             
+            # [Architecture 5.0] Register for Governance
+            if self.process_manager:
+                self.process_manager.register_mcp_client(client)
+            
             # Auto-Connect Hooks (Generic)
             auto_connect = server_config.get("auto_connect")
             if auto_connect:
@@ -134,11 +139,13 @@ class MCPHost:
             
             self.clients.clear()
 
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any] = {}) -> Any:
+    async def call_tool(self, tool_name: str, arguments: Dict[str, Any] = None) -> Any:
         """
         Call a tool.
         Format: "server_name.tool_name"
         """
+        if arguments is None:
+            arguments = {}
         if "." not in tool_name:
             logger.warning(f"Invalid tool format '{tool_name}'. Expected 'server.tool'.")
             return None

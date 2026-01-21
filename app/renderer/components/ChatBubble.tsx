@@ -12,29 +12,20 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, r
     const wasStreamingRef = useRef(false);
 
     useEffect(() => {
+        // [Fix] Simplified logic to prevent double-rendering during streaming
         if (isStreaming) {
+            // During streaming: Just show the message directly
             setDisplayedText(message);
             wasStreamingRef.current = true;
         } else {
             if (wasStreamingRef.current) {
+                // Stream just ended: Show final message directly (no animation)
                 setDisplayedText(message);
                 wasStreamingRef.current = false;
-            } else if (message) {
-                if (displayedText && message.startsWith(displayedText)) {
-                    setDisplayedText(message);
-                } else {
-                    setDisplayedText('');
-                    let i = 0;
-                    const timer = setInterval(() => {
-                        if (i < message.length) {
-                            setDisplayedText((prev) => prev + message.charAt(i));
-                            i++;
-                        } else {
-                            clearInterval(timer);
-                        }
-                    }, 50);
-                    return () => clearInterval(timer);
-                }
+            } else if (message && message !== displayedText) {
+                // New non-streaming message: Show directly without typewriter
+                // Typewriter animation was causing duplication issues
+                setDisplayedText(message);
             }
         }
     }, [message, isStreaming]);

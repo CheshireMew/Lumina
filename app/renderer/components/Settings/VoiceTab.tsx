@@ -1,8 +1,7 @@
-import React from 'react';
-import { useVoiceManager } from '../../hooks/useVoiceManager';
+import { VoiceManagerData } from '../../hooks/useVoiceManager';
 import { inputStyle } from './styles';
 
-export const VoiceTab: React.FC = () => {
+export const VoiceTab: React.FC<VoiceManagerData> = (props) => {
     const {
         whisperModels, currentWhisperModel, loadingStatus, sttEngineType,
         audioDevices, currentAudioDevice,
@@ -14,8 +13,9 @@ export const VoiceTab: React.FC = () => {
         handleVoiceprintToggle,
         handleVoiceprintThresholdChange,
         handleVadChange,
-        setVoiceprintProfile
-    } = useVoiceManager(true);
+        setVoiceprintProfile,
+        voiceprintLoaded
+    } = props;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px', overflowY: 'auto' }}>
@@ -160,8 +160,8 @@ export const VoiceTab: React.FC = () => {
                             style={{ height: '16px', width: '16px', cursor: 'pointer' }}
                         />
                          <div>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>启用声纹验证</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280' }}>只接受你的声音，过滤环境噪声和他人语音</div>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>{"启用声纹验证"}</div>
+                            <div style={{ fontSize: '12px', color: '#6b7280' }}>{"只接受你的声音，过滤环境噪声和他人语音"}</div>
                         </div>
                     </div>
 
@@ -200,8 +200,8 @@ export const VoiceTab: React.FC = () => {
                             fontSize: '12px',
                             padding: '8px',
                             borderRadius: '6px',
-                            backgroundColor: voiceprintStatus.includes('✓') ? '#d1fae5' : '#fef3c7',
-                            color: voiceprintStatus.includes('✓') ? '#065f46' : '#92400e',
+                            backgroundColor: voiceprintLoaded ? '#d1fae5' : '#fef3c7',
+                            color: voiceprintLoaded ? '#065f46' : '#92400e',
                             textAlign: 'center',
                             marginBottom: '10px'
                         }}>
@@ -210,11 +210,11 @@ export const VoiceTab: React.FC = () => {
                     )}
 
                     <div style={{ fontSize: '11px', color: '#9ca3af', lineHeight: '1.4' }}>
-                        💡 <strong>使用提示：</strong><br />
-                        1. 运行 <code>python python_backend/register_voiceprint.py</code><br />
-                        2. 启用声纹验证开关<br />
-                        3. 调整阈值以达到最佳效果<br />
-                        4. 重启 stt_server.py 使配置生效
+                        <span>💡 <strong>使用提示：</strong></span><br />
+                        <span>1. 运行 <code>python python_backend/register_voiceprint.py</code></span><br />
+                        <span>2. 启用声纹验证开关</span><br />
+                        <span>3. 调整阈值以达到最佳效果</span><br />
+                        <span>4. 重启 stt_server.py 使配置生效</span>
                     </div>
                 </div>
             </div>

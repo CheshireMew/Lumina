@@ -1,6 +1,4 @@
 import { Message } from "./types";
-import axios from "axios";
-import { app } from "electron";
 
 export class LLMService {
     private backendUrl: string = "http://127.0.0.1:8010"; // Default to Memory Server Port
@@ -15,7 +13,7 @@ export class LLMService {
         apiKey: string,
         baseUrl: string = "http://127.0.0.1:8010",
         modelName: string = "default",
-        temperature: number = 0.7
+        temperature: number = 0.7,
     ) {
         if (
             baseUrl &&
@@ -27,7 +25,7 @@ export class LLMService {
         }
         // We ignore apiKey and modelName here as they are managed by Python Backend
         console.log(
-            `[LLMService] Initialized Proxy to Backend: ${this.backendUrl}`
+            `[LLMService] Initialized Proxy to Backend: ${this.backendUrl}`,
         );
     }
 
@@ -52,7 +50,7 @@ export class LLMService {
         presencePenalty?: number,
         frequencyPenalty?: number,
         characterId?: string,
-        userId?: string
+        userId?: string,
     ): Promise<string> {
         // [Phase 20] Construct Payload
         let payload: any = {};
@@ -83,9 +81,8 @@ export class LLMService {
 
             // A. History
             const maxHistoryMessages = contextWindow * 2;
-            const recentHistory = conversationHistory.slice(
-                -maxHistoryMessages
-            );
+            const recentHistory =
+                conversationHistory.slice(-maxHistoryMessages);
 
             recentHistory.forEach((msg) => {
                 messages.push({
@@ -93,8 +90,8 @@ export class LLMService {
                         msg.role === "user"
                             ? "user"
                             : msg.role === "assistant"
-                            ? "assistant"
-                            : "system",
+                              ? "assistant"
+                              : "system",
                     content: msg.content,
                 });
             });
@@ -140,7 +137,7 @@ export class LLMService {
         }
 
         console.log(
-            `[LLMService] Proxying Chat to ${this.backendUrl}/lumina/chat/completions`
+            `[LLMService] Proxying Chat to ${this.backendUrl}/lumina/chat/completions`,
         );
 
         try {
@@ -152,7 +149,7 @@ export class LLMService {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify(payload),
-                }
+                },
             );
 
             if (!response.ok) {
@@ -166,16 +163,22 @@ export class LLMService {
 
             if (!reader) throw new Error("No response body");
 
+            let lineBuffer = "";
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
                 const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split("\n");
+                lineBuffer += chunk;
+
+                const lines = lineBuffer.split("\n");
+                // Keep the last part (potentially incomplete line) in the buffer
+                lineBuffer = lines.pop() || "";
 
                 for (const line of lines) {
-                    if (line.startsWith("data: ")) {
-                        const dataStr = line.slice(6).trim();
+                    const trimmedLine = line.trim();
+                    if (trimmedLine.startsWith("data: ")) {
+                        const dataStr = trimmedLine.slice(6).trim();
                         if (dataStr === "[DONE]") continue;
                         if (dataStr === "[START]") continue;
 
@@ -209,11 +212,16 @@ export class LLMService {
         return "Use stream";
     }
     public async chatStream(message: string, onToken: any): Promise<string> {
-        return "Use history";
+        // [Fix] Correct Argument Order: history, message, context, callback
+        return this.chatStreamWithHistory([], message, 8192, (token, type) => {
+            if (type === "content" || !type) {
+                onToken(token);
+            }
+        });
     }
     public async updateSummary(
         currentSummary: string,
-        newMessages: Message[]
+        newMessages: Message[],
     ): Promise<string> {
         console.log("[LLMService] Requesting Summary Update...");
 
@@ -254,7 +262,7 @@ Updated Summary:
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
-                }
+                },
             );
 
             if (!response.ok) {
@@ -272,16 +280,21 @@ Updated Summary:
 
             if (!reader) throw new Error("No response body");
 
+            let lineBuffer = "";
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
                 const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split("\n");
+                lineBuffer += chunk;
+
+                const lines = lineBuffer.split("\n");
+                lineBuffer = lines.pop() || "";
 
                 for (const line of lines) {
-                    if (line.startsWith("data: ")) {
-                        const dataStr = line.slice(6).trim();
+                    const trimmedLine = line.trim();
+                    if (trimmedLine.startsWith("data: ")) {
+                        const dataStr = trimmedLine.slice(6).trim();
                         if (dataStr === "[DONE]") continue;
                         if (dataStr === "[START]") continue;
                         try {

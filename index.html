@@ -1,19 +1,19 @@
 <!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'self' http://127.0.0.1:8010 ws://127.0.0.1:8010; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: lumina-local: http://127.0.0.1:8010; media-src 'self' blob:; frame-src 'self' http://127.0.0.1:8010; connect-src 'self' ws: http: https:;"
+        />
+        <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Lumina - Your AI Companion</title>
+        <script src="/libs/live2dcubismcore.min.js"></script>
+    </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ws: http: https:;">
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lumina - Your AI Companion</title>
-  <script src="/libs/live2dcubismcore.min.js"></script>
-</head>
-
-<body>
-  <div id="root"></div>
-  <script type="module" src="/app/renderer/main.tsx"></script>
-</body>
-
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/app/renderer/main.tsx"></script>
+    </body>
 </html>

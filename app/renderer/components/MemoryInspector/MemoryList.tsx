@@ -6,7 +6,11 @@ import { HistoryEvent, Fact } from './types';
 const parseContent = (jsonStr: string) => {
     try {
         const obj = JSON.parse(jsonStr);
-        return obj.content || jsonStr;
+        let content = obj.content;
+        if (typeof content === 'object' && content !== null) {
+            return JSON.stringify(content);
+        }
+        return String(content || jsonStr);
     } catch {
         return jsonStr;
     }
@@ -66,9 +70,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({ history, activeCharact
                 const isAI = normalizedRole === normalizedCharId || 
                              normalizedRole === 'assistant' || 
                              normalizedRole === 'ai' || 
-                             normalizedRole === 'system' ||
-                             normalizedRole === 'lillian' || 
-                             normalizedRole === 'hiyori';
+                             normalizedRole === 'system';
                              
                 const isUser = !isAI;
                 const displayName = parseName || (role === 'user' ? 'USER' : (role === 'system' ? 'SYSTEM' : role)) || 'AI';

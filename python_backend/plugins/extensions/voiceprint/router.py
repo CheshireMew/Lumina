@@ -65,8 +65,12 @@ async def list_profiles():
 
 @router.post("/upload")
 async def upload_voiceprint(name: str, file: UploadFile = File(...)):
+    if ".." in name or "/" in name or "\\" in name:
+        raise HTTPException(status_code=400, detail="Invalid profile name")
+        
     mgr = get_voiceprint_manager()
     
+    tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
             shutil.copyfileobj(file.file, tmp)
@@ -76,9 +80,7 @@ async def upload_voiceprint(name: str, file: UploadFile = File(...)):
         if audio.ndim > 1:
             audio = audio[:, 0]
             
-        success = await mgr.register_voiceprint(audio, name)
-        
-        os.remove(tmp_path)
+        success = await mgr.register_voiceprint(audio, name, sample_rate=sr)
         
         if success:
             return {"status": "ok", "message": f"Registered {name}"}
@@ -88,6 +90,9 @@ async def upload_voiceprint(name: str, file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 @router.post("/toggle/{name}")
 async def toggle_profile(name: str, enabled: bool):

@@ -81,7 +81,9 @@ async def register_interaction():
         }
     except Exception as e:
         logger.error(f"[API] Interaction update failed: {e}")
-        return {"status": "error", "detail": str(e)}
+    except Exception as e:
+        logger.error(f"[API] Interaction update failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/soul/switch_character")
@@ -92,7 +94,9 @@ async def switch_character(request: SwitchCharacterRequest):
     # For now, we assume the Frontend handles the character_id persistence config
     # and reboots the backend or we hot-swap config.
     
-    return {"status": "error", "detail": "Hot switching not yet implemented in Universal Architecture"}
+    # and reboots the backend or we hot-swap config.
+    
+    raise HTTPException(status_code=501, detail="Hot switching not yet implemented in Universal Architecture")
 
 
 @router.post("/soul/update_identity")

@@ -22,11 +22,17 @@ def _get_soul_service():
     return services.soul
 
 
+from core.security.safe_path import SafePath, SecurityException
+
+# Helper: Get Characters Root
+def _get_chars_root() -> Path:
+    return Path(__file__).parent.parent / "characters"
+
 def _load_char_config(character_id: str) -> Dict[str, Any]:
     """Helper to load config directly from disk without SoulManager"""
     try:
-        # Use relative path to python_backend
-        base_dir = Path(__file__).parent.parent / "characters" / character_id
+        # [Security] Use SafePath to prevent traversal
+        base_dir = SafePath.resolve_child(_get_chars_root(), character_id)
         config_path = base_dir / "config.json"
         
         if not config_path.exists():
@@ -34,6 +40,9 @@ def _load_char_config(character_id: str) -> Dict[str, Any]:
              
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
+    except SecurityException as se:
+        logger.warning(f"🚨 Security Violation loading char {character_id}: {se}")
+        raise HTTPException(403, "Invalid character ID")
     except Exception as e:
         logger.error(f"Failed to load config for {character_id}: {e}")
         raise
@@ -41,7 +50,8 @@ def _load_char_config(character_id: str) -> Dict[str, Any]:
 def _save_char_config(character_id: str, new_config: Dict[str, Any]):
     """Helper to save config directly to disk"""
     try:
-        base_dir = Path(__file__).parent.parent / "characters" / character_id
+        # [Security] Use SafePath
+        base_dir = SafePath.resolve_child(_get_chars_root(), character_id)
         base_dir.mkdir(parents=True, exist_ok=True)
         config_path = base_dir / "config.json"
         
@@ -56,6 +66,9 @@ def _save_char_config(character_id: str, new_config: Dict[str, Any]):
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(current_config, f, indent=4, ensure_ascii=False)
             
+    except SecurityException as se:
+        logger.warning(f"🚨 Security Violation saving char {character_id}: {se}")
+        raise HTTPException(403, "Invalid character ID")
     except Exception as e:
         logger.error(f"Failed to save config for {character_id}: {e}")
         raise
@@ -170,7 +183,12 @@ async def delete_character(character_id: str):
         if character_id == "hiyori":
              raise HTTPException(status_code=400, detail="Cannot delete default character 'hiyori'")
              
-        char_dir = Path(__file__).parent.parent / "characters" / character_id
+        try:
+            # [Security] Use SafePath
+            char_dir = SafePath.resolve_child(_get_chars_root(), character_id)
+        except SecurityException:
+            logger.warning(f"🚨 Security Violation deleting char {character_id}")
+            raise HTTPException(403, "Invalid character ID")
         
         if char_dir.exists() and char_dir.is_dir():
             shutil.rmtree(char_dir)

@@ -54,7 +54,13 @@ export const RecordEditor: React.FC<RecordEditorProps> = ({
                                     <input 
                                         type="text" 
                                         value={typeof editorForm[key] === 'object' ? JSON.stringify(editorForm[key]) : (editorForm[key] || '')}
-                                        onChange={e => setEditorForm({...editorForm, [key]: e.target.value})}
+                                        onChange={e => {
+                                            let val: any = e.target.value;
+                                            if (editingRecord && typeof editingRecord[key] === 'object') {
+                                                try { val = JSON.parse(e.target.value); } catch {}
+                                            }
+                                            setEditorForm({...editorForm, [key]: val})
+                                        }}
                                         style={{
                                             width:'100%', background:'rgba(0,0,0,0.3)', border:'1px solid rgba(255,255,255,0.1)', 
                                             color:'#fff', padding:'8px', borderRadius:'6px', fontFamily:'inherit'

@@ -86,7 +86,7 @@ export const SchemaForm: React.FC<SchemaFormProps> = ({ schema, values, onChange
                                     max={field.max ?? 100}
                                     step={field.step ?? 1}
                                     value={parseFloat(val) || 0}
-                                    onChange={(e) => onChange(field.key, e.target.value)}
+                                    onChange={(e) => onChange(field.key, parseFloat(e.target.value))}
                                     style={{ flex: 1, accentColor: '#a78bfa', cursor: 'pointer' }}
                                 />
                                 <span style={{ width: '40px', fontSize: '12px', color: '#ccc', textAlign: 'right' }}>
@@ -97,7 +97,10 @@ export const SchemaForm: React.FC<SchemaFormProps> = ({ schema, values, onChange
                             <input
                                 type={field.type === 'number' ? 'number' : 'text'}
                                 value={val}
-                                onChange={(e) => onChange(field.key, e.target.value)}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    onChange(field.key, field.type === 'number' ? (v === '' ? '' : parseFloat(v)) : v);
+                                }}
                                 style={{
                                     width: '100%',
                                     padding: '8px 12px',

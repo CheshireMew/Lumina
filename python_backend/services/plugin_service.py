@@ -5,16 +5,266 @@ import shutil
 import zipfile
 import yaml
 import os
+import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from app_config import config as app_config
+from core.manifest import PluginManifest
+from core.events.bus import Event
+from services.infra.service_discovery import discovery
+from core.events.definitions import PluginLifecycleRequest, PluginLoadedPayload, PluginErrorPayload, PluginDisabledPayload
+from core.protocol import EventType
+
+# [Fix] CapabilityType is in schemas
+from core.capabilities.schemas import CapabilityType
+
+
+# [Architecture 3.0] Base Directory
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 logger = logging.getLogger("PluginService")
 
 class PluginService:
     def __init__(self, services_container):
         self.services = services_container
+        # [Architecture 5.6] Unified Registry (Plugin-Centric SSOT)
+        # keys are plugin_id, values are full plugin states
+        self.plugin_registry: Dict[str, Dict[str, Any]] = {}
+        
+        # [Architecture 5.6] Worker Node Registry (Liveness & Routing)
+        # keys are worker_id
+        self.worker_registry: Dict[str, Dict[str, Any]] = {}
+        
+        # [Architecture 31] Watchdog Tracking
+        self._last_healthy_workers = set()
+        
+        # [Architecture 7.0] Centralized State Aggregator
+        self._aggregator = None
+        self._aggregator_ready = False
+        
+        # [Architecture 5.0] Background Tasks
+        asyncio.create_task(self._watchdog_loop())
+        asyncio.create_task(self._start_lifecycle_sync())
+        asyncio.create_task(self._init_aggregator())
+
+    async def _start_lifecycle_sync(self):
+        """
+        [Architecture 5.0] Real-time Sync.
+        Listens to the distributed Lifecycle Bus for status 'Shouts'.
+        Updates local registry immediately without waiting for heartbeat.
+        """
+        await asyncio.sleep(5) # Allow bus initialization
+        try:
+            from services.infra.bus_factory import get_lifecycle_bus
+            bus = get_lifecycle_bus()
+            
+            async for event in bus.subscribe_lifecycle_shouts():
+                plugins = event.get("plugins", [])
+                worker_id = event.get("worker_id")
+                
+                # 1. Update Plugin States Individually (Deep Merge)
+                for p in plugins:
+                    pid = p.get("id")
+                    if pid:
+                        # Append worker info to plugin state if available
+                        if worker_id: p["worker_id"] = worker_id
+                        
+                        # [Fix] Merge, don't overwrite!
+                        if pid in self.plugin_registry:
+                            self.plugin_registry[pid].update(p)
+                        else:
+                            self.plugin_registry[pid] = p
+
+                        # [NEW] Broadcast to Frontend (Fix for Stuck Transitioning State)
+                        # We need to compute the "frontend status" (enabled/disabled) based on the new state
+                        desired = p.get("enabled", False) 
+                        active_status = p.get("active_status", "unknown")
+                        
+                        # Logic from list_all_plugins to map raw state to UI status
+                        computed_status = "disabled"
+                        if active_status == "ready" or active_status == "idle":
+                             computed_status = "enabled"
+                        elif active_status == "stopped":
+                             computed_status = "disabled"
+                        elif active_status == "error":
+                             computed_status = "error"
+                        else: 
+                             computed_status = active_status # e.g. transitioning, provisioning
+                        
+                        # Emit Event
+                        if self.services.event_bus:
+                            # Use fire_and_forget to avoid blocking the sync loop
+                            asyncio.create_task(self.services.event_bus.emit(EventType.PLUGIN_STATUS, {
+                                "plugin_id": pid,
+                                "status": computed_status,
+                                "active_status": active_status,
+                                "active": desired
+                            }))
+                        
+                        # [Aggregator] Feed worker reports into aggregator
+                        if self._aggregator:
+                            asyncio.create_task(self._aggregator._merge_state(pid, p, source="worker"))
+                
+                # 2. Update Worker Node Info (Liveness)
+                if worker_id and worker_id != "unknown":
+                    host = event.get("host", "127.0.0.1")
+                    port = event.get("port")
+                    capabilities = event.get("capabilities", [])
+                    
+                    self.worker_registry[worker_id] = {
+                        "host": host,
+                        "port": port,
+                        "capabilities": capabilities,
+                        "last_seen": asyncio.get_event_loop().time()
+                    }
+                    
+                    if port:
+                        discovery.register(worker_id, host, port, capabilities=capabilities)
+                    
+                    # Update watchdog tracker
+                    self._last_healthy_workers.add(worker_id)
+        except Exception as e:
+            logger.error(f"Lifecycle sync error: {e}")
+            await asyncio.sleep(10)
+            asyncio.create_task(self._start_lifecycle_sync())
+
+    async def _watchdog_loop(self):
+        """Active monitoring of worker health"""
+        # Delay start to allow initial registration
+        await asyncio.sleep(20)
+        
+        while True:
+            try:
+                from services.infra.bus_factory import get_lifecycle_bus
+                bus = get_lifecycle_bus()
+                
+                active_records = await bus.get_active_workers(timeout_seconds=15)
+                current_active = {r.get("worker_id") for r in active_records if r.get("worker_id")}
+                
+                # Only track workers we've seen before or core ones
+                # For now, we detect transition from Alive -> Dead
+                dead = self._last_healthy_workers - current_active
+                for wid in dead:
+                    logger.warning(f"🚨 [Watchdog] Worker '{wid}' has gone OFFLINE!")
+                    # Emit event via Bus
+                    if self.services.event_bus:
+                        await self.services.event_bus.emit("system.worker.offline", {"worker_id": wid})
+                
+                # Update tracker with currently alive ones
+                self._last_healthy_workers = current_active
+                
+                # [Monitoring] Periodic stats logging (every 5 cycles = ~50s)
+                if not hasattr(self, '_stats_counter'):
+                    self._stats_counter = 0
+                self._stats_counter += 1
+                
+                if self._stats_counter % 5 == 0:
+                    self._log_memory_stats()
+                
+                await asyncio.sleep(10)
+            except Exception as e:
+                logger.error(f"Watchdog error: {e}")
+                await asyncio.sleep(20)
+
+    def _log_memory_stats(self):
+        """Log memory usage statistics for monitoring."""
+        import sys
+        
+        plugin_count = len(self.plugin_registry)
+        worker_count = len(self.worker_registry)
+        
+        # Estimate memory size (rough)
+        plugin_size = sys.getsizeof(self.plugin_registry)
+        worker_size = sys.getsizeof(self.worker_registry)
+        
+        logger.info(
+            f"📊 PluginService Memory: "
+            f"plugins={plugin_count} (~{plugin_size}B), "
+            f"workers={worker_count} (~{worker_size}B)"
+        )
+        
+        # Also log EventBus stats if available
+        if self.services.event_bus and hasattr(self.services.event_bus, 'log_stats'):
+            self.services.event_bus.log_stats()
+        
+        # Warn if registries are growing too large
+        if plugin_count > 100:
+            logger.warning(f"⚠️ Plugin registry has {plugin_count} entries (high)")
+        if worker_count > 20:
+            logger.warning(f"⚠️ Worker registry has {worker_count} entries (high)")
+
+    async def _init_aggregator(self):
+        """Initialize the centralized state aggregator"""
+        await asyncio.sleep(3)  # Wait for event bus to be ready
+        try:
+            from services.plugin_state_aggregator import init_plugin_state_aggregator
+            
+            if self.services.event_bus:
+                self._aggregator = await init_plugin_state_aggregator(self.services.event_bus)
+                
+                # Set user overrides from config
+                self._aggregator.set_overrides(
+                    groups=app_config.plugin_groups.assignments,
+                    categories=app_config.plugin_groups.custom_categories,
+                    behaviors=app_config.plugin_groups.group_behaviors
+                )
+                
+                # Seed initial state from system plugin manager
+                await self._seed_aggregator_from_local()
+                
+                self._aggregator_ready = True
+                logger.info("✅ PluginStateAggregator ready")
+        except Exception as e:
+            logger.error(f"Failed to initialize aggregator: {e}")
+    
+    async def _seed_aggregator_from_local(self):
+        """Populate aggregator with initial plugin states from all sources"""
+        if not self._aggregator:
+            return
+        
+        # 1. Local system plugins
+        if self.system_plugin_manager:
+            local_plugins = self.system_plugin_manager.list_plugins()
+            for p in local_plugins:
+                p["runtime_target"] = "main"
+                p["worker_id"] = "main"
+                await self._aggregator._merge_state(p["id"], p, source="local")
+        
+        # 2. Heartbeat tickers
+        if self.heartbeat_service:
+            for ticker in self.heartbeat_service.tickers.values():
+                ticker_state = {
+                    "id": ticker.id,
+                    "name": ticker.name,
+                    "category": "other",
+                    "description": f"System Ticker: {ticker.name}",
+                    "desired_enabled": ticker.enabled,
+                    "active_status": "ready" if ticker.enabled else "stopped",
+                    "group_policy": "independent",
+                    "capabilities": ["heartbeat.ticker"],
+                    "runtime_target": "main",
+                    "worker_id": "main"
+                }
+                await self._aggregator._merge_state(ticker.id, ticker_state, source="ticker")
+        
+        # 3. MCP servers
+        if self.mcp_host:
+            for name, client in self.mcp_host.clients.items():
+                pid = f"mcp.{name}"
+                mcp_state = {
+                    "id": pid,
+                    "name": name,
+                    "category": "tool",
+                    "description": f"MCP Module: {name}",
+                    "desired_enabled": True,
+                    "active_status": "ready",
+                    "group_policy": "independent",
+                    "capabilities": ["mcp.tool"],
+                    "runtime_target": "main",
+                    "worker_id": "main"
+                }
+                await self._aggregator._merge_state(pid, mcp_state, source="mcp")
 
     @property
     def system_plugin_manager(self):
@@ -29,195 +279,230 @@ class PluginService:
     def mcp_host(self):
         return getattr(self.services, 'mcp_host', None)
 
+    async def register_capabilities(self, worker_id: str, capabilities: List[Dict], host: str = "127.0.0.1", port: int = 8000):
+        """
+        [Architecture 6.0] Schema-Enforced Registration.
+        Workers push their active plugins/drivers here via heartbeats.
+        """
+        REQUIRED_FIELDS = ['id', 'name', 'category', 'runtime_target']
+        
+        valid_count = 0
+        for p in capabilities:
+            pid = p.get("id")
+            if not pid: continue
+            
+            # 1. Schema Validation
+            missing = [f for f in REQUIRED_FIELDS if f not in p]
+            if missing:
+                logger.warning(f"⚠️ [Registry] Plugin {pid} from {worker_id} rejected: Missing {missing}")
+                continue
+            
+            # 2. Ingestion
+            p["worker_id"] = worker_id
+            p.setdefault("enabled", True)
+            p.setdefault("active", True)
+            
+            # [Fix] Deep Merge for Registry Ingestion
+            if pid in self.plugin_registry:
+                self.plugin_registry[pid].update(p)
+            else:
+                self.plugin_registry[pid] = p
+            
+            valid_count += 1
+                
+        # [Architecture 6.0 - Scheme C]
+        # Main Process NO LONGER updates remote worker state in DB.
+        # Workers (Mesh Nodes) are responsible for their own liveness via WorkerStatusReporter.
+        
+        # We only use this payload for Service Discovery (IP/Port) below.
+        pass
+
+        try:
+            # Capabilities summary for discovery (list of capability strings)
+            caps_summary = []
+            for p in self.plugin_registry.values():
+                if p.get("worker_id") == worker_id:
+                    caps_summary.extend(p.get("capabilities", []))
+            
+            discovery.register(
+                worker_id=worker_id,
+                host=host,
+                port=port,
+                capabilities=list(set(caps_summary))
+            )
+        except Exception as e:
+            logger.warning(f"Discovery Registration Failed for {worker_id}: {e}")
+
+        logger.debug(f"[Registry] Worker '{worker_id}' registered {valid_count} capabilities.")
+        return True
+
     async def list_all_plugins(self) -> List[Dict[str, Any]]:
         """
-        Returns a consolidated list of all system capabilities.
-        Aggregate from Config, STT/TTS Servers, System Plugins, etc.
+        [Architecture 7.0] Plugin State Query
+        Uses centralized aggregator when available, falls back to legacy merge.
         """
-        plugins = []
+        # Fast path: Use aggregator if ready
+        if self._aggregator_ready and self._aggregator:
+            plugins = self._aggregator.get_snapshot()
+            # Enrich remote drivers with service URLs
+            for p in plugins:
+                target = p.get('runtime_target', 'main')
+                if target in ['stt_server', 'tts_server']:
+                    p['is_driver'] = True
+                    fallback_port = app_config.network.stt_port if target == 'stt_server' else app_config.network.tts_port
+                    p['service_url'] = discovery.get_url(target, fallback_port=fallback_port)
+            return plugins
+        
+        # Legacy fallback: Manual aggregation
+        logger.debug("[list_all_plugins] Aggregator not ready, using legacy merge")
+        plugin_map = {}
 
-        # 1. System Plugins
+        # 1. System Plugin Manager (Local SSOT)
         if self.system_plugin_manager:
             try:
-                plugins.extend(self.system_plugin_manager.list_plugins())
+                # spm.list_plugins() already provides live state for local plugins
+                for p in self.system_plugin_manager.list_plugins():
+                    plugin_map[p['id']] = p
             except Exception as e:
-                logger.error(f"Failed to list system plugins: {e}")
+                logger.error(f"Failed to fetch system plugins: {e}")
 
-        # 2. TTS Engines
+        # 2. Worker Registry (Distributed SSOT)
+        # Ensure registry is fresh (filter dead workers)
         try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(f"{app_config.network.tts_url}/models/list")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    active_id = data.get("active")
-                    engines = data.get("engines", [])
-                    
-                    for eng in engines:
-                        pid = eng['id']
-                        # Dynamic Schema assignment
-                        schema = None
-                        if pid == "edge-tts":
-                            schema = {
-                                "key": "voice_config",
-                                "fields": [
-                                    {"key": "voiceId", "label": "Voice", "type": "select", "optionSource": "edgeVoices"},
-                                    {"key": "rate", "label": "Rate", "type": "text", "default": "+0%"},
-                                    {"key": "pitch", "label": "Pitch", "type": "text", "default": "+0Hz"}
-                                ]
-                            }
-                        elif pid == "gpt-sovits":
-                            schema = {
-                                "key": "voice_config",
-                                "fields": [
-                                    {"key": "voiceId", "label": "Voice Model", "type": "select", "optionSource": "gptVoices"}
-                                ]
-                            }
-
-                        plugins.append({
-                            "id": pid,
-                            "category": "tts",
-                            "name": eng["name"],
-                            "description": eng["desc"],
-                            "enabled": True,
-                            "active_in_group": (pid == active_id),
-                            "config_schema": schema,
-                            "func_tag": "Voice Synthesis",
-                            "is_driver": True,
-                            "driver_id": pid,
-                            "service_url": f"{app_config.network.tts_url}/models/switch",
-                            "group_id": "driver.tts"
-                        })
+            from services.infra.bus_factory import get_lifecycle_bus
+            dist_bus = get_lifecycle_bus()
+            active_records = await dist_bus.get_active_workers(timeout_seconds=15)
+            active_worker_ids = {r.get("worker_id") for r in active_records if r.get("worker_id")}
+            
+            # Identify plugins associated with dead workers
+            plugins_to_prune = []
+            for pid, p in self.plugin_registry.items():
+                wid = p.get("worker_id")
+                if wid and wid != "main" and wid not in active_worker_ids:
+                    plugins_to_prune.append(pid)
+            
+            for pid in plugins_to_prune:
+                logger.info(f"👻 Pruning plugin from dead worker: {pid}")
+                self.plugin_registry.pop(pid, None)
+                
+            # Sync internal worker registry
+            self.worker_registry = {wid: info for wid, info in self.worker_registry.items() if wid in active_worker_ids}
+            self._last_healthy_workers = active_worker_ids
         except Exception as e:
-            logger.warning(f"Failed to fetch TTS plugins: {e}")
-            plugins.append({
-                 "id": "tts-error", "category": "tts", "name": "TTS Service Unavailable", 
-                 "description": str(e), "enabled": False, "func_tag": "Voice Synthesis"
-            })
+            logger.warning(f"Liveness check failed: {e}")
+            from services.error_monitor import track_error
+            track_error(e, context={"component": "PluginService", "operation": "liveness_check"})
 
-        # 3. STT Engines
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(f"{app_config.network.stt_url}/models/list")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    active_id = data.get("active_driver") or data.get("current_model")
-                    models = data.get("models", [])
-                    
-                    faster_whisper_models = []
-                    fw_active = False
-                    current_fw_size = "base"
+        # Overlay registry (Worker reports take precedence)
+        for pid, rp in self.plugin_registry.items():
+            if pid in plugin_map:
+                plugin_map[pid].update(rp)
+            else:
+                plugin_map[pid] = rp
 
-                    for m in models:
-                        mid = m["name"]
-                        is_active = (mid == active_id)
-
-                        if m.get("engine") == "faster_whisper" or m.get("is_whisper"):
-                            faster_whisper_models.append(mid)
-                            if is_active: 
-                                fw_active = True
-                                current_fw_size = mid
-                        else:
-                            plugins.append({
-                                "id": mid,
-                                "category": "stt",
-                                "name": m.get("desc", mid),
-                                "description": f"Speech Recognition ({mid})",
-                                "enabled": True,
-                                "active_in_group": is_active,
-                                "config_schema": None,
-                                "func_tag": "Speech Recognition",
-                                "is_driver": True,
-                                "driver_id": mid,
-                                "service_url": f"{app_config.network.stt_url}/models/switch",
-                                "group_id": "driver.stt"
-                            })
-
-                    if faster_whisper_models:
-                        fw_options = [
-                            {"value": "tiny", "label": "Tiny (Very Fast)"},
-                            {"value": "base", "label": "Base (Balanced)"},
-                            {"value": "small", "label": "Small (Accurate)"},
-                            {"value": "medium", "label": "Medium (Very Accurate)"},
-                            {"value": "large-v3", "label": "Large V3 (Most Accurate, Slow)"}
-                        ]
-                        
-                        plugins.append({
-                            "id": "faster-whisper-group",
-                            "category": "stt",
-                            "name": "Faster Whisper",
-                            "description": "Standard high-performance recognition. Select model size below.",
-                            "enabled": True,
-                            "active_in_group": fw_active,
-                            "config_schema": {
-                                "type": "select",
-                                "key": "fw_model_size",
-                                "label": "Model Size",
-                                "options": fw_options,
-                                "confirm_on_change": True 
-                            },
-                            "current_value": current_fw_size, 
-                            "func_tag": "Speech Recognition",
-                            "driver_id": current_fw_size, 
-                            "service_url": f"{app_config.network.stt_url}/models/switch",
-                            "group_id": "driver.stt" 
-                        })
-        except Exception as e:
-            logger.warning(f"Failed to fetch STT plugins: {e}")
-
-        # 4. System Tickers
+        # 3. System Tickers (Live State)
         if self.heartbeat_service:
             for ticker in self.heartbeat_service.tickers.values():
-                schema = getattr(ticker, "config_schema", None)
-                val = None
-                if schema:
-                    if hasattr(ticker, "config"):
-                        val = ticker.config
-                    else:
-                        val = getattr(ticker, "current_value", None)
-                else:
-                    schema = {"type": "number", "key": f"{ticker.id}:timeout_seconds", "label": "Interval (Sec)"}
-                    val = getattr(ticker, "timeout_seconds", getattr(ticker, "interval", 0))
-
-                plugins.append({
+                plugin_map[ticker.id] = {
                     "id": ticker.id, 
-                    "category": "other",
                     "name": ticker.name,
+                    "category": "other",
                     "description": f"System Ticker: {ticker.name}",
                     "enabled": ticker.enabled,
-                    "active_in_group": False, 
-                    "config_schema": schema,
-                    "current_value": val,
-                    "func_tag": "System Automation",
-                    "group_id": None 
-                })
+                    "active": ticker.enabled,
+                    "group_policy": "independent",
+                    "capabilities": ["heartbeat.ticker"],
+                    "runtime_target": "main"
+                }
 
-        # 5. MCP Servers
+        # 4. MCP Servers (Live State)
         if self.mcp_host:
             for name, client in self.mcp_host.clients.items():
-                plugins.append({
-                    "is_driver": False
-                })
-
-                # ⚡ Metadata Injection
-                # Try to load metadata.json for schema
-                mcp_dir = Path(BASE_DIR) / "mcp_servers" / name
+                pid = f"mcp.{name}"
+                plugin_map[pid] = {
+                    "id": pid,
+                    "name": name,
+                    "category": "tool",
+                    "description": f"MCP Module: {name}",
+                    "desired_enabled": True,  # Canonical
+                    "active_status": "ready",  # Canonical
+                    "enabled": True,  # UI Compat
+                    "active": True,
+                    "group_policy": "independent",
+                    "capabilities": ["mcp.tool"],
+                    "runtime_target": "main"
+                }
+                # Enrich with Schema if found
+                mcp_dir = Path(app_config.base_dir) / "mcp_servers" / name
                 meta_path = mcp_dir / "metadata.json"
                 if meta_path.exists():
-                    try:
-                        with open(meta_path, 'r', encoding='utf-8') as f:
-                            meta = json.load(f)
-                            # Update last added plugin
-                            plugins[-1].update({
-                                "name": meta.get("name", plugins[-1]["name"]),
-                                "description": meta.get("description", plugins[-1]["description"]),
-                                "category": meta.get("category", plugins[-1]["category"]),
-                                "config_schema": meta.get("config_schema")
-                            })
-                    except Exception as e:
-                        logger.warning(f"Failed to load metadata for MCP {name}: {e}")
+                     try:
+                         import json
+                         with open(meta_path, 'r', encoding='utf-8') as f:
+                             meta = json.load(f)
+                             plugin_map[pid].update({
+                                 "description": meta.get("description", plugin_map[pid]["description"]),
+                                 "category": meta.get("category", plugin_map[pid]["category"]),
+                                 "config_schema": meta.get("config_schema")
+                             })
+                     except Exception as e:
+                         logger.warning(f"Failed to load metadata for MCP {name}: {e}")
+        
+        plugins = list(plugin_map.values())
         
         # Apply Overrides (Groups/Categories)
         self._apply_overrides(plugins)
+        
+        # [Architecture 5.0] Post-Processing for Unified Schema
+        for p in plugins:
+            # 1. Capabilities Inference
+            if not p.get('capabilities'):
+                gid = p.get('group_id', '')
+                cat = p.get('category', '')
+                if gid == 'stt' or cat == 'stt': p['capabilities'] = ["stt.provider"]
+                elif gid == 'tts' or cat == 'tts': p['capabilities'] = ["tts.provider"]
+                elif gid == 'search_provider' or cat == 'search': p['capabilities'] = ["search.provider"]
+                else: p['capabilities'] = p.get('capabilities', [])
+
+            # 2. Map Legacy group_exclusive to group_policy if policy missing
+            if 'group_exclusive' in p and 'group_policy' not in p:
+                p['group_policy'] = "exclusive" if p['group_exclusive'] else "independent"
+                
+            # [Architecture 6.0] State Synthesis (Controller Logic)
+            desired = p.get("desired_enabled")
+            # Fallback for migration or locally managed plugins
+            if desired is None: desired = p.get("enabled", False)
+            
+            actual = p.get("active_status", "unknown")
+            
+            # Compute Status
+            computed = "unknown"
+            if desired:
+                if actual in ["ready", "idle"]: computed = "running"
+                elif actual in ["loading", "transitioning"]: computed = "provisioning"
+                elif actual == "error": computed = "error"
+                else: computed = "stuck" # desired=True, actual=stopped/unknown
+            else:
+                if actual == "ready": computed = "stopping" # desired=False, actual=ready
+                else: computed = "stopped"
+            
+            p["computed_status"] = computed
+            p["enabled"] = desired # UI Compatibility
+            
+            # 3. Ensure sensible defaults
+            p.setdefault('group_policy', "independent")
+            p.setdefault('active', p.get('enabled', False))
+            p.setdefault('active_in_group', p.get('active', False) if p.get('group_policy') == "exclusive" else False)
+
+            # [Fix] Enrich Remote Drivers for Frontend Toggle Logic
+            target = p.get('runtime_target', 'main')
+            if target in ['stt_server', 'tts_server']:
+                p['is_driver'] = True
+                # Resolve Service URL
+                fallback_port = app_config.network.stt_port if target == 'stt_server' else app_config.network.tts_port
+                # discovery is already imported
+                p['service_url'] = discovery.get_url(target, fallback_port=fallback_port)
+
         return plugins
 
     def _apply_overrides(self, plugins: List[Dict]):
@@ -225,6 +510,7 @@ class PluginService:
         user_groups = app_config.plugin_groups.assignments
         if user_groups:
             for p in plugins:
+                if 'id' not in p: continue
                 if p['id'] in user_groups:
                     p['group_id'] = user_groups[p['id']]
         
@@ -236,19 +522,36 @@ class PluginService:
                     p['category'] = user_cats[p['id']]
 
         # Behaviors
-        strict_groups = {"driver.stt", "driver.tts", "search_provider"}
+        strict_groups = {"stt", "tts", "search_provider"}
         behaviors = app_config.plugin_groups.group_behaviors
         
         for p in plugins:
             gid = p.get('group_id')
             if gid:
                 if gid in behaviors:
-                    p['group_exclusive'] = (behaviors[gid] == 'exclusive')
+                    p['group_policy'] = behaviors[gid] # "exclusive" or "independent"
                 else:
                     if gid in strict_groups:
-                        p['group_exclusive'] = True
+                         p['group_policy'] = "exclusive"
                     else:
-                        p['group_exclusive'] = True 
+                         p.setdefault('group_policy', "independent")
+            else:
+                 p.setdefault('group_policy', "independent")
+                    
+            # [Scheme C Cleanup] Hardcoded Overrides Removed
+            # Logic for determining 'active_in_group' is now decentralized.
+            # STT/TTS Servers report this via their Status Reporter.
+            # PluginService trusts the registry.
+            
+            # Legacy logic removed to prevent "Split Brain" overriding valid worker reports.
+            pass
+            
+            # [Fix] Fallback for system plugins moved to drivers (like Voiceprint)
+            # If a system plugin is acting as a driver but has no group_id, 
+            # we check if it matches the current stt/tts provider anyway.
+            # if not gid and p.get('category') == 'driver':
+            #    if stt_provider and stt_provider in pid_clean: p['active_in_group'] = True
+            #    if tts_provider and tts_provider in pid_clean: p['active_in_group'] = True
 
     def update_group_assignment(self, pid: str, gid: str):
         if not gid:
@@ -260,12 +563,30 @@ class PluginService:
         return gid
 
     def update_category_assignment(self, pid: str, category: str):
-        valid_cats = ["skill", "stt", "tts", "system", "other"]
-        if category not in valid_cats:
-             raise ValueError("Invalid category")
-        app_config.plugin_groups.custom_categories[pid] = category
+        # [Architecture 6.0] Strict Type Check
+        from core.interfaces.capability import CapabilityType
+        
+        # Legacy mappings for shorthand => Full Enum
+        legacy_map = {
+            "skill": CapabilityType.TOOL_EXECUTION.value,
+            "stt": CapabilityType.STT_PROVIDER.value,
+            "tts": CapabilityType.TTS_PROVIDER.value,
+            "system": CapabilityType.EXTENSION.value,
+            "other": "other"
+        }
+        
+        normalized = legacy_map.get(category, category)
+        
+        # Validation: Must be in Enum or explicit 'other' whitelist
+        valid_values = [m.value for m in CapabilityType] + ["other"]
+        
+        if normalized not in valid_values:
+             # Try fallback to partial match if needed, or fail strict
+             raise ValueError(f"Invalid category: {category}. Valid: {valid_values}")
+
+        app_config.plugin_groups.custom_categories[pid] = normalized
         app_config.save()
-        return category
+        return normalized
     
     def update_group_behavior(self, gid: str, behavior: str):
         if behavior not in ["exclusive", "independent"]:
@@ -274,167 +595,309 @@ class PluginService:
         app_config.save()
         return behavior
     
-    def update_system_config(self, key: str, value: Any):
-        # Special Case: Voiceprint
-        if key == "voiceprint_threshold":
-            try:
-                val = float(value)
-                app_config.audio.voiceprint_threshold = val
-                app_config.save()
-                return {"status": "ok", "message": f"Voiceprint threshold set to {val}"}
-            except Exception as e:
-                raise ValueError(f"Invalid value: {e}")
-
-                raise ValueError(f"Invalid value: {e}")
-
-        # General "plugin_id:field" pattern
-        if ":" in key:
-            target_id, field = key.split(":", 1)
-            
-            # 0. MCP Servers (Virtual Plugins)
-            if target_id.startswith("mcp."):
-                mcp_name = target_id.split(".", 1)[1]
-                # Map mcp.bilibili -> mcp-bilibili (Common convention in config.json)
-                module_id = f"mcp-{mcp_name}"
-                
-                # We need soul_client to save data
-                soul_client = getattr(self.services, "soul_client", None)
-                if soul_client:
-                    # Load existing
-                    data = soul_client.load_module_data(module_id) or {}
-                    
-                    # Convert types
-                    try:
-                        if field == "room_id": val = int(value)
-                        elif field == "enabled": val = bool(value)
-                        else: val = value
-                    except:
-                        val = value
-                        
-                    data[field] = val
-                    soul_client.save_module_data(module_id, data)
-                    logger.info(f"Updated MCP config {module_id}: {field}={val}")
-                    
-                    # ⚡ Hot Reload/Reconnect Logic could go here?
-                    # For now just save.
-                    return {"status": "ok", "config": data}
-            
-            # 1. System Manager
-            if self.system_plugin_manager:
-                plugin = self.system_plugin_manager.get_plugin(target_id)
-                if plugin:
-                    val = value
-                    try:
-                        # Attempt number conversion
-                        if str(val).replace('.', '', 1).isdigit() and "." in str(val):
-                             val = float(val) 
-                    except:
-                        pass
-                        
-                    plugin.update_config(field, val)
-                    logger.info(f"Updated plugin {target_id} config: {field}={val}")
-                    return {"status": "ok", "config": plugin.config}
-
-            # 2. Heartbeat Tickers
-            if self.heartbeat_service:
-                ticker = self.heartbeat_service.get_ticker(target_id)
-                if ticker:
-                    try:
-                        if field.endswith("seconds") or field.endswith("minutes"):
-                            val = float(value)
-                        else:
-                            val = value
-                    except:
-                        val = value
-                        
-                    ticker.config[field] = val
-                    if field == "enabled":
-                        ticker.enabled = bool(val)
-                    return {"status": "ok", "config": ticker.config}
+    async def update_config(self, plugin_id: str, key: str, value: Any):
+        """
+        [Architecture 5.3] Contract-Aware Config Handler.
+        Distinguishes between Persistent (Saved) and Transient (Runtime) keys.
+        """
+        # 1. Resolve Target & Intent
+        all_plugins = await self.list_all_plugins()
+        target_info = next((p for p in all_plugins if p['id'] == plugin_id), None)
+        if not target_info:
+             raise ValueError(f"Plugin {plugin_id} not found")
         
-        return {"status": "error", "message": "Plugin or Ticker not found"}
+        target = target_info.get('runtime_target', 'main')
+        caps = target_info.get('capabilities', [])
+        
+        # [Safety] Persistent vs Transient Audit
+        is_transient = key.startswith("_") or key in ["session_id", "trace_id"]
+        
+        logger.info(f"⚙️ [Unified Config] {plugin_id} ({target}) -> {key}={value} {'(Transient)' if is_transient else '(Persistent)'}")
 
-    async def toggle_plugin(self, provider_id: str):
-        # STT Special Case
-        if provider_id == "faster-whisper-group":
-            try:
-                 async with httpx.AsyncClient(timeout=5.0) as client:
-                     url = f"{app_config.network.stt_url}/models/switch"
-                     payload = {"model_name": "base"}
-                     resp = await client.post(url, json=payload)
-                     if resp.status_code == 200:
-                         return {"status": "ok", "state": True, "details": resp.json()}
-                     else:
-                         raise RuntimeError(f"STT Server Error: {resp.text}")
-            except Exception as e:
-                raise RuntimeError(f"Failed to contact STT Server: {e}")
+        # 2. Persistence (Main Process Authority)
+        if not is_transient:
+            app_config.plugins.settings.setdefault(plugin_id, {})[key] = value
+            app_config.save()
 
-        # System Manager
-        if self.system_plugin_manager:
-            # 1. Check Active (Running)
-            plugin = self.system_plugin_manager.get_plugin(provider_id)
-            if plugin:
-                # Disable it (Runtime Unload)
-                success = self.system_plugin_manager.disable_plugin(plugin.id)
-                if success:
-                    return {"status": "ok", "state": False}
-                else:
-                    raise RuntimeError("Failed to disable plugin")
-            
-            # 2. Check Disabled (Lazy)
-            # Try to find exact ID from disabled manifests if possible
-            target_id = provider_id
-            if provider_id in self.system_plugin_manager.disabled_manifests:
-                 target_id = provider_id
-            else:
-                 # Fallback: Check if any disabled manifest ends with this ID
-                 for pid in self.system_plugin_manager.disabled_manifests:
-                     if pid == provider_id or pid.endswith(f".{provider_id}"):
-                         target_id = pid
-                         break
-            
-            # Enable it (Hot Load)
-            success = self.system_plugin_manager.enable_plugin(target_id)
-            if success:
-                return {"status": "ok", "state": True}
-            
-            raise ValueError(f"Plugin {provider_id} not found or failed to load")
+        # 3. Route by Target
+        # A. Remote Worker
+        if target != 'main':
+             # [Architecture 5.2] Dynamic Discovery
+             fallback_port = app_config.network.stt_port if target == 'stt_server' else app_config.network.tts_port
+             base_url = discovery.get_url(target, fallback_port=fallback_port)
+             url = f"{base_url}/plugins/config"
+             
+             # [Optimization] Use shared HTTP client pool
+             from services.http_client import get_http_client
+             try:
+                 client = await get_http_client()
+                 res = await client.post(url, json={"id": plugin_id, "key": key, "value": value}, timeout=5.0)
+                 return res.json()
+             except Exception as e:
+                 logger.error(f"Failed to forward config to {url}: {e}")
+                 raise RuntimeError(f"Remote config update failed: {e}")
 
-        # Heartbeat
+        # B. MCP Virtual Plugins
+        if plugin_id.startswith("mcp."):
+            mcp_name = plugin_id.split(".", 1)[1]
+            module_id = f"mcp-{mcp_name}"
+            soul_client = getattr(self.services, "soul_client", None)
+            if soul_client:
+                data = soul_client.load_module_data(module_id) or {}
+                data[key] = value
+                soul_client.save_module_data(module_id, data)
+                return {"status": "ok", "config": data}
+
+        # C. System Plugins
+        plugin = self.system_plugin_manager.get_plugin(plugin_id)
+        if plugin:
+            plugin.update_config(key, value)
+            return {"status": "ok", "config": getattr(plugin, 'config', {})}
+
+        # D. Heartbeat Tickers
         if self.heartbeat_service:
-             ticker = self.heartbeat_service.get_ticker(provider_id)
-             if ticker:
-                 if ticker.enabled:
-                     ticker.stop()
-                     return {"status": "ok", "state": False}
-                 else:
-                     ticker.start()
-                     return {"status": "ok", "state": True}
+            ticker = self.heartbeat_service.get_ticker(plugin_id)
+            if ticker:
+                ticker.config[key] = value
+                if key == "enabled": ticker.enabled = bool(value)
+                return {"status": "ok", "config": ticker.config}
         
-        raise ValueError("System plugin not found")
+        return {"status": "error", "message": "Configuration target not supported"}
+
+    async def ensure_worker_running(self, worker_id: str) -> bool:
+        """
+        [Architecture 4.0] On-Demand Orchestrator Trigger.
+        Ensures the specified worker process is running.
+        """
+        # Get ProcessManager from container (Might be None if not initialized)
+        pm = getattr(self.services, "get_process_manager", lambda: None)()
+        if not pm:
+            logger.warning("ProcessManager not available. Cannot spawn worker.")
+            return False
+
+        if pm.is_running(worker_id):
+            return True
+
+        # Map worker_id to script args
+        # backend_launcher.py expects: python backend_launcher.py [stt|tts]
+        script_args = {
+            "stt_server": ["stt"],
+            "tts_server": ["tts"]
+        }
+        
+        args = script_args.get(worker_id)
+        if not args:
+            logger.error(f"Unknown worker ID: {worker_id}")
+            return False
+
+        logger.info(f"🚀 [Orchestrator] Spawning {worker_id} on demand...")
+        success = pm.start_worker(worker_id, "backend_launcher.py", args)
+        if success:
+            # Short wait for startup? Or we let the registry handle it?
+            # Architecture 3.0 handles the discovery asynchronously.
+            # But the caller might expect immediate results.
+            # We just return True that "We started it".
+            return True
+        return False
+
+    async def toggle_plugin(self, provider_id: str, target_state: bool = None):
+        """
+        [Architecture 5.0] Unified Dispatcher.
+        Routes toggle requests to the appropriate runtime (Local, Remote, Search).
+        """
+        # 0. Handle Legacy Toggle (No intent)
+        if target_state is None:
+             current_plugins = await self.list_all_plugins()
+             p = next((x for x in current_plugins if x['id'] == provider_id), None)
+             target_state = not (p.get('enabled', False) or p.get('active', False)) if p else True
+
+        # 1. Resolve Metadata (Live SSOT)
+        all_plugins = await self.list_all_plugins()
+        target_info = next((p for p in all_plugins if p['id'] == provider_id), None)
+        if not target_info:
+            raise ValueError(f"Plugin {provider_id} not found")
+
+        gid = target_info.get('group_id')
+        policy = target_info.get('group_policy', 'independent')
+        caps = target_info.get('capabilities', [])
+        target = target_info.get('runtime_target', 'main')
+
+        logger.info(f"🔌 [Unified Toggle] {provider_id} -> {target_state} (Group: {gid}, Policy: {policy}, Target: {target})")
+
+        # 2. Handle Mutual Exclusion (Backend Driven)
+        if target_state is True and policy == "exclusive" and gid:
+            for p in all_plugins:
+                if p['group_id'] == gid and p['id'] != provider_id and (p.get('enabled') or p.get('active')):
+                    logger.info(f"🔄 [Auto-Exclusion] Deactivating {p['id']} in group {gid}")
+                    if p.get('runtime_target') == 'main':
+                        # System plugins handle themselves
+                        self.system_plugin_manager.disable_plugin(p['id'])
+                    # For search/remote, it's implicitly handled by switching the provider/context below
+
+        # [Architecture Refinement] Hybrid Fast Path
+        # If target IS local ('main'), we execute immediately for UI responsiveness ("Desktop Pet Mode")
+        # Then we sync to DB for persistence ("Home AI OS Mode")
+        
+        # 1. Fast Path Execution
+        fast_path_success = False
+        if target == 'main':
+            logger.info(f"🚀 [Hybrid Fast Path] Executing local toggle for {provider_id} -> {target_state}")
+            try:
+                if target_state:
+                    if "search.provider" in caps or gid == "search_provider":
+                         app_config.search.provider = provider_id
+                         app_config.save()
+                    fast_path_success = self.system_plugin_manager.enable_plugin(provider_id)
+                else:
+                    if "search.provider" in caps or gid == "search_provider":
+                        if app_config.search.provider == provider_id:
+                            app_config.search.provider = "none"
+                            app_config.save()
+                    fast_path_success = self.system_plugin_manager.disable_plugin(provider_id)
+            except Exception as e:
+                logger.error(f"❌ Fast Path Execution Failed: {e}")
+                # Fallback to slow path? Or fail?
+                # If local execution fails, writing to DB won't help much for immediate use.
+                return {"status": "error", "message": f"Local execution failed: {e}", "state": not target_state}
+        
+        # 2. Persistence & D-Bus Notification (Eventual Consistency)
+        # We ALWAYS do this to keep the 'Home AI OS' dream alive (Remote nodes/UI need to know).
+        try:
+            from services.infra.bus_factory import get_lifecycle_bus
+            bus_ssot = get_lifecycle_bus()
+            
+            # If Fast Path succeeded, we report "ready/stopped" immediately instead of "transitioning"
+            # This prevents the UI from showing a spinner if we are already done.
+            new_status = "ready" if (target_state and fast_path_success) else \
+                         "stopped" if (not target_state and fast_path_success) else \
+                         "transitioning"
+                         
+            await bus_ssot.publish_state(provider_id, {
+                "desired_enabled": target_state, 
+                "active_status": new_status,
+                "runtime_target": target, # [Fix] Critical for Worker Filtering
+                # "active": target_state  <-- REMOVED: Workers perform the action, we just signal Intent.
+                # "enabled": target_state <-- REMOVED: 'enabled' is now effective state reported by Worker.
+            })
+        except Exception as e:
+            logger.warning(f"Failed to update SSOT in DB (Non-Critical for Local): {e}")
+
+        # [Frontend Sync] Real-time Push
+        # Notify Gateway -> Frontend immediately
+        if self.services.event_bus:
+            # Map Internal Status to Frontend Expectation (enabled/disabled)
+            # Frontend: PluginStoreModal.tsx expects 'status' to be 'enabled' or 'disabled' to clear transit state
+            event_status = "enabled" if new_status == "ready" else "disabled" if new_status == "stopped" else new_status
+            
+            payload = {
+                "plugin_id": provider_id,
+                "status": event_status, # [Fix] Compatibility with PluginStoreModal
+                "desired_enabled": target_state,
+                "active_status": new_status,
+                "active": target_state
+            }
+            # Use 'fire_and_forget' or just emit? emit is async usually.
+            await self.services.event_bus.emit(EventType.PLUGIN_STATUS, payload)
+
+
+        # 3. Hybrid Return Strategy
+        if target == 'main':
+             # Return immediately, don't wait for reconciliation loop
+             return {"status": "ok", "state": target_state}
+             
+        # --- End Hybrid Fast Path ---
+
+        # 4. Slow Path (Remote / Search / Legacy)
+        # If we didn't execute locally (e.g. Remote Worker), we fall back to the Wait-Loop
+        
+        # Phase B: Execution (Remote)
+        # B. Remote Driver (STT/TTS Worker)
+        if target != 'main':
+             # [Architecture 6.1] Pure Mesh Control (Scheme C)
+             # The Intent was already written to the Bus (Phase A/2).
+             # We rely on Worker's PluginStateSync to pick it up and report back.
+             pass
+
+        # Phase C: Reconciliation Loop (Wait for Actual State)
+        logger.info(f"⏳ [Reconciliation] Waiting for remote {provider_id} to report state {target_state}...")
+        for _ in range(10):
+            await asyncio.sleep(0.5)
+            current_state = self.plugin_registry.get(provider_id, {})
+            # [Fix] Use canonical fields for state comparison
+            actual_desired = current_state.get("desired_enabled")
+            actual_status = current_state.get("active_status", "unknown")
+            
+            if target_state:  # Enabling
+                if actual_desired is True and actual_status in ["ready", "idle"]:
+                    logger.info(f"✅ [Reconciliation] State confirmed for {provider_id}")
+                    return {"status": "ok", "state": target_state}
+            else:  # Disabling
+                if actual_desired is False or actual_status == "stopped":
+                    logger.info(f"✅ [Reconciliation] State confirmed for {provider_id}")
+                    return {"status": "ok", "state": target_state}
+        
+        return {"status": "pending", "state": target_state, "message": "Toggle requested but remote state report is lagging."}
 
     async def install_plugin_from_zip(self, file_obj, filename: str):
         if not filename.endswith('.zip'):
              raise ValueError("Only .zip files are supported")
         
         temp_zip_path = Path(f"temp_plugin_upload_{filename}")
+        install_id = f"install_{int(asyncio.get_event_loop().time())}"
+        
+        async def emit_progress(current: int, total: int, message: str):
+            """Emit progress event to frontend via EventBus"""
+            if self.services.event_bus:
+                await self.services.event_bus.emit("plugin.install.progress", {
+                    "install_id": install_id,
+                    "filename": filename,
+                    "current": current,
+                    "total": total,
+                    "percent": int((current / total) * 100) if total > 0 else 0,
+                    "message": message
+                })
+        
+        def sync_progress_callback(current, total, message):
+            """Sync wrapper for async emit (runs in thread)"""
+            # Store progress for later async emission
+            sync_progress_callback.last_progress = (current, total, message)
+        sync_progress_callback.last_progress = None
+        
         try:
-            # Save
+            # Phase 1: Save file
+            await emit_progress(0, 100, "Saving uploaded file...")
             await asyncio.to_thread(self._save_file_sync, file_obj, temp_zip_path)
-            # Extract
-            plugin_id = await asyncio.to_thread(self._extract_zip_sync, temp_zip_path)
+            await emit_progress(5, 100, "File saved, extracting...")
             
-            # Hot Reload
+            # Phase 2: Extract with progress
+            plugin_id = await asyncio.to_thread(
+                self._extract_zip_sync, 
+                temp_zip_path, 
+                sync_progress_callback
+            )
+            
+            # Emit final extraction progress
+            if sync_progress_callback.last_progress:
+                c, t, m = sync_progress_callback.last_progress
+                await emit_progress(c, t, m)
+            
+            # Phase 3: Hot Reload
+            await emit_progress(95, 100, "Loading plugin...")
             if self.system_plugin_manager:
                  logger.info(f"Triggering Hot Reload for {plugin_id}")
                  success = await asyncio.to_thread(self.system_plugin_manager.reload_plugin, plugin_id)
+                 await emit_progress(100, 100, "Complete")
                  if success:
-                     return {"status": "success", "id": plugin_id, "message": "Installed and loaded."}
+                     return {"status": "success", "id": plugin_id, "message": "Installed and loaded.", "install_id": install_id}
                  else:
-                     return {"status": "warning", "id": plugin_id, "message": "Installed but failed to load."}
+                     return {"status": "warning", "id": plugin_id, "message": "Installed but failed to load.", "install_id": install_id}
             
-            return {"status": "success", "id": plugin_id, "message": "Installed. Restart backend to load."}
+            await emit_progress(100, 100, "Complete")
+            return {"status": "success", "id": plugin_id, "message": "Installed. Restart backend to load.", "install_id": install_id}
             
+        except Exception as e:
+            await emit_progress(0, 100, f"Error: {str(e)}")
+            raise
         finally:
             if temp_zip_path.exists():
                 try:
@@ -445,7 +908,14 @@ class PluginService:
         with open(dest, "wb") as buffer:
             shutil.copyfileobj(src, buffer)
 
-    def _extract_zip_sync(self, zip_path: Path) -> str:
+    def _extract_zip_sync(self, zip_path: Path, progress_callback=None) -> str:
+        """
+        Extract plugin zip with progress reporting.
+        
+        Args:
+            zip_path: Path to zip file
+            progress_callback: Optional callback(current, total, message)
+        """
         plugin_id = None
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             file_list = zip_ref.namelist()
@@ -453,42 +923,153 @@ class PluginService:
             
             if not manifest_path:
                 raise ValueError("No manifest.yaml found")
+            
+            # Report: Parsing manifest
+            if progress_callback:
+                progress_callback(0, 100, "Parsing manifest...")
                 
-            # Determine logic for root detection (simplified from original for brevity but robust enough)
             extract_root = ""
             if '/' in manifest_path:
                  extract_root = manifest_path.rsplit('/', 1)[0]
             
             with zip_ref.open(manifest_path) as mf:
                 data = yaml.safe_load(mf)
-                plugin_id = data.get("id")
-                if not plugin_id: raise ValueError("Missing ID in manifest")
+                try:
+                    manifest = PluginManifest(**data)
+                    plugin_id = manifest.id
+                except Exception as e:
+                    raise ValueError(f"Invalid Manifest: {e}")
 
-            safe_dirname = plugin_id.split(".")[-1]
-            target_dir = Path(f"plugins/system/{safe_dirname}")
+            safe_dirname = plugin_id.replace(".", "_")
+            # [Security] Resolve absolute path for boundary check
+            target_dir = Path(f"plugins/system/{safe_dirname}").resolve()
             
             if target_dir.exists():
+                if progress_callback:
+                    progress_callback(5, 100, "Removing old version...")
                 shutil.rmtree(target_dir)
             target_dir.mkdir(parents=True, exist_ok=True)
             
-            for member in zip_ref.infolist():
-                if member.filename.startswith("__MACOSX"): continue
-                
-                # Extraction logic logic matching original
+            # Count extractable files for progress
+            extractable = [m for m in zip_ref.infolist() 
+                          if not m.filename.startswith("__MACOSX")]
+            total_files = len(extractable)
+            extracted = 0
+            
+            for member in extractable:
                 fname = member.filename
                 if extract_root and fname.startswith(extract_root + '/'):
                      fname = fname[len(extract_root)+1:]
                 elif extract_root and not fname.startswith(extract_root):
-                     continue # Skip files outside root?
+                     continue
                 
                 if not fname: continue
                 
-                target_path = target_dir / fname
+                # [Security Fix] Zip Slip Prevention
+                target_path = (target_dir / fname).resolve()
+                
+                # Robust Containment Check
+                try:
+                    if os.path.commonpath([target_dir, target_path]) != str(target_dir):
+                        logger.warning(f"🚨 [Security] Blocked Zip Path Traversal attempt: {member.filename}")
+                        continue
+                except ValueError:
+                    # Can happen on Windows if paths are on different drives
+                    continue
+
                 if member.is_dir():
                     target_path.mkdir(parents=True, exist_ok=True)
                 else:
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     with zip_ref.open(member) as src, open(target_path, "wb") as dst:
                         shutil.copyfileobj(src, dst)
+                
+                extracted += 1
+                if progress_callback and total_files > 0:
+                    # Progress: 10-95% for extraction
+                    pct = 10 + int((extracted / total_files) * 85)
+                    progress_callback(pct, 100, f"Extracting {fname[:30]}...")
                         
+        if progress_callback:
+            progress_callback(100, 100, "Complete")
         return plugin_id
+
+    async def get_all_ui_slots(self) -> List[Dict[str, Any]]:
+        """
+        Aggregate UI components from all plugin sources.
+        """
+        slots = []
+        
+        # 1. System Plugins (Local Stubs & Active)
+        if self.system_plugin_manager:
+            try:
+                slots.extend(self.system_plugin_manager.get_active_ui_slots())
+            except Exception as e:
+                logger.error(f"Failed to get system plugin slots: {e}")
+
+        # 2. Remote Registry (Distributed Workers)
+        for pid, state in self.plugin_registry.items():
+            worker_slots = state.get("ui_slots")
+            if worker_slots:
+                for s in worker_slots:
+                    s["_source"] = state.get("worker_id", "remote")
+                    slots.append(s)
+        
+        # 3. MCP Servers 
+        if self.mcp_host:
+            for name, client in self.mcp_host.clients.items():
+                mcp_dir = Path(BASE_DIR) / "mcp_servers" / name
+                meta_path = mcp_dir / "metadata.json"
+                if meta_path.exists():
+                     try:
+                         with open(meta_path, 'r', encoding='utf-8') as f:
+                             meta = json.load(f)
+                             mcp_slots = meta.get("ui_slots", [])
+                             if mcp_slots:
+                                 for s in mcp_slots:
+                                     s["plugin_id"] = f"mcp.{name}" # logical ID
+                                     s["_source"] = "mcp"
+                                 slots.extend(mcp_slots)
+                     except Exception as e:
+                         pass
+
+        return slots
+
+    async def _broadcast_lifecycle_event(self, plugin_id: str, event_type: str):
+        """
+        [Scheme D] The 'Shoute' Sender.
+        Broadcasts Lifecycle events to all known worker ports via HTTP.
+        This ensures external processes (STT/TTS) stay in sync with the Main Process.
+        """
+        logger.info(f"📢 Broadcasting Lifecycle Event: {plugin_id} -> {event_type}")
+        
+        # Define Targets
+        # Alternatively, iterate self.registry or config.network
+        stt_port = app_config.network.stt_port
+        tts_port = app_config.network.tts_port
+        
+        targets = [
+            f"http://127.0.0.1:{stt_port}/system/lifecycle",
+            f"http://127.0.0.1:{tts_port}/system/lifecycle"
+        ]
+        
+        payload = {
+            "type": event_type, # 'enabled' | 'disabled'
+            "plugin_id": plugin_id,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+        
+        # [Optimization] Use shared HTTP client pool
+        from services.http_client import get_http_client
+        try:
+            client = await get_http_client()
+            for url in targets:
+                try:
+                    # Fire and Forget (mostly)
+                    await client.post(url, json=payload, timeout=1.0)
+                except httpx.ConnectError:
+                    pass # Worker might be offline, which is fine
+                except Exception as e:
+                    logger.warning(f"Broadcast to {url} failed: {e}")
+        except Exception as e:
+            logger.warning(f"HTTP client error: {e}")

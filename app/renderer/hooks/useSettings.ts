@@ -102,19 +102,25 @@ export function useSettings() {
                     historyLimit,
                     overflowStrategy,
                     contextWindow,
-                    backgroundImage, // Load this
+                    backgroundImage,
+                    topP,
+                    presencePenalty,
+                    frequencyPenalty,
                 ] = await Promise.all([
                     store.get("apiKey"),
                     store.get("apiBaseUrl"),
                     store.get("modelName"),
                     store.get("llm_temperature"),
                     store.get("thinking_enabled"),
-                    store.get("userName"), // 5: userName
-                    store.get("live2d_high_dpi"), // 6: highDpi
-                    store.get("history_limit"), // 7: historyLimit
-                    store.get("overflow_strategy"), // 8: overflowStrategy
-                    store.get("contextWindow"), // 9: contextWindow
-                    store.get("backgroundImage"), // Fetch this
+                    store.get("userName"),
+                    store.get("live2d_high_dpi"),
+                    store.get("history_limit"),
+                    store.get("overflow_strategy"),
+                    store.get("contextWindow"),
+                    store.get("backgroundImage"),
+                    store.get("llm_top_p"),
+                    store.get("llm_presence_penalty"),
+                    store.get("llm_frequency_penalty"),
                 ]);
 
                 const loaded: AppSettings = {
@@ -124,6 +130,13 @@ export function useSettings() {
                         model: model || DEFAULT_SETTINGS.llm.model,
                         temperature:
                             temperature ?? DEFAULT_SETTINGS.llm.temperature,
+                        topP: topP ?? DEFAULT_SETTINGS.llm.topP,
+                        presencePenalty:
+                            presencePenalty ??
+                            DEFAULT_SETTINGS.llm.presencePenalty,
+                        frequencyPenalty:
+                            frequencyPenalty ??
+                            DEFAULT_SETTINGS.llm.frequencyPenalty,
                         thinkingEnabled:
                             thinkingEnabled ??
                             DEFAULT_SETTINGS.llm.thinkingEnabled,
@@ -149,7 +162,7 @@ export function useSettings() {
                     memoryService.configure(
                         loaded.llm.apiKey,
                         loaded.llm.baseUrl,
-                        loaded.llm.model
+                        loaded.llm.model,
                     );
                 }
 
@@ -171,7 +184,7 @@ export function useSettings() {
         <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
             setSettings((prev) => ({ ...prev, [key]: value }));
         },
-        []
+        [],
     );
 
     /**
@@ -228,7 +241,7 @@ export function useSettings() {
         async <K extends keyof AppSettings>(
             key: K,
             storeKey: string,
-            value: AppSettings[K]
+            value: AppSettings[K],
         ) => {
             const store = window.settings;
             if (store) {
@@ -236,7 +249,7 @@ export function useSettings() {
             }
             updateSetting(key, value);
         },
-        [updateSetting]
+        [updateSetting],
     );
 
     return {

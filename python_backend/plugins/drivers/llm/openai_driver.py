@@ -46,8 +46,24 @@ class OpenAIDriver(BaseLLMDriver):
             )
             
             if stream:
-                # Return the async generator directly
-                return response
+                async def stream_generator():
+                    # [Fix] Stream Processing: Extract CONTENT only.
+                    # Do NOT yield raw objects, because Pipeline/Frontend might serialize them fully,
+                    # revealing internal fields like 'reasoning_content' or full JSON structure.
+                    async for chunk in response:
+                        if not chunk.choices: continue
+                        delta = chunk.choices[0].delta
+                        
+                        # 1. Extract Main Content
+                        content = delta.content or ""
+                        
+                        # 2. Extract Reasoning (DeepSeek-R1 style)
+                        reasoning = getattr(delta, "reasoning_content", "") or ""
+                        
+                        # Yield structured data so Pipeline can decide what to log vs stream
+                        if content or reasoning:
+                            yield {"content": content, "reasoning": reasoning}
+                return stream_generator()
             else:
                 # Return content string
                 return response.choices[0].message.content

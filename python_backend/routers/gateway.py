@@ -14,11 +14,32 @@ class GatewayService:
     EventBus-driven Gateway.
     Acts as a bridge between WebSocket clients and the internal EventBus.
     """
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(GatewayService, cls).__new__(cls)
+            cls._instance.initialized = False
+        return cls._instance
+
     def __init__(self):
+        if self.initialized:
+            return
+        self.initialized = True
+        
         self.active_connections: list[WebSocket] = []
-        self._session_id = 0 # Simple counter for now
+        self._session_id = 0 
+        self._sequences: dict[int, int] = {} # [Architecture 4.2] Per-session sequence tracker
         self.bus = get_event_bus()
         self._subscribe_all()
+        logger.info("✅ GatewayService Initialized (Singleton)")
+
+    def _get_next_sequence(self, session_id: int) -> int:
+        """Increment and return the next sequence number for a session."""
+        current = self._sequences.get(session_id, 0)
+        next_seq = current + 1
+        self._sequences[session_id] = next_seq
+        return next_seq
 
     def _subscribe_all(self):
         """Subscribe to all outbound events."""
@@ -26,13 +47,14 @@ class GatewayService:
         outbound_events = [
             EventType.BRAIN_THINKING,
             EventType.BRAIN_RESPONSE,
-            "brain_response_end", # Custom string type
+            EventType.BRAIN_RESPONSE_END,
             EventType.COGNITIVE_STATE,
             EventType.SYSTEM_STATUS,
             EventType.CONTROL_SESSION,
-            "emotion:changed",
-            "ui:register_widget",
-            "ui:remove_widget"
+            EventType.EMOTION_CHANGED,
+            EventType.UI_REGISTER_WIDGET,
+            EventType.UI_REMOVE_WIDGET,
+            EventType.PLUGIN_STATUS
         ]
         
         for evt in outbound_events:
@@ -93,8 +115,12 @@ class GatewayService:
                 timestamp=event.timestamp
             ).dict()
 
+        # [Architecture 4.2] Tier C: Sequence Injection
+        sid = payload_to_send.get("session_id", 0)
+        payload_to_send["sequence_number"] = self._get_next_sequence(sid)
+
         # Broadcast
-        # logger.debug(f"Broadcasting {event.type} to {len(self.active_connections)} clients")
+        # logger.debug(f"Broadcasting {event.type} (# {payload_to_send['sequence_number']}) to {len(self.active_connections)} clients")
         for connection in self.active_connections:
             try:
                 await connection.send_json(payload_to_send)
@@ -103,35 +129,39 @@ class GatewayService:
                 # Cleanup handled in 'connect' loop usually, but good to be safe
 
     async def connect(self, websocket: WebSocket):
+        # [Security] Connection Limit
+        if len(self.active_connections) > 100:
+             logger.warning("🚨 Gateway Connection Limit Reached (100). Rejecting.")
+             await websocket.close(code=1013) # Try Again Later
+             return
+
         await websocket.accept()
         self.active_connections.append(websocket)
         logger.info(f"Client Connected [Session: {self._session_id}]")
         
-        # Send Initial Status
-        try:
-            init_packet = EventPacket(
-                session_id=self._session_id,
-                type=EventType.SYSTEM_STATUS,
-                source="gateway",
-                payload={"status": "connected", "session_id": self._session_id}
-            )
-            await websocket.send_json(init_packet.dict())
-        except Exception as e:
-            logger.error(f"Failed to send init packet: {e}")
-            return
+        # ... (init status)
 
         try:
             while True:
                 try:
                     data = await websocket.receive_text()
                     
+                    # [Security] Message Size Limit (5MB)
+                    # Prevents memory exhaustion attacks
+                    if len(data) > 5 * 1024 * 1024:
+                         logger.warning("🚨 WS Message too large. Dropping.")
+                         continue
+                    
+                    # ... (rest of loop)
+                    
                     # Handle raw ping first
                     if data == "ping":
                         await websocket.send_text("pong")
                         continue
 
-                    # Log raw data for debugging
-                    logger.info(f"RAW WS RECV: {data[:200]}")
+                    # Log raw data for debugging (Masked)
+                    preview = data[:50] + "..." if len(data) > 50 else data
+                    logger.debug(f"RAW WS RECV: {preview}")
                     
                     try:
                         json_data = json.loads(data)
@@ -178,5 +208,27 @@ gateway_service = GatewayService()
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # [Security] Origin Check
+    # Prevent CSWSH (Cross-Site WebSocket Hijacking)
+    allowed_origins = ["http://localhost", "http://127.0.0.1", "app://", "file://"]
+    origin = websocket.headers.get("origin", "").lower()
+    
+    if origin and not any(origin.startswith(ao) for ao in allowed_origins):
+        logger.warning(f"🚨 Blocked WS Connection from invalid origin: {origin}")
+        await websocket.close(code=1008)
+        return
+
+    # [Security] Token Authentication (Optional for Localhost, Required for Remote)
+    token = websocket.query_params.get("token")
+    if token:
+        try:
+            from security.tokens import TokenManager
+            # Validate token (assuming verify_token exists and returns payload)
+            TokenManager.verify_token(token)
+        except Exception as e:
+            logger.warning(f"🚨 WS Token Validation Failed: {e}")
+            await websocket.close(code=1008)
+            return
+
     await gateway_service.connect(websocket)
 

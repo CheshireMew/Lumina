@@ -104,8 +104,19 @@ class SenseVoiceEngine:
             import tarfile
             try:
                 logger.info("Extracting SenseVoice model...")
+                # Safe extraction (Zip Slip mitigation)
+                def is_safe_path(base, path):
+                    base = os.path.abspath(base)
+                    path = os.path.abspath(path)
+                    return os.path.commonprefix([base, path]) == base
+
                 with tarfile.open(archive_path, 'r:bz2') as tar:
-                    tar.extractall(target_path)
+                    for member in tar.getmembers():
+                        member_path = os.path.join(target_path, member.name)
+                        if not is_safe_path(target_path, member_path):
+                            logger.warning(f"Blocked unsafe file path during extraction: {member.name}")
+                            continue
+                        tar.extract(member, target_path)
                 
                 # Move files from extracted subfolder
                 extracted_folder = os.path.join(target_path, "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09")

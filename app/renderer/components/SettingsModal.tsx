@@ -12,6 +12,7 @@ import { useVoiceManager } from '../hooks/useVoiceManager';
 // ⚡ Dynamic Architecture
 import { usePluginManager } from '../hooks/usePluginManager';
 import { PluginConfigRenderer } from './Settings/PluginConfigRenderer';
+import { VoiceManagerData } from '../hooks/useVoiceManager';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -28,11 +29,8 @@ interface SettingsModalProps {
     activeCharacterId: string;
     initialTab?: Tab;
     
-    // Voice Props
-    edgeVoices?: any[];
-    gptVoices?: any[];
-    activeTtsEngines?: string[];
-    ttsPlugins?: any[];
+    // Voice Data State
+    voiceManagerData: VoiceManagerData;
 }
 
 type Tab = 'general' | 'voice' | 'characters' | 'interaction';
@@ -40,7 +38,7 @@ type Tab = 'general' | 'voice' | 'characters' | 'interaction';
 const SettingsModal: React.FC<SettingsModalProps> = ({
     isOpen, onClose, onClearHistory, onContextWindowChange, onLLMSettingsChange, onCharactersUpdated, onUserNameUpdated, onLive2DHighDpiChange, onCharacterSwitch,
     activeCharacterId, onThinkingModeChange, initialTab, onBackgroundImageChange,
-    edgeVoices = [], gptVoices = [], activeTtsEngines = [], ttsPlugins = []
+    voiceManagerData
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>(initialTab || 'general');
     
@@ -58,6 +56,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const { refreshData: fetchLlmManagerData } = useLlmManager();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+    // Blob Cleanup Ref
+    const previewBlobRef = React.useRef<string | null>(null);
+
+    // Cleanup on unmount (only if we created a blob)
+    useEffect(() => {
+        return () => {
+            if (previewBlobRef.current) URL.revokeObjectURL(previewBlobRef.current);
+        };
+    }, []);
+
     // Initial Load
     useEffect(() => {
         if (isOpen) {
@@ -72,8 +80,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         setUserName(await settings.get('userName') || 'Master');
         setHighDpiEnabled(await settings.get('live2d_high_dpi') || false);
         setContextWindow(await settings.get('contextWindow') || 15);
-        setHistoryLimit(await settings.get('historyLimit') || 100);
-        setOverflowStrategy(await settings.get('overflowStrategy') || 'slide');
+        setHistoryLimit(await settings.get('history_limit') || 100);
+        setOverflowStrategy(await settings.get('overflow_strategy') || 'slide');
         setBackgroundImage(await settings.get('backgroundImage') || '');
     };
 
@@ -85,8 +93,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         await settings.set('contextWindow', contextWindow);
         await settings.set('activeCharacterId', activeCharacterId);
         await settings.set('live2d_high_dpi', highDpiEnabled);
-        await settings.set('historyLimit', historyLimit);
-        await settings.set('overflowStrategy', overflowStrategy);
+        await settings.set('history_limit', historyLimit);
+        await settings.set('overflow_strategy', overflowStrategy);
         await settings.set('backgroundImage', backgroundImage);
 
         if (onUserNameUpdated) onUserNameUpdated(userName);
@@ -255,14 +263,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     <input
                                         type="file"
                                         ref={fileInputRef}
-                                        onChange={(e) => {
+                                        onChange={async (e) => {
                                             const file = e.target.files?.[0];
                                             if (file && (file as any).path) {
-                                                const path = (file as any).path.replace(/\\/g, '/');
-                                                const savedUrl = `file:///${path}`;
-                                                setBackgroundImage(savedUrl);
-                                                const previewUrl = URL.createObjectURL(file);
-                                                if (onBackgroundImageChange) onBackgroundImageChange(previewUrl); 
+                                                try {
+                                                    // Cleanup previous blob
+                                                    if (previewBlobRef.current) {
+                                                        URL.revokeObjectURL(previewBlobRef.current);
+                                                        previewBlobRef.current = null;
+                                                    }
+
+                                                    // [Security] Upload to safe storage
+                                                    const safeUrl = await (window as any).app.uploadBackground((file as any).path);
+                                                    setBackgroundImage(safeUrl);
+                                                    
+                                                    // Instant Preview (UI Only)
+                                                    const previewUrl = URL.createObjectURL(file);
+                                                    previewBlobRef.current = previewUrl; // Track it
+                                                    
+                                                    // [Fix] Verify persistence uses safeUrl, NOT blob
+                                                    // We update the PARENT with safeUrl so it saves the real path
+                                                    if (onBackgroundImageChange) onBackgroundImageChange(safeUrl); 
+                                                } catch (e) {
+                                                    console.error("Upload failed", e);
+                                                    alert("Failed to save background image.");
+                                                }
                                             }
                                         }}
                                         style={{ display: 'none' }}
@@ -322,7 +347,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <div>
                                 <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '15px', color: '#374151' }}>Game Systems</h3>
                                 <div style={{ display: 'grid', gap: '15px' }}>
-                                    {plugins.filter(p => p.category === 'game' || p.category === 'interaction').map(plugin => (
+                                    {plugins.filter(p => p.category === 'game' || p.category === 'interaction' || p.category === 'skill').map(plugin => (
                                          <div key={plugin.id} style={{
                                              background: 'white',
                                              padding: '20px',
@@ -336,7 +361,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                     <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '4px' }}>{plugin.description}</p>
                                                 </div>
                                                 <button 
-                                                    onClick={() => togglePlugin(plugin.id)}
+                                                    onClick={() => togglePlugin(plugin, !plugin.enabled)}
                                                     style={{
                                                         padding: '6px 12px',
                                                         borderRadius: '20px',
@@ -355,7 +380,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                 <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '15px' }}>
                                                     <PluginConfigRenderer 
                                                         plugin={plugin} 
-                                                        onUpdate={(key, val) => updateConfig(plugin.id, key, val)} 
+                                                        onUpdate={(key, val) => updateConfig(plugin, key, val)} 
                                                     />
                                                 </div>
                                             )}
@@ -367,7 +392,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     )}
 
                     {/* --- VOICE TAB --- */}
-                    {activeTab === 'voice' && <VoiceTab />}
+                    {activeTab === 'voice' && <VoiceTab {...voiceManagerData} />}
 
                 </div>
             </div>

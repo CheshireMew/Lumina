@@ -1,18 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { API_CONFIG } from "../config";
+import { useChatStore } from "../store/useChatStore";
 
 interface GatewayProps {
     onChatStart?: (mode: string) => void;
     onChatStream?: (content: string) => void;
     onChatEnd?: () => void;
-    onEmotion?: (emotion: string) => void; // [Phase 32] Emotion event from backend Broker
+    onEmotion?: (emotion: string) => void;
+    onSessionReset?: (sessionId: number) => void;
     baseUrl?: string;
 }
 
-// --- Protocol Definition ---
+// ... Protocol Interfaces (Keep same) ...
 interface EventPacket {
     trace_id: string;
     session_id: number;
+    sequence_number: number;
     type: string;
     source: string;
     payload: any;
@@ -22,29 +25,46 @@ interface EventPacket {
 const EventType = {
     BRAIN_THINKING: "brain_thinking",
     BRAIN_RESPONSE: "brain_response",
+    BRAIN_RESPONSE_END: "brain_response_end",
     SYSTEM_STATUS: "system_status",
     CONTROL_SESSION: "control_session",
-    EMOTION_CHANGED: "emotion:changed", // [Phase 32]
+    EMOTION_CHANGED: "emotion:changed",
+    UI_REGISTER_WIDGET: "ui:register_widget",
+    UI_REMOVE_WIDGET: "ui:remove_widget",
+    PLUGIN_STATUS: "plugin_status",
 };
+
+// ========== [FIX] Singleton Connection Guard ==========
+// Prevents React 18 dev mode from creating duplicate WebSocket connections
+let globalWsInstance: WebSocket | null = null;
+let globalWsUrl: string | null = null;
+let connectionCount = 0;
+// ======================================================
 
 export const useGateway = ({
     onChatStart,
     onChatStream,
     onChatEnd,
     onEmotion,
+    onSessionReset,
     baseUrl,
 }: GatewayProps) => {
     const wsRef = useRef<WebSocket | null>(null);
-    const [isConnected, setIsConnected] = useState(false);
+
+    // Store Actions (Direct access to avoid re-renders)
+    const { setConnection, setSessionId, setEmotion } = useChatStore.getState();
+    const isConnected = useChatStore((state) => state.isConnected); // Reactive for return
+
     const currentSessionIdRef = useRef<number>(0);
+    const lastSequenceRef = useRef<number>(-1); // [Architecture 4.2] Tier C: Sequence Tracker
     const pendingQueueRef = useRef<{ type: string; payload: any }[]>([]);
 
-    // Use refs to keep callbacks fresh without reconnecting WS
     const callbacksRef = useRef({
         onChatStart,
         onChatStream,
         onChatEnd,
         onEmotion,
+        onSessionReset,
     });
 
     useEffect(() => {
@@ -53,18 +73,18 @@ export const useGateway = ({
             onChatStream,
             onChatEnd,
             onEmotion,
+            onSessionReset,
         };
-    }, [onChatStart, onChatStream, onChatEnd, onEmotion]);
+    }, [onChatStart, onChatStream, onChatEnd, onEmotion, onSessionReset]);
 
     useEffect(() => {
-        // Determine WS URL (assume backend port 8010 based on standard setup)
-        // [Fix] Use provided baseUrl or fallback to config
         const targetBaseUrl = baseUrl || API_CONFIG.BASE_URL;
         const wsUrl =
             targetBaseUrl.replace("http", "ws") + "/lumina/gateway/ws";
 
         let ws: WebSocket;
         let keepAliveTimer: any;
+        let reconnectTimer: any;
 
         const flushQueue = () => {
             if (
@@ -75,12 +95,10 @@ export const useGateway = ({
                 while (pendingQueueRef.current.length > 0) {
                     const item = pendingQueueRef.current.shift();
                     if (item) {
-                        console.log(
-                            `[Gateway] Flushing queued message: ${item.type}`
-                        );
                         const packet: EventPacket = {
                             trace_id: crypto.randomUUID(),
                             session_id: currentSessionIdRef.current,
+                            sequence_number: 0, // Placeholder
                             type: item.type,
                             source: "frontend",
                             payload: item.payload,
@@ -93,52 +111,84 @@ export const useGateway = ({
         };
 
         const connect = () => {
-            console.log("[Gateway] Connecting to", wsUrl);
+            connectionCount++;
+            const connId = connectionCount;
+            console.log(`[Gateway #${connId}] Attempting connection to`, wsUrl);
+
+            // [FIX] Singleton Guard: Reuse existing connection if same URL
+            if (
+                globalWsInstance &&
+                globalWsUrl === wsUrl &&
+                globalWsInstance.readyState === WebSocket.OPEN
+            ) {
+                console.log(`[Gateway #${connId}] Reusing existing connection`);
+                ws = globalWsInstance;
+                wsRef.current = ws;
+                useChatStore.getState().setConnection(true);
+                return;
+            }
+
+            // Close any stale global connection
+            if (
+                globalWsInstance &&
+                globalWsInstance.readyState !== WebSocket.CLOSED
+            ) {
+                console.log(`[Gateway #${connId}] Closing stale connection`);
+                globalWsInstance.close();
+            }
+
+            console.log(`[Gateway #${connId}] Creating new connection`);
             ws = new WebSocket(wsUrl);
+            globalWsInstance = ws;
+            globalWsUrl = wsUrl;
 
             ws.onopen = () => {
-                console.log("[Gateway] Connected");
-                setIsConnected(true);
+                console.log(`[Gateway #${connId}] Connected`);
+                useChatStore.getState().setConnection(true);
                 wsRef.current = ws;
-
-                // Flush early messages if session assumed valid (0)
                 flushQueue();
-
-                // Keep Alive (Ping every 30s)
                 keepAliveTimer = setInterval(() => {
                     if (ws.readyState === WebSocket.OPEN) ws.send("ping");
                 }, 30000);
             };
 
             ws.onclose = () => {
-                console.log("[Gateway] Disconnected. Reconnecting in 3s...");
-                setIsConnected(false);
+                console.log("[Gateway] Disconnected. Reconnecting...");
+                useChatStore.getState().setConnection(false);
                 wsRef.current = null;
                 clearInterval(keepAliveTimer);
-                setTimeout(connect, 3000);
+                reconnectTimer = setTimeout(connect, 3000);
             };
 
-            ws.onerror = (err) => {
-                console.warn("[Gateway] Error:", err);
-            };
+            ws.onerror = (err) => console.warn("[Gateway] Error:", err);
 
             ws.onmessage = (event) => {
                 try {
-                    // 1. Handle Ping-Pong
                     if (event.data === "pong") return;
                     try {
-                        // Check if it's simple pong JSON
-                        const raw = JSON.parse(event.data);
-                        if (raw.type === "pong") return;
+                        if (JSON.parse(event.data).type === "pong") return;
                     } catch {}
 
-                    // 2. Parse Packet
                     const packet: EventPacket = JSON.parse(event.data);
 
-                    // 3. Log Source
-                    // console.log(`[EventBus] <${packet.source}> ${packet.type}`, packet.payload);
+                    // [Architecture 4.2] Tier C: Idempotency Guard
+                    // 1. Session Jump? Reset Sequence tracker
+                    if (packet.session_id > currentSessionIdRef.current) {
+                        lastSequenceRef.current = -1;
+                    }
+                    // 2. Duplicate or Out-of-order? Drop it.
+                    else if (
+                        packet.session_id === currentSessionIdRef.current
+                    ) {
+                        if (packet.sequence_number <= lastSequenceRef.current) {
+                            // console.warn(`[Gateway] Dropped redundant packet: Seq ${packet.sequence_number}`);
+                            return;
+                        }
+                    }
 
-                    // 4. Update Session Awareness
+                    lastSequenceRef.current = packet.sequence_number;
+
+                    // Session Awareness (System packets usually have 0 session_id, we need to handle carefully)
                     if (
                         packet.type === EventType.SYSTEM_STATUS ||
                         packet.type === EventType.CONTROL_SESSION
@@ -148,89 +198,74 @@ export const useGateway = ({
                             if (newId > currentSessionIdRef.current) {
                                 console.log(`[Gateway] New Session: ${newId}`);
                                 currentSessionIdRef.current = newId;
-                                // [Fix] Flush pending messages now that we have a session
+                                useChatStore.getState().setSessionId(newId); // Sync Store
+
+                                if (packet.type === EventType.CONTROL_SESSION) {
+                                    callbacksRef.current.onSessionReset?.(
+                                        newId,
+                                    );
+                                }
                                 flushQueue();
                             }
                         }
                         return;
                     }
 
-                    // 5. Check Session Validity (Simple Client-Side Guard)
-                    if (packet.session_id < currentSessionIdRef.current) {
-                        // Ignore old packet
-                        return;
-                    }
+                    if (packet.session_id < currentSessionIdRef.current) return;
 
-                    // 6. Map to Logic
+                    // Logic Mapping
                     switch (packet.type) {
                         case EventType.BRAIN_THINKING:
-                            // Mapped from "chat_start"
                             console.log(
-                                "[Gateway] Brain Thinking...",
-                                packet.payload
+                                "[useGateway] 🧠 BRAIN_THINKING received - will call onChatStart",
                             );
                             callbacksRef.current.onChatStart?.(
-                                packet.payload?.mode || "proactive"
+                                packet.payload?.mode || "proactive",
                             );
                             break;
-
                         case EventType.BRAIN_RESPONSE:
-                            // Check for End Signal
-                            if (packet.payload?.content) {
+                            if (packet.payload?.content)
                                 callbacksRef.current.onChatStream?.(
-                                    packet.payload.content
+                                    packet.payload.content,
                                 );
-                            } else {
-                                // If empty payload, treating as end?
-                            }
                             break;
-
-                        case "brain_response_end":
-                            console.log("[Gateway] Brain Response End");
+                        case EventType.BRAIN_RESPONSE_END:
                             callbacksRef.current.onChatEnd?.();
                             break;
-
                         case EventType.EMOTION_CHANGED:
-                            // [Phase 32] Emotion event from backend Broker
                             if (packet.payload?.emotion) {
-                                console.log(
-                                    "[Gateway] Emotion:",
-                                    packet.payload.emotion
-                                );
-                                callbacksRef.current.onEmotion?.(
-                                    packet.payload.emotion
-                                );
-                                // Also dispatch to window for components that listen directly
+                                const emo = packet.payload.emotion;
+                                useChatStore.getState().setEmotion(emo); // Sync Store
+                                callbacksRef.current.onEmotion?.(emo);
                                 window.dispatchEvent(
                                     new CustomEvent("lumina:emotion", {
-                                        detail: {
-                                            emotion: packet.payload.emotion,
-                                        },
-                                    })
+                                        detail: { emotion: emo },
+                                    }),
                                 );
                             }
                             break;
-
-                        case "ui:register_widget":
-                        case "ui:remove_widget":
-                            // Bridge Backend UI Events -> Frontend Window Events
-                            console.log(
-                                `[Gateway] Bridging ${packet.type}`,
-                                packet.payload
-                            );
+                        case EventType.UI_REGISTER_WIDGET:
+                        case EventType.UI_REMOVE_WIDGET:
+                        case "ui:unregister_widget":
                             window.dispatchEvent(
-                                new CustomEvent(packet.type, {
-                                    detail: packet.payload,
-                                })
+                                new CustomEvent("lumina:widget", {
+                                    detail: {
+                                        type: packet.type,
+                                        payload: packet.payload,
+                                    },
+                                }),
                             );
                             break;
-
-                        default:
+                        case EventType.PLUGIN_STATUS:
+                            window.dispatchEvent(
+                                new CustomEvent("lumina:plugin_status", {
+                                    detail: packet.payload,
+                                }),
+                            );
                             break;
                     }
                 } catch (e) {
-                    // Ignore non-json
-                    console.warn("[Gateway] Parse Error:", e, event.data);
+                    console.warn("[Gateway] Parse Error:", e);
                 }
             };
         };
@@ -240,16 +275,17 @@ export const useGateway = ({
         return () => {
             ws?.close();
             clearInterval(keepAliveTimer);
+            if (reconnectTimer) clearTimeout(reconnectTimer);
         };
-    }, [baseUrl]); // Only reconnect if baseUrl changes
+    }, [baseUrl]);
 
-    const send = (type: string, payload: any) => {
+    const send = useCallback((type: string, payload: any) => {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            // [Fix] Check if session is ready
             if (currentSessionIdRef.current >= 0) {
                 const packet: EventPacket = {
                     trace_id: crypto.randomUUID(),
                     session_id: currentSessionIdRef.current,
+                    sequence_number: 0, // Placeholder
                     type,
                     source: "frontend",
                     payload,
@@ -257,16 +293,15 @@ export const useGateway = ({
                 };
                 wsRef.current.send(JSON.stringify(packet));
             } else {
-                // Queue it
-                console.warn(
-                    `[Gateway] Session not ready (id=${currentSessionIdRef.current}), queueing message: ${type}`
-                );
+                console.log("[Gateway] Session not ready, queuing:", type);
                 pendingQueueRef.current.push({ type, payload });
             }
         } else {
-            console.warn("[Gateway] Cannot send, WS not open");
+            console.log("[Gateway] Offline, queuing:", type);
+            pendingQueueRef.current.push({ type, payload });
         }
-    };
+    }, []);
+    // }; [Fixed] Removed extra closing brace
 
     return { isConnected, send };
 };

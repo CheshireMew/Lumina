@@ -5,9 +5,11 @@ export const formatCellValue = (key: string, value: any) => {
     if (value === null || value === undefined) return <span style={{color:'rgba(255,255,255,0.3)'}}>-</span>;
     
     // 1. Time formatting
-    if (key === 'created_at' || key.includes('time')) {
+    // 1. Time formatting - STRICTER check
+    const isLikelyDate = key === 'created_at' || key === 'updated_at' || key === 'timestamp' || key === 'date' || (key.endsWith('_at') && !key.includes('hit_at'));
+    if (isLikelyDate) {
         try {
-            return new Date(value).toLocaleString();
+            return <span style={{fontSize:'12px', color:'#9ca3af'}}>{new Date(value).toLocaleString()}</span>;
         } catch (e) { return value; }
     }
     
@@ -46,7 +48,16 @@ export const formatCellValue = (key: string, value: any) => {
 
 export const getOrderedColumns = (data: any[]) => {
     if (!data || data.length === 0) return [];
-    const allKeys = Object.keys(data[0]);
+    
+    // Collect ALL unique keys from ALL rows (NoSQL schema flexibility)
+    const keySet = new Set<string>();
+    data.forEach(row => {
+        if (row && typeof row === 'object') {
+            Object.keys(row).forEach(k => keySet.add(k));
+        }
+    });
+    const allKeys = Array.from(keySet);
+
     // Define priority: agent_id, narrative, then others
     const priority = ['agent_id', 'narrative', 'content', 'role', 'timestamp', 'created_at', 'id'];
     

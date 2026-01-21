@@ -74,6 +74,12 @@ const AvatarSelectorModal: React.FC<AvatarSelectorModalProps> = ({
 
     useEffect(() => {
         if (isOpen) {
+             // Reset state on open
+             setView('main');
+             setDeletedIds([]);
+             setEditingCharId(null);
+             setPickerTargetCharId(null);
+
              fetch(`${API_CONFIG.BASE_URL}/characters/models`)
                 .then(res => res.json())
                 .then(data => {

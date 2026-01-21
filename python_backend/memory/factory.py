@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 from app_config import config
 from core.interfaces.driver import BaseMemoryDriver
-from services.plugin_loader import PluginLoader
+from services.plugins.loader import PluginLoader
 
 logger = logging.getLogger("memory.factory")
 
@@ -18,6 +18,10 @@ class NoOpDriver:
     async def query(self, *args, **kwargs): return []
     async def update(self, *args, **kwargs): return None
     async def delete(self, *args, **kwargs): return None
+    async def mark_memories_hit(self, *args, **kwargs): pass
+    async def search_vector(self, *args, **kwargs): return []
+    async def search_fulltext(self, *args, **kwargs): return []
+    async def search_hybrid(self, *args, **kwargs): return []
     @property
     def _db(self): return None
 
@@ -90,10 +94,19 @@ class MemoryDriverFactory:
                     selected_driver = d
                     break
             
-            # 4b. Alias Handling ("surreal" -> "surreal-db")
-            if not selected_driver and target_provider == "surreal":
+            # 4b. Alias Handling
+            if not selected_driver:
+                aliases = {
+                    "surreal": "driver.memory.surreal",
+                    "postgres": "driver.memory.postgres",
+                    "surreal-db": "driver.memory.surreal",
+                    "postgres-db": "driver.memory.postgres"
+                }
+                
+                target_id = aliases.get(target_provider, target_provider)
+
                 for d in loaded_drivers:
-                    if d.id == "surreal-db":
+                    if d.id == target_id:
                         selected_driver = d
                         break
             

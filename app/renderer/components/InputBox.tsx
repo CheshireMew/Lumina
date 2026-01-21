@@ -58,40 +58,44 @@ const InputBox: React.FC<InputBoxProps> = ({
 
                 ws.onopen = () => setVoiceError('');
                 ws.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'vad_status') {
-                        setVadStatus(data.status);
-                        if (data.status === 'listening') {
-                             events.emit('audio:vad.start', undefined);
-                             if (onSpeechStartRef.current) onSpeechStartRef.current();
-                        }
-                    } else if (data.type === 'partial') {
-                        setTranscript(data.text);
-                    } else if (data.type === 'transcript' || data.type === 'transcription') {
-                        if (data.text.trim()) {
-                            let finalText = data.text;
-                            // Clean tags
-                            const displayText = data.text.replace(/<\|[A-Z]+\|>/g, '').trim();
-                            setTranscript(displayText);
-                            
-                            // Emotion handling
-                            if (data.emotion) {
-                                const emotionMap: Record<string, string> = {
-                                    '<|HAPPY|>': 'Happy', '<|SAD|>': 'Sad', '<|ANGRY|>': 'Angry',
-                                    '<|NEUTRAL|>': 'Neutral', '<|FEAR|>': 'Fear', '<|SURPRISE|>': 'Surprise'
-                                };
-                                const readableEmotion = emotionMap[data.emotion] || data.emotion;
-                                finalText = `(User emotion: ${readableEmotion}) ${displayText}`;
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'vad_status') {
+                            setVadStatus(data.status);
+                            if (data.status === 'listening') {
+                                 events.emit('audio:vad.start', undefined);
+                                 if (onSpeechStartRef.current) onSpeechStartRef.current();
                             }
-
-                            setTimeout(() => {
-                                onSendRef.current(finalText);
-                                setTranscript('');
-                            }, 500);
+                        } else if (data.type === 'partial') {
+                            setTranscript(data.text);
+                        } else if (data.type === 'transcript' || data.type === 'transcription') {
+                            if (data.text.trim()) {
+                                let finalText = data.text;
+                                // Clean tags
+                                const displayText = data.text.replace(/<\|[A-Z]+\|>/g, '').trim();
+                                setTranscript(displayText);
+                                
+                                // Emotion handling
+                                if (data.emotion) {
+                                    const emotionMap: Record<string, string> = {
+                                        '<|HAPPY|>': 'Happy', '<|SAD|>': 'Sad', '<|ANGRY|>': 'Angry',
+                                        '<|NEUTRAL|>': 'Neutral', '<|FEAR|>': 'Fear', '<|SURPRISE|>': 'Surprise'
+                                    };
+                                    const readableEmotion = emotionMap[data.emotion] || data.emotion;
+                                    finalText = `(User emotion: ${readableEmotion}) ${displayText}`;
+                                }
+    
+                                setTimeout(() => {
+                                    onSendRef.current(finalText);
+                                    setTranscript('');
+                                }, 500);
+                            }
+                        } else if (data.type === 'error') {
+                            setVoiceError(data.message);
+                            setVadStatus('idle');
                         }
-                    } else if (data.type === 'error') {
-                        setVoiceError(data.message);
-                        setVadStatus('idle');
+                    } catch (err) {
+                        console.warn('WebSocket message parse error:', err);
                     }
                 };
                 ws.onerror = () => setVoiceError('Connection Failed');
@@ -129,7 +133,9 @@ const InputBox: React.FC<InputBoxProps> = ({
             const formData = new FormData();
             formData.append('file', file);
             formData.append('prompt', 'Describe this image in detail.');
-            const res = await fetch('http://127.0.0.1:8010/vision/analyze', { method: 'POST', body: formData });
+            // @ts-ignore
+            const { API_CONFIG } = await import('../config'); 
+            const res = await fetch(`${API_CONFIG.BASE_URL}/vision/analyze`, { method: 'POST', body: formData });
             if (res.ok) {
                 const data = await res.json();
                 setValue(prev => (prev ? prev + '\n' + `[Image Context]: ${data.description}` : `[Image Context]: ${data.description}`));

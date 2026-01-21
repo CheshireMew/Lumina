@@ -37,8 +37,12 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
     const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
     
     // 交互状态
-    const [draggingNode, setDraggingNode] = useState<any>(null);
-    const [hoverNode, setHoverNode] = useState<any>(null);
+    const [draggingNodeState, setDraggingNodeState] = useState<any>(null);
+    const [hoverNodeState, setHoverNodeState] = useState<any>(null);
+    
+    // Refs for animation loop to avoid restarting effect
+    const draggingNodeRef = useRef<any>(null);
+    const hoverNodeRef = useRef<any>(null);
 
     // 物理引擎状态
     const alphaRef = useRef(1.0); // 模拟热度，随时间衰减
@@ -83,9 +87,9 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
             if (!canvas) return;
             
             // 物理计算步进 (当热度 alpha > 0.01 或 正在拖拽时计算)
-            if (alphaRef.current > 0.01 || draggingNode) {
+            if (alphaRef.current > 0.01 || draggingNodeRef.current) {
                 simulationRef.current.forEach(node => {
-                    if (node === draggingNode) return;
+                    if (node === draggingNodeRef.current) return;
 
                     // 1. 向心力 (Centering) - 弱
                     const cx = canvasSize.width / 2;
@@ -139,7 +143,7 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
                 });
                 
                 // 热度衰减
-                if (!draggingNode) {
+                if (!draggingNodeRef.current) {
                     alphaRef.current *= 0.99; // 每一帧衰减
                 } else {
                     alphaRef.current = 0.3; // 拖拽时保持一定热度以响应变化
@@ -160,7 +164,7 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
                 const src = simulationRef.current.find(n => n.id === edge.from);
                 const dst = simulationRef.current.find(n => n.id === edge.to);
                 if (src && dst) {
-                    const isFocus = (src === hoverNode || dst === hoverNode);
+                    const isFocus = (src === hoverNodeRef.current || dst === hoverNodeRef.current);
                     
                     ctx.beginPath();
                     ctx.moveTo(src.x, src.y);
@@ -199,7 +203,7 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
                 ctx.fill();
                 ctx.shadowBlur = 0; // reset
                 
-                if (node === hoverNode || node === draggingNode) {
+                if (node === hoverNodeRef.current || node === draggingNodeRef.current) {
                     ctx.strokeStyle = '#fff';
                     ctx.lineWidth = 2 / transform.k;
                     ctx.stroke();
@@ -218,7 +222,7 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
         
         animate();
         return () => cancelAnimationFrame(animationFrameId);
-    }, [nodes, edges, draggingNode, hoverNode, transform, canvasSize]);
+    }, [nodes, edges, transform, canvasSize]); // Removed dragging/hover deps
 
     // --- 事件处理 (坐标映射逻辑) ---
     const toWorldPos = (clientX: number, clientY: number) => {
@@ -240,7 +244,8 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
         });
 
         if (clickedNode) {
-            setDraggingNode(clickedNode);
+            setDraggingNodeState(clickedNode);
+            draggingNodeRef.current = clickedNode;
             onNodeSelect(clickedNode);
             alphaRef.current = 0.5;
         } else {
@@ -250,12 +255,12 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
-        if (draggingNode) {
+        if (draggingNodeRef.current) {
              const worldPos = toWorldPos(e.clientX, e.clientY);
-             draggingNode.x = worldPos.x;
-             draggingNode.y = worldPos.y;
-             draggingNode.vx = 0; 
-             draggingNode.vy = 0;
+             draggingNodeRef.current.x = worldPos.x;
+             draggingNodeRef.current.y = worldPos.y;
+             draggingNodeRef.current.vx = 0; 
+             draggingNodeRef.current.vy = 0;
              return;
         }
         if (isDraggingCanvas) {
@@ -271,15 +276,19 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
             const dy = node.y - worldPos.y;
             return Math.sqrt(dx*dx + dy*dy) < (node.radius + 5 / transform.k);
         });
-        setHoverNode(hovered || null);
+        setHoverNodeState(hovered || null);
+        hoverNodeRef.current = hovered || null;
     };
 
     const handleMouseUp = () => {
-        setDraggingNode(null);
+        setDraggingNodeState(null);
+        draggingNodeRef.current = null;
         setIsDraggingCanvas(false);
     };
 
     const handleWheel = (e: React.WheelEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
         const zoomIntensity = 0.1;
         const delta = e.deltaY > 0 ? -zoomIntensity : zoomIntensity;
         let newK = transform.k * (1 + delta);
@@ -299,7 +308,7 @@ export const SimpleGraph: React.FC<SimpleGraphProps> = ({ nodes, edges, onNodeSe
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
                 onWheel={handleWheel}
-                style={{ width: '100%', height: '100%', cursor: isDraggingCanvas ? 'grabbing' : (hoverNode ? 'pointer' : 'default') }}
+                style={{ width: '100%', height: '100%', cursor: isDraggingCanvas ? 'grabbing' : (hoverNodeState ? 'pointer' : 'default') }}
             />
             <div style={{
                 position: 'absolute', bottom: '15px', right: '15px',

@@ -12,10 +12,14 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
     const [error, setError] = useState<string>('');
     const [transcript, setTranscript] = useState<string>('');
     const [enabled, setEnabled] = useState<boolean>(true);
+    // [Option B] Offline state handling
+    const [isOffline, setIsOffline] = useState<boolean>(false);
+    const [reconnectAttempt, setReconnectAttempt] = useState<number>(0);
 
     const wsRef = useRef<WebSocket | null>(null);
     const onSendRef = useRef(onSend);
     const onSpeechStartRef = useRef(onSpeechStart);
+    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         onSendRef.current = onSend;
@@ -26,6 +30,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
         if (!enabled) return;
 
         let ws: WebSocket | null = null;
+        let isMounted = true;
+        
         const connectWS = async () => {
             try {
                 const wsUrl = await window.stt.getWSUrl();
@@ -34,91 +40,120 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
 
                 ws.onopen = () => {
                     console.log('[VoiceInput] WebSocket connected');
-                    setError('');
+                    if (isMounted) {
+                        setError('');
+                        setIsOffline(false);
+                        setReconnectAttempt(0);
+                    }
                 };
 
                 ws.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-
-                    if (data.type === 'vad_status') {
-                        console.log('[VAD Status]', data.status);
-                        setVadStatus(data.status);
-
-                        if (data.status === 'listening') {
-                             console.log('[VAD] User speaking, emitting event...');
-                             events.emit('audio:vad.start', undefined);
-                             
-                             if (onSpeechStartRef.current) {
-                                 onSpeechStartRef.current();
-                             }
-                        }
-                    }
-                    else if (data.type === 'partial') {
-                        console.log('[STT] Partial:', data.segment);
-                        setTranscript(data.text);
-                    }
-                    else if (data.type === 'transcript' || data.type === 'transcription') {
-                        console.log('[STT] Final:', data.text);
-
-                        if (data.text.trim()) {
-                            // Extract Emotion if available
-                            let finalText = data.text;
-                            
-                            // 1. Remove raw XML-like tags from display text if present (e.g. <|HAPPY|>)
-                            const displayText = data.text.replace(/<\|[A-Z]+\|>/g, '').trim();
-                            setTranscript(displayText);
-
-                            // 2. Inject emotion into LLM context
-                            if (data.emotion) {
-                                // Map SenseVoice tags to human readable
-                                // <|HAPPY|> -> Happy
-                                const emotionMap: Record<string, string> = {
-                                    '<|HAPPY|>': 'Happy',
-                                    '<|SAD|>': 'Sad',
-                                    '<|ANGRY|>': 'Angry',
-                                    '<|NEUTRAL|>': 'Neutral',
-                                    '<|FEAR|>': 'Fear',
-                                    '<|SURPRISE|>': 'Surprise'
-                                };
-                                const readableEmotion = emotionMap[data.emotion] || data.emotion;
-                                finalText = `(User emotion: ${readableEmotion}) ${displayText}`;
+                    try {
+                        const data = JSON.parse(event.data);
+    
+                        if (data.type === 'vad_status') {
+                            console.log('[VAD Status]', data.status);
+                            setVadStatus(data.status);
+    
+                            if (data.status === 'listening') {
+                                 console.log('[VAD] User speaking, emitting event...');
+                                 events.emit('audio:vad.start', undefined);
+                                 
+                                 if (onSpeechStartRef.current) {
+                                     onSpeechStartRef.current();
+                                 }
                             }
-
-                            setTimeout(() => {
-                                onSendRef.current(finalText);
-                                setTranscript('');
-                            }, 500);
                         }
-                    }
-                    else if (data.type === 'error') {
-                        setError(data.message);
-                        setVadStatus('idle');
+                        else if (data.type === 'partial') {
+                            console.log('[STT] Partial:', data.segment);
+                            setTranscript(data.text);
+                        }
+                        else if (data.type === 'transcript' || data.type === 'transcription') {
+                            console.log('[STT] Final:', data.text);
+    
+                            if (data.text.trim()) {
+                                // Extract Emotion if available
+                                let finalText = data.text;
+                                
+                                // 1. Remove raw XML-like tags from display text if present (e.g. <|HAPPY|>)
+                                const displayText = data.text.replace(/<\|[A-Z]+\|>/g, '').trim();
+                                setTranscript(displayText);
+    
+                                // 2. Inject emotion into LLM context
+                                if (data.emotion) {
+                                    // Map SenseVoice tags to human readable
+                                    // <|HAPPY|> -> Happy
+                                    const emotionMap: Record<string, string> = {
+                                        '<|HAPPY|>': 'Happy',
+                                        '<|SAD|>': 'Sad',
+                                        '<|ANGRY|>': 'Angry',
+                                        '<|NEUTRAL|>': 'Neutral',
+                                        '<|FEAR|>': 'Fear',
+                                        '<|SURPRISE|>': 'Surprise'
+                                    };
+                                    const readableEmotion = emotionMap[data.emotion] || data.emotion;
+                                    finalText = `(User emotion: ${readableEmotion}) ${displayText}`;
+                                }
+    
+                                setTimeout(() => {
+                                    onSendRef.current(finalText);
+                                    setTranscript('');
+                                }, 500);
+                            }
+                        }
+                        else if (data.type === 'error') {
+                            setError(data.message);
+                            setVadStatus('idle');
+                        }
+                    } catch (err) {
+                        console.warn('WebSocket message parse error:', err);
                     }
                 };
 
                 ws.onclose = () => {
                     console.log('[VoiceInput] WebSocket closed');
+                    if (isMounted && enabled) {
+                        // [Option B] Auto-reconnect with exponential backoff
+                        setIsOffline(true);
+                        const nextAttempt = reconnectAttempt + 1;
+                        const delay = Math.min(1000 * Math.pow(2, nextAttempt), 30000); // Max 30s
+                        console.log(`[VoiceInput] Reconnecting in ${delay/1000}s (attempt ${nextAttempt})...`);
+                        
+                        reconnectTimeoutRef.current = setTimeout(() => {
+                            if (isMounted) {
+                                setReconnectAttempt(nextAttempt);
+                                connectWS();
+                            }
+                        }, delay);
+                    }
                 };
 
                 ws.onerror = () => {
                     setError('无法连接语音服务');
+                    setIsOffline(true);
                 };
 
             } catch (e) {
                 console.error(e);
                 setError('初始化失败');
+                setIsOffline(true);
             }
         };
 
         connectWS();
 
         return () => {
+            isMounted = false;
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
             if (ws) ws.close();
         };
     }, [enabled]);
 
     const getStatusText = () => {
         if (!enabled) return 'Mic Disabled';
+        if (isOffline) return `🔴 Service Offline${reconnectAttempt > 0 ? ` (Retry ${reconnectAttempt})` : ''}`;
         if (error) return error;
         if (vadStatus === 'thinking') return 'Thinking...';
         if (vadStatus === 'listening') return 'Listening...';

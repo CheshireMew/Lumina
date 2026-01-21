@@ -1,18 +1,22 @@
 
 import json
 import os
-import shutil
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
+from core.exceptions import PersistenceError
+from services.error_monitor import track_error
+
+logger = logging.getLogger("SoulPersistence")
 
 class SoulPersistence:
     """
-    璐熻矗 SoulManager 鐨勫簳灞傛枃浠?I/O 鎿嶄綔銆?
-    鍘熷垯锛?
-    1. 鍞竴鐨?IO 鍏ュ彛
-    2. 澶勭悊 Path Traversal 瀹夊叏妫€鏌?
-    3. 澶勭悊 Atomic Write (tmp -> target)
-    4. 澶勭悊 JSON 搴忓垪鍖?
+    负责 SoulManager 的底层文件 I/O 操作。
+    原则：
+    1. 唯一的 IO 入口
+    2. 处理 Path Traversal 安全检查
+    3. 处理 Atomic Write (tmp -> target)
+    4. 处理 JSON 序列化
     """
     def __init__(self, base_dir: Path):
         self.base_dir = base_dir
@@ -35,8 +39,13 @@ class SoulPersistence:
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in config: {e}")
+            track_error(e, context={"file": str(self.config_path)})
+            return {}
         except Exception as e:
-            print(f"[SoulPersistence] Error loading config: {e}")
+            logger.error(f"Error loading config: {e}")
+            track_error(e, context={"file": str(self.config_path)})
             return {}
 
     def save_config(self, data: Dict[str, Any]):
@@ -46,11 +55,18 @@ class SoulPersistence:
             with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
                 f.flush()
-                # os.fsync(f.fileno()) # Optimized: Removed aggressive fsync
             
             os.replace(temp_path, self.config_path)
+            logger.debug(f"Config saved: {self.config_path}")
         except Exception as e:
-            print(f"[SoulPersistence] Error saving config: {e}")
+            logger.error(f"Error saving config: {e}")
+            track_error(e, context={"file": str(self.config_path)})
+            # Clean up temp file if exists
+            if temp_path.exists():
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
     def load_module_data(self, module_name: str) -> Dict[str, Any]:
         """Load generic module data"""
@@ -62,13 +78,19 @@ class SoulPersistence:
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in {module_name}: {e}")
+            track_error(e, context={"module": module_name, "file": str(path)})
+            return {}
         except Exception as e:
-            print(f"[SoulPersistence] Error loading {module_name}: {e}")
+            logger.error(f"Error loading {module_name}: {e}")
+            track_error(e, context={"module": module_name, "file": str(path)})
             return {}
 
     def save_module_data(self, module_name: str, data: Dict[str, Any]):
         """Save generic module data (Atomic)"""
-        if not data: return # Optimization: Don't save empty dicts if avoidable?
+        if not data:
+            return  # Optimization: Don't save empty dicts
         
         safe_name = self._sanitize_name(module_name)
         target_path = self._resolve_data_root() / f"{safe_name}.json"
@@ -80,8 +102,13 @@ class SoulPersistence:
                 f.flush()
             
             os.replace(temp_path, target_path)
+            logger.debug(f"Module data saved: {module_name}")
         except Exception as e:
-            print(f"[SoulPersistence] Error saving {module_name}: {e}")
+            logger.error(f"Error saving {module_name}: {e}")
+            track_error(e, context={"module": module_name, "file": str(target_path)})
             if temp_path.exists():
-                try: os.remove(temp_path)
-                except: pass
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+
