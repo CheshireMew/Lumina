@@ -1,4 +1,4 @@
-from plugins.base import BaseSystemPlugin
+from core.interfaces.plugin import BaseSystemPlugin
 
 class LLMCorePlugin(BaseSystemPlugin):
     """

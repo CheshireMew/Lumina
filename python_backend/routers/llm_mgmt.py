@@ -13,7 +13,7 @@ logger = logging.getLogger("LLMManagementRouter")
 
 def _get_soul_client():
     from services.container import services
-    return services.soul_client
+    return services.soul  # Fixed: was soul_client which doesn't exist
 
 def _get_llm_manager():
     from services.container import services

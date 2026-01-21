@@ -2,7 +2,7 @@
  * DataViewer - 通用数据可视化组件 (Refactored)
  * 包含：表浏览、数据查看、查询控制台
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Database, X, RefreshCw, GitMerge, Network } from 'lucide-react';
 import { API_CONFIG } from '../../config';
 
@@ -32,6 +32,10 @@ const DataViewer: React.FC<DataViewerProps> = ({
     const [detailEdge, setDetailEdge] = useState<any>(null); 
     
     const [tableCache, setTableCache] = useState<Record<string, any[]>>({});
+    
+    // [Fix] AbortController refs to prevent race conditions
+    const loadTableAbortRef = useRef<AbortController | null>(null);
+    const loadGraphAbortRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -71,6 +75,13 @@ const DataViewer: React.FC<DataViewerProps> = ({
     };
 
     const loadTableData = async (tableName: string, forceRefresh: boolean = false) => {
+        // [Fix] Cancel previous request to prevent race condition
+        if (loadTableAbortRef.current) {
+            loadTableAbortRef.current.abort();
+        }
+        loadTableAbortRef.current = new AbortController();
+        const signal = loadTableAbortRef.current.signal;
+        
         setSelectedTable(tableName);
         if (tableName === 'knowledge_facts') {
             setLoading(false);
@@ -90,14 +101,15 @@ const DataViewer: React.FC<DataViewerProps> = ({
             if (activeCharacterId && (tableName === 'conversation_log' || tableName === 'episodic_memory')) {
                 url += `&character_id=${activeCharacterId}`;
             }
-            const res = await fetch(url);
+            const res = await fetch(url, { signal });
             if (res.ok) {
                 const data = await res.json();
                 const rows = data.data || [];
                 setTableData(rows);
                 setTableCache(prev => ({ ...prev, [tableName]: rows }));
             }
-        } catch (e) {
+        } catch (e: any) {
+            if (e.name === 'AbortError') return; // Ignore aborted requests
             setError('Failed to load table data');
         } finally {
             setLoading(false);
@@ -105,16 +117,24 @@ const DataViewer: React.FC<DataViewerProps> = ({
     };
 
     const loadGraph = async () => {
+        // [Fix] Cancel previous request to prevent race condition
+        if (loadGraphAbortRef.current) {
+            loadGraphAbortRef.current.abort();
+        }
+        loadGraphAbortRef.current = new AbortController();
+        const signal = loadGraphAbortRef.current.signal;
+        
         setLoading(true);
         try {
-             const res = await fetch(`${API_CONFIG.BASE_URL}/debug/brain_dump?character_id=${activeCharacterId || 'hiyori'}`);
+             const res = await fetch(`${API_CONFIG.BASE_URL}/debug/brain_dump?character_id=${activeCharacterId || 'hiyori'}`, { signal });
              if (res.ok) {
                  const data = await res.json();
                  if (data.status === 'success' && data.graph) {
                      setGraphData(data.graph);
                  }
              }
-        } catch (e) {
+        } catch (e: any) {
+            if (e.name === 'AbortError') return; // Ignore aborted requests
             console.error('Graph load failed');
         } finally {
             setLoading(false);
