@@ -16,7 +16,6 @@ class EventType(str, Enum):
     ERROR = "error"
     LOG = "log"
     EVENT_EMIT = "event_emit" # Worker -> Main (bus.emit)
-    REGISTER_ROUTER = "register_router"
     REGISTER_SERVICE = "register_service"
     SYNC_STATE = "sync_state" # Update 'enabled', 'status', etc.
     SAVE_DATA = "save_data"   # Worker -> Host (request persistence)

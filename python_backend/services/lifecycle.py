@@ -54,15 +54,6 @@ async def lifespan(app: FastAPI):
     # Ideally this moves to a RouteBootstrapper, but requires app instance access
     # Keeping it here for now to avoid passing 'app' deep into bootstrappers
     if service_instance.event_bus:
-        def on_router_registered(event):
-            router = event.data.get("router")
-            prefix = event.data.get("prefix", "")
-            if router:
-                app.include_router(router, prefix=prefix)
-                logger.info(f"🔗 Mounted Router via EventBus: {prefix}")
-                
-        service_instance.event_bus.subscribe("core.register_router", on_router_registered)
-        
         # Start ChatBridge (Legacy/MVP helper)
         try:
              from services.chat_bridge import BasicChatBridge

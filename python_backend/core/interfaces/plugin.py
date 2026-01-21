@@ -104,23 +104,6 @@ class BaseSystemPlugin(ABC):
                 "response_model": response_model
             })
 
-    def register_router(self, router, prefix: str = None):
-        """
-        [DEPRECATED] Register a FastAPI router directly.
-        Please migrate to register_route() for better decoupling.
-        """
-        if not hasattr(self, 'context') or not self.context:
-            raise RuntimeError("Cannot register router before initialize() is called")
-        
-        if not prefix:
-            prefix = f"/plugins/{self.id}"
-        
-        self.context.bus.emit_sync("core.register_router", {
-            "router": router,
-            "prefix": prefix
-        })
-        self._router_registered = True
-
     # ================= Persistence Helpers (Phase 28) =================
     # Plugins must set self.context in initialize() to use these.
 
