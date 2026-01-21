@@ -13,8 +13,20 @@ import asyncio
 import logging
 from pathlib import Path
 
+# Force UTF-8 for Isolated Process (Windows default is GBK)
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # Setup logging for child process
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [PluginHost-%(process)d] %(message)s')
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s [%(levelname)s] [PluginHost-%(process)d] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("child_process.log", mode='w', encoding='utf-8')
+    ]
+)
 logger = logging.getLogger("PluginHost")
 
 class PluginHost:
@@ -32,12 +44,25 @@ class PluginHost:
         
         try:
             # 1. Load Plugin
-            self._load_plugin()
+            try:
+                with open(f"host_debug_{self.manifest.get('id', 'unknown')}.txt", "w") as f:
+                    f.write(f"Manifest Keys: {list(self.manifest.keys())}\n")
+                    f.write(f"Path: {self.manifest.get('path')}\n")
+                    f.write(f"Entrypoint: {self.manifest.get('entrypoint')}\n")
+                
+                self._load_plugin()
+            except Exception as e:
+                with open(f"host_crash_{self.manifest.get('id', 'unknown')}.txt", "w") as f:
+                    import traceback
+                    f.write(traceback.format_exc())
+                raise e # Re-raise to trigger main exception handler logging
             
             # 2. Command Loop
+            logger.info("Host: Entering Command Loop. Waiting for ipc_queue.get()...")
             while True:
                 # Blocking Get
                 msg = self.ipc_queue.get()
+                logger.info(f"Host: Received message: {msg.get('cmd') if msg else 'None'}")
                 if msg is None: # Sentinel
                     break
                 
@@ -105,9 +130,30 @@ class PluginHost:
                  if isinstance(val, dict): return ConfigStub(val)
                  return val
         
-        context = RemoteContextStub(self.event_queue)
+        context = RemoteContextStub(self.event_queue, self.manifest['id'])
         context.config = ConfigStub(config_snapshot)
         context._data_dir = data_dir 
+        
+        # [PR-3] Bridge Logging
+        # We attach a custom handler to the root logger that forwards to context
+        class IPCLogHandler(logging.Handler):
+            def emit(self, record):
+                try:
+                    # Avoid infinite recursion if logging fails in queue put
+                    log_entry = {
+                        "levelno": record.levelno,
+                        "msg": self.format(record),
+                        "name": record.name
+                    }
+                    context.emit_log(log_entry)
+                except:
+                    pass
+        
+        # Add handler to root logger
+        ipc_handler = IPCLogHandler()
+        ipc_handler.setFormatter(logging.Formatter('%(message)s'))
+        logging.getLogger().addHandler(ipc_handler)
+        logger.info("📡 Logging Bridge Established. Forwarding to Main Process.")
         
         if hasattr(self.plugin_instance, 'initialize'):
              if asyncio.iscoroutinefunction(self.plugin_instance.initialize):
@@ -118,20 +164,49 @@ class PluginHost:
         self.event_queue.put({"type": "result", "id": msg["id"], "status": "ok"})
 
     async def _handle_call(self, msg):
-        method_name = msg["method"]
+        import types
+        import inspect
+        
+        req_id = msg.get("id")
+        method_name = msg.get("method")
         args = msg.get("args", [])
         kwargs = msg.get("kwargs", {})
         
         try:
             method = getattr(self.plugin_instance, method_name)
+            
+            # Execute
+            # Note: iscoroutinefunction returns FALSE for async generators (async def ... yield)
             if asyncio.iscoroutinefunction(method):
                 res = await method(*args, **kwargs)
             else:
+                # Sync OR Async Generator execution returns the generator object immediately
                 res = method(*args, **kwargs)
+                
+            # [PR-4] Streaming Support
+            # Check for Async Generator OR Async Iterator
+            is_async_gen = isinstance(res, types.AsyncGeneratorType) or inspect.isasyncgen(res)
             
-            self.event_queue.put({"type": "result", "id": msg["id"], "result": res, "status": "ok"})
+            if is_async_gen:
+                # It's an Async Generator!
+                self.event_queue.put({"type": "stream_start", "id": req_id})
+                
+                async for chunk in res:
+                    self.event_queue.put({
+                        "type": "stream_chunk", 
+                        "id": req_id, 
+                        "chunk": chunk
+                    })
+                    
+                self.event_queue.put({"type": "stream_end", "id": req_id})
+            
+            else:
+                # Standard Result
+                self.event_queue.put({"type": "result", "id": req_id, "status": "ok", "result": res})
+                
         except Exception as e:
-            self.event_queue.put({"type": "result", "id": msg["id"], "error": str(e), "status": "error"})
+            logger.error(f"RPC Call '{method_name}' failed: {e}", exc_info=True)
+            self.event_queue.put({"type": "result", "id": req_id, "status": "error", "error": str(e)})
 
     def _handle_teardown(self):
         if hasattr(self.plugin_instance, 'terminate'):

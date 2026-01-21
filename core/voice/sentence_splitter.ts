@@ -4,11 +4,12 @@
  */
 
 export class SentenceSplitter {
-    private buffer: string = '';
+    private buffer: string = "";
     private onSentenceCallback: ((sentence: string) => void) | null = null;
     // 优化：添加逗号等短停顿符，提前触发 TTS (包含换行)
     // ⚡ '&' 为 LLM 控制的断句符，用于精确控制语音停顿
-    private sentenceEndRegex = /[。！？.!?,，、；&\n]$/;
+    // [Fix] Use Unicode Escapes for robustness: 。！ ？ ， 、 ；
+    private sentenceEndRegex = /[\u3002\uff01\uff1f.!?,\uff0c\u3001\uff1b&\n]$/;
     private minLength = 1; // 降低最小长度，避免丢失短句
     // 优化：降低超时时间，减少等待延迟（从 1500ms -> 800ms）
     private maxWaitMs = 800; // 最大等待时间（毫秒）
@@ -35,9 +36,12 @@ export class SentenceSplitter {
         const trimmedBuffer = this.buffer.trim();
         if (this.sentenceEndRegex.test(trimmedBuffer)) {
             // Ensure non-empty and brackets are balanced (don't split inside [emotion, tag])
-            if (trimmedBuffer.length >= this.minLength && this.isBalanced(trimmedBuffer)) {
+            if (
+                trimmedBuffer.length >= this.minLength &&
+                this.isBalanced(trimmedBuffer)
+            ) {
                 this.emit(trimmedBuffer);
-                this.buffer = '';
+                this.buffer = "";
                 return;
             }
         }
@@ -46,9 +50,11 @@ export class SentenceSplitter {
         this.timeoutId = setTimeout(() => {
             const trimmed = this.buffer.trim();
             if (trimmed.length > 0) {
-                console.log('[SentenceSplitter] Timeout triggered, flushing buffer');
+                console.log(
+                    "[SentenceSplitter] Timeout triggered, flushing buffer",
+                );
                 this.emit(trimmed);
-                this.buffer = '';
+                this.buffer = "";
             }
         }, this.maxWaitMs);
     }
@@ -63,9 +69,9 @@ export class SentenceSplitter {
         }
 
         if (this.buffer.trim().length > 0) {
-            console.log('[SentenceSplitter] Flushing remaining buffer');
+            console.log("[SentenceSplitter] Flushing remaining buffer");
             this.emit(this.buffer.trim());
-            this.buffer = '';
+            this.buffer = "";
         }
     }
 
@@ -73,7 +79,7 @@ export class SentenceSplitter {
      * 重置状态
      */
     reset() {
-        this.buffer = '';
+        this.buffer = "";
         if (this.timeoutId) {
             clearTimeout(this.timeoutId);
             this.timeoutId = null;
@@ -95,10 +101,10 @@ export class SentenceSplitter {
         let openSquare = 0;
         let openParen = 0;
         for (const char of text) {
-            if (char === '[') openSquare++;
-            else if (char === ']') openSquare--;
-            else if (char === '(' || char === '（') openParen++;
-            else if (char === ')' || char === '）') openParen--;
+            if (char === "[") openSquare++;
+            else if (char === "]") openSquare--;
+            else if (char === "(" || char === "\uff08") openParen++;
+            else if (char === ")" || char === "\uff09") openParen--;
         }
         return openSquare === 0 && openParen === 0;
     }

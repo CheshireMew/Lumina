@@ -16,6 +16,11 @@ class SoulService:
     3. Delegate Interaction Hooks to the Driver.
     """
     
+    async def initialize(self):
+        """Initialize the SoulService async components."""
+        # Future setup if needed
+        logger.info("SoulService Initialized")
+
     def __init__(self):
         self._drivers: Dict[str, BaseSoulDriver] = {}
         self._active_driver: Optional[BaseSoulDriver] = None
@@ -68,10 +73,12 @@ class SoulService:
         else:
             logger.error(f"Cannot switch to unknown driver: {driver_id}")
 
-    async def get_system_prompt(self, context: Dict[str, Any] = {}) -> str:
+    async def get_system_prompt(self, context: Dict[str, Any] = None) -> str:
         """
         Generates system prompt using standard 'system.yaml' template + Character Config.
         """
+        if context is None:
+            context = {}
         # 1. Try Active Driver first (if it overrides prompt generation)
         if self._active_driver:
             # Note: Drivers might want to use the standard template too, 
@@ -131,6 +138,15 @@ class SoulService:
         """
         if self._active_driver:
             await self._active_driver.on_interaction(user_input, ai_response, context)
+
+    def set_pending_interaction(self, content: str, source: str):
+        """
+        [MCP Support] Queue an interaction/notification from an external source.
+        For now, we just log calls or trigger an immediate passive interaction if supported.
+        """
+        logger.info(f"Pending Interaction from {source}: {content}")
+        # TODO: Implement actual queue or notification bus
+        # self._interaction_queue.append(...)
 
     # ================= Compatibility Layer (Facade) =================
     

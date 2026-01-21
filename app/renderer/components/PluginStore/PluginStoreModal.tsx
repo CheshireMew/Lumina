@@ -3,36 +3,13 @@ import './PluginStoreModal.css';
 import GalgameSelect from './GalgameSelect';
 import GalgameToggle from './GalgameToggle';
 import PluginConfigModal from './PluginConfigModal';
-
-interface PluginItem {
-  id: string;
-  category: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  active_in_group: boolean;
-  config_schema?: { 
-      type: string; 
-      key: string; 
-      label: string;
-      options?: {value: string; label: string}[]; 
-      confirm_on_change?: boolean; 
-  };
-  current_value?: any; 
-  func_tag?: string;
-  is_driver?: boolean;
-  service_url?: string;
-  driver_id?: string;
-  group_id?: string; 
-  group_exclusive?: boolean; 
-  permissions?: string[]; // [NEW]
-  tags?: string[]; // [NEW] Dynamic Styling
-}
+import { usePluginManager, PluginStatus } from '../../hooks/usePluginManager'; // [Refactor] Import Hook
+import { API_CONFIG } from '../../config';
 
 interface PluginStoreModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenLLMSettings?: () => void; // [NEW] Link to LLM Config
+  onOpenLLMSettings?: () => void;
 }
 
 const PluginCardSkeleton = () => (
@@ -51,32 +28,28 @@ const PluginCardSkeleton = () => (
 
 const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, onOpenLLMSettings }) => {
   const [activeTab, setActiveTab] = useState<'skill' | 'tts' | 'stt' | 'system' | 'other'>('skill');
-  const [plugins, setPlugins] = useState<PluginItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [configPlugin, setConfigPlugin] = useState<PluginItem | null>(null); // Plugin being configured
+  
+  // [Refactor] Use Hook
+  const { plugins, isLoading, refreshPlugins, togglePlugin, updateConfig } = usePluginManager();
+  
+  const [configPlugin, setConfigPlugin] = useState<PluginStatus | null>(null); // Plugin being configured
   
   // [NEW] Permission Modal State
-  const [pendingPlugin, setPendingPlugin] = useState<PluginItem | null>(null);
+  const [pendingPlugin, setPendingPlugin] = useState<PluginStatus | null>(null);
   
   // [NEW] Drag & Drop State
   const [dragActive, setDragActive] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null); // "uploading", "success", "error"
+  
+  // [Architecture 4.2] Tier C: Real-time Transit States
+  const [transitStates, setTransitStates] = useState<{[id: string]: string}>({});
 
-  // Fetch Plugins
-  const fetchPlugins = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('http://localhost:8010/plugins/list');
-      const data = await res.json();
-      console.log("[PluginStore] Fetched plugins:", data);
-      setPlugins(data || []); // data is already the array
-    } catch (error) {
-      console.error('Failed to fetch plugins:', error);
-    } finally {
-      // Small delay for smooth aesthetic transition
-      setTimeout(() => setLoading(false), 600);
+  // Initial Fetch Only
+  useEffect(() => {
+    if (isOpen) {
+        refreshPlugins();
     }
-  };
+  }, [isOpen, refreshPlugins]);
 
   // Drag Handlers
   const handleDrag = function(e: React.DragEvent) {
@@ -111,19 +84,26 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
       formData.append('file', file);
 
       try {
-          const res = await fetch('http://localhost:8010/plugins/upload', {
+            const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/upload`, {
               method: 'POST',
               body: formData
           });
-          const data = await res.json();
+
+          // [Robustness] Handle non-JSON errors (e.g. Nginx 502, Proxy errors)
+          const text = await res.text();
+          let data;
+          try {
+              data = JSON.parse(text);
+          } catch (e) {
+              data = { detail: text || res.statusText };
+          }
+
           if (res.ok) {
               setUploadStatus("success");
-              // Check if we need to show a restart prompt or confirm
-              alert(`Plugin installed: ${data.id}\nPlease restart backend to load.`);
-              // Ideally we trigger backend refresh logic if implemented
+              alert(`Plugin installed: ${data.id || 'Unknown'}\nPlease restart backend to load.`);
           } else {
               setUploadStatus("error");
-              alert(`Upload failed: ${data.detail}`);
+              alert(`Upload failed: ${data.detail || text.slice(0, 100)}`);
           }
       } catch (e: any) {
           console.error(e);
@@ -131,74 +111,64 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
           alert("Upload error: " + e.message);
       } finally {
           setUploadStatus(null);
-          // Refresh list anyway just in case hot reload works
-          fetchPlugins();
+          await refreshPlugins();
       }
   };
 
+  // [Architecture 4.2] Tier C: WebSocket Response Handler
   useEffect(() => {
-    if (isOpen) fetchPlugins();
-  }, [isOpen]);
+    const handleStatusUpdate = (e: any) => {
+        const { plugin_id, status } = e.detail;
+        console.log(`[PluginStore] Real-time Status: ${plugin_id} -> ${status}`);
 
-  const executeToggle = async (plugin: PluginItem, newState: boolean) => {
+        setTransitStates(prev => ({ ...prev, [plugin_id]: status }));
+
+        // Final States: Sync back via refresh
+        if (status === 'enabled' || status === 'disabled') {
+            refreshPlugins();
+            
+            // Clear transit state after short delay
+            setTimeout(() => {
+                setTransitStates(prev => {
+                    const next = {...prev};
+                    delete next[plugin_id];
+                    return next;
+                });
+            }, 500);
+        }
+    };
+
+    window.addEventListener('lumina:plugin_status', handleStatusUpdate);
+    return () => window.removeEventListener('lumina:plugin_status', handleStatusUpdate);
+  }, [refreshPlugins]);
+
+  // [Refactor] Use Hook for Toggle
+  const executeToggle = async (plugin: PluginStatus, newState: boolean) => {
     console.log(`[PluginStore] Executing Toggle ${plugin.id} to ${newState}`);
     
-    // [OPTIMISTIC UPDATE]
-    if (newState && plugin.group_id && plugin.group_exclusive) {
-        setPlugins(prev => prev.map(p => {
-            if (p.group_id === plugin.group_id) {
-                return { 
-                    ...p, 
-                    active_in_group: p.id === plugin.id,
-                    enabled: p.id === plugin.id 
-                };
-            }
-            return p;
-        }));
-    }
-
-    // 1. Skill (Search) - Legacy Category Check
-    if (plugin.category === 'skill') {
-         if (!newState) return;
-         try {
-            await fetch('http://localhost:8010/plugins/config/search', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ provider_id: plugin.id })
-            });
-        } catch(e) { console.error(e); }
-    } 
-    // 2. Driver (TTS/STT or Group)
-    else if (plugin.is_driver && plugin.service_url) {
-        if (!newState) return;
-        
-        let targetId = plugin.driver_id || plugin.id;
-        try {
-            await fetch(plugin.service_url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ model_name: targetId })
-            });
-        } catch(e) { console.error(e); }
-    }
-    // 3. System / Default
-    else {
-        try {
-            await fetch('http://localhost:8010/plugins/toggle/system', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ provider_id: plugin.id })
-            });
-        } catch(e) { console.error(e); }
-    }
-
-    // Refresh
+    // [OPTIMISTIC UPDATE] - handled by hook logic mostly, but we can rely on refresh
+    setTransitStates(prev => ({ ...prev, [plugin.id]: newState ? 'enabling' : 'disabling' }));
+    
+    await togglePlugin(plugin, newState);
+    
+    // Clear transit state (if WebSocket didn't already)
+    // Actually wait a bit? Hook handles refresh.
+    // [FIX] Do NOT clear specific transit state optimistically. 
+    // Wait for WebSocket 'lumina:plugin_status' event to confirm real state.
+    // Add a safety release only (in case WS fails)
     setTimeout(() => {
-        fetchPlugins();
-    }, 300); 
+         setTransitStates(prev => {
+             const next = {...prev};
+             // Only clear if still in transitional state (hasn't been handled by WS)
+             if (next[plugin.id] === (newState ? 'enabling' : 'disabling')) {
+                 delete next[plugin.id];
+             }
+             return next;
+         });
+    }, 15000); // 15s Safety Timeout for heavy models
   };
 
-  const handleToggle = (plugin: PluginItem, newState: boolean) => {
+  const handleToggle = (plugin: PluginStatus, newState: boolean) => {
       // If turning ON and has permissions, show confirmation
       if (newState && plugin.permissions && plugin.permissions.length > 0) {
           setPendingPlugin(plugin);
@@ -214,69 +184,25 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
       }
   };
 
+  // [Refactor] Use Hook for Config
   const handleSaveConfig = async (key: string, value: string) => {
     if (!configPlugin) return;
-    try {
-        if (key === 'voiceprint_threshold' || configPlugin.id.startsWith('system.')) {
-             await fetch('http://localhost:8010/plugins/config/system', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ key, value })
-            });
-        }
-        else if (key === 'BRAVE_API_KEY') {
-            await fetch('http://localhost:8010/plugins/config/brave-key', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ key, value })
-            });
-        }
-        else if (key === 'fw_model_size') {
-            // Updating model size -> Also Trigger Switch!
-            if (configPlugin.service_url) {
-                await fetch(configPlugin.service_url, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ model_name: value })
-                });
-            }
-        }
-        // [NEW] Group ID Update
-        else if (key === '__group_id') {
-             await fetch('http://localhost:8010/plugins/config/group', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ key: configPlugin.id, value: value })
-            });
-        }
-        else if (key === '__category') {
-             await fetch('http://localhost:8010/plugins/config/category', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ key: configPlugin.id, value: value })
-            });
-        }
-        else if (key === '__group_behavior') {
-            const targetGroup = configPlugin.group_id; 
-            if(targetGroup) {
-                 await fetch('http://localhost:8010/plugins/config/group_behavior', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ key: targetGroup, value: value })
-                });
-            }
-        }
-        
-        fetchPlugins();
-    } catch(e) { console.error(e); }
+    await updateConfig(configPlugin, key, value);
   };
 
   if (!isOpen) return null;
 
-  const filteredPlugins = plugins.filter(p => p.category === activeTab);
+  const filteredPlugins = plugins.filter(p => {
+      // 1. Direct Category Match
+      if (p.category === activeTab) return true;
+      
+
+      
+      return false;
+  });
   
   // Group by Function Tag
-  const groupedPlugins: {[tag: string]: PluginItem[]} = {};
+  const groupedPlugins: {[tag: string]: PluginStatus[]} = {};
   filteredPlugins.forEach(p => {
     const tag = p.func_tag || "General";
     if (!groupedPlugins[tag]) groupedPlugins[tag] = [];
@@ -332,7 +258,7 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
               </div>
           )}
 
-          {loading ? (
+          {isLoading ? (
               <div className="plugin-grid" style={{ marginTop: '20px' }}>
                   {[1, 2, 3, 4, 5, 6].map(i => <PluginCardSkeleton key={i} />)}
               </div>
@@ -345,14 +271,9 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
                         {groupedPlugins[tag].map(plugin => {
                             // Drivers (STT/TTS/Skill) are mutually exclusive, use active_in_group
                             const isGrouped = !!plugin.group_id;
-                            // If grouped, use active_in_group. If standalone, use enabled.
-                            const isSelected = isGrouped ? plugin.active_in_group : plugin.enabled;
+                            // If grouped AND exclusive, use active_in_group. If standalone or independent group, use enabled.
+                            const isSelected = ((plugin.group_id && plugin.group_exclusive) ? plugin.active_in_group : plugin.enabled) || false;
                             
-                            // Always clickable now for "Advanced Group" setting
-                            const hasConfig = !!plugin.config_schema;
-
-                            // MVP Core Identification
-                            // Dreaming/Reverie removed from Kernel as per user request (Optional)
                             // MVP Core Identification
                             // Dynamic Tag-based check
                             const isMvpCore = plugin.tags?.includes('mvp_kernel') || ['LLM Intelligence', 'LLM Core', 'Emotion Broker'].includes(plugin.name);
@@ -362,11 +283,10 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
                                 key={plugin.id} 
                                 className={`plugin-card ${isSelected ? 'active-card' : ''} ${isMvpCore ? 'mvp-core-card' : ''} clickable`}
                                 onClick={(e) => {
-                                    // Stop propagation
                                     e.stopPropagation();
 
-                                    // Only allow opening settings if plugin is enabled
-                                    if (!isSelected) return;
+                                    // [UX Fix] Allow opening settings if selected OR if it has a valid config schema
+                                    if (!isSelected && !plugin.config_schema) return;
 
                                     if (plugin.name === 'LLM Intelligence' || plugin.name === 'LLM Core') {
                                         if (onOpenLLMSettings) {
@@ -391,12 +311,19 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
                                     </div>
                                     
                                     <div onClick={(e) => e.stopPropagation()}>
-                                        <GalgameToggle 
-                                            checked={isSelected} 
-                                            onChange={(val) => handleToggle(plugin, val)}
-                                            labelOn={isGrouped ? 'USE' : 'ON'}
-                                            labelOff="OFF"
-                                        />
+                                        {transitStates[plugin.id] ? (
+                                            <div className="plugin-transit-state">
+                                                <span className="spinner-small"></span>
+                                                <span className="transit-label">{transitStates[plugin.id].toUpperCase()}...</span>
+                                            </div>
+                                        ) : (
+                                            <GalgameToggle 
+                                                checked={isSelected} 
+                                                onChange={(val) => handleToggle(plugin, val)}
+                                                labelOn={isGrouped ? 'USE' : 'ON'}
+                                                labelOff="OFF"
+                                            />
+                                        )}
                                     </div>
                                 </div>
 
@@ -428,7 +355,6 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
               plugin={configPlugin} 
               onClose={() => setConfigPlugin(null)} 
               onSave={handleSaveConfig}
-              existingGroups={[...new Set(plugins.map(p => p.group_id).filter((g): g is string => !!g))]}
           />
       )}
       
@@ -447,8 +373,8 @@ const PluginStoreModal: React.FC<PluginStoreModalProps> = ({ isOpen, onClose, on
             </ul>
             <p style={{fontSize: '0.9em', color: '#ccc'}}>Do you want to trust this plugin?</p>
             <div className="modal-actions">
-              <button onClick={() => setPendingPlugin(null)} className="cancel-btn">Cancel</button>
-              <button onClick={handleConfirmPermission} className="save-btn" style={{background: '#ff4757'}}>Allow & Enable</button>
+                <button onClick={() => setPendingPlugin(null)} className="cancel-btn">Cancel</button>
+                <button onClick={handleConfirmPermission} className="save-btn" style={{background: '#ff4757'}}>Allow & Enable</button>
             </div>
           </div>
         </div>

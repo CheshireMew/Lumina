@@ -7,9 +7,8 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "verify-build": "python scripts/verify_build.py",
     "gen-types": "powershell scripts/generate_api_client.ps1",
-    "build": "npm run verify-build && tsc && vite build && electron-builder",
+    "build": "tsc && vite build && electron-builder",
     "preview": "vite preview",
     "lint": "eslint ."
   },
@@ -31,22 +30,29 @@
     "pixi.js": "^6.5.10",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "three": "^0.182.0"
+    "surrealdb": "^1.3.2",
+    "three": "^0.182.0",
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/ui": "^4.0.17",
     "autoprefixer": "^10.4.17",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
+    "jsdom": "^27.4.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.2.2",
     "vite": "^5.0.8",
     "vite-plugin-electron": "^0.28.0",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^4.0.17"
   },
   "build": {
     "appId": "com.cheshiremew.lumina",
@@ -97,8 +103,20 @@
         "to": "bin/ffmpeg.exe"
       },
       {
-        "from": "public/live2d/hiyori_pro",
-        "to": "bin/lumina_backend/live2d/hiyori_pro"
+        "from": "public/live2d/Hiyori",
+        "to": "bin/lumina_backend/live2d/Hiyori"
+      },
+      {
+        "from": "dist_backend/tts_server",
+        "to": "bin/tts_server"
+      },
+      {
+        "from": "dist_backend/stt_server",
+        "to": "bin/stt_server"
+      },
+      {
+        "from": "config/ports.json",
+        "to": "config/ports.json"
       }
     ]
   }

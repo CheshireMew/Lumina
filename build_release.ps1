@@ -102,7 +102,15 @@ if (Test-Path $LLMConfigPath) {
 try {
     # Ensure hooks are visible
     $env:PYTHONPATH = "python_backend" 
-    pyinstaller --distpath dist_backend --workpath build_backend --clean build_backend.spec
+    
+    Write-Host "📦 Building Main Backend..." -ForegroundColor Cyan
+    pyinstaller --distpath dist_backend --workpath build_backend --clean python_backend/packaging/backend.spec
+    
+    Write-Host "📦 Building TTS Service..." -ForegroundColor Cyan
+    pyinstaller --distpath dist_backend --workpath build_backend --clean python_backend/packaging/tts.spec
+    
+    Write-Host "📦 Building STT Service..." -ForegroundColor Cyan
+    pyinstaller --distpath dist_backend --workpath build_backend --clean python_backend/packaging/stt.spec
 }
 finally {
     if ($Redacted) {

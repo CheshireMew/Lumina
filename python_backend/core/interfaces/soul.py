@@ -28,7 +28,7 @@ class BaseSoulDriver(ABC):
         pass
 
     @abstractmethod
-    async def get_system_prompt(self, context: Dict[str, Any] = {}) -> str:
+    async def get_system_prompt(self, context: Dict[str, Any] = None) -> str:
         """
         Render the current system prompt.
         The Core calls this before every LLM interaction.
@@ -36,7 +36,7 @@ class BaseSoulDriver(ABC):
         pass
 
     @abstractmethod
-    async def on_interaction(self, user_input: str, ai_response: str, context: Dict[str, Any] = {}):
+    async def on_interaction(self, user_input: str, ai_response: str, context: Dict[str, Any] = None):
         """
         Hook called after a successful interaction.
         Use this to update mood, intimacy, XP, etc.

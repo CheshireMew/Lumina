@@ -41,13 +41,13 @@ class SoulRenderer:
             if isinstance(data, dict):
                 parts = []
                 # Order matters: Role -> Style -> Constraints
-                if "瑙掕壊" in data: parts.append(data["瑙掕壊"])
+                if "角色" in data: parts.append(data["角色"])
                 if "role" in data: parts.append(data["role"])
                 
-                if "琛ㄨ揪瑙勮寖" in data: parts.append(data["琛ㄨ揪瑙勮寖"])
+                if "表达规范" in data: parts.append(data["表达规范"])
                 if "style" in data: parts.append(data["style"])
                 
-                if "琛屼负鍑嗗垯" in data: parts.append(data["琛屼负鍑嗗垯"])
+                if "行为准则" in data: parts.append(data["行为准则"])
                 if "constraints" in data: parts.append(data["constraints"])
                 
                 full_prompt = "\n\n".join(parts)

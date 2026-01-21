@@ -19,7 +19,9 @@ from .manager import VoiceprintManager
 import soundfile as sf
 import numpy as np
 
-def main():
+import asyncio
+
+async def main():
     print("=" * 60)
     print("澹扮汗娉ㄥ唽宸ュ叿")
     print("=" * 60)
@@ -28,7 +30,12 @@ def main():
     print("\n[1/4] 鍒濆鍖栧0绾圭鐞嗗櫒...")
     try:
         vp_mgr = VoiceprintManager()
-        print("鉁?澹扮汗绠$悊鍣ㄥ垵濮嬪寲鎴愬姛")
+        # Ensure implicit driver load if needed, though Manager.__init__ loads driver synchronously currently? 
+        # Checking manager.py: self.driver = SherpaCAMDriver() -> and ensure_driver_loaded is async.
+        # But register_voiceprint calls extract_embedding which calls driver.
+        # Let's manually call load for safety if not implicitly done.
+        await vp_mgr.ensure_driver_loaded()
+        print("鉁?澹扮汗绠理鍣ㄥ垵濮嬪寲鎴愬姛")
     except Exception as e:
         print(f"鉁?鍒濆鍖栧け璐? {e}")
         return
@@ -38,7 +45,7 @@ def main():
     
     if not Path(audio_file).exists():
         print(f"鉁?鏂囦欢涓嶅瓨鍦? {audio_file}")
-        print("\n鎻愮ず: 璇峰厛鐢ㄥ綍闊宠澶囧綍鍒?-5绉掔殑娓呮櫚璇煶锛?)
+        print("\n鎻愮ず: 璇峰厛鐢ㄥ綍闊宠澶囧綍鍒?-5绉掔殑娓呮櫚璇煶锛?")
         return
     
     try:
@@ -59,7 +66,7 @@ def main():
     # 娉ㄥ唽澹扮汗
     print(f"\n[4/4] 娉ㄥ唽澹扮汗 Profile: {profile_name}...")
     try:
-        success = vp_mgr.register_voiceprint(
+        success = await vp_mgr.register_voiceprint(
             audio=audio,
             profile_name=profile_name,
             sample_rate=sr
@@ -67,11 +74,10 @@ def main():
         
         if success:
             print(f"\n{'='*60}")
-            print(f"鉁?澹扮汗娉ㄥ唽鎴愬姛锛?)
+            print(f"鉁?澹扮汗娉ㄥ唽鎴愬姛锛?")
             print(f"{'='*60}")
             print(f"\nProfile: {profile_name}")
             print(f"淇濆瓨璺緞: voiceprint_profiles/{profile_name}.npy")
-            # print(f"鐗瑰緛缁村害: {embedding.shape}") # Removed as API returns bool
             print(f"\n涓嬩竴姝?")
             print(f"  1. 鎵撳紑 Lumina 璁剧疆鐣岄潰")
             print(f"  2. 杩涘叆 Voice 閫夐」鍗?)
@@ -87,4 +93,4 @@ def main():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

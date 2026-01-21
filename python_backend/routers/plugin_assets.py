@@ -1,61 +1,65 @@
-
-import os
 import logging
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from core.security.safe_path import SafePath, SecurityException
+from services.container import services
 
-router = APIRouter()
 logger = logging.getLogger("PluginAssets")
+router = APIRouter(prefix="/plugins/assets", tags=["Plugin Assets"])
 
-# Base paths
-BACKEND_DIR = Path(__file__).parent.parent
-PLUGINS_SYSTEM = BACKEND_DIR / "plugins" / "system"
-PLUGINS_EXTENSIONS = BACKEND_DIR / "plugins" / "extensions"
-
-@router.get("/plugins/{plugin_id}/assets/{file_path:path}")
+@router.get("/{plugin_id}/{file_path:path}")
 async def get_plugin_asset(plugin_id: str, file_path: str):
     """
-    Serve static assets for a plugin.
-    
-    Path resolution:
-    1. Try plugins/system/{safe_name}/assets/{file_path}
-    2. Try plugins/extensions/{safe_name}/assets/{file_path}
+    Serve static assets for a specific ACTIVE plugin.
+    Enforces security:
+    1. Plugin must be enabled.
+    2. Path must be within plugin's directory.
     """
     
-    # Security: Sanitization
-    safe_name = plugin_id.split(".")[-1] # basic cleanup
-    if ".." in plugin_id or "/" in plugin_id or "\\" in plugin_id:
-         # If ID is complex like "system.dev.tool", split(".")[-1] gives "tool"
-         # If ID is "tool", gives "tool".
-         # However, we must ensure we don't traverse directories with the ID itself if it was malformed.
-         # The safe_name extraction is checking against the directory structure convention.
-         pass
+    # 1. Resolve Plugin
+    # We use SystemPluginManager to find the plugin object
+    # (And conceptually MCPs in future, but they are remote)
+    spm = services.system_plugin_manager
+    if not spm:
+        raise HTTPException(503, "Plugin Manager unavailable")
+        
+    plugin = spm.get_plugin(plugin_id)
+    if not plugin:
+        raise HTTPException(404, "Plugin not found or not active")
+        
+    if not plugin.enabled:
+        raise HTTPException(403, "Plugin is disabled")
 
-    # Logic: Find the plugin directory
-    # 1. System
-    sys_path = PLUGINS_SYSTEM / safe_name / "assets" / file_path
-    if _is_safe_path(PLUGINS_SYSTEM, sys_path) and sys_path.exists():
-        return FileResponse(sys_path)
+    # 2. Resolve Path
+    manifest = getattr(plugin, '_manifest', None) or getattr(plugin, 'manifest', None)
     
-    # 2. Extensions (Try raw ID too if safe_name fails? Usually directories match ID suffix or ID itself)
-    # Let's assume directories in extensions/ match safe_name for now. 
-    ext_path = PLUGINS_EXTENSIONS / safe_name / "assets" / file_path
-    if _is_safe_path(PLUGINS_EXTENSIONS, ext_path) and ext_path.exists():
-        return FileResponse(ext_path)
+    # [Security] Strict Validation of Manifest
+    if callable(manifest):
+        try:
+            manifest = manifest()
+        except Exception:
+            raise HTTPException(404, "Failed to resolve manifest")
 
-    # 3. Fallback: Try exact ID matches in extensions/ (If folder is named 'system.galgame' not 'galgame')
-    # Some folders might include the namespace.
-    ext_path_id = PLUGINS_EXTENSIONS / plugin_id / "assets" / file_path
-    if _is_safe_path(PLUGINS_EXTENSIONS, ext_path_id) and ext_path_id.exists():
-        return FileResponse(ext_path_id)
+    if not manifest:
+        # Prevent accessing properties on incomplete objects
+        raise HTTPException(404, "Invalid plugin manifest")
 
-    raise HTTPException(status_code=404, detail="Asset not found")
+    if not hasattr(manifest, 'path') or not manifest.path:
+        raise HTTPException(404, "Plugin has no asset directory")
+        
+    plugin_root = Path(manifest.path).resolve()
 
-def _is_safe_path(base: Path, target: Path) -> bool:
-    """Ensure target is within base to prevent traversal."""
+    # 3. Security Check (SafePath)
+    # [Security] SafePath ensures we don't escape plugin_root
     try:
-        # resolve() deals with .. and symbolic links
-        return base.resolve() in target.resolve().parents
-    except Exception:
-        return False
+        requested_path = SafePath.resolve_child(plugin_root, file_path)
+    except SecurityException:
+        logger.warning(f"🚨 Path Traversal Attempt: {plugin_id} -> {file_path}")
+        raise HTTPException(403, "Access denied")
+        
+    if not requested_path.exists() or not requested_path.is_file():
+        raise HTTPException(404, "File not found")
+        
+    return FileResponse(requested_path)

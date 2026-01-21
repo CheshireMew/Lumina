@@ -16,13 +16,13 @@ import { memoryService } from '@core/memory/memory_service'
 import { ttsService } from '@core/voice/tts_service'
 
 // Core Hooks
-// Core Hooks
 import { useGateway } from './hooks/useGateway';
 import { useCoreSystem } from './hooks/useCoreSystem';
 import { useCharacterState } from './hooks/useCharacterState';
 import { useAudioPipeline } from './hooks/useAudioPipeline';
 import { useChatStream } from './hooks/useChatStream';
 import { useSettings } from './hooks/useSettings';
+import { transformImageSrc } from './utils/srcUtils';
 
 // Avatar System
 import AvatarContainer from './core/avatar/AvatarContainer';
@@ -162,7 +162,7 @@ function App() {
             position: 'relative', 
             overflow: 'hidden',
             backgroundColor: '#f3f4f6', // Fallback color
-            backgroundImage: backgroundImage ? `url("${backgroundImage}")` : 'linear-gradient(135deg, #eef2ff 0%, #fae8ff 50%, #f0fdf4 100%)',
+            backgroundImage: backgroundImage ? `url("${transformImageSrc(backgroundImage)}")` : 'linear-gradient(135deg, #eef2ff 0%, #fae8ff 50%, #f0fdf4 100%)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -210,7 +210,11 @@ function App() {
                     overflow: 'hidden', // Contain children
                     transition: 'all 0.3s ease',
                     // Auto-hide top part if no message
-                    height: displayMessage ? 'auto' : 'auto' 
+                    height: displayMessage ? 'auto' : 'auto',
+                    // Electron Interaction Fixes
+                    // @ts-ignore
+                    WebkitAppRegion: 'no-drag',
+                    pointerEvents: 'auto' 
                 }}>
                     
                     {/* 1. Chat Area (Scrollable) */}
@@ -299,7 +303,10 @@ function App() {
                 onThinkingModeChange={enable => updateLLMSettings({ ...settings.llm, thinkingEnabled: enable })}
                 onBackgroundImageChange={url => {
                     setBackgroundImage(url);
-                    saveSetting('backgroundImage', 'backgroundImage', url);
+                    // [Fix] Do not save blob: URLs to settings (they are transient previews)
+                    if (url && !url.startsWith('blob:')) {
+                        saveSetting('backgroundImage', 'backgroundImage', url);
+                    }
                 }}
                 
                 // Character Props (Passed to AvatarSelectorModal)

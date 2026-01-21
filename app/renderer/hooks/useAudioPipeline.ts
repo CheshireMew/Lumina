@@ -15,105 +15,139 @@ import { AudioQueue } from "@core/voice/audio_queue";
  * - Automatic queue management
  */
 export function useAudioPipeline() {
-  const audioQueueRef = useRef<AudioQueue>(new AudioQueue());
-  const sentenceSplitterRef = useRef<SentenceSplitter | null>(null);
-  const synthPromisesRef = useRef<Promise<void>[]>([]);
-  const sentenceIndexRef = useRef<number>(0);
+    const audioQueueRef = useRef<AudioQueue>(new AudioQueue());
+    const sentenceSplitterRef = useRef<SentenceSplitter | null>(null);
+    const synthPromisesRef = useRef<Promise<void>[]>([]);
+    const sentenceIndexRef = useRef<number>(0);
+    const runIdRef = useRef<number>(0);
 
-  /**
-   * Initialize the pipeline for a new response stream.
-   * Call this at the start of each AI response.
-   */
-  const initPipeline = useCallback(
-    (onSentenceReady: (sentence: string, index: number) => void) => {
-      sentenceIndexRef.current = 0;
-      synthPromisesRef.current = [];
-      audioQueueRef.current.clear();
+    /**
+     * Initialize the pipeline for a new response stream.
+     * Call this at the start of each AI response.
+     */
+    const initPipeline = useCallback(
+        (onSentenceReady: (sentence: string, index: number) => void) => {
+            sentenceIndexRef.current = 0;
+            runIdRef.current++; // New run
+            synthPromisesRef.current = [];
+            audioQueueRef.current.clear();
 
-      sentenceSplitterRef.current = new SentenceSplitter((sentence) => {
-        const cleanSentence = sentence.trim();
-        if (cleanSentence.length > 0) {
-          onSentenceReady(cleanSentence, sentenceIndexRef.current++);
-        }
-      });
-    },
-    []
-  );
+            sentenceSplitterRef.current = new SentenceSplitter((sentence) => {
+                const cleanSentence = sentence.trim();
+                if (cleanSentence.length > 0) {
+                    onSentenceReady(cleanSentence, sentenceIndexRef.current++);
+                }
+            });
+        },
+        [],
+    );
 
-  /**
-   * Enqueue a sentence for synthesis.
-   * Synthesis happens concurrently, but playback is sequential.
-   */
-  const enqueueSynthesis = useCallback((sentence: string, index: number) => {
-    const synthPromise = (async () => {
-      // Filter empty/symbol-only sentences
-      const cleanSentence = sentence
-        .replace(/[。！？!?,，、；&\n\s]/g, "")
-        .trim();
-      if (cleanSentence.length === 0) {
-        console.log(`[AudioPipeline] Skipping empty sentence: "${sentence}"`);
-        return;
-      }
+    /**
+     * Enqueue a sentence for synthesis.
+     * Synthesis happens concurrently, but playback is sequential.
+     */
+    const enqueueSynthesis = useCallback((sentence: string, index: number) => {
+        const currentRunId = runIdRef.current; // Capture current ID
+        const synthPromise = (async () => {
+            // Filter empty/symbol-only sentences
+            const cleanSentence = sentence
+                .replace(/[。！？!?,，、；&\n\s]/g, "")
+                .trim();
+            if (cleanSentence.length === 0) {
+                console.log(
+                    `[AudioPipeline] Skipping empty sentence: "${sentence}"`,
+                );
+                return;
+            }
 
-      console.log(
-        `[AudioPipeline] Synthesizing ${index}:`,
-        sentence.slice(0, 30)
-      );
-      try {
-        // 1. Start synthesis immediately (concurrent)
-        const audioResponse = await ttsService.synthesize(sentence);
+            console.log(
+                `[AudioPipeline] Synthesizing ${index}:`,
+                sentence.slice(0, 30),
+            );
+            try {
+                // Prepare text for speech (remove parens content)
+                const spokenSentence = sentence
+                    .replace(/\[.*?\]/g, "")
+                    .replace(/\(.*?\)/g, "")
+                    .replace(/（.*?）/g, "")
+                    .replace(/<\|.*?\|>/g, "")
+                    .trim();
 
-        // 2. Wait for previous sentence to finish enqueuing (preserve order)
-        if (index > 0) {
-          await synthPromisesRef.current[index - 1];
-        }
+                if (!spokenSentence) {
+                    console.log(
+                        `[AudioPipeline] Skipping silent sentence: "${sentence}"`,
+                    );
+                    // Still need to maintain promise chain order, maybe just return?
+                    // Ideally we should process it as empty to keep index sync, but let's check length
+                    return;
+                }
 
-        // 3. Enqueue in order
-        if (audioResponse) {
-          audioQueueRef.current.enqueue(audioResponse);
-          console.log(
-            `[AudioPipeline] Enqueued ${index} (Queue: ${audioQueueRef.current.length})`
-          );
-        }
-      } catch (error) {
-        console.error(`[AudioPipeline] Synthesis failed for ${index}:`, error);
-      }
-    })();
+                // 1. Start synthesis immediately (concurrent)
+                const audioResponse =
+                    await ttsService.synthesize(spokenSentence);
 
-    synthPromisesRef.current[index] = synthPromise;
-  }, []);
+                // Run Check 1: After synthesis (network might have taken time)
+                if (currentRunId !== runIdRef.current) return;
 
-  /**
-   * Feed a token to the sentence splitter.
-   * Call this for each token received during streaming.
-   */
-  const feedToken = useCallback((token: string) => {
-    sentenceSplitterRef.current?.feedToken(token);
-  }, []);
+                // 2. Wait for previous sentence to finish enqueuing (preserve order)
+                if (index > 0) {
+                    await synthPromisesRef.current[index - 1];
+                }
 
-  /**
-   * Flush any remaining content in the splitter.
-   * Call this when the stream ends.
-   */
-  const flush = useCallback(() => {
-    sentenceSplitterRef.current?.flush();
-  }, []);
+                // Run Check 2: After waiting for previous (queue could be cleared)
+                if (currentRunId !== runIdRef.current) return;
 
-  /**
-   * Clear the audio queue immediately.
-   * Use for interruption scenarios.
-   */
-  const clear = useCallback(() => {
-    audioQueueRef.current.clear();
-    synthPromisesRef.current = [];
-  }, []);
+                // 3. Enqueue in order
+                if (audioResponse) {
+                    audioQueueRef.current.enqueue(audioResponse);
+                    console.log(
+                        `[AudioPipeline] Enqueued ${index} (Queue: ${audioQueueRef.current.length})`,
+                    );
+                }
+            } catch (error) {
+                console.error(
+                    `[AudioPipeline] Synthesis failed for ${index}:`,
+                    error,
+                );
+            }
+        })();
 
-  return {
-    initPipeline,
-    enqueueSynthesis,
-    feedToken,
-    flush,
-    clear,
-    audioQueue: audioQueueRef.current,
-  };
+        synthPromisesRef.current[index] = synthPromise;
+    }, []);
+
+    /**
+     * Feed a token to the sentence splitter.
+     * Call this for each token received during streaming.
+     */
+    const feedToken = useCallback((token: string) => {
+        sentenceSplitterRef.current?.feedToken(token);
+    }, []);
+
+    /**
+     * Flush any remaining content in the splitter.
+     * Call this when the stream ends.
+     */
+    const flush = useCallback(() => {
+        sentenceSplitterRef.current?.flush();
+    }, []);
+
+    /**
+     * Clear the audio queue immediately.
+     * Use for interruption scenarios.
+     */
+    const clear = useCallback(() => {
+        ttsService.stop(); // Abort network requests
+        runIdRef.current++; // Invalidate pending promises
+        audioQueueRef.current.clear();
+        synthPromisesRef.current = [];
+    }, []);
+
+    return {
+        initPipeline,
+        enqueueSynthesis,
+        feedToken,
+        flush,
+        clear,
+        audioQueue: audioQueueRef.current,
+    };
 }

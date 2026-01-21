@@ -30,15 +30,35 @@ class RAGContextProvider(ContextProvider):
         
         if not user_text or len(user_text) < 3: return None
 
-        # 2. Embedding + Search
-        # Note: Ideally moving embedding logic out, but maintaining functionality for now
-        from model_manager import model_manager
-        path = model_manager.ensure_embedding_model("all-MiniLM-L6-v2")
-        emb_model = model_manager.load_embedding_model(path)
-        
-        vector = emb_model.encode(user_text).tolist()
+        # 2. Embedding + Search (with caching)
+        from services.embedding_cache import get_embedding_cached, get_embedding_cache
         
         llm_manager = services.get_llm_manager()
+        vector = None
+        
+        # Check if model is loaded
+        if hasattr(llm_manager, "embedding_model") and llm_manager.embedding_model:
+            # Use cached embedding
+            vector = get_embedding_cached(
+                user_text, 
+                llm_manager.embedding_model,
+                model_name="all-MiniLM-L6-v2"
+            )
+        else:
+            # Fallback: Load model and cache it
+            try:
+                from model_manager import model_manager
+                path = model_manager.ensure_embedding_model("all-MiniLM-L6-v2")
+                llm_manager.embedding_model = model_manager.load_embedding_model(path)
+                vector = get_embedding_cached(
+                    user_text,
+                    llm_manager.embedding_model,
+                    model_name="all-MiniLM-L6-v2"
+                )
+            except ImportError:
+                logger.error("ModelManager not available")
+                return None
+        
         route = llm_manager.get_route("chat")
         
         # Default: Paid/Local Tier -> Episodic Memory (High Context)

@@ -12,9 +12,7 @@ from typing import Optional, Any, TYPE_CHECKING, List
 if TYPE_CHECKING:
     from routers.gateway import EventBus as WebSocketGateway
     from core.events.bus import EventBus
-    from memory.core import SurrealMemory
-    from llm.manager import LLMManager
-    from memory.core import SurrealMemory
+    from memory.core import MemoryService
     from llm.manager import LLMManager
     from app_config import ConfigManager
     from core.interfaces.context import ContextProvider
@@ -51,7 +49,7 @@ class ServiceContainer:
         self._config: Optional['ConfigManager'] = None
         
         # === DATA SERVICES ===
-        self._surreal_system: Optional['SurrealMemory'] = None
+        self._memory_service: Optional['MemoryService'] = None
         self._llm_manager: Optional['LLMManager'] = None
         
         # === SYSTEM MANAGERS ===
@@ -66,8 +64,15 @@ class ServiceContainer:
         self._vision: Optional[Any] = None
         self._tts: Optional[Any] = None
         self._stt: Optional[Any] = None
-        self._stt: Optional[Any] = None
         self._ticker: Optional[Any] = None
+        # [Architecture 5.0] High-Level Plugin Service (Registry)
+        self._plugin_service: Optional[Any] = None
+        
+        # [Architecture 4.0] Micro-Orchestrator
+        self._process_manager: Optional[Any] = None
+        
+        # [Architecture 6.0] Active Controller
+        self._reconciliation_service: Optional[Any] = None
         
         # === REGISTRIES ===
         self._context_providers: List['ContextProvider'] = []
@@ -91,10 +96,15 @@ class ServiceContainer:
             raise ServiceNotInitializedError("Config not initialized.")
         return self._config
     
-    def get_surreal(self) -> 'SurrealMemory':
-        if self._surreal_system is None:
-            raise ServiceNotInitializedError("SurrealMemory not initialized.")
-        return self._surreal_system
+    # def get_surreal(self) -> 'SurrealMemory':
+    #     """[DEPRECATED] Use get_memory()"""
+    #     return self.get_memory()
+
+    def get_memory(self) -> 'MemoryService':
+        """Access Memory Service (Standard)."""
+        if self._memory_service is None:
+            raise ServiceNotInitializedError("Memory Service not initialized.")
+        return self._memory_service
     
     def get_llm_manager(self) -> 'LLMManager':
         if self._llm_manager is None:
@@ -110,6 +120,11 @@ class ServiceContainer:
         if self._tts is None:
             raise ServiceNotInitializedError("TTSManager not initialized.")
         return self._tts
+
+    def get_plugin_service(self) -> Any:
+        if self._plugin_service is None:
+            raise ServiceNotInitializedError("PluginService not initialized.")
+        return self._plugin_service
 
     # ==================== REGISTRY METHODS ====================
     
@@ -146,7 +161,18 @@ class ServiceContainer:
             raise ServiceNotInitializedError("STTManager not initialized.")
         return self._stt
 
+    def get_process_manager(self) -> Any:
+        # Optional service (might not be present in worker processes)
+        return self._process_manager
+
+    def get_reconciliation_service(self) -> Any:
+        return self._reconciliation_service
+
     # ==================== SETTERS (For Lifecycle) ====================
+    
+    def set_process_manager(self, instance: Any):
+        self._process_manager = instance
+
     
     def set_gateway(self, instance: 'WebSocketGateway'):
         self._gateway = instance
@@ -157,8 +183,12 @@ class ServiceContainer:
     def set_config(self, instance: 'ConfigManager'):
         self._config = instance
     
-    def set_surreal(self, instance: 'SurrealMemory'):
-        self._surreal_system = instance
+    def set_memory(self, instance: 'MemoryService'):
+        self._memory_service = instance
+
+    def set_surreal(self, instance: 'MemoryService'):
+        """[DEPRECATED] Use set_memory()"""
+        self._memory_service = instance
     
     def set_llm_manager(self, instance: 'LLMManager'):
         self._llm_manager = instance
@@ -169,12 +199,18 @@ class ServiceContainer:
     def set_tts(self, instance: Any):
         self._tts = instance
 
+    def set_plugin_service(self, instance: Any):
+        self._plugin_service = instance
+
     # Aliases for explicit registration
     def register_tts(self, instance: Any):
         self._tts = instance
 
     def register_stt(self, instance: Any):
         self._stt = instance
+
+    def register_reconciliation_service(self, instance: Any):
+        self._reconciliation_service = instance
 
     # ==================== LEGACY PROPERTIES (Backward Compat) ====================
     # These are kept for existing code that uses services.xxx syntax
@@ -205,11 +241,17 @@ class ServiceContainer:
     
     @property
     def surreal_system(self):
-        return self._surreal_system
+        """[DEPRECATED] Use get_memory()"""
+        return self._memory_service
     
     @surreal_system.setter
     def surreal_system(self, value):
-        self._surreal_system = value
+        self._memory_service = value
+
+    @property
+    def memory(self):
+        """[DEPRECATED] Use get_memory()"""
+        return self._memory_service
     
     @property
     def llm_manager(self):
@@ -289,6 +331,14 @@ class ServiceContainer:
     @stt.setter
     def stt(self, value):
         self._stt = value
+
+    @property
+    def tts(self):
+        return self._tts
+    
+    @tts.setter
+    def tts(self, value):
+        self._tts = value
 
     # ==================== SINGLETON ====================
     

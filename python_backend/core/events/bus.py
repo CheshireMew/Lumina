@@ -20,14 +20,21 @@ from pydantic import BaseModel, ValidationError
 logger = logging.getLogger("EventBus")
 
 
+def _safe_timestamp():
+    import time
+    try:
+        loop = asyncio.get_running_loop()
+        return loop.time()
+    except RuntimeError:
+        return time.time()
+
 @dataclass
 class Event:
     """Standard Event Payload"""
     type: str
     data: Any = None
     source: str = "system"
-    timestamp: float = field(default_factory=lambda: asyncio.get_event_loop().time() if asyncio.get_event_loop().is_running() else 0)
-
+    timestamp: float = field(default_factory=_safe_timestamp)
 
 @dataclass
 class EventSchema:
@@ -126,25 +133,32 @@ class EventBus:
         # Schema Validation
         if event_type in self._schemas:
             schema = self._schemas[event_type]
+            payload = data
+            
+            # [Architecture 4.2] Extract payload from EventPacket container if needed
+            from core.protocol import EventPacket
+            if isinstance(data, EventPacket):
+                payload = data.payload
+
             try:
-                # Validate data against Pydantic model
-                if data is None:
-                    # Allow None only if model allows optional fields?
-                    # Dict can be empty.
+                # Validate payload against Pydantic model
+                if payload is None:
+                    # Allow None if it matches schema expectations?
                     pass 
-                elif isinstance(data, dict):
+                elif isinstance(payload, dict):
                     # Validate dict matches model
-                    schema.payload_model(**data)
-                elif isinstance(data, BaseModel):
+                    schema.payload_model(**payload)
+                elif isinstance(payload, BaseModel):
                     # Ensure it matches the expected model type or is compatible
-                    if not isinstance(data, schema.payload_model):
-                         # Try conversion?
-                         schema.payload_model(**data.dict())
+                    if not isinstance(payload, schema.payload_model):
+                         schema.payload_model(**payload.dict())
             except ValidationError as ve:
-                logger.error(f"鉂?Event Validation Failed for '{event_type}': {ve}")
+                logger.error(f"❌ Event Validation Failed for '{event_type}': {ve}")
+                # [Hardening] Log the faulty data for easier debugging
+                logger.debug(f"Faulty Data: {payload}")
                 return 0
             except Exception as e:
-                logger.error(f"鉂?Schema Validation Error for '{event_type}': {e}")
+                logger.error(f"❌ Schema Validation Error for '{event_type}': {e}")
                 return 0
 
         event = Event(type=event_type, data=data, source=source)
@@ -174,10 +188,44 @@ class EventBus:
                     logger.error(f"Wildcard handler error for '{pattern}' on '{event_type}': {e}")
         
         if handlers_called > 0:
-            logger.debug(f"Emitted '{event_type}' to {handlers_called} handlers")
+            # [DEBUG] Log handler count for BRAIN_RESPONSE to check for duplicates
+            if event_type == "brain_response":
+                logger.info(f"🔔 Emitted '{event_type}' to {handlers_called} handlers")
+            else:
+                logger.debug(f"Emitted '{event_type}' to {handlers_called} handlers")
         
         return handlers_called
     
+    async def wait_for(self, event_type: str, predicate: Callable[[Event], bool] = None, timeout: float = 5.0) -> Optional[Event]:
+        """
+        Wait for a specific event.
+        
+        Args:
+            event_type: Event type to wait for.
+            predicate: Optional function(event) -> bool. Return True to accept event.
+            timeout: Max seconds to wait.
+            
+        Returns:
+            Event object if found, None if timeout.
+        """
+        future = asyncio.get_running_loop().create_future()
+        
+        def _callback(event: Event):
+            if not future.done():
+                try:
+                    if predicate is None or predicate(event):
+                        future.set_result(event)
+                except Exception as e:
+                    logger.error(f"wait_for predicate failed: {e}")
+        
+        sub_id = self.subscribe(event_type, _callback)
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            self.unsubscribe(sub_id)
+
     def emit_sync(self, event_type: str, data: Any = None, source: str = "system"):
         """
         Synchronous emit for non-async contexts.
@@ -233,6 +281,12 @@ class EventBus:
         """Emit plugin unloaded event."""
         await self.emit("plugin.unloaded", {"id": plugin_id})
 
+    def bulk_register_schemas(self, schemas: Dict[str, Type[BaseModel]], version: str = "1.0"):
+        """Bulk register schemas for multiple event types."""
+        for event_type, model in schemas.items():
+            self.register_schema(event_type, EventSchema(version=version, payload_model=model))
+        logger.info(f"⚡ Bulk Registered {len(schemas)} Event Schemas")
+
     # --- Utilities ---
     
     def throttle(self, event_type: str, interval: float = 1.0):
@@ -253,8 +307,87 @@ class EventBus:
                 if now - last_emit.get(event_type, 0) >= interval:
                     last_emit[event_type] = now
                     return await func(*args, **kwargs)
-            return wrapper
         return decorator
+
+    # --- Monitoring & Stats ---
+    
+    # Warning thresholds for potential leaks
+    SUBSCRIPTION_WARN_THRESHOLD = 100  # Warn if single event has > 100 subscribers
+    TOTAL_SUBSCRIPTION_WARN = 500      # Warn if total subscriptions > 500
+    
+    def get_stats(self) -> dict:
+        """
+        Get EventBus statistics for monitoring.
+        
+        Returns:
+            {
+                "total_subscriptions": int,
+                "event_types": int,
+                "wildcard_subscriptions": int,
+                "services": int,
+                "schemas": int,
+                "top_events": [(event_type, count), ...]
+            }
+        """
+        # Count subscriptions per event
+        event_counts = {
+            event: len(callbacks) 
+            for event, callbacks in self._subscriptions.items()
+        }
+        
+        # Sort by count descending
+        top_events = sorted(event_counts.items(), key=lambda x: -x[1])[:10]
+        
+        return {
+            "total_subscriptions": sum(len(cbs) for cbs in self._subscriptions.values()),
+            "event_types": len(self._subscriptions),
+            "wildcard_subscriptions": len(self._wildcard_subscriptions),
+            "services": len(self._services),
+            "schemas": len(self._schemas),
+            "top_events": top_events,
+        }
+    
+    def check_for_leaks(self) -> list:
+        """
+        Check for potential subscription leaks.
+        
+        Returns:
+            List of warning messages, empty if no leaks detected
+        """
+        warnings = []
+        stats = self.get_stats()
+        
+        # Check total
+        if stats["total_subscriptions"] > self.TOTAL_SUBSCRIPTION_WARN:
+            warnings.append(
+                f"⚠️ High subscription count: {stats['total_subscriptions']} "
+                f"(threshold: {self.TOTAL_SUBSCRIPTION_WARN})"
+            )
+        
+        # Check per-event
+        for event_type, count in stats["top_events"]:
+            if count > self.SUBSCRIPTION_WARN_THRESHOLD:
+                warnings.append(
+                    f"⚠️ Possible leak on '{event_type}': {count} subscribers "
+                    f"(threshold: {self.SUBSCRIPTION_WARN_THRESHOLD})"
+                )
+        
+        return warnings
+    
+    def log_stats(self):
+        """Log current EventBus statistics."""
+        stats = self.get_stats()
+        logger.info(
+            f"📊 EventBus Stats: "
+            f"{stats['total_subscriptions']} subs, "
+            f"{stats['event_types']} events, "
+            f"{stats['services']} services"
+        )
+        
+        # Check for leaks
+        warnings = self.check_for_leaks()
+        for w in warnings:
+            logger.warning(w)
 
 
 # Global singleton (initialized in main.py)
@@ -272,6 +405,10 @@ def get_event_bus() -> EventBus:
 def init_event_bus() -> EventBus:
     """Initialize and return the global EventBus."""
     global _bus_instance
-    _bus_instance = EventBus()
-    logger.info("馃殞 EventBus Initialized")
+    if _bus_instance is None:
+        _bus_instance = EventBus()
+        logger.info("⚡ EventBus Initialized")
     return _bus_instance
+
+# Export Singleton
+bus = get_event_bus()

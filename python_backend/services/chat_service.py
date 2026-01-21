@@ -72,40 +72,53 @@ class ChatService:
         
         if user_input:
             is_server_side = True
-            # 1. RAG Retrieval
-            rag_context = long_term_memory # Fallback to arg if provided
-            if not rag_context and services.surreal_system:
+            # [Optimization] Parallelize Context & System Prompt Retrieval
+            # 1. Prepare Tasks
+            rag_task = None
+            sys_prompt_task = soul.get_system_prompt({"user_name": user_name})
+            
+            # RAG Task (if no override provided)
+            # [Refactor] Use get_memory() accessor
+            if not long_term_memory:
                 try:
-                    # [HOTFIX] Ensure Embedding Model is loaded & generate vector
-                    if not hasattr(llm_manager, "embedding_model") or llm_manager.embedding_model is None:
-                         # Lazy load via model_manager (Global import to avoid circular dep?)
-                         from model_manager import model_manager
-                         model_path = model_manager.ensure_embedding_model("all-MiniLM-L6-v2") # Standardize this later
-                         llm_manager.embedding_model = model_manager.load_embedding_model(str(model_path))
-
-                    vector = None
-                    if llm_manager.embedding_model:
-                         vector = llm_manager.embedding_model.encode(user_input).tolist()
-
-                    # Try hybrid search first
-                    if vector:
-                        results = await services.surreal_system.search_hybrid(
-                            query=user_input, 
-                            vector=vector,  
-                            limit=3, 
-                            character_id=character_id
-                        )
-                        if results:
-                            rag_context = "\n".join([r['content'] for r in results])
-                    else:
-                        logger.warning("RAG Skipped: No embedding model available.")
-
+                    memory_svc = services.get_memory()
+                    rag_task = memory_svc.retrieve_context(
+                        query=user_input, 
+                        character_id=character_id
+                    )
                 except Exception as e:
-                    logger.warning(f"RAG Search failed: {e}")
+                    # If memory service not init, skip
+                    pass
 
-            # 2. Build Prompt (System + Context + History + User)
+            # 2. Execute Parallel
+            # We await system prompt + RAG (if exists)
+            tasks = [sys_prompt_task]
+            if rag_task:
+                 tasks.append(rag_task)
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # 3. Unpack
+            system_prompt_content = ""
+            rag_context = long_term_memory
+
+            # Sys Prompt Result
+            if isinstance(results[0], Exception):
+                 logger.error(f"System Prompt Failed: {results[0]}")
+                 system_prompt_content = "You are a helpful assistant."
+            else:
+                 system_prompt_content = results[0]
+
+            # RAG Result
+            if rag_task:
+                 if isinstance(results[1], Exception):
+                      logger.warning(f"RAG Search failed: {results[1]}")
+                 else:
+                      rag_context = results[1]
+
+            # 4. Construct Messages
             # A. System
-            final_messages.append({"role": "system", "content": soul.get_system_prompt({"user_name": user_name})})
+            final_messages.append({"role": "system", "content": system_prompt_content})
             
             # B. Context
             if rag_context:
@@ -152,7 +165,7 @@ class ChatService:
             
         else:
             # [Legacy Mode] Client Managed
-            system_prompt = soul.get_system_prompt(user_context={"user_name": user_name})
+            system_prompt = await soul.get_system_prompt(user_context={"user_name": user_name})
             
             # Check for existing system prompt
             has_system = False
@@ -173,7 +186,7 @@ class ChatService:
         logger.info(f"[Chat] Streaming with {model_name} (Temp: {params.get('temperature')})")
         
         try:
-            # 4. Stream
+            # 4. Stream (With Line Buffering)
             # Driver expects: messages, model, **kwargs
             async_gen = await driver.chat_completion(
                 final_messages,
@@ -182,10 +195,47 @@ class ChatService:
                 **params
             )
             
+            buffer = ""
             async for chunk in async_gen:
                 if is_server_side:
                     full_response += chunk
-                yield chunk
+                
+                buffer += chunk
+                
+                # Check for yield triggers
+                while True:
+                    # Delimiters: \n, . , ? , ! 
+                    # Note: We include space after punctuation to avoid breaking "Mr. Smith" (heuristic imperfect but better)
+                    delimiters = [
+                        (buffer.find("\n"), 1), 
+                        (buffer.find(". "), 2), 
+                        (buffer.find("? "), 2), 
+                        (buffer.find("! "), 2),
+                        (buffer.find(".\n"), 2) 
+                    ]
+                    # Filter not found (-1)
+                    valid = [(idx, length) for idx, length in delimiters if idx != -1]
+                    
+                    if not valid:
+                        break
+                        
+                    # Find first occurrence
+                    split_idx, split_len = min(valid, key=lambda x: x[0])
+                    cut_point = split_idx + split_len
+                    
+                    to_yield = buffer[:cut_point]
+                    buffer = buffer[cut_point:]
+                    yield to_yield
+                
+                # Safety Valve (Latency vs Buffer Size)
+                # If buffer gets too long without punctuation, force yield to prevent lag
+                if len(buffer) > 50:
+                    yield buffer
+                    buffer = ""
+
+            # Yield remaining
+            if buffer:
+                yield buffer
             
             # Update History
             if is_server_side:

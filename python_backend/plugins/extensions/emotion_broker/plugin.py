@@ -54,7 +54,7 @@ class EmotionBrokerPlugin(BaseSystemPlugin):
         if hasattr(self.context, 'bus'):
             self.context.bus.subscribe(EventType.BRAIN_RESPONSE, self.handle_brain_response)
             # Also listen for response end to flush buffer
-            self.context.bus.subscribe("brain_response_end", self.handle_response_end)
+            self.context.bus.subscribe(EventType.BRAIN_RESPONSE_END, self.handle_response_end)
         
         logger.info("馃幁 Emotion Broker Online - Single Source of Truth for Emotions")
 
@@ -90,7 +90,9 @@ class EmotionBrokerPlugin(BaseSystemPlugin):
             # Only broadcast if changed
             if new_emotion != self.current_emotion:
                 self.current_emotion = new_emotion
-                await self._broadcast_emotion(new_emotion, event.session_id)
+                # Get session_id from packet data, not from event directly
+                session_id = getattr(packet, 'session_id', 0) if packet else 0
+                await self._broadcast_emotion(new_emotion, session_id)
             
             # Clear buffer after successful match to avoid re-triggering
             self.token_buffer = ""
@@ -107,12 +109,13 @@ class EmotionBrokerPlugin(BaseSystemPlugin):
         """
         logger.info(f"鉁?Emotion Changed: {emotion}")
         
-        await self.context.bus.emit(EventPacket(
-            session_id=session_id,
-            type="emotion:changed",
+        packet = EventPacket(
+            type=EventType.EMOTION_CHANGED,
             source=self.id,
             payload={
                 "emotion": emotion,
-                "timestamp": __import__("time").time()
+                "timestamp": __import__("time").time(),
+                "session_id": session_id # Include in payload instead of packet
             }
-        ))
+        )
+        await self.context.bus.emit(packet.type, packet)

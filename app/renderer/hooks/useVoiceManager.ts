@@ -9,7 +9,38 @@ export interface WhisperModelInfo {
     download_status: "idle" | "downloading" | "completed" | "failed";
 }
 
-export const useVoiceManager = (isActive: boolean) => {
+export interface VoiceManagerData {
+    whisperModels: WhisperModelInfo[];
+    currentWhisperModel: string;
+    loadingStatus: string;
+    sttEngineType: string;
+    audioDevices: { index: number; name: string; channels: number }[];
+    currentAudioDevice: string | null;
+    edgeVoices: { name: string; gender: string }[];
+    gptVoices: { name: string; gender: string }[];
+    activeTtsEngines: string[];
+    ttsPlugins: any[];
+    voiceprintEnabled: boolean;
+    voiceprintThreshold: number;
+    voiceprintProfile: string;
+    voiceprintStatus: string;
+    voiceprintLoaded: boolean; // ⚡ New Boolean State
+    vadStartThreshold: number;
+    vadEndThreshold: number;
+    handleSttModelChange: (newModel: string) => Promise<void>;
+    handleEngineChange: (newEngine: string) => Promise<void>;
+    handleAudioDeviceChange: (deviceName: string) => Promise<void>;
+    handleVoiceprintToggle: (enabled: boolean) => Promise<void>;
+    handleVoiceprintThresholdChange: (val: number) => Promise<void>;
+    handleVadChange: (
+        key: "speech_start_threshold" | "speech_end_threshold",
+        value: number,
+    ) => Promise<void>;
+    setVoiceprintProfile: (val: string) => void;
+    refreshVoiceData: () => Promise<void>;
+}
+
+export const useVoiceManager = (isActive: boolean): VoiceManagerData => {
     // STT / Whisper State
     const [whisperModels, setWhisperModels] = useState<WhisperModelInfo[]>([]);
     const [currentWhisperModel, setCurrentWhisperModel] = useState("base");
@@ -22,7 +53,7 @@ export const useVoiceManager = (isActive: boolean) => {
         { index: number; name: string; channels: number }[]
     >([]);
     const [currentAudioDevice, setCurrentAudioDevice] = useState<string | null>(
-        null
+        null,
     );
 
     // TTS Voices State
@@ -40,6 +71,7 @@ export const useVoiceManager = (isActive: boolean) => {
     const [voiceprintThreshold, setVoiceprintThreshold] = useState(0.6);
     const [voiceprintProfile, setVoiceprintProfile] = useState("default");
     const [voiceprintStatus, setVoiceprintStatus] = useState<string>("");
+    const [voiceprintLoaded, setVoiceprintLoaded] = useState(false); // ⚡ New
 
     // VAD State (Voice Activity Detection)
     const [vadStartThreshold, setVadStartThreshold] = useState(0.6);
@@ -107,7 +139,7 @@ export const useVoiceManager = (isActive: boolean) => {
             } catch (pluginErr) {
                 console.warn(
                     "Failed to fetch TTS plugins for schema",
-                    pluginErr
+                    pluginErr,
                 );
             }
         } catch (e) {
@@ -125,7 +157,7 @@ export const useVoiceManager = (isActive: boolean) => {
         // Edge TTS
         try {
             const res = await fetch(
-                `${API_CONFIG.TTS_BASE_URL}/tts/voices?engine=edge-tts`
+                `${API_CONFIG.TTS_BASE_URL}/tts/voices?engine=edge-tts`,
             );
             if (res.ok) {
                 const data = await res.json();
@@ -139,7 +171,7 @@ export const useVoiceManager = (isActive: boolean) => {
         // GPT-SoVITS
         try {
             const res = await fetch(
-                `${API_CONFIG.TTS_BASE_URL}/tts/voices?engine=gpt-sovits`
+                `${API_CONFIG.TTS_BASE_URL}/tts/voices?engine=gpt-sovits`,
             );
             if (res.ok) {
                 const data = await res.json();
@@ -152,20 +184,23 @@ export const useVoiceManager = (isActive: boolean) => {
     const fetchVoiceprintConfig = useCallback(async () => {
         try {
             const res = await fetch(
-                `${API_CONFIG.STT_BASE_URL}/voiceprint/status`
+                `${API_CONFIG.STT_BASE_URL}/voiceprint/status`,
             );
             if (res.ok) {
                 const data = await res.json();
                 setVoiceprintEnabled(data.enabled || false);
                 setVoiceprintThreshold(data.threshold || 0.6);
                 setVoiceprintProfile(data.profile || "default");
+
+                // ⚡ Robust Boolean + String
+                setVoiceprintLoaded(data.profile_loaded || false);
                 setVoiceprintStatus(
-                    data.profile_loaded ? "✓ 已加载声纹" : "⚠️ 未注册声纹"
+                    data.profile_loaded ? "✓ 已加载声纹" : "⚠️ 未注册声纹",
                 );
             }
 
             const statusRes = await fetch(
-                `${API_CONFIG.STT_BASE_URL}/audio/status`
+                `${API_CONFIG.STT_BASE_URL}/audio/status`,
             );
             if (statusRes.ok) {
                 const data = await statusRes.json();
@@ -235,9 +270,7 @@ export const useVoiceManager = (isActive: boolean) => {
             if (res.ok) {
                 setVoiceprintEnabled(enabled);
                 alert(
-                    `声纹验证已${
-                        enabled ? "启用" : "禁用"
-                    }\n请重启 stt_server.py 使配置生效`
+                    `声纹验证已${enabled ? "启用" : "禁用"}\n请重启 stt_server.py 使配置生效`,
                 );
             }
         } catch (e) {
@@ -264,7 +297,7 @@ export const useVoiceManager = (isActive: boolean) => {
 
     const handleVadChange = async (
         key: "speech_start_threshold" | "speech_end_threshold",
-        value: number
+        value: number,
     ) => {
         if (key === "speech_start_threshold") setVadStartThreshold(value);
         if (key === "speech_end_threshold") setVadEndThreshold(value);
@@ -311,6 +344,7 @@ export const useVoiceManager = (isActive: boolean) => {
         voiceprintThreshold,
         voiceprintProfile,
         voiceprintStatus,
+        voiceprintLoaded, // ⚡ Added
         vadStartThreshold,
         vadEndThreshold,
 

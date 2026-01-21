@@ -2,8 +2,17 @@ id: driver.stt.sensevoice
 name: SenseVoice Driver
 version: 1.0.0
 description: Accurate Multilingual STT (Sherpa-ONNX)
-entrypoint: none
+entrypoint: drivers.stt.sense_voice_driver:SenseVoiceDriver
 category: driver
 group_id: stt
 group_exclusive: true
 tags: [stt, local, multilingual]
+runtime_target: stt_server
+
+# [Capability Contract]
+provides:
+  - type: stt.provider
+    attributes:
+      model: sensevoice
+      language: multilingual
+      offline: true

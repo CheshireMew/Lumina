@@ -78,15 +78,6 @@ class ConsolidateRequest(BaseModel):
         populate_by_name = True
 
 
-class DreamRequest(BaseModel):
-    """Deep Dreaming Request"""
-    user_id: str = "user"
-    character_id: Optional[str] = None
-    user_name: str = "User"
-    character_name: str = Field(default="AI", alias="char_name")
-
-    class Config:
-        populate_by_name = True
 
 
 class UpdateIdentityRequest(BaseModel):

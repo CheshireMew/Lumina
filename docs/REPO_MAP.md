@@ -36,7 +36,7 @@
 ### 系统配置 (config/)
 
 - **`llm_registry.json`**: **LLM 路由注册表**。定义了多个 LLM 供应方（如 Pollinations, OpenAI）并将它们路由到不同的业务功能（对话、记忆摘要、前瞻思考）。
-- **`ports.json`**: **端口定义**。统一规定后端各微服务（Memory, STT, TTS, SurrealDB）的监听端口及主机地址。
+- **`app_config.py` (in backend)**: **主配置逻辑**。统一管理端口、路径和 Pydantic 校验。
 
 ---
 
@@ -110,15 +110,16 @@ Lumina 的后端采用分层架构，集成了 FastAPI 服务、高性能语音�
   - **`container.py`**: **依赖注入容器**。中央服务注册表，控制所有核心组件的实例化与生存期。
   - **`soul/`**: **灵魂引擎逻辑**。定义角色的人格、短期情绪波动以及对话风格偏好。
   - **`chat/`**: **对话流水线**。包含基于 Pipes & Filters 模式的 `unified_chat.py` 逻辑。
+  - **`soul_service.py`**: **角色状态中枢**。统筹人设更新、长期记忆演化以及情感决策逻辑（替代了旧的 SoulManager）。
 - **`llm/`**: **模型驱动层**。屏蔽 OpenAI、DeepSeek、Pollinations 等不同 API 的协议差异。
 - **`memory/`**: **记忆系统**。实现向量存储 (Vector DB) 与知识图谱 (Knowledge Graph) 的混合检索逻辑。
-- **`soul_manager.py`**: **角色状态中枢**。统筹人设更新、长期记忆演化以及情感决策逻辑。
 
 ### 路由与配置 (routers/ & config)
 
 - **`routers/`**:
   - **`gateway.py`**: WebSocket 中央网关，负责向渲染进程分发实时语音、动画及状态包。
   - **`llm_mgmt.py`**: 运行时模型配置管理，用于动态切换 AI 供应商。
+  - **`vision.py`**: 视觉分析路由，处理图片分析与模型加载。
 - **`app_config.py`**: **强类型配置中心**。基于 Pydantic 解析 `.env` 及本地 JSON 设置。
 - **`logger_setup.py`**: 实现多进程、多服务的日志收集与 RequestID 链路追踪。
 

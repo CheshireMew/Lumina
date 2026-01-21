@@ -9,100 +9,106 @@ import { useRef, useCallback, useState } from "react";
  * Extracted from App.tsx to improve modularity.
  */
 export function useChatStream() {
-  const [displayMessage, setDisplayMessage] = useState<string>("");
-  const [reasoningContent, setReasoningContent] = useState<string>("");
+    const [displayMessage, setDisplayMessage] = useState<string>("");
+    const [reasoningContent, setReasoningContent] = useState<string>("");
 
-  const fullRawResponseRef = useRef<string>("");
-  const emotionBufferRef = useRef<string>("");
-  const reasoningBufferRef = useRef<string>("");
+    const fullRawResponseRef = useRef<string>("");
+    const emotionBufferRef = useRef<string>("");
+    const reasoningBufferRef = useRef<string>("");
 
-  /**
-   * Reset all buffers at the start of a new stream.
-   */
-  const reset = useCallback(() => {
-    fullRawResponseRef.current = "";
-    emotionBufferRef.current = "";
-    reasoningBufferRef.current = "";
-    setDisplayMessage("");
-    setReasoningContent("");
-  }, []);
+    /**
+     * Reset all buffers at the start of a new stream.
+     */
+    const reset = useCallback(() => {
+        console.log("[useChatStream] 🔄 RESET called - clearing all buffers");
+        fullRawResponseRef.current = "";
+        emotionBufferRef.current = "";
+        reasoningBufferRef.current = "";
+        setDisplayMessage("");
+        setReasoningContent("");
+    }, []);
 
-  /**
-   * Process an incoming token.
-   * @param token The token received from the stream
-   * @param type 'content' for main response, 'reasoning' for thinking content
-   * @param onEmotionDetected Callback when an emotion tag is detected
-   */
-  const processToken = useCallback(
-    (
-      token: string,
-      type: "content" | "reasoning" = "content",
-      onEmotionDetected?: (emotion: string) => void
-    ) => {
-      if (type === "reasoning") {
-        reasoningBufferRef.current += token;
-        setReasoningContent(reasoningBufferRef.current);
-        return;
-      }
+    /**
+     * Process an incoming token.
+     * @param token The token received from the stream
+     * @param type 'content' for main response, 'reasoning' for thinking content
+     * @param onEmotionDetected Callback when an emotion tag is detected
+     */
+    const processToken = useCallback(
+        (
+            token: string,
+            type: "content" | "reasoning" = "content",
+            onEmotionDetected?: (emotion: string) => void,
+        ) => {
+            if (type === "reasoning") {
+                reasoningBufferRef.current += token;
+                setReasoningContent(reasoningBufferRef.current);
+                return;
+            }
 
-      fullRawResponseRef.current += token;
-      emotionBufferRef.current += token;
+            // [DEBUG] Log every token received
+            console.log(
+                `[useChatStream] Token received: "${token.slice(0, 20)}..." | Buffer before: ${fullRawResponseRef.current.length} chars`,
+            );
 
-      // Emotion Detection
-      if (token.includes(")") || token.includes("]")) {
-        // Check for emotion tags like [joy] or (happy)
-        const emotionMatch = emotionBufferRef.current.match(
-          /[\[\(](joy|happy|sad|angry|surprised|neutral|thinking)[\]\)]/i
-        );
-        if (emotionMatch && onEmotionDetected) {
-          onEmotionDetected(emotionMatch[1].toLowerCase());
-          emotionBufferRef.current = "";
-        }
+            fullRawResponseRef.current += token;
+            emotionBufferRef.current += token;
 
-        // Keep buffer from growing too large
-        if (emotionBufferRef.current.length > 50) {
-          emotionBufferRef.current = emotionBufferRef.current.slice(-20);
-        }
-      }
+            // Emotion Detection
+            if (token.includes(")") || token.includes("]")) {
+                // Check for emotion tags like [joy] or (happy)
+                const emotionMatch = emotionBufferRef.current.match(
+                    /[\[\(](joy|happy|sad|angry|surprised|neutral|thinking)[\]\)]/i,
+                );
+                if (emotionMatch && onEmotionDetected) {
+                    onEmotionDetected(emotionMatch[1].toLowerCase());
+                    emotionBufferRef.current = "";
+                }
 
-      // Display Processing (cleanup tags)
-      let displayUpdate = fullRawResponseRef.current;
-      displayUpdate = displayUpdate
-        .replace(/\[[^\]]*\]/g, "") // Remove [tags]
-        .replace(/\([^)]*\)/g, "") // Remove (tags)
-        .replace(/（[^）]*）/g, "") // Remove （中文tags）
-        .replace(/&/g, ""); // Remove &
+                // Keep buffer from growing too large
+                if (emotionBufferRef.current.length > 50) {
+                    emotionBufferRef.current =
+                        emotionBufferRef.current.slice(-20);
+                }
+            }
 
-      setDisplayMessage(displayUpdate);
-    },
-    []
-  );
+            // Display Processing (cleanup tags)
+            let displayUpdate = fullRawResponseRef.current;
 
-  /**
-   * Get the final cleaned content for saving to history.
-   */
-  const getFinalContent = useCallback(() => {
-    return fullRawResponseRef.current
-      .replace(/\[[^\]]*\]/g, "")
-      .replace(/\([^)]*\)/g, "")
-      .replace(/（[^）]*）/g, "")
-      .replace(/&/g, "")
-      .trim();
-  }, []);
+            // Strip emotion tags like [happy], [sad], [neutral] etc.
+            displayUpdate = displayUpdate.replace(/\[[^\]]+\]\n?/g, "");
 
-  /**
-   * Get the raw response (with tags intact).
-   */
-  const getRawResponse = useCallback(() => {
-    return fullRawResponseRef.current;
-  }, []);
+            // Clean specific system tokens if any (e.g. <|...|>)
+            displayUpdate = displayUpdate.replace(/<\|.*?\|>/g, "");
 
-  return {
-    displayMessage,
-    reasoningContent,
-    reset,
-    processToken,
-    getFinalContent,
-    getRawResponse,
-  };
+            // Strip leading whitespace that might remain after tag removal
+            displayUpdate = displayUpdate.trimStart();
+
+            setDisplayMessage(displayUpdate);
+        },
+        [],
+    );
+
+    /**
+     * Get the final cleaned content for saving to history.
+     */
+    const getFinalContent = useCallback(() => {
+        return fullRawResponseRef.current.replace(/<\|.*?\|>/g, "").trim();
+    }, []);
+
+    /**
+     * Get the raw response (with tags intact).
+     */
+    const getRawResponse = useCallback(() => {
+        return fullRawResponseRef.current;
+    }, []);
+
+    return {
+        displayMessage,
+        reasoningContent,
+        reset,
+        processToken,
+        getFinalContent,
+        getRawResponse,
+    };
 }

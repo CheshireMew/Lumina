@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 from typing import Dict, Any
+import json
 from services.mcp.client import MCPClient
 
 logger = logging.getLogger("SandboxHost")
@@ -21,7 +22,8 @@ class SandboxHost(MCPClient):
         """Spawns the worker or connects via SSE."""
         if self.transport == "sse":
             await super().start()
-            await self.send_initialize({"name": "Lumina Sandbox Host"})
+            # [FIX] send_initialize removed (handled by client handshake or non-existent)
+            # await self.send_initialize({"name": "Lumina Sandbox Host"})
             return
             
         logger.info(f"Starting Sandbox Worker via Stdio for: {self.plugin_path}")
@@ -35,9 +37,24 @@ class SandboxHost(MCPClient):
         
         await super().start(cmd=cmd)
         await self.send_initialize({"name": "Lumina Sandbox Host"})
-        logger.info("鉁?Sandbox Worker Ready")
+        logger.info("✅ Sandbox Worker Ready")
 
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any] = {}) -> Any:
+    async def send_initialize(self, client_info: Dict[str, Any]):
+        """
+        Sends JSON-RPC initialize request.
+        """
+        params = {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": client_info
+        }
+        # Use generic call_tool logic which wraps in json-rpc request
+        # 'initialize' is just a method in MCP
+        return await self.call_tool("initialize", params)
+
+    async def call_tool(self, tool_name: str, arguments: Dict[str, Any] = None) -> Any:
+        if arguments is None:
+            arguments = {}
         try:
             # Delegate to generic client
             result = await super().call_tool(tool_name, arguments)

@@ -19,20 +19,19 @@ interface ServiceConfig {
 
 /**
  * Python Backend Service Manager
- * Manages multiple Python backend processes (STT, TTS, Memory) AND SurrealDB
+ * Manages multiple Python backend processes (Memory/Main)
  */
 export class PythonSTTService {
     private services: ServiceConfig[] = [
-        {
-            name: "surreal",
-            port: 0, // [Phase 19] Dynamic Load
-            type: "binary",
-        },
+        // [Removed] SurrealDB - replaced by Postgres
+        // { name: "surreal", port: 0, type: "binary" },
         { name: "memory", port: 0, type: "python" }, // Will load 8010
-        { name: "stt", port: 0, type: "python" }, // Will load 8765
-        { name: "tts", port: 0, type: "python" }, // Will load 8766
+        // [Architecture 4.0] On-Demand Orchestration: STT/TTS spawned by Main Process
+        // { name: "stt", port: 0, type: "python" },
+        // { name: "tts", port: 0, type: "python" },
     ];
 
+    private ports: Record<string, number> = {};
     private host: string = "127.0.0.1";
     private isShuttingDown: boolean = false;
 
@@ -45,14 +44,9 @@ export class PythonSTTService {
         // Load Dynamic Ports
         this.loadPortsConfig();
 
-        // Start SurrealDB first
-        const surreal = this.services.find((s) => s.name === "surreal")!;
-        await this.startService(surreal);
-
-        // Start others concurrently
-        const others = this.services.filter((s) => s.name !== "surreal");
-        const startPromises = others.map((service) =>
-            this.startService(service)
+        // Start all services concurrently
+        const startPromises = this.services.map((service) =>
+            this.startService(service),
         );
         await Promise.all(startPromises);
 
@@ -67,13 +61,13 @@ export class PythonSTTService {
         if (isPortOpen) {
             if (isHealthy) {
                 console.log(
-                    `[BackendManager] Service ${service.name} is already active (Port ${service.port}). Skipping spawn.`
+                    `[BackendManager] Service ${service.name} is already active (Port ${service.port}). Skipping spawn.`,
                 );
                 service.ready = true;
                 return;
             } else {
                 console.warn(
-                    `[BackendManager] ⚠️ Port ${service.port} (${service.name}) is occupied but unresponsive to /health. Skipping spawn to avoid conflict.`
+                    `[BackendManager] ⚠️ Port ${service.port} (${service.name}) is occupied but unresponsive to /health. Skipping spawn to avoid conflict.`,
                 );
                 // We assume it's running but stuck, or another app. We shouldn't conflict.
                 service.ready = false;
@@ -83,7 +77,7 @@ export class PythonSTTService {
 
         if (service.process) {
             console.log(
-                `[BackendManager] Service ${service.name} already running internally`
+                `[BackendManager] Service ${service.name} already running internally`,
             );
             return;
         }
@@ -99,7 +93,7 @@ export class PythonSTTService {
                 executable = path.join(
                     process.resourcesPath,
                     "bin",
-                    "surreal.exe"
+                    "surreal.exe",
                 );
                 const dbPath = path.join(app.getPath("userData"), "lumina.db");
                 // Ensure directory exists? userData always exists.
@@ -122,7 +116,7 @@ export class PythonSTTService {
                     "[BackendManager] Launching packaged SurrealDB:",
                     executable,
                     "DB:",
-                    dbPath
+                    dbPath,
                 );
             } else {
                 // Production: Launch compiled executable
@@ -130,13 +124,13 @@ export class PythonSTTService {
                     process.resourcesPath,
                     "bin",
                     "lumina_backend",
-                    "lumina_backend.exe"
+                    "lumina_backend.exe",
                 );
                 args = [service.name];
                 cwd = path.join(process.resourcesPath, "bin", "lumina_backend");
                 console.log(
                     `[BackendManager] Launching packaged ${service.name}:`,
-                    executable
+                    executable,
                 );
             }
         } else {
@@ -148,7 +142,7 @@ export class PythonSTTService {
                 // Current policy: "Detached Mode" is preferred.
                 // If checkHealth failed above, it means it's NOT running.
                 console.warn(
-                    '[BackendManager] SurrealDB is NOT running on port 8001. Please start it manually: "surreal start ..."'
+                    '[BackendManager] SurrealDB is NOT running on port 8001. Please start it manually: "surreal start ..."',
                 );
                 // We interrupt startup because app needs it?
                 // Or we try to spawn 'surreal' from PATH?
@@ -171,14 +165,14 @@ export class PythonSTTService {
                 ];
                 cwd = process.cwd();
                 console.log(
-                    "[BackendManager] Attempting to auto-start SurrealDB in Dev..."
+                    "[BackendManager] Attempting to auto-start SurrealDB in Dev...",
                 );
             } else {
                 const projectRoot = process.cwd();
                 const launcherScript = path.join(
                     projectRoot,
                     "python_backend",
-                    "backend_launcher.py"
+                    "backend_launcher.py",
                 );
                 // ⚡ Config: Use system python in dev mode, or allow ENV override
                 executable = process.env.PYTHON_PATH || "python";
@@ -189,7 +183,7 @@ export class PythonSTTService {
                     executable,
                     args,
                     "CWD:",
-                    cwd
+                    cwd,
                 );
             }
         }
@@ -202,8 +196,22 @@ export class PythonSTTService {
             env: {
                 ...process.env,
                 LITE_MODE: app.isPackaged ? "true" : "false",
-                LUMINA_DATA_PATH: app.getPath("userData"),
+                // [Architecture Repair] Unify Data Root
+                // Dev: Use local Lumina_Data (Portable) to match Python defaults
+                // Prod: Use AppData (Standard)
+                LUMINA_DATA_PATH: app.isPackaged
+                    ? app.getPath("userData")
+                    : path.join(process.cwd(), "Lumina_Data"),
                 LUMINA_ENV: app.isPackaged ? "production" : "development",
+
+                // [Refactor] Ports Configuration injection
+                // Forces Python backend to respect Electron's assigned ports
+                LUMINA_MEMORY_PORT: (this.ports.memory_port || 8010).toString(),
+                LUMINA_STT_PORT: (this.ports.stt_port || 8010).toString(),
+                LUMINA_TTS_PORT: (this.ports.tts_port || 8766).toString(),
+                LUMINA_SURREAL_PORT: (
+                    this.ports.surreal_port || 8001
+                ).toString(),
             },
         });
 
@@ -223,7 +231,7 @@ export class PythonSTTService {
             console.error(`[${service.name}] Failed to spawn:`, err);
             if (service.name === "surreal" && !app.isPackaged) {
                 console.error(
-                    "[BackendManager] Please install SurrealDB or ensure it is in PATH, or start it manually."
+                    "[BackendManager] Please install SurrealDB or ensure it is in PATH, or start it manually.",
                 );
             }
         });
@@ -250,17 +258,17 @@ export class PythonSTTService {
 
                 if (service.restartCount > 5) {
                     console.error(
-                        `[${service.name}] 🚨 Crashing too frequently (${service.restartCount} times in <60s). Giving up.`
+                        `[${service.name}] 🚨 Crashing too frequently (${service.restartCount} times in <60s). Giving up.`,
                     );
                     return;
                 }
 
                 const delay = Math.min(
                     1000 * Math.pow(2, service.restartCount),
-                    30000
+                    30000,
                 );
                 console.log(
-                    `[${service.name}] 🔄 Auto-restarting in ${delay}ms... (Attempt ${service.restartCount})`
+                    `[${service.name}] 🔄 Auto-restarting in ${delay}ms... (Attempt ${service.restartCount})`,
                 );
 
                 setTimeout(() => {
@@ -268,8 +276,8 @@ export class PythonSTTService {
                         this.startService(service).catch((e) =>
                             console.error(
                                 `[${service.name}] Restart failed:`,
-                                e
-                            )
+                                e,
+                            ),
                         );
                 }, delay);
             }
@@ -282,8 +290,11 @@ export class PythonSTTService {
     private async checkServiceHealth(service: ServiceConfig): Promise<boolean> {
         try {
             const url = `http://${this.host}:${service.port}/health`;
-            await axios.get(url, { timeout: 3000, validateStatus: () => true });
-            return true;
+            const response = await axios.get(url, {
+                timeout: 3000,
+                validateStatus: () => true,
+            });
+            return response.status === 200;
         } catch (error) {
             return false;
         }
@@ -315,7 +326,7 @@ export class PythonSTTService {
 
     private async waitForServiceReady(
         service: ServiceConfig,
-        maxRetries: number = 30
+        maxRetries: number = 30,
     ): Promise<void> {
         for (let i = 0; i < maxRetries; i++) {
             if (await this.checkServiceHealth(service)) {
@@ -346,8 +357,10 @@ export class PythonSTTService {
     }
 
     public getWebSocketURL(): string {
-        const stt = this.services.find((s) => s.name === "stt");
-        const port = stt ? stt.port : 8765;
+        // [Refactor] Use loaded config port or default to 8010 (Main)
+        // const stt = this.services.find((s) => s.name === "stt");
+        // const port = stt ? stt.port : 8765;
+        const port = this.ports.stt_port || 8010;
         return `ws://${this.host}:${port}/ws/stt`;
     }
 
@@ -356,73 +369,169 @@ export class PythonSTTService {
         this.services.forEach((s) => {
             ports[s.name] = s.port;
         });
+
+        // [Fix] Ensure STT/TTS are returned even if not in active services list
+        // This ensures the Frontend gets the correct config even if we don't manage the process here.
+        if (!ports.stt && this.ports["stt_port"])
+            ports.stt = this.ports["stt_port"];
+        if (!ports.tts && this.ports["tts_port"])
+            ports.tts = this.ports["tts_port"];
+
         return ports;
+    }
+
+    /**
+     * [Architecture 7.0] API-based Network Discovery
+     * Fetches port configuration from running backend.
+     * Call this AFTER backend is healthy to get authoritative ports.
+     */
+    public async refreshPortsFromAPI(): Promise<boolean> {
+        try {
+            const basePort = this.ports.memory_port || 8010;
+            const response = await axios.get(
+                `http://${this.host}:${basePort}/network`,
+                { timeout: 3000 },
+            );
+
+            if (response.data) {
+                const apiPorts = response.data;
+                this.ports = {
+                    ...this.ports,
+                    memory_port: apiPorts.memory_port,
+                    stt_port: apiPorts.stt_port,
+                    tts_port: apiPorts.tts_port,
+                };
+
+                // Update service configs
+                this.services.forEach((s) => {
+                    if (s.name === "memory") s.port = apiPorts.memory_port;
+                });
+
+                console.log(
+                    "[BackendManager] ✅ Ports refreshed from API:",
+                    this.ports,
+                );
+                return true;
+            }
+        } catch (e) {
+            console.warn(
+                "[BackendManager] API port refresh failed, using file config:",
+                e,
+            );
+        }
+        return false;
     }
 
     private loadPortsConfig() {
         try {
-            // In Dev, config is at config/ports.json relative to CWD
-            // In Prod, usually resources/config/ports.json or user data
-            let configPath = path.join(process.cwd(), "config", "ports.json");
+            // [Deployment Fix]
+            // Strategy:
+            // 1. Dev: Use local config/ports.json
+            // 2. Prod: Use 'userData/config/ports.json' (Writable)
+            //    - If missing, copy from 'resources/config/ports.json' (Template)
+            //    - If template missing, use defaults.
 
-            if (!fs.existsSync(configPath) && app.isPackaged) {
-                // If packaged and not in CWD, check resources
-                // But strict config means we should look in UserData if we want it writable,
-                // or resources if read-only. Ports usually static in prod unless multiple instances.
-                // Let's stick to reading from resources/config if packaged.
+            let configPath: string;
+
+            if (!app.isPackaged) {
+                // Development
+                configPath = path.join(process.cwd(), "config", "ports.json");
+            } else {
+                // Production -> UserData
                 configPath = path.join(
-                    process.resourcesPath,
+                    app.getPath("userData"),
                     "config",
-                    "ports.json"
+                    "ports.json",
                 );
+
+                // If UserData config doesn't exist, try to copy from Template
+                if (!fs.existsSync(configPath)) {
+                    const templatePath = path.join(
+                        process.resourcesPath,
+                        "config",
+                        "ports.json",
+                    );
+                    if (fs.existsSync(templatePath)) {
+                        try {
+                            const dir = path.dirname(configPath);
+                            if (!fs.existsSync(dir))
+                                fs.mkdirSync(dir, { recursive: true });
+                            fs.copyFileSync(templatePath, configPath);
+                            console.log(
+                                "[BackendManager] Initialized ports.json from template.",
+                            );
+                        } catch (e) {
+                            console.error("Failed to copy ports template:", e);
+                        }
+                    }
+                }
             }
 
-            // [Phase 19] Single Source of Truth: Auto-generate if missing
-            if (!fs.existsSync(configPath)) {
+            // [Persistence] Ensure Config Exists (Self-Healing)
+            if (fs.existsSync(configPath)) {
+                try {
+                    const data = JSON.parse(
+                        fs.readFileSync(configPath, "utf-8"),
+                    );
+                    this.ports = { ...this.ports, ...data };
+                    console.log(
+                        "[BackendManager] Loaded ports from:",
+                        configPath,
+                    );
+                } catch (e) {
+                    console.error(
+                        "[BackendManager] Failed to parse ports.json:",
+                        e,
+                    );
+                }
+            } else {
                 console.log(
-                    "[BackendManager] ports.json not found. Generating defaults..."
+                    "[BackendManager] ports.json not found. Generating defaults...",
                 );
                 const defaults = {
                     surreal_port: 8001,
                     memory_port: 8010,
-                    stt_port: 8765,
+                    stt_port: 8010, // [Fix] STT Integrated into Main
                     tts_port: 8766,
                 };
-                // Ensure dir exists
-                const dir = path.dirname(configPath);
-                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-                fs.writeFileSync(configPath, JSON.stringify(defaults, null, 2));
-            }
+                try {
+                    // Ensure dir exists
+                    const dir = path.dirname(configPath);
+                    if (!fs.existsSync(dir))
+                        fs.mkdirSync(dir, { recursive: true });
 
-            // Load strictly
-            if (fs.existsSync(configPath)) {
-                const data = fs.readFileSync(configPath, "utf-8");
-                const ports = JSON.parse(data);
+                    fs.writeFileSync(
+                        configPath,
+                        JSON.stringify(defaults, null, 2),
+                    );
+                    console.log("[BackendManager] Generated ports.json");
+                } catch (e) {
+                    console.error("Failed to write ports.json defaults:", e);
+                }
 
-                const updatePort = (name: string, port: number) => {
-                    const svc = this.services.find((s) => s.name === name);
-                    if (svc && port) svc.port = port;
-                };
-
-                if (ports.memory_port) updatePort("memory", ports.memory_port);
-                if (ports.stt_port) updatePort("stt", ports.stt_port);
-                if (ports.tts_port) updatePort("tts", ports.tts_port);
-                if (ports.surreal_port)
-                    updatePort("surreal", ports.surreal_port);
-
-                console.log("[BackendManager] Loaded dynamic ports:", ports);
+                this.ports = defaults;
             }
         } catch (e) {
-            console.error(
-                "[BackendManager] Failed to load/generate ports.json:",
-                e
-            );
-            // Fallback/Crash? For now log error.
-            // If ports are 0, services will fail to start or check health correctly.
-            // We can fallback to hardcoded safety net here if critical?
-            // But user asked for Strict.
+            console.error("Failed to load ports config:", e);
         }
+
+        // Update Service Objects from this.ports
+        const updatePort = (name: string, portKey: string) => {
+            const svc = this.services.find((s) => s.name === name);
+            const port = (this.ports as any)[portKey];
+            if (svc && port) svc.port = port;
+        };
+
+        updatePort("memory", "memory_port");
+        updatePort("stt", "stt_port");
+        updatePort("tts", "tts_port");
+        updatePort("surreal", "surreal_port");
+
+        console.log(
+            "[BackendManager] Services Configured:",
+            this.services.map((s) => `${s.name}:${s.port}`),
+        );
     }
 }
 

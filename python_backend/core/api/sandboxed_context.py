@@ -37,13 +37,14 @@ class SandboxedContext(LuminaContext):
         context.memory.write(...)  # Lacks "memory.write" permission
     """
     
-    def __init__(self, container: Any, event_bus=None, permissions: List[str] = None):
-        super().__init__(container, event_bus)
+    def __init__(self, container: Any, plugin_id: str, event_bus=None, permissions: List[str] = None, router_manager=None):
+        super().__init__(container, plugin_id, event_bus=event_bus, router_manager=router_manager)
         
-        # Combine default + requested permissions
-        self._permissions: Set[str] = set(DEFAULT_PERMISSIONS)
+        # Combine default + requested permissions (Ensure strings)
+        defaults = {p.value if hasattr(p, 'value') else str(p) for p in DEFAULT_PERMISSIONS}
+        self._permissions: Set[str] = defaults
         if permissions:
-            self._permissions.update(permissions)
+            self._permissions.update({p.value if hasattr(p, 'value') else str(p) for p in permissions})
         
         logger.debug(f"馃敀 SandboxedContext created with permissions: {self._permissions}")
     
@@ -59,6 +60,9 @@ class SandboxedContext(LuminaContext):
             PermissionError: If permission is not granted
         """
         if perm not in self._permissions:
+            # [Architecture 6.0] Audit Denial
+            self.audit("access_check", f"permission:{perm}", "denied", metadata={"reason": action})
+            
             raise PermissionError(
                 f"Plugin lacks '{perm}' permission required to {action}. "
                 f"Add '{perm}' to permissions in manifest.yaml."
@@ -93,8 +97,32 @@ class SandboxedContext(LuminaContext):
         self._check_permission(Permission.TICKER_SUBSCRIBE.value, "subscribe to ticker")
         return super().ticker
     
+    def find_capability(self, cap_type: str, **attributes) -> Optional[str]:
+        """Discovery API (requires plugin.discovery permission)."""
+        self._check_permission(Permission.PLUGIN_DISCOVERY.value, "find capability providers")
+        return super().find_capability(cap_type, **attributes)
+
+    def register_route_def(self, path: str, method: str, handler_name: str, handler: Any):
+        """Register API route (requires network.listen permission)."""
+        # [Security] Prevent arbitrary port/route exposure
+        self._check_permission(Permission.NETWORK_LISTEN.value, "register API route")
+        return super().register_route_def(path, method, handler_name, handler)
+
     # --- Permission-Gated Methods ---
     
+    def load_data(self, plugin_id: str) -> Dict:
+        """Loads plugin-specific JSON data (Strict Isolation)."""
+        if plugin_id != self.plugin_id:
+            # [Security] Prevent Cross-Plugin Data Access
+            self.audit("access_check", f"read_data:{plugin_id}", "denied", metadata={"reason": "cross-plugin access"})
+            raise PermissionError("Sandboxed plugins can only load their own data.")
+            
+        # Permission Check (Self-Data read doesn't technically need extra permission beyond default, 
+        # but let's require filesystem.read per spec if strictly interpreted? 
+        # Actually legacy 'filesystem.read' meant OWN data. So yes.)
+        self._check_permission(Permission.FILESYSTEM_READ.value, "read plugin data")
+        return super().load_data(plugin_id)
+
     def save_data(self, plugin_id: str, data: Dict):
         """Saves plugin-specific JSON data (requires filesystem.write)."""
         self._check_permission(Permission.FILESYSTEM_WRITE.value, "write plugin data")

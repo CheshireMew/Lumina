@@ -11,8 +11,10 @@ import time
 import logging
 from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
-from schemas.requests import AddMemoryRequest, SearchRequest, ConsolidateRequest, DreamRequest
+from schemas.requests import AddMemoryRequest, SearchRequest, ConsolidateRequest
+
 
 logger = logging.getLogger("MemoryRouter")
 
@@ -20,15 +22,15 @@ router = APIRouter(tags=["Memory"])
 
 
 def _get_surreal():
-    """Get SurrealDB from container"""
+    """Get SurrealDB from container (Refactored)"""
     from services.container import services
-    return services.surreal_system
+    return services.get_memory()
 
 
 def _get_soul():
     """Get SoulClient from container"""
     from services.container import services
-    return services.soul_client
+    return services.soul
 
 
 def _get_service(name: str):
@@ -43,7 +45,8 @@ async def add_memory(request: AddMemoryRequest):
     """Add memory to SurrealDB (Primary Storage)"""
     surreal_system = _get_surreal()
     soul_client = _get_soul()
-    hippocampus_service = _get_service("hippocampus_service")
+    # hippocampus_service = _get_service("hippocampus_service") # [Dead Code] Removed
+
     
     # [Refactor] Fallback for optional character_id
     character_id = request.character_id
@@ -122,9 +125,10 @@ async def add_memory(request: AddMemoryRequest):
              # Apply Energy Cost
              galgame_service.update_energy(-0.1)
         
-        # [Hippocampus Trigger]
-        if hippocampus_service:
-            await hippocampus_service.process_memories(batch_size=20)
+        # [Hippocampus Trigger] - Removed (Ghost Feature)
+        # if hippocampus_service:
+        #     await hippocampus_service.process_memories(batch_size=20)
+
 
         print(f"[API] ✅ Conversation logged: {log_id}")
         return {"status": "success", "id": str(log_id), "storage": "surreal"}
@@ -300,38 +304,49 @@ async def consolidate_history(request: ConsolidateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/dream_on_idle")
-async def dream_on_idle(request: DreamRequest):
-    """Trigger idle dreaming / consolidation"""
-    dreaming_service = _get_service("dreaming_service")
-    try:
-        print(f"[API] 🛌 Idle Dream Request for '{request.character_id}'")
-        
-        if not dreaming_service:
-             raise HTTPException(status_code=500, detail="DreamingService not initialized.")
+# [Dead Code] Dream Route Removed
+# @router.post("/dream_on_idle")
+# async def dream_on_idle(request: DreamRequest):
+#     """Trigger idle dreaming / consolidation"""
+#     dreaming_service = _get_service("dreaming_service")
+#     try:
+#         print(f"[API] 🛌 Idle Dream Request for '{request.character_id}'")
+#         
+#         if not dreaming_service:
+#              raise HTTPException(status_code=500, detail="DreamingService not initialized.")
+# 
+#         dreaming_service.wake_up(mode="deep")
+#         
+#         return {"status": "success", "message": "Dreaming cycle started"}
+# 
+#     except Exception as e:
+#         print(f"[API] Dreaming Error: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
-        dreaming_service.wake_up(mode="deep")
-        
-        return {"status": "success", "message": "Dreaming cycle started"}
 
-    except Exception as e:
-        print(f"[API] Dreaming Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
+class ClearContextRequest(BaseModel):
+    user_id: Optional[str] = "default_user"
+    character_id: Optional[str] = "default_char"
 
 @router.post("/context/clear")
-async def clear_context(request: AddMemoryRequest):
+async def clear_context(request: ClearContextRequest):
     """Clear Short-Term Context (Session History)"""
     from services.session_manager import session_manager
     try:
         # Using AddMemoryRequest structure for convenience (user_id, character_id)
         # Or should we define a specific request schema? 
         # AddMemoryRequest has character_id.
-        cid = request.character_id or "default"
+        cid = request.character_id or "default_char"
         uid = request.user_id or "default_user"
         
         session_manager.clear_history(uid, cid)
-        print(f"[API] Context cleared for {uid}:{cid}")
+        
+        # Trigger Gateway Session Reset (Signal Frontend)
+        from routers.gateway import gateway_service
+        await gateway_service.start_new_session(source="api.clear_context")
+        
+        print(f"[API] Context cleared & Session New for {uid}:{cid}")
         return {"status": "success", "message": "Short-term context cleared"}
     except Exception as e:
         logger.error(f"Context Clear Error: {e}")
@@ -347,7 +362,14 @@ async def get_all_memories(character_id: str = "hiyori"):
          raise HTTPException(status_code=503, detail="SurrealDB not available")
     
     try:
-        results = await surreal_system.get_all_conversations(character_id=character_id)
+        if hasattr(surreal_system, 'get_all_conversations'):
+             results = await surreal_system.get_all_conversations(character_id=character_id)
+        else:
+             # Fallback query
+             sql = "SELECT * FROM conversation_log WHERE character_id = $cid ORDER BY created_at DESC LIMIT 50"
+             results = await surreal_system.query(sql, {"cid": character_id})
+             # Ensure results is list (Surreal might return result obj)
+             if isinstance(results, dict) and 'result' in results: results = results['result']
         
         # 鏍煎紡鍖?
         memories = []
@@ -363,15 +385,15 @@ async def get_all_memories(character_id: str = "hiyori"):
         return memories
     except Exception as e:
         print(f"[API] ALL ERROR: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/memory/inspiration")
+@router.get("/inspiration")
 async def get_inspiration(character_id: str = "hiyori", limit: int = 3):
     """Get random memories for inspiration (SurrealDB)"""
     surreal_system = _get_surreal()
     if not surreal_system:
-        return []
+        raise HTTPException(status_code=503, detail="SurrealDB not available")
         
     try:
         results = await surreal_system.get_inspiration(character_id=character_id, limit=limit)
@@ -387,4 +409,4 @@ async def get_inspiration(character_id: str = "hiyori", limit: int = 3):
         return formatted
     except Exception as e:
         print(f"[API] Inspiration Error: {e}")
-        return []
+        raise HTTPException(status_code=500, detail=str(e))

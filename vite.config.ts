@@ -1,10 +1,10 @@
-import { defineConfig } from 'vite'
-import path from 'node:path'
-import electron from 'vite-plugin-electron/simple'
-import react from '@vitejs/plugin-react'
-import { createRequire } from 'node:module'
+import { defineConfig } from "vite";
+import path from "node:path";
+import electron from "vite-plugin-electron/simple";
+import react from "@vitejs/plugin-react";
+import { createRequire } from "node:module";
 
-const require = createRequire(import.meta.url)
+const require = createRequire(import.meta.url);
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -14,7 +14,7 @@ export default defineConfig({
         electron({
             main: {
                 // Shortcut of `build.lib.entry`.
-                entry: 'app/main/main.ts',
+                entry: "app/main/main.ts",
                 vite: {
                     build: {
                         // Use esbuild instead of rollup for MUCH faster builds (10-100x speedup)
@@ -23,13 +23,19 @@ export default defineConfig({
                         rollupOptions: {
                             // Strategy: Externalize explicitly listed dependencies.
                             external: (id) => {
-                                const dependencies = Object.keys(require('./package.json').dependencies);
+                                const dependencies = Object.keys(
+                                    require("./package.json").dependencies,
+                                );
                                 const mustBundle: string[] = [
                                     // 'electron-store',
                                 ];
 
                                 // 1. Always bundle local imports
-                                if (id.startsWith('.') || id.startsWith('/') || path.isAbsolute(id)) {
+                                if (
+                                    id.startsWith(".") ||
+                                    id.startsWith("/") ||
+                                    path.isAbsolute(id)
+                                ) {
                                     return false;
                                 }
 
@@ -39,15 +45,18 @@ export default defineConfig({
                                 }
 
                                 // 3. Externalize known dependencies
-                                return dependencies.some(dep => id === dep || id.startsWith(`${dep}/`));
-                            }, 
+                                return dependencies.some(
+                                    (dep) =>
+                                        id === dep || id.startsWith(`${dep}/`),
+                                );
+                            },
                         },
                     },
                 },
             },
             preload: {
                 // Shortcut of `build.rollupOptions.input`.
-                input: 'app/main/preload.ts',
+                input: "app/main/preload.ts",
             },
             // Ployfill the Electron and Node.js built-in modules for Renderer process.
             // renderer: {}, // Disabled: We use contextBridge, so we don't need node polyfills in renderer
@@ -56,51 +65,53 @@ export default defineConfig({
     optimizeDeps: {
         // Limit scan scope to核心入口，避免预构建遍历大目录
         entries: [
-            'index.html',
-            'app/renderer/main.tsx',
-            'app/main/main.ts',
-            'app/main/preload.ts',
+            "index.html",
+            "app/renderer/main.tsx",
+            "app/main/main.ts",
+            "app/main/preload.ts",
         ],
         // Explicitly include heavy packages that should be pre-bundled
         include: [
-            'react',
-            'react-dom',
+            "react",
+            "react-dom",
             // LangChain removed
-            'axios',
-            'pixi.js',
-            'pixi-live2d-display',
-            'eventemitter3',
-            'lucide-react',
+            "axios",
+            "pixi.js",
+            "pixi-live2d-display",
+            "eventemitter3",
+            "lucide-react",
         ],
         // Exclude packages that don't work well with pre-bundling
-        exclude: [
-            'electron',
-        ],
+        exclude: ["electron"],
     },
     resolve: {
         alias: {
-            '@core': path.resolve(__dirname, 'core'),
-            '@app': path.resolve(__dirname, 'app'),
-            '@assets': path.resolve(__dirname, 'assets'),
+            "@core": path.resolve(__dirname, "core"),
+            "@app": path.resolve(__dirname, "app"),
+            "@assets": path.resolve(__dirname, "assets"),
         },
     },
     server: {
         // 加快 dev 启动与热更：忽略大体积/生成目录的文件监听
         watch: {
             ignored: [
-                '**/dist/**',
-                '**/dist-electron/**',
-                '**/dist_backend/**',
-                '**/release/**',
-                '**/logs/**',
-                '**/memory_backups/**',
-                '**/GPT-SoVITS/**',
-                '**/models/**',
-                '**/voiceprint_profiles/**',
-                '**/lumina_surreal.db*',
+                "**/dist/**",
+                "**/dist-electron/**",
+                "**/dist_backend/**",
+                "**/release/**",
+                "**/logs/**",
+                "**/memory_backups/**",
+                "**/GPT-SoVITS/**",
+                "**/models/**",
+                "**/voiceprint_profiles/**",
+                "**/lumina_surreal.db*",
             ],
         },
     },
-})
-
-
+    test: {
+        globals: true,
+        environment: "jsdom",
+        include: ["app/renderer/**/*.test.{ts,tsx}"],
+        setupFiles: ["./app/renderer/tests/setup.ts"],
+    },
+});

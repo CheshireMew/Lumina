@@ -55,6 +55,18 @@ class MCPClient:
             self.session = aiohttp.ClientSession()
             raise NotImplementedError("SSE transport not yet fully implemented")
 
+    @property
+    def pid(self) -> Optional[int]:
+        """Expose PID for ProcessManager"""
+        if self.process:
+            return self.process.pid
+        return None
+
+    def is_alive(self) -> bool:
+        """Check if process is running"""
+        if not self.process: return False
+        return self.process.returncode is None
+
     async def stop(self):
         """Stop the client"""
         self.running = False
@@ -128,8 +140,10 @@ class MCPClient:
                 self._pending_requests[req_id].set_exception(Exception(data["error"]))
                 del self._pending_requests[req_id]
 
-    async def call_tool(self, method: str, params: Dict = {}) -> Any:
+    async def call_tool(self, method: str, params: Dict = None) -> Any:
         """Send JSON-RPC Request"""
+        if params is None:
+            params = {}
         if not self.running:
             raise RuntimeError("Client not running")
 

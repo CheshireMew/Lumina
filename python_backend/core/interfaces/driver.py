@@ -1,17 +1,36 @@
-from abc import ABC, abstractmethod
-from typing import Iterator, AsyncGenerator, Any, Optional, Dict, Tuple
+from abc import abstractmethod
+from typing import Iterator, AsyncGenerator, Any, Optional, Dict, Tuple, TYPE_CHECKING
+from core.interfaces.plugin import BaseSystemPlugin
 
-class BaseDriver(ABC):
+if TYPE_CHECKING:
+    from core.db.query_builder import QueryBuilder
+
+class BaseDriver(BaseSystemPlugin):
     def __init__(self, id: str, name: str, description: str = ""):
-        self.id = id
-        self.name = name
+        self._id = id
+        self._name = name
         self.description = description
-        self.config: dict = {}
-        self.enabled: bool = False
+        # self.config removal: Handled by BaseSystemPlugin property
+        # self.enabled removal: Handled by BaseSystemPlugin property
+        
+    @property
+    def id(self) -> str:
+        return self._id
+
+    @property
+    def name(self) -> str:
+        return self._name
 
     def load_config(self, config: dict):
         self.config.update(config)
         self.enabled = self.config.get("enabled", self.enabled)
+
+    @property
+    def config_schema(self) -> Optional[Dict[str, Any]]:
+        """
+        Return form schema for frontend configuration.
+        """
+        return None
 
     @abstractmethod
     async def load(self):
@@ -37,8 +56,16 @@ class BaseSTTDriver(BaseDriver):
         super().__init__(id, name, description)
 
     @abstractmethod
-    def transcribe(self, audio_data: Any, **kwargs) -> str:
-        """Transcribes audio data (numpy array or bytes) to text."""
+    def transcribe(self, audio_data: Any, **kwargs) -> Dict[str, Any]:
+        """
+        Transcribes audio data (numpy array or bytes) to text.
+        Returns dict: {
+            "text": str, 
+            "language": str, 
+            "emotion": Optional[str], 
+            "confidence": float
+        }
+        """
         pass
 
     @property
@@ -120,6 +147,11 @@ class BaseMemoryDriver(BaseDriver):
         pass
 
     @abstractmethod
+    def get_query_builder(self) -> 'QueryBuilder':
+        """Return a QueryBuilder instance adapted for this driver's dialect."""
+        pass
+        
+    @abstractmethod
     async def query(self, sql: str, params: Optional[Dict] = None) -> Any:
         """Execute raw query (Driver specific, fallback)."""
         pass
@@ -135,7 +167,7 @@ class BaseMemoryDriver(BaseDriver):
                           vector: list, 
                           limit: int, 
                           threshold: float,
-                          filter_criterias: Optional[Dict] = None) -> list:
+                          filter_criteria: Optional[Dict] = None) -> list:
         """Vector similarity search."""
         pass
 
@@ -145,7 +177,7 @@ class BaseMemoryDriver(BaseDriver):
                             query: str, 
                             limit: int,
                             fields: list,
-                            filter_criterias: Optional[Dict] = None) -> list:
+                            filter_criteria: Optional[Dict] = None) -> list:
         """Full text / Substring search."""
         pass
 
@@ -160,6 +192,33 @@ class BaseMemoryDriver(BaseDriver):
                           filter_criteria: Optional[Dict] = None) -> list:
          """Hybrid search."""
          pass
+
+    # --- 馃枼锔?Knowledge Graph Extensions ---
+    
+    async def relate(self, 
+                     subject: str, 
+                     predicate: str, 
+                     object: str, 
+                     data: Optional[Dict] = None) -> bool:
+        """
+        Create a directed relationship (Subject)-[Predicate]->(Object).
+        """
+        raise NotImplementedError("Graph 'relate' not implemented for this driver.")
+
+    async def get_neighbors(self, node_id: str, depth: int = 1) -> list:
+        """Retrieve related entities."""
+        raise NotImplementedError("Graph 'get_neighbors' not implemented for this driver.")
+
+    # --- 馃搼 Realtime / Control Plane Extensions ---
+
+    async def publish(self, channel: str, message: Dict[str, Any]):
+        """Broadcast a message (Surreal LiveQuery or Postgres NOTIFY)."""
+        raise NotImplementedError("Pub/Sub 'publish' not implemented for this driver.")
+
+    async def listen(self, channel: str) -> AsyncGenerator[Dict[str, Any], None]:
+        """Subscribe to a channel."""
+        raise NotImplementedError("Pub/Sub 'listen' not implemented for this driver.")
+        yield {} # Type hint helper
 
 class BaseLLMDriver(BaseDriver):
     """

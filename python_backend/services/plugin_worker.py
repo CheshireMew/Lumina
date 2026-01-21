@@ -128,6 +128,14 @@ class PluginWorker:
 
     def _handle_stop(self, plugin_id: str):
         if plugin_id in self.plugins:
+            # [Fix] Graceful Termination
+            plugin = self.plugins[plugin_id]
+            if hasattr(plugin, 'terminate'):
+                try:
+                    plugin.terminate()
+                except Exception as e:
+                    logger.error(f"Error terminating {plugin_id} in worker: {e}")
+
             # Cleanup
             del self.plugins[plugin_id]
             del self.contexts[plugin_id]

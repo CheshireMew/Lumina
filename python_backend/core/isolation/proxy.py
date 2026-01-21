@@ -20,14 +20,35 @@ class RemoteContextStub:
     Minimally viable context for child process.
     Allows plugin to emit events back to parent.
     """
-    def __init__(self, event_queue):
+    def __init__(self, event_queue, plugin_id):
         self.bus = self
         self._queue = event_queue
+        self.plugin_id = plugin_id
 
-    async def emit(self, event):
-        # Flatten event to dict if needed
-        payload = event.dict() if hasattr(event, 'dict') else event
-        self._queue.put({"type": "emit", "event": payload})
+    async def emit(self, event_type: str, payload: Any = None):
+        """Standard EventBus.emit interface"""
+        # Support both (event_obj) and (type, payload) usage
+        if hasattr(event_type, "type") and payload is None:
+            # It's an EventPacket object
+            evt = event_type
+            data = evt.dict() if hasattr(evt, 'dict') else evt
+            self._queue.put({"type": "emit", "event": data})
+        else:
+            # (str, dict) usage
+            event_dict = {
+                "type": event_type,
+                "payload": payload or {}
+            }
+            self._queue.put({"type": "emit", "event": event_dict})
+
+    def emit_sync(self, topic, payload):
+        """Synchronous emit for shared plugin compatibility."""
+        # Wrap in expected event structure
+        event_dict = {
+            "type": topic, # Use 'type' to match EventBus event structure
+            "payload": payload
+        }
+        self._queue.put({"type": "emit", "event": event_dict})
 
     def subscribe(self, topic, handler):
         # TODO: Implement reverse subscription (Main -> Child)
@@ -45,22 +66,88 @@ class RemoteContextStub:
              return Path(self._data_dir)
         return None
 
+    def register_route_def(self, path: str, method: str, handler_name: str, handler: Any):
+        """
+        Forward generic route registration to the parent process.
+        The parent (RemotePluginProxy) will intercept this event and mount an RPC stub.
+        """
+        payload = {
+            "plugin_id": self.plugin_id,
+            "path": path,
+            "method": method,
+            "handler_name": handler_name,
+            # "handler" is not sent (cannot be pickled easily across processes), parent creates stub
+        }
+        
+        # Mimic Event structure
+        event_dict = {
+            "type": "core.register_route_def", # FIXED: Was 'topic'
+            "payload": payload
+        }
+        
+        self._queue.put({"type": "emit", "event": event_dict})
+        logging.info(f"📨 Route '{method} {path}' registration forwarded to Main Process.")
+
+    def emit_log(self, record_dict):
+        """
+        [PR-3] Forward Log Record from Child to Parent.
+        """
+        self._queue.put({
+            "type": "log",
+            "record": record_dict
+        })
+
+
+class RPCStream:
+    """Helper to consume RPC stream chunks as an async iterator"""
+    def __init__(self):
+        self.queue = asyncio.Queue()
+        self.finished = False
+        
+    def __aiter__(self):
+        return self
+        
+    async def __anext__(self):
+        if self.finished and self.queue.empty():
+            raise StopAsyncIteration
+            
+        item = await self.queue.get()
+        if item is StopAsyncIteration:
+            self.finished = True
+            raise StopAsyncIteration
+        return item
+        
+    def push(self, chunk):
+        self.queue.put_nowait(chunk)
+        
+    def close(self):
+        self.queue.put_nowait(StopAsyncIteration)
+
+
 class RemotePluginProxy(BaseSystemPlugin):
-    """
-    Proxies calls to a child process via multiprocessing.Queue.
-    """
+    # ... (Keep existing __init__ etc) ...
+    
+    # We need to store active streams to routes chunks to them
+    # _active_streams: Dict[req_id, RPCStream]
+    
     def __init__(self, manifest_data: dict):
+        super().__init__() # Ensure Base Init if needed (though Base is ABC)
         self._manifest_data = manifest_data
         self._manifest_obj = PluginManifest(**manifest_data)
         
         self.ipc_queue = multiprocessing.Queue()
         self.event_queue = multiprocessing.Queue()
         self.process: Optional[multiprocessing.Process] = None
-        self.context = None # Parent context
+        self.context = None 
         
-        # RPC Futures: request_id -> Future
-        # RPC Futures: request_id -> Future
         self._pending_requests: Dict[str, asyncio.Future] = {}
+        self._active_streams: Dict[str, RPCStream] = {} # [PR-4]
+
+    # ... (Properties) ...
+    # Skip to _event_loop modification
+    
+    # ... (inside class) ...
+
         
         # [REMOVED] Router Support (Simplified Architecture)
         # We no longer attempt to dynamic import routers for isolated plugins.
@@ -129,27 +216,24 @@ class RemotePluginProxy(BaseSystemPlugin):
         asyncio.create_task(self._event_loop())
         
         # Send Init Command with Config Snapshot
-        config_snapshot = {}
-        if hasattr(context, 'config'):
-            # Dump Pydantic settings to dict
-            # app_settings is commonly a Pydantic BaseSettings
-            try:
-                config_snapshot = context.config.model_dump() 
-            except:
-                config_snapshot = vars(context.config) if hasattr(context.config, '__dict__') else {}
-
-        # Resolve Data Dir
+        # Prepare Config Snapshot
+        config = {}
+        # SKIP CONFIG DUMP FOR NOW (MVP) - It hangs/crashes
+        logger.info("Proxy: Skipping Config Snapshot (MVP)")
+                 
         data_dir = ""
-        if hasattr(context, 'get_data_dir'):
-             data_dir = str(context.get_data_dir(self.id))
-        
+        if context and hasattr(context, 'get_data_dir'):
+             data_dir = str(context.get_data_dir(self.id) or "") # Ensure string
+             
         req_id = str(uuid.uuid4())
+        logger.info("Proxy: Putting to IPC Queue...")
         self.ipc_queue.put({
             "cmd": "initialize", 
-            "id": req_id, 
-            "config": config_snapshot,
+            "id": "init_0", 
+            "config": config,
             "data_dir": data_dir
         })
+        logger.info(f"➡️ Sent 'initialize' command to {self.id}")
         
         # Wait for Ack (with timeout)
         # For MVP, we presume success or catch failure in loop
@@ -172,12 +256,46 @@ class RemotePluginProxy(BaseSystemPlugin):
                 if msg["type"] == "emit":
                     # Re-emit on local bus
                     evt = msg.get("event")
-                    # Reconstruct if needed, or pass raw dict if bus supports it
-                    # Assuming bus.emit accepts dicts or converting
+                    logger.info(f"DEBUG: Proxy received emit: {evt.get('type')}")
+                    
                     if self.context and self.context.bus:
-                        # TODO: Convert dict back to EventPacket? 
-                        # For now, MVP assumes loose typing
-                        await self.context.bus.emit(evt)
+                        # [RPC Router Bridge]
+                        # If child is registering a route, the 'handler' is a useless pickled function (or None).
+                        # We must replace it with an RPC Stub.
+                        if evt.get("type") == "core.register_route_def":
+                            payload = evt.get("payload", {})
+                            handler_name = payload.get("handler_name")
+                            
+                            if handler_name:
+                                # Define RPC Proxy Wrapper
+                                # Define RPC Proxy Wrapper
+                                from fastapi import Request
+                                async def rpc_route_wrapper(request: Request):
+                                    # Extract params from Request (Generic Proxy)
+                                    kwargs = dict(request.query_params)
+                                    # Attempt body parse
+                                    try:
+                                        body = await request.json()
+                                        if isinstance(body, dict):
+                                            kwargs.update(body)
+                                    except:
+                                        pass
+                                        
+                                    result = await self._rpc_call(handler_name, **kwargs)
+                                    # [PR-4] Auto-Wrap RPC Streams
+                                    # RPCStream is globally defined in this file
+                                    if isinstance(result, RPCStream):
+                                        from starlette.responses import StreamingResponse
+                                        return StreamingResponse(result, media_type="text/event-stream")
+                                    return result
+                                
+                                # Update payload with valid local handler
+                                payload["handler"] = rpc_route_wrapper
+                                logger.info(f"🔗 RPC Route Proxy created for {self.id}:{handler_name}")
+                        
+                        # FIXED: Unpack event dictionary for EventBus.emit()
+                        # EventBus.emit(event_type: str, data: Any)
+                        await self.context.bus.emit(evt["type"], evt.get("payload"))
 
                 elif msg["type"] == "sys.register":
                     # Proxy Registration
@@ -187,6 +305,15 @@ class RemotePluginProxy(BaseSystemPlugin):
                     if self.context:
                         logger.info(f"🔗 Tunneling Service Registration: '{service_name}' -> Proxy({self.id})")
                         self.context.register_service(service_name, self)
+
+                elif msg["type"] == "log":
+                    # [PR-3] Bridge Child Log -> Main Logger
+                    rec = msg.get("record", {})
+                    lvl = rec.get("levelno", logging.INFO)
+                    msg_text = rec.get("msg", "")
+                    # Enrich with Child ID
+                    child_logger = logging.getLogger(f"Child.{self.id}")
+                    child_logger.log(lvl, f"{msg_text}")
                         
                 elif msg["type"] == "result":
                     # Handle RPC results
@@ -197,8 +324,33 @@ class RemotePluginProxy(BaseSystemPlugin):
                             future.set_result(msg.get("result")) 
                         else:
                             future.set_exception(Exception(msg.get("error")))
+                
+                # [PR-4] Streaming RPC Handlers
+                elif msg["type"] == "stream_start":
+                    req_id = msg.get("id")
+                    if req_id in self._pending_requests:
+                        future = self._pending_requests.pop(req_id)
+                        # Create Stream Object
+                        stream = RPCStream()
+                        self._active_streams[req_id] = stream
+                        # Resolve Future with the Stream Iterator
+                        future.set_result(stream)
+                        
+                elif msg["type"] == "stream_chunk":
+                    req_id = msg.get("id")
+                    if req_id in self._active_streams:
+                        chunk = msg.get("chunk")
+                        self._active_streams[req_id].push(chunk)
+                        
+                elif msg["type"] == "stream_end":
+                    req_id = msg.get("id")
+                    if req_id in self._active_streams:
+                        stream = self._active_streams.pop(req_id)
+                        stream.close()
                     
             except Exception as e:
+                import traceback
+                logger.error(f"Error in RemoteProxy Event Loop: {e}\n{traceback.format_exc()}")
                 pass # Queue empty or error
             
             await asyncio.sleep(0.01) # Faster polling for RPC

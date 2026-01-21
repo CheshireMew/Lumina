@@ -2,7 +2,7 @@
 import os
 import logging
 import threading
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from app_config import config as app_settings
 from core.interfaces.driver import BaseSTTDriver
 
@@ -13,7 +13,7 @@ logger = logging.getLogger("STTManager")
 class STTPluginManager:
     def __init__(self):
         self.drivers: Dict[str, BaseSTTDriver] = {}
-        self.active_driver_id: str = "sense-voice"
+        self.active_driver_id: str = "driver.stt.sensevoice"
         self.active_driver: Optional[BaseSTTDriver] = None
         self.loading_status: str = "idle" 
         self.lock = threading.Lock()
@@ -24,7 +24,10 @@ class STTPluginManager:
         
     @property
     def engine_type(self) -> str:
-        if self.active_driver_id == "sense-voice": return "sense_voice"
+        if self.active_driver_id == "driver.stt.sensevoice" or self.active_driver_id == "sense-voice": 
+             return "sense_voice"
+        if "plugin_asr" in self.active_driver_id: # Heuristic for generic plugins
+             return "plugin_asr"
         return "faster_whisper"
 
     @property
@@ -56,6 +59,7 @@ class STTPluginManager:
             return
 
         logger.info(f"Switching to driver: {target_driver_id} (Model: {model_size_override or 'default'})")
+        self.loading_status = "loading" # [Status] Begin Transition
         try:
             driver = self.drivers[target_driver_id]
             
@@ -75,7 +79,7 @@ class STTPluginManager:
             await driver.load()
             
             # 2. Update active ID
-            self.active_driver_id = driver_id 
+            self.active_driver_id = target_driver_id 
             self.active_driver = driver
             
             # 3. Notify frontend (optional, via WS)
@@ -83,11 +87,13 @@ class STTPluginManager:
             
         except Exception as e:
             logger.error(f"Failed to switch driver {driver_id}: {e}", exc_info=True)
+        finally:
+            self.loading_status = "idle" # [Status] End Transition
 
     async def register_drivers(self, auto_activate: bool = True):
         # [Dynamic Loading]
         try:
-            from services.plugin_loader import PluginLoader
+            from services.plugins.loader import PluginLoader
             
             # Current: python_backend/services/stt_manager.py
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -124,12 +130,32 @@ class STTPluginManager:
         saved_provider = app_settings.stt.provider
         if not saved_provider or saved_provider not in self.drivers:
             # Fallback
-            if "sense-voice" in self.drivers: saved_provider = "sense-voice"
+            if "driver.stt.sensevoice" in self.drivers: saved_provider = "driver.stt.sensevoice"
+            elif "sense-voice" in self.drivers: saved_provider = "sense-voice"
             elif "faster-whisper" in self.drivers: saved_provider = "faster-whisper"
             elif self.drivers: saved_provider = list(self.drivers.keys())[0]
             
         if saved_provider and auto_activate:
-             await self.activate(saved_provider)
+             if saved_provider in app_settings.plugins.disabled_plugins:
+                 logger.info(f"🚫 Driver {saved_provider} is disabled in config. Skipping auto-activation.")
+             else:
+                 await self.activate(saved_provider)
+
+    def register_driver(self, driver: BaseSTTDriver):
+        """
+        [Dynamic Registration]
+        Called by stt_server.py when a plugin hot-loads a driver.
+        """
+        if not driver.id:
+            logger.error("Cannot register driver without ID")
+            return
+
+        with self.lock:
+            self.drivers[driver.id] = driver
+            logger.info(f"✅ [STT] Dynamically Registered Driver: {driver.id}")
+            
+        # Optional: Auto-activate if it matches config?
+        # For now, just register.
 
     async def activate(self, driver_id: str):
         if not self.drivers:
@@ -143,35 +169,85 @@ class STTPluginManager:
              logger.warning(f"Driver {driver_id} not found. available: {list(self.drivers.keys())}")
              driver_id = list(self.drivers.keys())[0]
 
+        # [Critical Fix] Avoid holding threading.Lock across await!
         with self.lock:
             if self.active_driver_id == driver_id and self.active_driver: return
-            
             self.loading_status = "loading"
-            try:
-                logger.info(f"Activating STT Driver: {driver_id} (Background)")
-                driver = self.drivers[driver_id]
-                
-                # Offload blocking load() to thread pool
-                import asyncio
-                loop = asyncio.get_running_loop()
-                # Determine if driver.load is async (some might be)
-                # If sync, run in executor. If async, await it.
-                # Inspect driver.load:
-                import inspect
-                is_async = inspect.iscoroutinefunction(driver.load)
-                
-                if is_async:
-                    await driver.load()
-                else:
-                    # Sync load wrapper
-                    await loop.run_in_executor(None, driver.load) # None uses default ThreadPoolExecutor
-                
+            
+        try:
+            logger.info(f"Activating STT Driver: {driver_id} (Background)")
+            driver = self.drivers[driver_id]
+            
+            # Offload blocking load() to thread pool
+            import asyncio
+            loop = asyncio.get_running_loop()
+            import inspect
+            is_async = inspect.iscoroutinefunction(driver.load)
+            
+            if is_async:
+                await driver.load()
+            else:
+                # Sync load wrapper
+                logger.info(f"DEBUG: Running sync load for {driver_id}")
+                await loop.run_in_executor(None, driver.load) # None uses default ThreadPoolExecutor
+            
+            # Update State (Re-acquire Lock)
+            with self.lock:
+                logger.info(f"DEBUG: Load finished for {driver_id}. Setting active driver.")
                 self.active_driver = driver
                 self.active_driver_id = driver_id
-            finally:
+                logger.info(f"✅ Successfully activated {driver_id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to activate driver {driver_id}: {e}", exc_info=True)
+        finally:
+            with self.lock:
                 self.loading_status = "idle"
 
-    def transcribe(self, audio_data) -> str:
+    async def unload_active_driver(self):
+        """
+        [Architecture 4.2] Force Unload.
+        Called when the active plugin is disabled.
+        """
+        driver_to_unload = None
+        driver_id = "none"
+        
         with self.lock:
-            if not self.active_driver: return ""
+            if not self.active_driver:
+                return
+            
+            driver_to_unload = self.active_driver
+            driver_id = self.active_driver_id
+            
+            # Clear state BEFORE awaiting
+            self.active_driver = None
+            self.active_driver_id = "none"
+            
+        logger.info(f"🛑 Unloading Active Driver: {driver_id}")
+        
+        if hasattr(driver_to_unload, "unload"):
+            try:
+                import inspect
+                if inspect.iscoroutinefunction(driver_to_unload.unload):
+                    await driver_to_unload.unload()
+                else:
+                    driver_to_unload.unload()
+            except Exception as e:
+                logger.error(f"Error unloading driver {driver_id}: {e}")
+        
+        import gc
+        gc.collect()
+
+    # [Architecture 5.6] Bus Sync Interfaces
+    async def enable_plugin(self, plugin_id: str):
+        """Bridge for Lifecycle Bus"""
+        await self.activate(plugin_id)
+
+    async def disable_plugin(self, plugin_id: str):
+        """Bridge for Lifecycle Bus"""
+        if self.active_driver_id == plugin_id:
+            await self.unload_active_driver()
+
+    def transcribe(self, audio_data) -> Dict[str, Any]:
+        with self.lock:
+            if not self.active_driver: return {"text": ""}
             return self.active_driver.transcribe(audio_data)

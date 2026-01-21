@@ -12,6 +12,7 @@ capabilities:
 permissions:
   - "eventbus:subscribe"
   - "eventbus:emit"
+  - "filesystem.read"
 
 config:
   enabled: true

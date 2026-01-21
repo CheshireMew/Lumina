@@ -24,23 +24,30 @@ export const useLlmManager = () => {
     const [llmRoutes, setLlmRoutes] = useState<LlmRoute[]>([]);
     const [llmProviders, setLlmProviders] = useState<LlmProvider[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const refreshData = useCallback(async () => {
         setIsLoading(true);
+        setError(null);
         try {
             const [routesRes, provRes] = await Promise.all([
                 fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/routes`),
                 fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/providers`),
             ]);
 
-            if (routesRes.ok && provRes.ok) {
-                const rData = await routesRes.json();
-                const pData = await provRes.json();
-                setLlmRoutes(rData.routes || []);
-                setLlmProviders(pData.providers || []);
+            if (!routesRes.ok || !provRes.ok) {
+                throw new Error(
+                    `API Error: Routes=${routesRes.status}, Prov=${provRes.status}`,
+                );
             }
-        } catch (e) {
+
+            const rData = await routesRes.json();
+            const pData = await provRes.json();
+            setLlmRoutes(rData.routes || []);
+            setLlmProviders(pData.providers || []);
+        } catch (e: any) {
             console.error("[useLlmManager] Failed to fetch data", e);
+            setError(e.message || "Failed to load LLM data");
         } finally {
             setIsLoading(false);
         }
@@ -53,6 +60,7 @@ export const useLlmManager = () => {
         api_key: string;
         models: string[];
     }) => {
+        setError(null);
         try {
             const payload = {
                 ...config,
@@ -64,15 +72,17 @@ export const useLlmManager = () => {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
-                }
+                },
             );
-            if (res.ok) {
-                await refreshData();
-                return true;
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "Failed to add provider");
             }
-            return false;
-        } catch (e) {
+            await refreshData();
+            return true;
+        } catch (e: any) {
             console.error("[useLlmManager] Failed to add provider", e);
+            setError(e.message);
             return false;
         }
     };
@@ -101,7 +111,7 @@ export const useLlmManager = () => {
             top_p?: number;
             presence_penalty?: number;
             frequency_penalty?: number;
-        }
+        },
     ) => {
         try {
             const res = await fetch(
@@ -110,7 +120,7 @@ export const useLlmManager = () => {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
-                }
+                },
             );
             if (res.ok) {
                 await refreshData();
@@ -132,5 +142,6 @@ export const useLlmManager = () => {
         addProvider,
         updateProvider,
         updateRoute,
+        error,
     };
 };

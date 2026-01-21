@@ -8,3 +8,10 @@ group_id: system_core
 group_exclusive: false
 tags: [llm, ai, core, intelligence, mvp_kernel]
 author: Lumina Team
+
+# [Capability Contract]
+provides:
+  - type: llm.provider
+    attributes:
+      model_type: router
+      streaming: true

@@ -99,12 +99,12 @@ class SherpaCAMDriver(BaseVoiceAuthDriver):
         embedding = self.extractor.compute(stream)
         return np.array(embedding)
 
-    def verify(self, audio: np.ndarray, profiles: Dict[str, np.ndarray], threshold: float) -> Tuple[bool, str, float]:
+    def verify(self, audio: np.ndarray, profiles: Dict[str, np.ndarray], threshold: float, sample_rate: int = 16000) -> Tuple[bool, str, float]:
         if not self.extractor or not profiles:
             return False, "", 0.0
 
         # Extract Input Embedding
-        test_embedding = self.extract_embedding(audio)
+        test_embedding = self.extract_embedding(audio, sample_rate)
         if test_embedding.size == 0: return False, "", 0.0
         
         best_score = -1.0

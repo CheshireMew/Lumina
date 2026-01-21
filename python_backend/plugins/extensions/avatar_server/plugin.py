@@ -79,12 +79,8 @@ class AvatarServerPlugin(BaseSystemPlugin):
             # If "sync_frontend" is true, we emit a dedicated event
             # so the Frontend doesn't HAVE to parse text anymore.
             if self.config.get("sync_frontend", True):
-                await self.context.bus.emit(EventPacket(
-                    session_id=packet.session_id,
-                    type="avatar.emotion",
-                    source=self.id,
-                    payload={"emotion": emotion, "provider": "vmc_mirror"}
-                ))
+                payload = {"emotion": emotion, "provider": "vmc_mirror"}
+                await self.context.bus.emit("avatar.emotion", payload)
 
     def scan_models(self) -> list:
         """
@@ -105,8 +101,6 @@ class AvatarServerPlugin(BaseSystemPlugin):
             logger.warning(f"Public directory not found: {public_root}")
             return []
 
-        models = []
-        
         # Helper to find thumbnail
         def find_thumbnail(model_path: Path) -> Optional[str]:
             # Priority: thumbnail.png/jpg -> preview.png/jpg -> model_name.png/jpg
@@ -128,6 +122,17 @@ class AvatarServerPlugin(BaseSystemPlugin):
                         continue
             return None
 
+        # Helper to deduplicate
+        seen_names = set()
+        unique_models = []
+
+        def add_model(model_data):
+            # Normalize key for loose deduplication (optional) or strict
+            key = model_data['name']
+            if key not in seen_names:
+                seen_names.add(key)
+                unique_models.append(model_data)
+
         # 1. Scan Live2D (.model3.json)
         live2d_root = public_root / "live2d"
         if live2d_root.exists():
@@ -136,13 +141,19 @@ class AvatarServerPlugin(BaseSystemPlugin):
                     if file.endswith(".model3.json"):
                         try:
                             abs_path = Path(root) / file
+                            # Skip if inside hidden folders
+                            if any(p.startswith('.') for p in abs_path.parts): continue
+                            
                             rel_path = abs_path.relative_to(public_root)
                             web_path = f"/{rel_path.as_posix()}"
                             
                             name = abs_path.parent.name
                             if name == "imported": name = file.replace(".model3.json", "")
                             
-                            models.append({
+                            # Clean up name (optional)
+                            # name = name.replace("_", " ") 
+                            
+                            add_model({
                                 "name": name,
                                 "path": web_path,
                                 "type": "live2d",
@@ -159,10 +170,12 @@ class AvatarServerPlugin(BaseSystemPlugin):
                     if file.endswith(".vrm"):
                         try:
                             abs_path = Path(root) / file
+                            if any(p.startswith('.') for p in abs_path.parts): continue
+                            
                             rel_path = abs_path.relative_to(public_root)
                             web_path = f"/{rel_path.as_posix()}"
                             
-                            models.append({
+                            add_model({
                                 "name": file.replace(".vrm", ""),
                                 "path": web_path,
                                 "type": "vrm",
@@ -175,6 +188,8 @@ class AvatarServerPlugin(BaseSystemPlugin):
         if sprites_root.exists():
              for entry in sprites_root.iterdir():
                  if entry.is_dir():
+                     if entry.name.startswith('.'): continue
+                     
                      # Check for main image
                      candidates = ["default.png", "normal.png", "stand.png"]
                      main_sprite = None
@@ -186,12 +201,12 @@ class AvatarServerPlugin(BaseSystemPlugin):
                      if main_sprite:
                          try:
                              web_path = f"/{main_sprite.relative_to(public_root).as_posix()}"
-                             models.append({
+                             add_model({
                                  "name": entry.name,
                                  "path": web_path,
                                  "type": "sprite",
-                                 "thumbnail": find_thumbnail(main_sprite) or web_path # Use itself as thumb
+                                 "thumbnail": find_thumbnail(main_sprite) or web_path
                              })
                          except: pass
 
-        return sorted(models, key=lambda x: x['name'])
+        return sorted(unique_models, key=lambda x: x['name'])

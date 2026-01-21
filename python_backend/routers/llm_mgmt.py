@@ -102,5 +102,30 @@ async def get_feature_params(feature: str):
             }
             logger.info(f"[LLM Mgmt] Calculating dynamic params for {feature} using soul state: {soul_state}")
             
-    params = llm_manager.get_parameters(feature, soul_state=soul_state)
+    params = _get_llm_manager().get_parameters(feature, soul_state=soul_state)
     return params
+
+# --- New Models Router (for /models/list) ---
+models_router = APIRouter(
+    prefix="/models",
+    tags=["Models"]
+)
+
+@models_router.get("/list")
+async def list_models():
+    """List available LLM models for frontend configuration"""
+    try:
+        llm_manager = _get_llm_manager()
+        
+        # Try to find Pollinations driver first (as it has the list logic)
+        driver = await llm_manager.get_driver("chat") 
+        if driver and hasattr(driver, "list_models"):
+            return {"models": await driver.list_models()}
+            
+        # Fallback: Return cached or hardcoded list if driver not available
+        return {"models": ["openai", "mistral", "claude-3-haiku", "gemini", "midijourney"]}
+            
+    except Exception as e:
+        logger.error(f"Error listing models: {e}")
+        # Graceful fallback
+        return {"models": ["openai", "mistral", "claude-3-haiku", "gemini", "midijourney"]}

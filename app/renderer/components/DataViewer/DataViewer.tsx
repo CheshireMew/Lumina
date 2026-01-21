@@ -17,7 +17,6 @@ const DataViewer: React.FC<DataViewerProps> = ({
     isOpen, 
     onClose, 
     activeCharacterId, 
-    dataSource = 'surreal' 
 }) => {
     const [activeTab, setActiveTab] = useState<'tables' | 'query' | 'stats' | 'graph'>('tables');
     const [tables, setTables] = useState<TableInfo[]>([]);
@@ -44,14 +43,15 @@ const DataViewer: React.FC<DataViewerProps> = ({
     }, [isOpen]);
 
     useEffect(() => {
-        if (activeTab === 'graph' && !graphData) {
+        if (activeTab === 'graph') {
             loadGraph();
         }
-    }, [activeTab]);
+    }, [activeTab, activeCharacterId]);
 
     useEffect(() => {
         if (activeCharacterId) {
             setTableCache({});
+            setGraphData(null); // Reset graph for new character
             if (isOpen && selectedTable) {
                 loadTableData(selectedTable, true);
             }
@@ -74,6 +74,9 @@ const DataViewer: React.FC<DataViewerProps> = ({
         setSelectedTable(tableName);
         if (tableName === 'knowledge_facts') {
             setLoading(false);
+            if (forceRefresh || !graphData) {
+                loadGraph();
+            }
             return;
         }
         if (!forceRefresh && tableCache[tableName]) {
@@ -219,6 +222,20 @@ const DataViewer: React.FC<DataViewerProps> = ({
                     setEditingRecord(null);
                     setTableData(prev => prev.map(r => r.id === editingRecord.id ? { ...r, ...updateData } : r));
                 }
+            } else {
+                // Create New Record
+                const res = await fetch(`${API_CONFIG.BASE_URL}/admin/record/${table}/new`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ data: editorForm })
+                });
+                 const data = await res.json();
+                if (data.status === 'success') {
+                    setEditingRecord(null);
+                    loadTableData(table, true); // Refresh to get new ID
+                } else {
+                    alert(`Create failed: ${data.detail || 'Unknown error'}`);
+                }
             }
         } catch (e) {
             alert(`Error saving: ${e}`);
@@ -344,5 +361,6 @@ const DataViewer: React.FC<DataViewerProps> = ({
         </div>
     );
 };
+
 
 export default DataViewer;

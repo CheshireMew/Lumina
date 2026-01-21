@@ -414,3 +414,33 @@
     height: 20px;
     border-radius: 10px;
 }
+
+/* [Architecture 4.2] Transit States Styles */
+.plugin-transit-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 60px;
+}
+
+.spinner-small {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 105, 180, 0.2);
+    border-top-color: #ff69b4;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.transit-label {
+    font-size: 8px;
+    font-weight: 800;
+    color: #ff69b4;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

@@ -40,10 +40,7 @@ class AudioManager:
         aggressiveness: int = 3,
         on_speech_start: Optional[Callable] = None,
         on_speech_end: Optional[Callable[[np.ndarray], None]] = None,
-        on_vad_status_change: Optional[Callable[[str], None]] = None,
-        voiceprint_manager=None,  # 鏂板
-        enable_voiceprint=False,  # 鏂板  
-        voiceprint_threshold=0.6  # 鏂板
+        on_vad_status_change: Optional[Callable[[str], None]] = None
     ):
         """
         Initialize Audio Manager
@@ -55,44 +52,41 @@ class AudioManager:
             on_speech_start: Callback for speech start
             on_speech_end: Callback for speech end (passes full audio data)
             on_vad_status_change: VAD status change callback
-            voiceprint_manager: Voiceprint Manager Instance (Optional)
-            enable_voiceprint: Enable Voiceprint Verification (Default False)
-            voiceprint_threshold: Voiceprint Similarity Threshold 0-1 (Default 0.6)
+            on_speech_end: Callback for speech end (passes full audio data)
+            on_vad_status_change: VAD status change callback
         """
         self.sample_rate = sample_rate
         self.frame_duration_ms = frame_duration_ms
         self.frame_size = int(sample_rate * frame_duration_ms / 1000)
         self.aggressiveness = aggressiveness
         
-        # 鍥炶皟鍑芥暟
+        # Callbacks
         self.on_speech_start = on_speech_start
         self.on_speech_end = on_speech_end
         self.on_vad_status_change = on_vad_status_change
-        self.voiceprint_manager = voiceprint_manager
-        self.enable_voiceprint = enable_voiceprint
-        self.voiceprint_threshold = voiceprint_threshold
+        self.on_vad_status_change = on_vad_status_change
         
-        # VAD瀹炰緥
+        # VAD Instance
         self.vad = webrtcvad.Vad(aggressiveness)
         
-        # === VAD 鍙傛暟閰嶇疆锛堝彲璋冩暣锛?==
-        # 婊戝姩绐楀彛澶у皬锛氱敤浜庡钩婊慥AD缁撴灉锛岀獥鍙h秺澶ц秺涓嶆晱鎰?
-        self.window_size = 15  # 甯ф暟锛堝師 10锛?
+        # === VAD Parameters (Adjustable) ===
+        # Sliding window size: Smooths VAD results. Larger = less sensitive.
+        self.window_size = 15  # Frames (Original 10)
         
-        # 璇煶寮€濮嬮槇鍊硷細绐楀彛鍐呰闊冲抚姣斾緥瓒呰繃姝ゅ€兼墠鍒ゅ畾涓哄紑濮嬭璇?
-        self.speech_start_threshold = 0.8  # 80% 鐨勫抚鏄闊?
+        # Speech Start Threshold: Ratio of speech frames in window to trigger start.
+        self.speech_start_threshold = 0.8  # 80% frames are speech
         
-        # 璇煶缁撴潫闃堝€硷細绐楀彛鍐呰闊冲抚姣斾緥浣庝簬姝ゅ€兼墠鍒ゅ畾涓哄仠姝㈣璇?
-        # 鈿狅笍 杩欎釜鍊艰秺灏忥紝瓒婂蹇嶇敤鎴疯璇濇椂鐨勫仠椤?
-        self.speech_end_threshold = 0.05  # 5% 鐨勫抚鏄闊筹紙鍘?0.15锛?
+        # Speech End Threshold: Ratio of speech frames in window to trigger end.
+        # ⚠️ Lower value = more tolerance for pauses.
+        self.speech_end_threshold = 0.05  # 5% frames are speech (Original 0.15)
         
-        # 鏈€灏忚闊抽暱搴︼紙甯ф暟锛夛細浣庝簬姝ら暱搴︾殑闊抽浼氳涓㈠純锛堥槻姝㈣瑙﹀彂锛?
-        self.min_speech_frames = 15  # 绾?0.45 绉掞紙鍘?15锛?
+        # Min Speech Length (Frames): Audio shorter than this is discarded (Noise filter).
+        self.min_speech_frames = 15  # Approx 0.45s (Original 15)
         
-        # 婊戝姩绐楀彛缂撳啿鍖猴紙鐢ㄤ簬骞虫粦VAD缁撴灉锛?
+        # Sliding Window Buffer (For smoothing VAD)
         self.speech_buffer = deque(maxlen=self.window_size)
         
-        # 棰勭紦鍐插尯锛堜繚鐣欒闊冲墠0.5绉掞級
+        # Pre-buffer (Keep 0.5s before speech)
         pre_buffer_frames = int(0.5 * 1000 / frame_duration_ms)  # 0.5s
         self.pre_buffer = deque(maxlen=pre_buffer_frames)
         
@@ -103,12 +97,12 @@ class AudioManager:
         self.is_speaking = False
         self.is_running = False
         
-        # 闊抽娴?
+        # Audio Stream
         self.stream: Optional[sd.InputStream] = None
         self.device_index: Optional[int] = None
         self.device_name: Optional[str] = None
         
-        # 鍔犺浇閰嶇疆
+        # Load Config
         self.load_config()
         
 
@@ -129,7 +123,7 @@ class AudioManager:
     
     def save_config(self):
         """Save audio config (preserves existing fields)"""
-        # 璇诲彇鐜版湁閰嶇疆
+        # Read existing config
         config = {}
         if CONFIG_FILE.exists():
             try:
@@ -138,7 +132,7 @@ class AudioManager:
             except Exception as e:
                 logger.warning(f"Config load failed: {e}. Creating new config.")
         
-        # 鏇存柊瀛楁
+        # Update Fields
         config['device_name'] = self.device_name
         config['speech_start_threshold'] = self.speech_start_threshold
         config['speech_end_threshold'] = self.speech_end_threshold
@@ -287,22 +281,9 @@ class AudioManager:
             audio_data = np.concatenate(self.audio_frames) if self.audio_frames else np.array([])
             self.audio_frames.clear()
             
-            # ⚠️ Voiceprint Verification (If enabled)
+            # ⚠️ Voiceprint Verification (Removed)
             should_process = True
-            if self.enable_voiceprint and self.voiceprint_manager and len(audio_data) > 0:
-                try:
-                    is_match, similarity = self.voiceprint_manager.verify(
-                        audio_data, 
-                        self.voiceprint_threshold,
-                        self.sample_rate
-                    )
-                    if not is_match:
-                        logger.info(f"[Voiceprint] REJECTED: Similarity {similarity:.3f} < Threshold {self.voiceprint_threshold}")
-                        should_process = False
-                    else:
-                        logger.debug(f"[Voiceprint] PASSED: Similarity {similarity:.3f}")
-                except Exception as e:
-                    logger.warning(f"[Voiceprint] Validation Failed: {e}, proceeding with audio")
+            # [Spring Cleaning] Verification removed from Audio Loop
             
             # Only callback if verification passed
             if should_process and self.on_speech_end and len(audio_data) > 0:
@@ -339,7 +320,13 @@ class AudioManager:
         
         # Extra Energy Check (Filter low energy noise)
         rms = np.sqrt(np.mean(frame**2))
-        if rms < 0.01:  # Low energy = Noise
+        
+        # [Debug] Trace Audio Levels occasionally
+        # import random
+        # if random.random() < 0.01:
+        #     logger.debug(f"🎤 Audio Level (RMS): {rms:.4f} | VAD: {is_speech}")
+            
+        if rms < 0.001:  # Lowered noise gate (was 0.005, user has ~0.0039)
             is_speech = False
         
         # Update Sliding Window
@@ -405,7 +392,7 @@ class AudioManager:
             # sounddevice auto-resamples to 16kHz
             self.stream = sd.InputStream(
                 device=self.device_index,
-                samplerate=16000,  # 寮哄埗16kHz锛宻ounddevice鑷姩閲嶉噰鏍?
+                samplerate=16000,  # Force 16kHz (sounddevice auto-resamples)
                 channels=1,
                 dtype='float32',
                 blocksize=self.frame_size,
@@ -441,11 +428,15 @@ class AudioManager:
                     logger.error(f"Default device also failed: {e2}", exc_info=True)
     
     def stop(self):
-        """Stop Audio Capture"""
+        """
+        [Architecture 3.1] Eager Revocation.
+        Stop Audio Capture immediately and clear all safety buffers.
+        """
         if not self.is_running:
             return
         
         try:
+            logger.info("🛑 [Revocation] Eagerly stopping audio stream...")
             if self.stream:
                 self.stream.stop()
                 self.stream.close()
@@ -453,11 +444,13 @@ class AudioManager:
             
             self.is_running = False
             self.is_speaking = False
+            
+            # Wipe buffers for privacy/safety
             self.audio_frames.clear()
             self.pre_buffer.clear()
             self.speech_buffer.clear()
             
-            logger.info("Audio capture stopped.")
+            logger.debug("✅ Audio stream eagerly revoked and buffers wiped.")
         except Exception as e:
             logger.error(f"Stop capture failed: {e}", exc_info=True)
     

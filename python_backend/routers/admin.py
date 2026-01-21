@@ -7,20 +7,19 @@ Provides restricted access to SurrealDB for frontend management tools.
 Refactored: Removed inject_dependencies
 """
 import logging
+import re
 from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from services.container import services
 
 logger = logging.getLogger("AdminRouter")
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
-def _get_surreal():
-    from services.container import services
-    if not services.surreal_system:
-         raise HTTPException(503, "SurrealDB not initialized")
-    return services.surreal_system
+def _get_memory_service():
+    return services.get_memory()
 
 
 # --- Schemas ---
@@ -32,9 +31,7 @@ class UpdateRecordRequest(BaseModel):
     # Dynamic dict for updates
     data: Dict[str, Any]
 
-class CreateRecordRequest(BaseModel):
-    table_name: str
-    data: Dict[str, Any]
+
 
 # --- Endpoints ---
 
@@ -54,62 +51,79 @@ async def get_tables():
     return {"tables": ALLOWED_TABLES}
 
 
+# from core.db.query_builder import SurrealQueryBuilder # REMOVED: Dynamic Builder
+# qb = SurrealQueryBuilder()
+
 @router.get("/table/{table_name}")
 async def get_table_data(table_name: str, limit: int = 50, character_id: Optional[str] = None):
-    """Get data from a table (Safe Read)."""
-    surreal_system = _get_surreal()
-
-    # 1. Validate Table Name (Alphanumeric only)
-    if not table_name.replace("_", "").isalnum():
-         raise HTTPException(400, "Invalid table name")
+    """Get data from a table (Safe Read via QueryBuilder)."""
+    memory_system = _get_memory_service()
 
     try:
-        query = f"SELECT * FROM {table_name}"
-        conditions = []
+        # [Refactored] Use Dynamic QueryBuilder from Driver
+        qb = services.get_memory().driver.get_query_builder()
         
-        # 2. Filter by character_id if applicable and provided
-        if character_id:
-             # Basic injection safety checked by validation above, but use param for safety if possible.
-             conditions.append(f"character_id = '{character_id}'")
-
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-
-        # 3. Enforce Limit
-        final_limit = min(limit, 100) # Max 100 rows
-        query += f" ORDER BY created_at DESC LIMIT {final_limit};"
-
-        logger.info(f"[Admin] Reading table {table_name} (Limit {final_limit})")
-        results = await surreal_system.execute_raw_query(query)
+        # [Phase 12] Use SafeQueryBuilder
+        # This prevents injections via table_name or character_id construction
+        where_clause = {"character_id": character_id} if character_id else None
         
-        # Driver returns data list directly
-        if isinstance(results, list):
-             return {"status": "success", "data": results}
+        query, params = qb.select(table_name, where=where_clause, limit=limit)
         
-        return {"status": "success", "data": []}
+        logger.info(f"[Admin] Reading table {table_name} (Safe): {query} | {params}")
+        
+        # Execute via Driver to support parameters
+        # Driver.query(sql, vars) -> returns list of asyncpg.Record for Postgres
+        response = await memory_system.driver.query(query, params)
+        
+        # [Fix] Convert asyncpg.Record objects to dicts for JSON serialization
+        # asyncpg.Record is dict-like but not JSON serializable directly
+        if response and hasattr(response[0], 'keys'):
+            # Convert each Record to dict, handling special types
+            data = []
+            for record in response:
+                row = {}
+                for key in record.keys():
+                    val = record[key]
+                    # Handle UUID, datetime, etc.
+                    if hasattr(val, '__str__') and not isinstance(val, (str, int, float, bool, list, dict, type(None))):
+                        row[key] = str(val)
+                    else:
+                        row[key] = val
+                data.append(row)
+            return {"status": "success", "data": data}
+            
+        return {"status": "success", "data": response if response else []}
 
     except Exception as e:
         logger.error(f"[Admin] Read Error: {e}", exc_info=True)
-        return {"status": "error", "data": []}
+        return {"status": "error", "data": [], "detail": str(e)}
 
 @router.post("/query")
 async def safe_query(request: SafeQueryRequest):
     """Execute a Safe SELECT Query."""
-    surreal_system = _get_surreal()
+    memory_system = _get_memory_service()
 
     q = request.query.strip().upper()
     
-    # 1. Block Dangerous Keywords
-    FORBIDDEN = ["DELETE", "UPDATE", "INSERT", "CREATE", "REMOVE", "DROP", "ALTER", "KILL", "GRANT", "REVOKE"]
-    if any(k in q for k in FORBIDDEN):
-        raise HTTPException(403, "Only SELECT queries are allowed in Admin console.")
+    # 1. Security: Prevent Multiple Statements
+    if ";" in q:
+         raise HTTPException(400, "Multiple statements (semicolon) are not allowed.")
+
+    # 2. Security: Block Dangerous Keywords (Word Boundaries)
+    # Match standalone keywords only (e.g. DELETE, DROP) to avoid blocking columns like 'UPDATE_TIME'
+    # Keywords: DELETE, UPDATE, INSERT, CREATE, DROP, ALTER, GRANT, REVOKE, TRUNCATE, REPLACE
+    forbidden_pattern = r'\b(DELETE|UPDATE|INSERT|CREATE|DROP|ALTER|GRANT|REVOKE|TRUNCATE|REPLACE)\b'
+    
+    if re.search(forbidden_pattern, q):
+        raise HTTPException(403, "Only SELECT queries are allowed. Modification keywords detected.")
 
     if not q.startswith("SELECT"):
          raise HTTPException(400, "Query must start with SELECT.")
          
     try:
         logger.info(f"[Admin] Executing Safe Query: {request.query}")
-        results = await surreal_system.execute_raw_query(request.query)
+        # Pass through to driver directly for consistency
+        results = await memory_system.driver.query(request.query)
         return {"status": "success", "result": results}
     except Exception as e:
         logger.error(f"[Admin] Query Error: {e}", exc_info=True)
@@ -118,7 +132,7 @@ async def safe_query(request: SafeQueryRequest):
 @router.delete("/record/{table_name}/{record_safe_id}")
 async def delete_record(table_name: str, record_safe_id: str):
     """Safe Delete Record."""
-    surreal_system = _get_surreal()
+    memory_system = _get_memory_service()
         
     # Validate Inputs
     if not table_name.replace("_", "").isalnum():
@@ -137,7 +151,7 @@ async def delete_record(table_name: str, record_safe_id: str):
             
         logger.info(f"[Admin] Deleting {full_id}")
         # Fix: Access driver directly
-        await surreal_system.driver.delete(table_name, full_id) # Driver.delete(table, id)
+        await memory_system.driver.delete(table_name, full_id) # Driver.delete(table, id)
         return {"status": "success", "id": full_id}
     except Exception as e:
         logger.error(f"[Admin] Delete Error: {e}", exc_info=True)
@@ -146,7 +160,7 @@ async def delete_record(table_name: str, record_safe_id: str):
 @router.post("/record/{table_name}/new")
 async def create_record(table_name: str, request: UpdateRecordRequest):
     """Create New Record."""
-    surreal_system = _get_surreal()
+    memory_system = _get_memory_service()
     
     if table_name not in ["episodic_memory", "conversation_log", "knowledge_facts", "user_profile"]:
          raise HTTPException(403, "Creation restricted for this table.")
@@ -154,7 +168,7 @@ async def create_record(table_name: str, request: UpdateRecordRequest):
     try:
         logger.info(f"[Admin] Creating in {table_name}: {request.data.keys()}")
         # Driver.create(table, data) -> returns ID string
-        new_id = await surreal_system.driver.create(table_name, request.data)
+        new_id = await memory_system.driver.create(table_name, request.data)
         return {"status": "success", "id": new_id}
     except Exception as e:
         logger.error(f"[Admin] Create Error: {e}", exc_info=True)
@@ -163,7 +177,7 @@ async def create_record(table_name: str, request: UpdateRecordRequest):
 @router.put("/record/{table_name}/{record_safe_id}")
 async def update_record(table_name: str, record_safe_id: str, request: UpdateRecordRequest):
     """Safe Update (Merge)."""
-    surreal_system = _get_surreal()
+    memory_system = _get_surreal()
         
     if table_name not in ["episodic_memory", "conversation_log", "knowledge_facts", "user_profile", "character_profile"]:
          raise HTTPException(403, "Update restricted to content tables.")
@@ -180,7 +194,54 @@ async def update_record(table_name: str, record_safe_id: str, request: UpdateRec
             
         logger.info(f"[Admin] Updating {full_id} with {safe_data.keys()}")
         # Fix: Access driver directly. Driver.update(table, id, data)
-        await surreal_system.driver.update(table_name, full_id, safe_data)
+        await memory_system.driver.update(table_name, full_id, safe_data)
         return {"status": "success"}
     except Exception as e:
          raise HTTPException(500, str(e))
+
+
+# =============================================================================
+# Debug / Monitoring Endpoints
+# =============================================================================
+
+@router.get("/debug/errors")
+async def get_error_stats():
+    """Get error monitoring statistics."""
+    from services.error_monitor import get_error_monitor
+    monitor = get_error_monitor()
+    return {
+        "stats": monitor.get_stats(),
+        "recent_errors": monitor.get_recent_errors(limit=20)
+    }
+
+
+@router.get("/debug/errors/{error_type}")
+async def get_errors_by_type(error_type: str, limit: int = 10):
+    """Get recent errors of a specific type."""
+    from services.error_monitor import get_error_monitor
+    monitor = get_error_monitor()
+    return {
+        "error_type": error_type,
+        "errors": monitor.get_errors_by_type(error_type, limit)
+    }
+
+
+@router.get("/debug/system")
+async def get_system_stats():
+    """Get system-wide statistics."""
+    from services.error_monitor import get_error_monitor
+    from services.http_client import get_http_stats
+    from core.events.bus import get_event_bus
+    
+    stats = {
+        "error_monitor": get_error_monitor().get_stats(),
+        "http_client": get_http_stats(),
+    }
+    
+    # EventBus stats if available
+    bus = get_event_bus()
+    if hasattr(bus, 'get_stats'):
+        stats["event_bus"] = bus.get_stats()
+    
+    return stats
+

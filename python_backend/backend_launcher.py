@@ -1,4 +1,5 @@
 import sys
+print(f"DEBUG_TRACE: Loading backend_launcher.py from {__file__}", flush=True)
 import argparse
 import multiprocessing
 import os
@@ -9,34 +10,117 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from app_config import IS_FROZEN, config
 
 def start_stt():
-    import stt_server
+    import generic_worker
+    from argparse import Namespace
+    
+    # Inject Args for Generic Worker
+    generic_worker.args = Namespace(
+        capability="stt",
+        host=config.network.host,
+        port=config.network.stt_port
+    )
+    
     import uvicorn
     port = config.network.stt_port
-    print(f"[Launcher] Starting STT Service on port {port}...")
-    uvicorn.run(stt_server.app, host=config.network.host, port=port, log_level="info")
+    print(f"[Launcher] Starting STT Service (Generic Helper) on port {port}...")
+    uvicorn.run(generic_worker.app, host=config.network.host, port=port, log_level="info", log_config=None)
 
 def start_tts():
-    import tts_server
+    import generic_worker
+    from argparse import Namespace
+    
+    # Inject Args for Generic Worker
+    generic_worker.args = Namespace(
+        capability="tts",
+        host=config.network.host,
+        port=config.network.tts_port
+    )
+
     import uvicorn
     port = config.network.tts_port
-    print(f"[Launcher] Starting TTS Service on port {port}...")
-    uvicorn.run(tts_server.app, host=config.network.host, port=port, log_level="info")
+    print(f"[Launcher] Starting TTS Service (Generic Helper) on port {port}...")
+    uvicorn.run(generic_worker.app, host=config.network.host, port=port, log_level="info", log_config=None)
 
 def start_memory():
-    # Fix for surreal_memory / main imports
-    # main.py is the memory/soul server
+    # [Refactor] Memory is now a Generic Worker Capability
+    # Previously it ran 'main.py' directly.
+    # To support migration, we offer two modes:
+    # 1. Legacy Monolith (runs main.py) - Default if no args?
+    # 2. Worker Mode (generic_worker --capability memory)
+    # The user instruction was to MIGRATE. 
+    # But main.py IS the Gateway/Soul server. It NEEDS to run.
+    # If we run 'memory' as a worker, main.py still needs to run as Gateway/Soul.
+    # So 'start_memory' in launcher usually meant "Start the Main Server".
+    # We should probably Rename `start_memory` to `start_main` or `start_core`.
+    # AND add `start_memory_worker`.
+    # However, existing ecosystem expects `python backend_launcher.py memory` to start the "Main Brain".
+    # So we should KEEP `start_memory` pointing to `main.py` for now, BUT `main.py` should be stripped of Helper Logic if Config says so.
+    
+    # WAIT. User wants "stt_server.py ... abstracted".
+    # If we abstract Memory, we have a Memory Worker.
+    # `main.py` becomes just Soul/Gateway.
+    # So we need a NEW entry in launcher for "Core" (main.py) and change "Memory" to be the Worker?
+    # No, that breaks compatibility violently.
+    # Let's keep `start_memory` launching `main.py` (Monolith) for now, 
+    # and add `start_memory_worker` for the new Isolated Capability?
+    # OR, if the user intends to run Distributed, they run:
+    # 1. launcher memory_worker
+    # 2. launcher core (main.py)
+    
+    # For now, let's inject `start_memory_node` -> Generic Worker.
+    # And keep `start_memory` -> Main.py (renamed to start_core ideally, but keep alias).
+    
     import main as memory_app 
     import uvicorn
     port = config.network.memory_port
-    print(f"[Launcher] Starting Memory/Soul Service on port {port}...")
-    uvicorn.run(memory_app.app, host=config.network.host, port=port, log_level="info")
+    print(f"[Launcher] Starting Core System (Soul/Gateway) on port {port}...")
+    host = "127.0.0.1" if config.network.bind_localhost_only else config.network.host
+    uvicorn.run(memory_app.app, host=host, port=port, log_level="info", log_config=None)
+
+def start_memory_worker():
+    import generic_worker
+    from argparse import Namespace
+    
+    generic_worker.args = Namespace(
+        capability="memory",
+        host=config.network.host,
+        port=8006 # Discrete port for Memory Worker
+    )
+    
+    import uvicorn
+    # Config need a memory_worker_port?
+    port = 8006
+    print(f"[Launcher] Starting Memory Worker on port {port}...")
+    uvicorn.run(generic_worker.app, host=config.network.host, port=port, log_level="info", log_config=None)
+
+
+
+def start_vision():
+    import generic_worker
+    from argparse import Namespace
+    
+    # Inject Args for Generic Worker
+    # Vision doesn't have a port in config usually, let's pick 8003 or similar, or look it up
+    # For now, let's assume 8005 or define in config.
+    # But ConfigManager might not have vision_port.
+    # Let's just default to 8005 for now.
+    generic_worker.args = Namespace(
+        capability="vision",
+        host=config.network.host,
+        port=8005
+    )
+
+    import uvicorn
+    port = 8005
+    print(f"[Launcher] Starting Vision Service (Generic Helper) on port {port}...")
+    uvicorn.run(generic_worker.app, host=config.network.host, port=port, log_level="info", log_config=None)
 
 if __name__ == "__main__":
     # Crucial for PyInstaller multiprocessing
     multiprocessing.freeze_support() 
     
     parser = argparse.ArgumentParser(description="Lumina Backend Launcher")
-    parser.add_argument("service", choices=["stt", "tts", "memory"], help="Service to launch")
+    parser.add_argument("service", choices=["stt", "tts", "memory", "vision", "memory_worker"], help="Service to launch")
     
     # Parse args (sys.argv[1:])
     try:
@@ -44,7 +128,9 @@ if __name__ == "__main__":
         service_map = {
             "stt": start_stt,
             "tts": start_tts,
-            "memory": start_memory
+            "memory": start_memory,
+            "vision": start_vision,
+            "memory_worker": start_memory_worker
         }
         
         # Execute

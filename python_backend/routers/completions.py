@@ -16,17 +16,18 @@ from app_config import config as app_config
 from services.container import services
 
 # Search Imports removed. Uses dynamic lookup in handle_tool_call.
-BraveSearch = None
-DuckDuckGoSearch = None
+# from plugins.skills.brave_search import BraveSearch
+# BraveSearch = None
+# DuckDuckGoSearch = None
 
 router = APIRouter(
     # prefix="/free-llm", # ⚙️ Disabled prefix to serve as default /v1 handler
     tags=["Unified LLM"]
 )
 
-def _get_soul_client():
+def _get_soul_service():
     from services.container import services
-    return services.soul_client
+    return services.soul
 
 # OpenAI-compatible Request Models
 class ChatMessage(BaseModel):
@@ -44,45 +45,8 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = 0.7
 
 # --- Tool Definitions ---
+# Search tool definitions removed (DEPRECATED): Logic handled by UnifiedChatProcessor directly.
 
-WEB_SEARCH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": "Search the internet for real-time information, news, or facts not in your internal knowledge.",
-        "strict": True, # DeepSeek Compatible
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query, optimized for a search engine."
-                }
-            },
-            "required": ["query"],
-            "additionalProperties": False
-        }
-    }
-}
-
-async def handle_tool_call(tool_name: str, args: dict) -> str:
-    """Execute tool and return string result"""
-    if tool_name == "web_search":
-        from services.container import services
-        provider_id = app_config.search.provider # "brave" or "duckduckgo"
-        
-        provider = services.get_search_provider(provider_id)
-        if not provider:
-             return f"Error: Search provider '{provider_id}' is not active or installed."
-
-        logger.info(f"[UnifiedLLM] Web Search requested via provider: {provider_id}")
-        
-        try:
-             return await provider.search(args.get("query", ""))
-        except Exception as e:
-             return f"Error executing search with {provider_id}: {e}"
-    
-    return f"Error: Unknown tool '{tool_name}'"
 
 
 def mask_log(text: str) -> str:
@@ -105,7 +69,7 @@ async def chat_completions(request: ChatCompletionRequest):
     Unified Chat Endpoint (Phase 19).
     Delegates to UnifiedChatProcessor for RAG, Tools, and LLM.
     """
-    soul_client = _get_soul_client()
+    soul_service = _get_soul_service()
     
     # [Security] Input Guardrails
     from core.security.guardrails import InputGuard
@@ -121,25 +85,33 @@ async def chat_completions(request: ChatCompletionRequest):
         raise HTTPException(status_code=400, detail=f"Content Policy Error: {reason}")
 
     # Update Heartbeat
-    if soul_client:
-        soul_client.update_last_interaction()
+    if soul_service:
+        soul_service.update_last_interaction()
     
     # Import processor
-    from services.unified_chat import unified_chat
+    # Import processor
+    from services.chat.instance import chat_pipeline
     
     # Convert Pydantic messages to dicts
-    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    # Convert Pydantic messages to dicts, preserving tool usage
+    messages = []
+    for m in request.messages:
+        msg_dict = {"role": m.role, "content": m.content}
+        if m.name: msg_dict["name"] = m.name
+        if m.tool_calls: msg_dict["tool_calls"] = m.tool_calls
+        if m.tool_call_id: msg_dict["tool_call_id"] = m.tool_call_id
+        messages.append(msg_dict)
     
     # Extract user_id and character_id from context if available
     user_id = "default_user"
     character_id = "default_char"
-    if soul_client:
-        character_id = soul_client.character_id or character_id
+    if soul_service:
+        character_id = getattr(soul_service, "_active_character_id", character_id)
     
     try:
         if request.stream:
             async def stream_generator():
-                async for token in unified_chat.process(
+                async for token in chat_pipeline.run(
                     messages=messages,
                     user_id=user_id,
                     character_id=character_id,
@@ -156,7 +128,7 @@ async def chat_completions(request: ChatCompletionRequest):
         else:
             # Non-streaming: collect full response
             full_response = ""
-            async for token in unified_chat.process(
+            async for token in chat_pipeline.run(
                 messages=messages,
                 user_id=user_id,
                 character_id=character_id,
@@ -186,28 +158,7 @@ async def chat_completions(request: ChatCompletionRequest):
         logger.error(f"[UnifiedChat] Generation Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-async def _sse_formatter(generator):
-    """Ensure output is SSE format"""
-    async for chunk in generator:
-        # If chunk is already formatted (string starting with data:), yield
-        if isinstance(chunk, str) and chunk.startswith("data:"):
-            yield chunk
-        elif isinstance(chunk, str):
-            # Raw text chunk? Wrap it
-            yield _mock_chunk(chunk, "unified-model")
-        else:
-            # OpenAI Chunk Object? Verify and yield
-            try:
-                # If valid object with model_dump_json (Pydantic/Library)
-                if hasattr(chunk, "model_dump_json"):
-                     yield "data: " + chunk.model_dump_json() + "\n\n"
-                else:
-                     # Dictionary?
-                     yield "data: " + json.dumps(chunk) + "\n\n"
-            except:
-                yield "data: [DONE]\n\n"
-                
-    yield "data: [DONE]\n\n"
+# _sse_formatter removed (DEPRECATED): Logic handled by stream_generator inside chat_completions.
 
 def _mock_chunk(content: str, model: str) -> str:
     """Helper to create OpenAI-compatible delta chunk"""

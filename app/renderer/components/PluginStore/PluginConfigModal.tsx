@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import GalgameSelect from './GalgameSelect';
 import GalgameToggle from './GalgameToggle';
+import { API_CONFIG } from '../../config';
 
 interface PluginConfigModalProps {
     plugin: any;
     onClose: () => void;
     onSave: (key: string, value: any) => Promise<void>;
-    existingGroups: string[]; // [NEW] For dropdown suggestions
+    // existingGroups removed
 }
 
 import { Trash2, FolderOpen, Mic, ToggleLeft, ToggleRight } from 'lucide-react';
@@ -15,7 +16,8 @@ const VoiceprintConfigPanel = ({ threshold, onThresholdChange }: { threshold: nu
     const [profiles, setProfiles] = useState<any[]>([]);
     const [name, setName] = useState("");
     const [file, setFile] = useState<File | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false); // For registration action
+    const [isFetching, setIsFetching] = useState(true); // For initial load
     const [msg, setMsg] = useState("");
     const [localThreshold, setLocalThreshold] = useState(threshold);
 
@@ -24,15 +26,18 @@ const VoiceprintConfigPanel = ({ threshold, onThresholdChange }: { threshold: nu
         setLocalThreshold(threshold);
     }, [threshold]);
 
-    const categories = ["Skill", "STT", "TTS", "System", "Game", "Other"];
+    // [Cleanup] 'categories' was unused. Removed.
 
     const fetchProfiles = async () => {
+        setIsFetching(true);
         try {
-            const res = await fetch("http://localhost:8010/plugins/voiceprint/list");
+            const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/voiceprint/list`);
             const data = await res.json();
             if (data.profiles) setProfiles(data.profiles);
         } catch (e) {
             console.error(e);
+        } finally {
+            setIsFetching(false);
         }
     };
 
@@ -47,7 +52,7 @@ const VoiceprintConfigPanel = ({ threshold, onThresholdChange }: { threshold: nu
             const formData = new FormData();
             formData.append("file", file);
             
-            const res = await fetch(`http://localhost:8010/plugins/voiceprint/upload?name=${encodeURIComponent(name)}`, {
+            const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/voiceprint/upload?name=${encodeURIComponent(name)}`, {
                 method: "POST",
                 body: formData
             });
@@ -70,7 +75,7 @@ const VoiceprintConfigPanel = ({ threshold, onThresholdChange }: { threshold: nu
     const handleDelete = async (pName: string) => {
         if (!confirm(`Delete voiceprint '${pName}'?`)) return;
         try {
-            await fetch(`http://localhost:8010/plugins/voiceprint/${pName}`, { method: "DELETE" });
+            await fetch(`${API_CONFIG.BASE_URL}/plugins/voiceprint/${pName}`, { method: "DELETE" });
             fetchProfiles();
         } catch (e) {
             console.error(e);
@@ -79,7 +84,7 @@ const VoiceprintConfigPanel = ({ threshold, onThresholdChange }: { threshold: nu
 
     const handleToggle = async (pName: string, currentEnabled: boolean) => {
         try {
-            const res = await fetch(`http://localhost:8010/plugins/voiceprint/toggle/${pName}?enabled=${!currentEnabled}`, { method: "POST" });
+            const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/voiceprint/toggle/${pName}?enabled=${!currentEnabled}`, { method: "POST" });
             if (res.ok) {
                 fetchProfiles();
             }
@@ -125,8 +130,15 @@ const VoiceprintConfigPanel = ({ threshold, onThresholdChange }: { threshold: nu
                 <Mic size={16} /> Active Voiceprints
             </h4>
             <div style={{maxHeight: 150, overflowY: "auto", background: "rgba(0,0,0,0.2)", borderRadius: 6, padding: 5, marginBottom: 15}}>
-                {profiles.length === 0 ? <div style={{padding:10, color:"#888", textAlign:"center", fontSize: "0.9em"}}>No voiceprints yet</div> : 
-                profiles.map(p => (
+                {isFetching ? (
+                    <div style={{padding: 20, textAlign: "center", color: "#888", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10}}>
+                         <div className="spinner" style={{width: 16, height: 16, border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "#a78bfa", borderRadius: "50%", animation: "spin 1s linear infinite"}}></div>
+                         <span>Loading profiles...</span>
+                    </div>
+                ) : profiles.length === 0 ? (
+                    <div style={{padding:10, color:"#888", textAlign:"center", fontSize: "0.9em"}}>No voiceprints yet</div>
+                ) : (
+                    profiles.map(p => (
                     <div key={p.name} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding: "6px 10px", borderBottom: "1px solid rgba(255,255,255,0.05)"}}>
                         <div style={{opacity: p.enabled ? 1 : 0.5, transition: 'opacity 0.2s'}}>
                             <span style={{fontWeight:"bold", color:"#fff", marginRight: 8}}>{p.name}</span>
@@ -156,8 +168,12 @@ const VoiceprintConfigPanel = ({ threshold, onThresholdChange }: { threshold: nu
                             </button>
                         </div>
                     </div>
-                ))}
+                ))
+                )}
             </div>
+            <style>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+            `}</style>
 
             <h4 style={{margin: "0 0 10px 0", color: "#ddd", fontSize:'0.9em'}}>Register New Voice</h4>
             {/* ... Rest of Registration UI ... */}
@@ -190,8 +206,9 @@ const VoiceprintConfigPanel = ({ threshold, onThresholdChange }: { threshold: nu
     );
 };
 
-const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, onSave, existingGroups }) => {
-    console.log("[PluginConfigModal] Existing groups:", existingGroups, "Current Plugin Group:", plugin.group_id);
+// [Cleanup] Removed unused 'categories' and 'existingGroups'
+const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, onSave }) => {
+    // console.log("[PluginConfigModal] Current Plugin Group:", plugin.group_id);
     const [values, setValues] = useState<{[key: string]: any}>({});
     const [saving, setSaving] = useState(false);
     
@@ -219,8 +236,7 @@ const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, 
 
     const fetchLlmData = async () => {
         try {
-            // Hardcoded base URL or import API_CONFIG (assuming localhost:8010 based on existing code)
-            const BASE_URL = "http://localhost:8010"; 
+            const BASE_URL = API_CONFIG.BASE_URL; 
             const routesRes = await fetch(`${BASE_URL}/llm-mgmt/routes`);
             const provRes = await fetch(`${BASE_URL}/llm-mgmt/providers`);
             
@@ -244,7 +260,7 @@ const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, 
                 : r
             ));
 
-            await fetch(`http://localhost:8010/llm-mgmt/routes/${feature}`, {
+            await fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/routes/${feature}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -431,7 +447,10 @@ const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, 
                                                     type={field.type === 'number' ? 'number' : 'text'}
                                                     className="galgame-input"
                                                     value={fieldVal}
-                                                    onChange={(e) => setValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+                                                    onChange={(e) => {
+                                                        const val = field.type === 'number' ? Number(e.target.value) : e.target.value;
+                                                        setValues(prev => ({ ...prev, [field.key]: val }));
+                                                    }}
                                                 />
                                             )}
                                         </div>

@@ -67,22 +67,35 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
             try {
                 // ⚡ 分别获取 soul 和 state 数据
                 const soulRes = await fetch(`${API_CONFIG.BASE_URL}/soul/${activeCharacterId}`);
-                const stateRes = await fetch(`${API_CONFIG.BASE_URL}/galgame/${activeCharacterId}/state`);
                 
-                if (soulRes.ok && stateRes.ok) {
+                // [Plugin Support] Check if GalGame plugin API is available
+                // If moved to plugin, it might be at /plugins/galgame/state or similar.
+                // For now, we try the core path, if it fails (404), we use defaults.
+                let stateData = {};
+                try {
+                    const stateRes = await fetch(`${API_CONFIG.BASE_URL}/galgame/${activeCharacterId}/state`);
+                    if (stateRes.ok) {
+                        stateData = await stateRes.json();
+                    } else if (stateRes.status !== 404) {
+                         console.warn("[GalGameHud] State fetch failed:", stateRes.status);
+                    }
+                } catch (e) {
+                     // Ignore network error for optional plugin endpoint
+                }
+                
+                if (soulRes.ok) {
                     const soulData = await soulRes.json();
-                    const stateData = await stateRes.json();
                     
-                    // 合并为 SoulProfile 格式
+                    // 合并为 SoulProfile 格式 (Use defaults if stateData missing)
                     setProfile({
                         identity: { name: activeCharacterId },
                         personality: soulData.personality,
                         state: {
                             current_mood: soulData.state?.current_mood || 'neutral',
-                            energy_level: stateData.energy_level ?? 100,
-                            last_interaction: stateData.last_interaction || new Date().toISOString()
+                            energy_level: (stateData as any).energy_level ?? 100,
+                            last_interaction: (stateData as any).last_interaction || new Date().toISOString()
                         },
-                        relationship: stateData.relationship || {
+                        relationship: (stateData as any).relationship || {
                             user_name: 'Master',
                             level: 0,
                             progress: 0,

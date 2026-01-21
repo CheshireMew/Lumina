@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { MemoryData, ProcessingStatus } from './types';
+import { API_CONFIG } from '../../config';
 import MemoryStatus from './MemoryStatus';
 import { HistoryList, FactList } from './MemoryList';
 import MemoryGraph from './MemoryGraph';
@@ -25,10 +26,14 @@ const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`http://127.0.0.1:8010/debug/brain_dump?character_id=${activeCharacterId}`);
-            const json = await res.json();
-            if (json.status === 'success') {
-                setData(json);
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/brain_dump?character_id=${activeCharacterId}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.status === 'success') {
+                    setData(json);
+                }
+            } else {
+                console.warn("Fetch Memory Data Failed: " + res.status);
             }
         } catch (err) {
             console.error('Failed to fetch memory data:', err);
@@ -39,10 +44,12 @@ const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string
     
     const fetchStatus = async () => {
         try {
-            const res = await fetch(`http://127.0.0.1:8010/debug/processing_status?character_id=${activeCharacterId}`);
-            const json = await res.json();
-            if (json.status === 'success') {
-                setStatus(json);
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/processing_status?character_id=${activeCharacterId}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.status === 'success') {
+                    setStatus(json);
+                }
             }
         } catch (err) {
             console.error('Failed to fetch processing status:', err);

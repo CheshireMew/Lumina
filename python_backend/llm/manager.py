@@ -133,7 +133,8 @@ class LLMManager:
         self.drivers.clear()
         
         # 1. Discover available driver classes via PluginLoader
-        from services.plugin_loader import PluginLoader
+        # Lazy import to avoid circular dep
+        from services.plugins.loader import PluginLoader
         
         # Construct path: python_backend/plugins/drivers/llm
         # We are in python_backend/llm/manager.py

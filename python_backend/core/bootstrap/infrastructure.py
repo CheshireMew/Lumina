@@ -30,7 +30,14 @@ class ConfigBootstrapper(Bootstrapper):
                     character_id = 'lillian' if 'lillian' in found else found[0]
                     logger.info(f"Fallback to: {character_id}")
                 else:
-                    character_id = "lumina_default"
+                    # [Fix] Verify 'lumina_default' exists before falling back blind
+                    default_path = os.path.join(base_char_dir, "lumina_default")
+                    if os.path.exists(default_path):
+                        character_id = "lumina_default"
+                    else:
+                        logger.critical(f"Panic: No characters found in {base_char_dir}. Please install a character.")
+                        # sys.exit(1) # Optional: hard fail or allow boot empty? Allow boot for setup UI.
+                        character_id = "setup_required"
         
         # Stash resolved character_id in config for downstream access if needed,
         # or just rely on container injection later.
@@ -44,7 +51,7 @@ class DatabaseBootstrapper(Bootstrapper):
     def name(self) -> str: return "SurrealDB"
 
     async def bootstrap(self, container):
-        from memory.core import SurrealMemory
+        from memory.core import MemoryService
         from model_manager import model_manager
         from app_config import config
         from consolidation_batch import BatchManager
@@ -62,22 +69,22 @@ class DatabaseBootstrapper(Bootstrapper):
 
         # Connect
         try:
-            surreal = SurrealMemory(character_id=character_id)
+            memory_svc = MemoryService(character_id=character_id)
             if embedding_model:
-                surreal.set_encoder(embedding_model.encode)
+                memory_svc.set_encoder(embedding_model.encode)
             
-            await surreal.connect()
+            await memory_svc.connect()
             
             # Batch Manager
             batch_mgr = BatchManager()
             container.batch_manager = batch_mgr
-            surreal.set_batch_manager(batch_mgr)
+            memory_svc.set_batch_manager(batch_mgr)
             
-            container.surreal_system = surreal
-            logger.info("✅ SurrealDB Connected")
+            container.set_memory(memory_svc)
+            logger.info("✅ Memory System Connected")
             
         except Exception as e:
-            logger.critical(f"SurrealDB Failed: {e}")
+            logger.critical(f"Memory System Failed: {e}")
             sys.exit(1)
 
 
@@ -96,12 +103,27 @@ class EventBusBootstrapper(Bootstrapper):
         logger.info("✅ EventBus Initialized")
         
         # Bind Gateway
+        # [FIX] Do NOT call _subscribe_all() again - it's already called in GatewayService.__init__()
+        # Calling it twice causes duplicate subscriptions and double WebSocket broadcasts!
         gateway_service.bus = bus
-        gateway_service._subscribe_all()
-        container.gateway = gateway_service # Note: container uses set_gateway logic usually
+        # gateway_service._subscribe_all()  # REMOVED: Causes duplicate event handlers
+        container.gateway = gateway_service
         
         # Schemas
         bus.register_schema("system.ready", EventSchema("1.0", SystemReadyPayload))
         bus.register_schema("system.shutdown", EventSchema("1.0", SystemShutdownPayload))
         bus.register_schema("plugin.loaded", EventSchema("1.0", PluginLoadedPayload))
         bus.register_schema("plugin.error", EventSchema("1.0", PluginErrorPayload))
+
+class ProtocolBootstrapper(Bootstrapper):
+    @property
+    def name(self) -> str: return "Event Protocol (Schemas)"
+
+    async def bootstrap(self, container):
+        if not container.event_bus:
+            logger.warning("EventBus not found, skipping protocol registration.")
+            return
+            
+        from core.protocol import CORE_SCHEMAS
+        container.event_bus.bulk_register_schemas(CORE_SCHEMAS)
+        logger.info(f"✅ Protocol Schema Validation Active ({len(CORE_SCHEMAS)} events)")

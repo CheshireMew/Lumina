@@ -3,7 +3,7 @@
     "name": "hiyori",
     "display_name": "hiyori",
     "description": "女朋友",
-    "system_prompt": "你是一个18岁的可爱大学生\n",
+    "system_prompt": "",
     "live2d_model": "/live2d/Hiyori/Hiyori.model3.json",
     "voice_config": {
         "service": "edge-tts",
@@ -17,5 +17,9 @@
     "bilibili": {
         "enabled": false,
         "room_id": 0
+    },
+    "metadata": {
+        "last_update_id": 19,
+        "timestamp": 1769002500.059077
     }
 }
