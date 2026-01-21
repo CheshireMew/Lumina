@@ -155,3 +155,8 @@ config/local.json
 secrets.json
 *.key
 *.pem
+*.secret
+lumina.secret
+secrets.encrypted
+
+Data
