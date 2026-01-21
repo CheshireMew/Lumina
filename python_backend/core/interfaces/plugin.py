@@ -26,11 +26,6 @@ class BaseSystemPlugin(ABC):
         pass
 
 
-    # @property
-    # def router(self) -> Any:
-    #    """[DEPRECATED] Direct FastAPI Router access."""
-    #    return None
-    
     @property
     def llm_routes(self) -> list[str]:
         """

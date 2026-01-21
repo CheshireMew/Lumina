@@ -2,7 +2,7 @@ import re
 import logging
 from typing import Optional
 
-from plugins.base import BaseSystemPlugin
+from core.interfaces.plugin import BaseSystemPlugin
 from core.protocol import EventPacket, EventType
 
 logger = logging.getLogger("EmotionBroker")

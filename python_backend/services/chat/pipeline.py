@@ -162,9 +162,15 @@ class LLMExecutionStep(PipelineStep):
             # --- LOGGING: OUTPUT (Always Log even if stream interrupted) ---
             logger.info(f"\n========= 📥 LLM OUTPUT ({ctx.target_model}) =========\n{collected_response}\n================================================")
         
-        # 2. Tool Execution Loop
-        if ctx.tool_calls_buffer:
-            logger.info(f"[Pipeline] Processing {len(ctx.tool_calls_buffer)} tool calls...")
+        # 2. Tool Execution Loop (Multi-Turn Support)
+        # [Architecture Fix] Allow up to MAX_TOOL_TURNS to support tool chains
+        MAX_TOOL_TURNS = 5
+        
+        for tool_turn in range(MAX_TOOL_TURNS):
+            if not ctx.tool_calls_buffer:
+                break  # No more tool calls, exit loop
+                
+            logger.info(f"[Pipeline] Tool Turn {tool_turn + 1}/{MAX_TOOL_TURNS}: Processing {len(ctx.tool_calls_buffer)} tool calls...")
             
             for tool_call in ctx.tool_calls_buffer:
                 result = await self._execute_tool(tool_call)
@@ -181,18 +187,27 @@ class LLMExecutionStep(PipelineStep):
                     "content": result
                 })
             
-            # 3. Second Pass (Final Answer)
+            # Clear buffer for next turn
+            ctx.tool_calls_buffer = []
+            
+            # Continue LLM call to see if more tools are needed (or final answer)
+            is_last_turn = (tool_turn == MAX_TOOL_TURNS - 1)
+            
             async for chunk in await ctx.llm_driver.chat_completion(
                 ctx.final_messages,
                 model=ctx.target_model,
                 stream=ctx.stream,
                 temperature=ctx.temperature,
-                tools=None # Disable tools to force answer
+                tools=None if is_last_turn else ctx.tools_def  # Disable tools on last turn to force answer
             ):
-                 if isinstance(chunk, dict):
+                if isinstance(chunk, dict):
+                    if "tool_calls" in chunk:
+                        ctx.tool_calls_buffer.extend(chunk["tool_calls"])
+                        continue
                     content = chunk.get("content", "")
-                    if content: yield content
-                 else:
+                    if content: 
+                        yield content
+                else:
                     yield chunk
 
     async def _execute_tool(self, tool_call: dict) -> str:
