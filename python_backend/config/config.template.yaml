@@ -16,11 +16,12 @@ memory:
   namespace: "lumina"
   database: "memory"
   character_id: "hiyori"
-  # Credentials (override with env vars in production)
+  # Credentials - Use environment variables in production!
+  # Set SURREAL_ROOT_PASS and SURREAL_APP_PASS instead of editing here.
   root_user: "root"
-  root_password: "root"
+  root_password: "" # SURREAL_ROOT_PASS
   app_user: "lumina_app"
-  app_password: "lumina_secure_pass"
+  app_password: "" # SURREAL_APP_PASS
 
 llm:
   model: "deepseek-chat"

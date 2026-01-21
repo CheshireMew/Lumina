@@ -4,12 +4,13 @@ import { useSettings } from "./useSettings";
 import { useAudioPipeline } from "./useAudioPipeline";
 import { useChatStream } from "./useChatStream";
 import { useGateway } from "./useGateway";
+import { useChatStore } from "../store/useChatStore";
 import { API_CONFIG } from "../config";
 import { Message } from "@core/llm/types";
 import { AvatarRendererRef } from "../core/avatar/types";
 
 export const useCoreSystem = (
-    avatarRef: React.RefObject<AvatarRendererRef>
+    avatarRef: React.RefObject<AvatarRendererRef>,
 ) => {
     // Basic Hooks
     const {
@@ -42,19 +43,25 @@ export const useCoreSystem = (
         getFinalContent,
     } = useChatStream();
 
-    // Local State
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [isStreaming, setIsStreaming] = useState(false);
-    const conversationHistoryRef = useRef<Message[]>([]);
-    const isProcessingRef = useRef(false);
+    // --- Store Integration ---
+    const {
+        setProcessing,
+        setStreaming,
+        addMessage,
+        // clearHistory, // Exposed if needed
+        messages,
+    } = useChatStore();
+
+    // Derived state from store (or keep direct usage if performance allows)
+    const isProcessing = useChatStore((state) => state.isProcessing);
+    const isStreaming = useChatStore((state) => state.isStreaming);
 
     // --- Gateway Callbacks ---
     const handleChatStart = useCallback(
         (mode: string) => {
             console.log(`[Core] Chat Start (mode: ${mode})`);
-            isProcessingRef.current = true;
-            setIsProcessing(true);
-            setIsStreaming(true);
+            setProcessing(true);
+            setStreaming(true);
             resetStream();
 
             if (settings.isTTSEnabled) {
@@ -63,7 +70,14 @@ export const useCoreSystem = (
                 });
             }
         },
-        [settings.isTTSEnabled, resetStream, initPipeline, enqueueSynthesis]
+        [
+            settings.isTTSEnabled,
+            resetStream,
+            initPipeline,
+            enqueueSynthesis,
+            setProcessing,
+            setStreaming,
+        ],
     );
 
     const handleChatStream = useCallback(
@@ -76,14 +90,13 @@ export const useCoreSystem = (
                 feedToken(token);
             }
         },
-        [processToken, settings.isTTSEnabled, feedToken]
+        [processToken, settings.isTTSEnabled, feedToken],
     );
 
     const handleChatEnd = useCallback(() => {
         console.log("[Core] Chat End");
-        isProcessingRef.current = false;
-        setIsProcessing(false);
-        setIsStreaming(false);
+        setProcessing(false);
+        setStreaming(false);
 
         if (settings.isTTSEnabled) {
             flush();
@@ -96,41 +109,64 @@ export const useCoreSystem = (
                 content: finalContent,
                 timestamp: Date.now(),
             };
-            conversationHistoryRef.current.push(msg);
+            addMessage(msg);
         }
-    }, [settings.isTTSEnabled, flush, getFinalContent]);
+    }, [
+        settings.isTTSEnabled,
+        flush,
+        getFinalContent,
+        setProcessing,
+        setStreaming,
+        addMessage,
+    ]);
 
     const handleEmotion = useCallback(
         (emotion: string) => {
             console.log("[Core] Emotion:", emotion);
             avatarRef.current?.setEmotion?.(emotion);
+            // Window dispatch is handled by useGateway now (legacy compat)
+            // But we keep this for consistency if useGateway invokes it.
         },
-        [avatarRef]
+        [avatarRef],
+    );
+
+    const handleSessionReset = useCallback(
+        (newId: number) => {
+            console.log(`[Core] 🔄 Session Reset (ID: ${newId})`);
+            resetStream();
+            setProcessing(false);
+            setStreaming(false);
+            // Store's session ID and history handled by useGateway or Store actions if we wired it there
+            // But here we might want to clear history in Store
+            useChatStore.getState().clearHistory();
+        },
+        [resetStream, setProcessing, setStreaming],
     );
 
     // Initialize Gateway
     const { isConnected, send } = useGateway({
+        // ... Callbacks ...
         onChatStart: handleChatStart,
         onChatStream: handleChatStream,
         onChatEnd: handleChatEnd,
         onEmotion: handleEmotion,
+        onSessionReset: handleSessionReset,
         baseUrl: API_CONFIG.BASE_URL,
     });
 
     // --- Actions ---
     const sendMessage = useCallback(
         async (text: string) => {
-            if (!text.trim() || isProcessingRef.current) return;
+            if (!text.trim() || isProcessing) return;
 
             const userMsg: Message = {
                 role: "user",
                 content: text,
                 timestamp: Date.now(),
             };
-            conversationHistoryRef.current.push(userMsg);
+            addMessage(userMsg);
 
-            isProcessingRef.current = true;
-            setIsProcessing(true);
+            setProcessing(true);
 
             send("chat", {
                 text,
@@ -139,22 +175,32 @@ export const useCoreSystem = (
                 model: settings.llm.model,
             });
         },
-        [activeCharacterId, settings.userName, send]
+        [
+            activeCharacterId,
+            settings.userName,
+            settings.llm.model, // [Fix] Include model to update callback on model change
+            send,
+            isProcessing,
+            addMessage,
+            setProcessing,
+        ],
     );
 
     const interrupt = useCallback(() => {
         clearAudio();
         avatarRef.current?.stopExpression?.();
-    }, [clearAudio, avatarRef]);
+        setProcessing(false);
+        setStreaming(false);
+    }, [clearAudio, avatarRef, setProcessing, setStreaming]);
 
     // Character Switch Logic wrapping
     const handleSwitchCharacter = useCallback(
         async (newId: string) => {
             await switchCharacter(newId);
-            conversationHistoryRef.current = [];
+            useChatStore.getState().clearHistory();
             resetStream();
         },
-        [switchCharacter, resetStream]
+        [switchCharacter, resetStream],
     );
 
     // Return unified interface
@@ -170,6 +216,8 @@ export const useCoreSystem = (
         displayMessage,
         reasoningContent,
         isConnected,
+        // Expose Messages if needed
+        messages,
 
         // Actions
         sendMessage,
@@ -181,7 +229,6 @@ export const useCoreSystem = (
         updateLLMSettings,
         saveSetting,
 
-        // Refs (if needed exposed)
-        conversationHistoryRef,
+        // Removed conversationHistoryRef, as 'messages' from store replaces it
     };
 };
