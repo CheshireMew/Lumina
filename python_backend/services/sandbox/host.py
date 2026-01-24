@@ -71,7 +71,7 @@ class SandboxHost(MCPClient):
                     # Try parsing as JSON if it looks like it?
                     try:
                         return json.loads(text_val)
-                    except:
+                    except Exception:
                         return text_val
             
             return result

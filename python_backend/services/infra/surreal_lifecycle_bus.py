@@ -87,7 +87,8 @@ class SurrealLifecycleBus(AbstractLifecycleBus):
                 if self.db:
                     try:
                         await self.db.close()
-                    except: pass
+                    except Exception:
+                        pass
                     self.db = None
                 # Don't raise, allow retry loop to handle it gracefully
             # We don't raise here to allow retry / fallback logic if needed
@@ -97,7 +98,7 @@ class SurrealLifecycleBus(AbstractLifecycleBus):
             if self.live_query_uuid:
                 try:
                     await self.db.kill(self.live_query_uuid)
-                except:
+                except Exception:
                     pass
             await self.db.close()
             self._is_connected = False
@@ -399,7 +400,8 @@ class SurrealLifecycleBus(AbstractLifecycleBus):
                          # Reconnect attempt
                          if not self._is_connected: # Double check
                              await self.connect()
-                     except: pass
+                     except Exception:
+                         pass
                      continue
 
                 # Polling interval

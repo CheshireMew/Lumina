@@ -902,7 +902,8 @@ class PluginService:
             if temp_zip_path.exists():
                 try:
                     os.remove(temp_zip_path)
-                except: pass
+                except Exception:
+                    pass
 
     def _save_file_sync(self, src, dest: Path):
         with open(dest, "wb") as buffer:
