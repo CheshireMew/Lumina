@@ -47,15 +47,20 @@ class RemoteContext:
 
     def subscribe(self, event_name: str, handler):
         """
-        Register a local handler for an event coming from Host.
-        The Worker loop handles dispatching incoming events to these handlers.
+        [Phase 1] Register a local handler for an event coming from Host.
+        Sends subscription request to main process for forwarding.
         """
-        # This registration happens in the worker's internal dispatcher, 
-        # not sent to Host immediately (Host knows subscriptions via manifest? 
-        # Or we need to send a 'subscribe' command?)
-        # For V1, let's assume Host blindly forwards subscribed events 
-        # based on Manifest, OR we send a dynamic subscription message.
-        pass
+        if not hasattr(self, '_local_handlers'):
+            self._local_handlers = {}
+        
+        self._local_handlers[event_name] = handler
+        
+        # Notify main process to forward this event type
+        self.event_queue.put({
+            "type": "subscribe",
+            "topic": event_name
+        })
+        logger.debug(f"[RemoteContext] Subscribed to '{event_name}', forwarding request to main process")
 
     # --- Data Persistence Proxy ---
 
@@ -80,10 +85,13 @@ class RemoteContext:
         self._send(EventType.UPDATE_CONFIG, payload)
 
     def load_data(self, key: str) -> Dict:
-        # TODO: This requires synchronous Request-Reply logic which is complex in Queues.
-        # Strategy: Pass initial data in 'start' command. 
-        # Runtime load_data might be cached or unimplemented for V1.
-        logger.warning("RemoteContext.load_data only returns cached config")
+        """
+        [Phase 2] Returns pre-loaded data cache instead of empty dict.
+        Data is passed during initialize from main process.
+        """
+        if hasattr(self, '_data_cache') and self._data_cache:
+            return self._data_cache
+        logger.debug("RemoteContext.load_data: No cached data available")
         return {}
 
     # --- Logging ---

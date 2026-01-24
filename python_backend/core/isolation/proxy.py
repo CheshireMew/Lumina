@@ -142,6 +142,7 @@ class RemotePluginProxy(BaseSystemPlugin):
         
         self._pending_requests: Dict[str, asyncio.Future] = {}
         self._active_streams: Dict[str, RPCStream] = {} # [PR-4]
+        self._child_subscriptions: set = set()  # [Phase 1] Topics child process subscribed to
 
     # ... (Properties) ...
     # Skip to _event_loop modification
@@ -170,11 +171,10 @@ class RemotePluginProxy(BaseSystemPlugin):
     @property
     def config_schema(self):
         """
-        Remote plugins must sync schema via IPC.
-        For now, prevent crash by returning None instead of __getattr__ proxy.
-        TODO: Sync schema during initialization.
+        [Phase 3] Read config_schema from manifest instead of returning None.
+        This allows frontend to render configuration UI for isolated plugins.
         """
-        return None 
+        return getattr(self._manifest_obj, 'config_schema', None)
 
     @property
     def _manifest(self):
@@ -224,6 +224,15 @@ class RemotePluginProxy(BaseSystemPlugin):
         data_dir = ""
         if context and hasattr(context, 'get_data_dir'):
              data_dir = str(context.get_data_dir(self.id) or "") # Ensure string
+        
+        # [Phase 2] Pre-load plugin data to avoid sync RPC issues
+        initial_data = {}
+        if context and hasattr(context, 'load_data'):
+            try:
+                initial_data = context.load_data(self.id) or {}
+                logger.info(f"Proxy: Pre-loaded {len(initial_data)} keys for {self.id}")
+            except Exception as e:
+                logger.warning(f"Proxy: Failed to pre-load data: {e}")
              
         req_id = str(uuid.uuid4())
         logger.info("Proxy: Putting to IPC Queue...")
@@ -231,7 +240,8 @@ class RemotePluginProxy(BaseSystemPlugin):
             "cmd": "initialize", 
             "id": "init_0", 
             "config": config,
-            "data_dir": data_dir
+            "data_dir": data_dir,
+            "initial_data": initial_data  # [Phase 2] Include pre-loaded data
         })
         logger.info(f"➡️ Sent 'initialize' command to {self.id}")
         
@@ -296,6 +306,17 @@ class RemotePluginProxy(BaseSystemPlugin):
                         # FIXED: Unpack event dictionary for EventBus.emit()
                         # EventBus.emit(event_type: str, data: Any)
                         await self.context.bus.emit(evt["type"], evt.get("payload"))
+                
+                elif msg["type"] == "subscribe":
+                    # [Phase 1] Child process registering event subscription
+                    topic = msg.get("topic")
+                    if topic and topic not in self._child_subscriptions:
+                        self._child_subscriptions.add(topic)
+                        # Subscribe to main EventBus and forward to child
+                        async def forward_handler(event, t=topic):
+                            await self._forward_event_to_child(t, event)
+                        self.context.bus.subscribe(topic, forward_handler)
+                        logger.info(f"📡 Forwarding '{topic}' events to child process {self.id}")
 
                 elif msg["type"] == "sys.register":
                     # Proxy Registration
@@ -391,4 +412,17 @@ class RemotePluginProxy(BaseSystemPlugin):
             return await asyncio.wait_for(future, timeout=10.0)
         except asyncio.TimeoutError:
             self._pending_requests.pop(req_id, None)
-            raise TimeoutError(f"RPC Call {method} timed out.") 
+            raise TimeoutError(f"RPC Call {method} timed out.")
+
+    async def _forward_event_to_child(self, topic: str, event):
+        """[Phase 1] Forward main process events to child via IPC"""
+        try:
+            event_data = event.dict() if hasattr(event, 'dict') else {"type": topic, "data": event}
+            self.ipc_queue.put({
+                "cmd": "event",
+                "topic": topic,
+                "event": event_data
+            })
+        except Exception as e:
+            logger.warning(f"Failed to forward event '{topic}' to child: {e}")
+
