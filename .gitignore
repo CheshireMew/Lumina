@@ -160,3 +160,10 @@ lumina.secret
 secrets.encrypted
 
 Data
+
+# Debug and temporary files
+*_debug*.txt
+host_debug_*.txt
+child_process.log
+pytest_real_results*.txt
+nul
