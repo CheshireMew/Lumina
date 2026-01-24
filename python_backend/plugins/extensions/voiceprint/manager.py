@@ -152,7 +152,8 @@ class VoiceprintManager(BaseSystemPlugin):
         self.profiles_meta_cache: Dict[str, float] = {} # [Cache] name -> timestamp
         self.loaded_count = 0
         self._router = None # Backing field for router property
-        self.default_threshold = 0.6 
+        self.default_threshold = 0.6
+        self.current_profile: Optional[str] = None  # Track currently active profile
 
     @property
     def router(self):
@@ -246,7 +247,11 @@ class VoiceprintManager(BaseSystemPlugin):
         
         # Try reloading to see if it appeared on disk
         self.reload_profiles()
-        return (profile_name in self.profiles)
+        if profile_name in self.profiles:
+            self.current_profile = profile_name
+            logger.info(f"📁 Loaded voiceprint profile: {profile_name}")
+            return True
+        return False
 
     async def register_voiceprint(self, audio: np.ndarray, profile_name: str = "default", sample_rate: int = 16000) -> bool:
         """
