@@ -42,9 +42,11 @@ def _load_char_config(character_id: str) -> Dict[str, Any]:
     except SecurityException as se:
         logger.warning(f"🚨 Security Violation loading char {character_id}: {se}")
         raise HTTPException(403, "Invalid character ID")
+    except FileNotFoundError:
+        raise
     except Exception as e:
         logger.error(f"Failed to load config for {character_id}: {e}")
-        raise
+        raise HTTPException(500, "Failed to load character config")
 
 def _save_char_config(character_id: str, new_config: Dict[str, Any]):
     """Helper to save config directly to disk"""
