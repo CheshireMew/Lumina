@@ -243,6 +243,34 @@ class AudioManager:
         
         logger.warning(f"Invalid device index: {device_index}")
         return False
+
+    def switch_device(self, device_name: str) -> bool:
+        """
+        Hot-switch audio input device while running.
+        Stops current stream, switches device, and restarts if was running.
+        
+        Args:
+            device_name: Target device name
+            
+        Returns:
+            Success or not
+        """
+        was_running = self.is_running
+        
+        if was_running:
+            logger.info(f"🔄 Hot-switching device: stopping current stream...")
+            self.stop()
+        
+        success = self.set_device_by_name(device_name)
+        
+        if was_running and success:
+            logger.info(f"🔄 Restarting stream with new device: {device_name}")
+            self.start()
+        elif was_running and not success:
+            logger.warning(f"Device switch failed, restarting with previous device")
+            self.start()
+        
+        return success
     
     def _audio_callback(self, indata: np.ndarray, frames: int, time_info, status):
         """
