@@ -1,3 +1,19 @@
+"""
+[DEPRECATED] This module is scheduled for removal.
+
+Migration Path:
+- Use `services.chat.pipeline.ChatPipeline` for unified chat processing
+- Use `services.chat.instance.chat_pipeline` singleton
+
+This file will be removed in a future version.
+"""
+import warnings
+warnings.warn(
+    "services.chat_service.ChatService is deprecated. Use services.chat.pipeline.ChatPipeline instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
 import logging
 import asyncio
 from typing import List, Dict, Any, AsyncGenerator, Optional
