@@ -1,9 +1,8 @@
 import logging
 import json
 import os
-from pathlib import Path
 from typing import Dict, Any, Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 # Use Config from app_config for singleton nature (or load independently)
 # To avoid circular imports, we might prefer loading config here or relying on app_config injection
@@ -96,8 +95,8 @@ class LLMManager:
             logger.error(f"Failed to save LLM config: {e}")
 
     def _create_default_config(self) -> LLMConfig:
-        host = os.getenv("HOST", "127.0.0.1")
-        port = os.getenv("PORT", "8000")
+        os.getenv("HOST", "127.0.0.1")
+        os.getenv("PORT", "8000")
         
         providers = {
             "free_tier": ProviderConfig(

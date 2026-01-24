@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, List, Dict, Any, Optional
+from typing import Callable, List, Dict, Any
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 

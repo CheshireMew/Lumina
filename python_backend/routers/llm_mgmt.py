@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from typing import List, Dict, Any
-from llm.manager import ProviderConfig, FeatureRoute
+from typing import Dict, Any
 
 router = APIRouter(
     prefix="/llm-mgmt",

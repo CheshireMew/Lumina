@@ -53,7 +53,6 @@ class DatabaseBootstrapper(Bootstrapper):
     async def bootstrap(self, container):
         from memory.core import MemoryService
         from model_manager import model_manager
-        from app_config import config
         from consolidation_batch import BatchManager
         
         character_id = container.config.memory.character_id

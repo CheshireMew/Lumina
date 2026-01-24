@@ -3,7 +3,6 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from core.protocol import EventPacket, EventType
 from core.events.bus import get_event_bus, Event
-import asyncio
 import json
 
 logger = logging.getLogger("Gateway")

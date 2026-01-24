@@ -5,11 +5,8 @@ Includes: /add, /search, /consolidate_history, /all, /memory/inspiration
 Refactored: Removed inject_dependencies pattern
 Now uses container for core services, EventBus for plugin services
 """
-import os
-import json
-import time
 import logging
-from typing import Dict, Optional
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 

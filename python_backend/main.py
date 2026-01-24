@@ -4,15 +4,9 @@ Refactored from memory_server.py
 """
 import os
 import sys
-import json
 import uuid
-import logging
-import asyncio
 import uvicorn
-import time
 from services.container import services as service_instance
-from collections import defaultdict
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app_config import ConfigManager
@@ -29,7 +23,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from routers import gateway # Gateway
 from routers.voiceprint import router as voiceprint_router  # [Scheme C] Voiceprint Management
 # from services.vision_service import vision_service, VisionService # Vision (Migrated)
-from services.mcp_host import MCPHost
 
 
 # 配置日志 (Using shared setup)

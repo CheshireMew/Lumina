@@ -131,7 +131,6 @@ class VoiceprintManager(BaseSystemPlugin):
         
         # Initialize Driver Dynamically
         # Default to SherpaCAM if not specified
-        driver_name = "sherpa_cam" 
         # TODO: Get from config if needed
         # driver_name = self.context.config.audio.voice_auth_driver 
         

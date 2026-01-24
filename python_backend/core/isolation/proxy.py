@@ -6,7 +6,6 @@ import uuid
 import logging
 import asyncio
 import multiprocessing
-import json
 import time
 from typing import Optional, Any
 from core.interfaces.plugin import BaseSystemPlugin
@@ -234,7 +233,7 @@ class RemotePluginProxy(BaseSystemPlugin):
             except Exception as e:
                 logger.warning(f"Proxy: Failed to pre-load data: {e}")
              
-        req_id = str(uuid.uuid4())
+        str(uuid.uuid4())
         logger.info("Proxy: Putting to IPC Queue...")
         self.ipc_queue.put({
             "cmd": "initialize", 

@@ -1,7 +1,7 @@
 import logging
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict
 from core.api.context import LuminaContext
-from core.isolation.protocol import EventType, PluginEvent, EventEmitPayload
+from core.isolation.protocol import EventType, PluginEvent
 
 logger = logging.getLogger("RemoteContext")
 

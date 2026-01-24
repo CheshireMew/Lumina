@@ -3,11 +3,8 @@ import asyncio
 import sys
 import os
 from pathlib import Path
-from typing import Optional
 
 from app_config import config
-from core.events.bus import bus
-from core.events.definitions import PluginLoadedPayload, PluginErrorPayload, PluginDisabledPayload
 from services.plugins.loader import PluginLoader
 
 logger = logging.getLogger("PluginLifecycleManager")

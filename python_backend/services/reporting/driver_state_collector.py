@@ -4,7 +4,7 @@
 提取自 stt_server._gather_stt_state() 和 tts_server._gather_tts_state() 的重复逻辑
 """
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 logger = logging.getLogger("DriverStateCollector")
 

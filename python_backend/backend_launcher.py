@@ -7,7 +7,7 @@ import os
 # Ensure local imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app_config import IS_FROZEN, config
+from app_config import config
 
 def start_stt():
     import generic_worker

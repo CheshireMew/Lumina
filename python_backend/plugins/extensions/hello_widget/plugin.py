@@ -1,6 +1,5 @@
 
 from core.interfaces.plugin import BaseSystemPlugin
-import asyncio
 
 class HelloWidgetPlugin(BaseSystemPlugin):
     @property

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Any
 from pydantic import BaseModel, Field
 
 class CapabilityType(str, Enum):

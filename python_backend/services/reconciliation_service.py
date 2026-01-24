@@ -110,7 +110,7 @@ class ReconciliationService:
         # If desired=True AND status='transitioning' AND updated_at < now - 60s
         if desired and active_status == "transitioning":
              # Checkstaleness
-             updated_at_str = state.get("updated_at")
+             state.get("updated_at")
              # Parsing is complex without knowing format. 
              # Let's assume we use a simpler heuristic or just check loop count?
              # No, simply: If it stays transitioning for > 60s.

@@ -4,7 +4,6 @@ Includes: /characters, /characters/{id}/config, DELETE /characters/{id}
 
 Refactored: Removes SoulManager dependency. Uses direct file operations for config management.
 """
-import os
 import json
 import shutil
 import logging
@@ -141,7 +140,7 @@ async def get_character_config(character_id: str):
 @router.post("/{character_id}/config")
 async def update_character_config(character_id: str, config: dict):
     """Update character config"""
-    soul_service = _get_soul_service()
+    _get_soul_service()
     try:
         logger.info(f"[API] update_character_config for: {character_id}")
         

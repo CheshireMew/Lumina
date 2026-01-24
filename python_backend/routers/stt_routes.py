@@ -177,7 +177,6 @@ async def list_audio_devices():
     try:
         devices = sd.query_devices()
         input_devices = []
-        current_device_name = None
         
         # Try to get looking at audio_manager if initialized
         if stt_globals.audio_manager and hasattr(stt_globals.audio_manager, 'device_index'):
@@ -397,7 +396,6 @@ async def load_plugins(req: PluginLoadRequest, request: Request, background_task
     """
     from services.plugins.loader import PluginLoader
     from core.interfaces.driver import BaseSTTDriver
-    import services.stt.globals as stt_globals
 
     loaded = []
     

@@ -1,7 +1,6 @@
 import logging
 import json
 import asyncio
-import datetime
 from typing import Any, Callable, Dict, Optional, List, Awaitable
 import asyncpg
 from core.interfaces.lifecycle_bus import AbstractLifecycleBus

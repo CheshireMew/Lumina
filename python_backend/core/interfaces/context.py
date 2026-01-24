@@ -1,9 +1,9 @@
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from services.chat.pipeline import PipelineContext
+    pass
 
 class ContextProvider(ABC):
     """

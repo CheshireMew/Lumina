@@ -1,9 +1,6 @@
 import logging
-import json
-import httpx
-import time
 import asyncio
-from typing import Any, List, AsyncGenerator
+from typing import List, AsyncGenerator
 from core.interfaces.driver import BaseLLMDriver
 
 logger = logging.getLogger("PollinationsDriver")
@@ -113,7 +110,6 @@ class PollinationsDriver(BaseLLMDriver):
             import re
             
             content = ""
-            reasoning = ""
             data = None
 
             try:

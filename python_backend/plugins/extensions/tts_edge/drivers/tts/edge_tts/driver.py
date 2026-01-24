@@ -1,5 +1,4 @@
 import logging
-import asyncio
 from typing import Dict, Any, Optional
 
 from python_backend.core.plugins.interface import TTSPlugin

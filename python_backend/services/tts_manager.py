@@ -1,6 +1,5 @@
 
 import logging
-import asyncio
 from typing import Dict, Optional
 from pathlib import Path
 from core.interfaces.driver import BaseTTSDriver

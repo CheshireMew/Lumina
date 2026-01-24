@@ -1,6 +1,6 @@
 import logging
 import asyncio
-from typing import List, Dict
+from typing import List
 from pathlib import Path
 from app_config import config
 

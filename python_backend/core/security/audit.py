@@ -53,7 +53,6 @@ class AuditLogger:
                     await bus.db.create("security_audit", data)
                 # PostgreSQL (New)
                 else:
-                    import json
                     await bus.db.execute("""
                         INSERT INTO security_audit (timestamp, actor_id, action, target, status, metadata)
                         VALUES ($1, $2, $3, $4, $5, $6)

@@ -1,5 +1,4 @@
 import logging
-import asyncio
 from typing import Dict, Any, List, Optional
 from contextlib import AsyncExitStack
 
@@ -54,7 +53,6 @@ class MCPManager:
 
         logger.info(f"Connecting to MCP (SSE): {name} -> {url}")
         try:
-            import httpx
             # TODO: Implement full SSE transport logic similar to example reference
             # For simplicity, we assume robust implementation later.
             # Here we use the basic sse_client context manager provided by mcp

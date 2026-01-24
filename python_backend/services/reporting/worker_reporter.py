@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import json
 from typing import Callable, List, Dict, Any
 from core.schemas import WorkerState, PluginState
 

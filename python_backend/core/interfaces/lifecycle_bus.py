@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Awaitable, Dict, Optional, List
+from typing import Any, Callable, Awaitable, Dict, List
 
 class AbstractLifecycleBus(ABC):
     """

@@ -11,7 +11,7 @@ Features:
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional, Set, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 from dataclasses import dataclass, field
 from collections import defaultdict
 import fnmatch
@@ -232,7 +232,7 @@ class EventBus:
         Creates a new event loop if needed.
         """
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             asyncio.create_task(self.emit(event_type, data, source))
         except RuntimeError:
             # No running loop

@@ -67,7 +67,7 @@ class PluginHost:
                     break
                 
                 cmd = msg.get("cmd")
-                req_id = msg.get("id")
+                msg.get("id")
                 
                 if cmd == "initialize":
                     self.loop.run_until_complete(self._handle_initialize(msg))

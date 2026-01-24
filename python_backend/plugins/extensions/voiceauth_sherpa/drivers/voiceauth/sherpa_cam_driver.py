@@ -3,8 +3,7 @@ import os
 import numpy as np
 import sherpa_onnx
 import torch
-from typing import Dict, Tuple, Any, Optional
-from pathlib import Path
+from typing import Dict, Tuple, Optional
 from app_config import MODELS_DIR
 
 from core.interfaces.driver import BaseVoiceAuthDriver

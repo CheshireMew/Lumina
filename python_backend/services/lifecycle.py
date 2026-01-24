@@ -1,4 +1,3 @@
-import os
 import sys
 import logging
 from contextlib import asynccontextmanager
@@ -88,7 +87,6 @@ async def lifespan(app: FastAPI):
         from app_config import config
         if config.plugins.prewarm_core and service_instance.get_process_manager():
             logger.info("🔥 Pre-warming Core Services (STT/TTS)...")
-            from services.plugin_service import PluginService
             # We don't have direct access to PluginService instance here via container...
             # Wait, SystemPluginManager is Level 4.
             # But PluginService is NOT explicitly in container! 

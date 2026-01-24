@@ -4,7 +4,6 @@ from typing import List, Dict, Any, AsyncGenerator, Optional
 from services.container import services
 # from llm.manager import llm_manager
 from services.session_manager import session_manager
-from fastapi import HTTPException
 
 logger = logging.getLogger("ChatService")
 
@@ -86,7 +85,7 @@ class ChatService:
                         query=user_input, 
                         character_id=character_id
                     )
-                except Exception as e:
+                except Exception:
                     # If memory service not init, skip
                     pass
 

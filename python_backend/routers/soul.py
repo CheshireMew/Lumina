@@ -4,12 +4,9 @@ Includes: /soul, /soul/mutate, /soul/switch_character, /galgame etc.
 
 Refactored: Uses SoulService instead of SoulManager
 """
-import os
-import json
 import logging
-from typing import Dict, Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 
 from schemas.requests import UpdateIdentityRequest, UpdateUserNameRequest
 
@@ -102,7 +99,7 @@ async def switch_character(request: SwitchCharacterRequest):
 @router.post("/soul/update_identity")
 async def update_identity(request: UpdateIdentityRequest):
     """Update Identity"""
-    soul_service = _get_soul_service()
+    _get_soul_service()
     try:
         # Delegate to service/driver
         # soul_service.update_identity(request)
@@ -115,7 +112,7 @@ async def update_identity(request: UpdateIdentityRequest):
 @router.post("/soul/update_user_name")
 async def update_user_name(request: UpdateUserNameRequest):
     """Update User Name"""
-    soul_service = _get_soul_service()
+    _get_soul_service()
     try:
         # Delegate
         # soul_service.update_user_name(request.user_name)

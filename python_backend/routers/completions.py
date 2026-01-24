@@ -1,19 +1,16 @@
 
 import logging
 import json
-import httpx
-import asyncio
 import time
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 
 logger = logging.getLogger("FreeLLMRouter")
 
 # from llm.manager import llm_manager
 from app_config import config as app_config
-from services.container import services
 
 # Search Imports removed. Uses dynamic lookup in handle_tool_call.
 # from plugins.skills.brave_search import BraveSearch

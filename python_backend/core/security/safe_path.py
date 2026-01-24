@@ -1,7 +1,7 @@
 import os
 import re
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union
 
 class SecurityException(Exception):
     """Raised when a security violation is detected (Path Traversal, etc.)"""
