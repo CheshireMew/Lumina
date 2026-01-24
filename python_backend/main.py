@@ -132,8 +132,8 @@ app.add_middleware(
         "tauri://localhost", "electron://altair"
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-Plugin-ID"],
 )
 
 # ========== 注册路由 ==========
