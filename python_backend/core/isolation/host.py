@@ -76,6 +76,9 @@ class PluginHost:
                     break
                 elif cmd == "call":
                     self.loop.run_until_complete(self._handle_call(msg))
+                elif cmd == "event":
+                    # [Phase 1] Handle forwarded events from main process
+                    self.loop.run_until_complete(self._handle_forwarded_event(msg))
                 else:
                     logger.warning(f"Unknown command: {cmd}")
                     
@@ -117,6 +120,7 @@ class PluginHost:
         # Unwrap data
         config_snapshot = msg.get("config", {})
         data_dir = msg.get("data_dir", "")
+        initial_data = msg.get("initial_data", {})  # [Phase 2] Pre-loaded data
         
         # Minimal Context for Isolated Plugin
         from core.isolation.proxy import RemoteContextStub
@@ -132,7 +136,8 @@ class PluginHost:
         
         context = RemoteContextStub(self.event_queue, self.manifest['id'])
         context.config = ConfigStub(config_snapshot)
-        context._data_dir = data_dir 
+        context._data_dir = data_dir
+        context._data_cache = initial_data  # [Phase 2] Set pre-loaded data cache
         
         # [PR-3] Bridge Logging
         # We attach a custom handler to the root logger that forwards to context
@@ -207,6 +212,33 @@ class PluginHost:
         except Exception as e:
             logger.error(f"RPC Call '{method_name}' failed: {e}", exc_info=True)
             self.event_queue.put({"type": "result", "id": req_id, "status": "error", "error": str(e)})
+
+    async def _handle_forwarded_event(self, msg):
+        """[Phase 1] Handle events forwarded from main process to child"""
+        topic = msg.get("topic")
+        event_data = msg.get("event", {})
+        
+        # Get context from plugin instance
+        context = getattr(self.plugin_instance, 'context', None)
+        if not context:
+            logger.warning(f"No context available to dispatch event '{topic}'")
+            return
+            
+        # Get local handlers registered via context.subscribe()
+        handlers = getattr(context, '_local_handlers', {})
+        handler = handlers.get(topic)
+        
+        if handler:
+            try:
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(event_data)
+                else:
+                    handler(event_data)
+                logger.debug(f"📨 Dispatched event '{topic}' to local handler")
+            except Exception as e:
+                logger.error(f"Error handling forwarded event '{topic}': {e}", exc_info=True)
+        else:
+            logger.debug(f"No handler registered for event '{topic}'")
 
     def _handle_teardown(self):
         if hasattr(self.plugin_instance, 'terminate'):
