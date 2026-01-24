@@ -35,7 +35,8 @@ class ReconciliationService:
             self._task.cancel()
             try:
                 await self._task
-            except: pass
+            except Exception:
+                pass
 
     async def _control_loop(self):
         """

@@ -59,7 +59,8 @@ async def lifespan(app: FastAPI):
              from services.chat_bridge import BasicChatBridge
              service_instance.chat_bridge = BasicChatBridge()
              service_instance.chat_bridge.start()
-        except: pass
+        except Exception as e:
+            logger.debug(f"ChatBridge init skipped: {e}")
 
     # Mount System Plugin Routers
     if service_instance.system_plugin_manager:

@@ -68,7 +68,8 @@ class ContextBuilderStep(PipelineStep):
              try:
                  # Use unified prompt system
                  base_system = await services.soul.get_system_prompt({"pipeline": "context_builder"})
-             except: pass
+             except Exception:
+                 pass
              
         ctx.system_prompt = base_system
         
@@ -215,7 +216,7 @@ class LLMExecutionStep(PipelineStep):
         args_str = tool_call.get("function", {}).get("arguments", "{}")
         try:
             args = json.loads(args_str)
-        except:
+        except Exception:
             args = {}
             
         # Dynamic Dispatch via Registry

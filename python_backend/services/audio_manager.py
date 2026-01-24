@@ -296,13 +296,13 @@ class AudioManager:
         if result == "speech_start" and self.on_speech_start:
             try:
                 self.on_speech_start()
-            except:
+            except Exception:
                 pass
             
             if self.on_vad_status_change:
                 try:
                     self.on_vad_status_change("listening")
-                except:
+                except Exception:
                     pass
         
         elif result == "speech_end":
@@ -323,7 +323,7 @@ class AudioManager:
             if self.on_vad_status_change:
                 try:
                     self.on_vad_status_change("idle")
-                except:
+                except Exception:
                     pass
     
     def _process_frame(self, frame: np.ndarray) -> str:
@@ -343,7 +343,7 @@ class AudioManager:
         # VAD Check
         try:
             is_speech = self.vad.is_speech(pcm, self.sample_rate)
-        except:
+        except Exception:
             is_speech = False
         
         # Extra Energy Check (Filter low energy noise)

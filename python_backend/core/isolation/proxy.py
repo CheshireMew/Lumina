@@ -259,8 +259,8 @@ class RemotePluginProxy(BaseSystemPlugin):
                     msg = await asyncio.get_event_loop().run_in_executor(
                         None, self.event_queue.get, True, 0.1
                     )
-                except:
-                    # Empty
+                except Exception:
+                    # Queue empty or timeout
                     continue
                 
                 if msg["type"] == "emit":
@@ -288,7 +288,7 @@ class RemotePluginProxy(BaseSystemPlugin):
                                         body = await request.json()
                                         if isinstance(body, dict):
                                             kwargs.update(body)
-                                    except:
+                                    except Exception:
                                         pass
                                         
                                     result = await self._rpc_call(handler_name, **kwargs)

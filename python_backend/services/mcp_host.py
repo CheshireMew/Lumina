@@ -68,8 +68,8 @@ class MCPHost:
                     try:
                         data = json.loads(line[6:])
                         await self._handle_event(name, data)
-                    except:
-                        pass # Ignore malformed events
+                    except Exception:
+                        pass  # Ignore malformed events
             
             client = MCPClient(name=name, stderr_handler=stderr_handler)
             
