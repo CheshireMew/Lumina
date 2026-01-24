@@ -18,7 +18,7 @@ Usage:
 import functools
 import warnings
 import logging
-from typing import Optional, Callable, Any
+from typing import Optional, Callable
 
 logger = logging.getLogger("API")
 

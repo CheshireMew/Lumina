@@ -1,6 +1,5 @@
 import logging
-import asyncio
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 
 from core.interfaces.plugin import BaseSystemPlugin
 # [Fix] CapabilityType is defined in schemas
@@ -11,8 +10,7 @@ from services.plugins.sync import PluginStateSynchronizer
 from services.plugins.dispatcher import PluginDispatcher
 
 from core.events.bus import bus
-from core.events.definitions import PluginLifecycleRequest, PluginLoadedPayload, PluginErrorPayload, PluginDisabledPayload
-from app_config import config
+from core.events.definitions import PluginLoadedPayload, PluginDisabledPayload
 
 logger = logging.getLogger("SystemPluginManager")
 

@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict
 from datetime import datetime
 from core.db.interface import VectorDBInterface
 

@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Iterator, AsyncGenerator, Any, Optional, Dict, Tuple, TYPE_CHECKING
+from typing import AsyncGenerator, Any, Optional, Dict, Tuple, TYPE_CHECKING
 from core.interfaces.plugin import BaseSystemPlugin
 
 if TYPE_CHECKING:

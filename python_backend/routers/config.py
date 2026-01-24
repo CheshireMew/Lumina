@@ -5,8 +5,6 @@ Includes: /configure, /health
 Refactored: Removed inject_dependencies pattern
 Now uses EventBus for service access
 """
-import os
-import json
 import time
 import logging
 from typing import Dict

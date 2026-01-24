@@ -1,6 +1,6 @@
 import logging
 from openai import AsyncOpenAI
-from typing import Any, List, Optional
+from typing import Any, Optional
 from core.interfaces.driver import BaseLLMDriver
 
 logger = logging.getLogger("OpenAIDriver")

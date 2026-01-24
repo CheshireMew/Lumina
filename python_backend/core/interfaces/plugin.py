@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
-from core.api_version import api_stable, deprecated, PLUGIN_API_VERSION
+from core.api_version import api_stable, PLUGIN_API_VERSION
 
 class BaseSystemPlugin(ABC):
     """

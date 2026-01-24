@@ -5,7 +5,7 @@ import os
 import traceback
 import argparse
 import inspect
-from typing import Any, Dict, List
+from typing import Any, Dict
 from pathlib import Path
 
 # Force UTF-8 for IO

@@ -4,7 +4,6 @@ from datetime import datetime
 from queue import Queue
 from threading import Thread
 from typing import List, Dict, Optional, Any
-from app_config import config
 from memory.vector_store import VectorStore
 # from memory.connection import DBConnection # Deprecated
 from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp

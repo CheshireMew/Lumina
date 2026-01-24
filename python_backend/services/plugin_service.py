@@ -7,17 +7,14 @@ import yaml
 import os
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from app_config import config as app_config
 from core.manifest import PluginManifest
-from core.events.bus import Event
 from services.infra.service_discovery import discovery
-from core.events.definitions import PluginLifecycleRequest, PluginLoadedPayload, PluginErrorPayload, PluginDisabledPayload
 from core.protocol import EventType
 
 # [Fix] CapabilityType is in schemas
-from core.capabilities.schemas import CapabilityType
 
 
 # [Architecture 3.0] Base Directory
@@ -607,7 +604,7 @@ class PluginService:
              raise ValueError(f"Plugin {plugin_id} not found")
         
         target = target_info.get('runtime_target', 'main')
-        caps = target_info.get('capabilities', [])
+        target_info.get('capabilities', [])
         
         # [Safety] Persistent vs Transient Audit
         is_transient = key.startswith("_") or key in ["session_id", "trace_id"]
@@ -1031,7 +1028,7 @@ class PluginService:
                                      s["plugin_id"] = f"mcp.{name}" # logical ID
                                      s["_source"] = "mcp"
                                  slots.extend(mcp_slots)
-                     except Exception as e:
+                     except Exception:
                          pass
 
         return slots

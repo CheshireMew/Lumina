@@ -1,5 +1,4 @@
 import sys
-import time
 import queue
 import logging
 import traceback

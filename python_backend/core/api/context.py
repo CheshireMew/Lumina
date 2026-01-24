@@ -1,8 +1,5 @@
 import logging
 from typing import Any, Optional, Dict
-import asyncio
-from pathlib import Path
-import json
 
 # Strict DI
 from core.utils.frozen_proxy import FrozenProxy
@@ -10,7 +7,6 @@ from core.utils.frozen_proxy import FrozenProxy
 from core.events import get_event_bus, EventBus
 # [Architecture 6.0] Capability
 # [Fix] CapabilityType is in schemas
-from core.capabilities.schemas import CapabilityType
 
 logger = logging.getLogger("LuminaContext")
 
@@ -128,7 +124,6 @@ class LuminaContext:
             return
 
         # BACKUP (EventBus)
-        from core.events import Event
         
         payload = {
             "plugin_id": self.plugin_id,

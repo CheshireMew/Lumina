@@ -31,7 +31,7 @@ class RAGContextProvider(ContextProvider):
         if not user_text or len(user_text) < 3: return None
 
         # 2. Embedding + Search (with caching)
-        from services.embedding_cache import get_embedding_cached, get_embedding_cache
+        from services.embedding_cache import get_embedding_cached
         
         llm_manager = services.get_llm_manager()
         vector = None

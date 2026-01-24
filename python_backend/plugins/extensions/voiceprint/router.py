@@ -1,11 +1,10 @@
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from typing import List, Dict, Any, TYPE_CHECKING
+from fastapi import APIRouter, UploadFile, File, HTTPException
+from typing import TYPE_CHECKING
 import logging
 import shutil
 import os
 import tempfile
-import numpy as np
 import soundfile as sf
 from services.container import services
 

@@ -8,7 +8,7 @@ Refactored: Removed inject_dependencies
 """
 import logging
 import re
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.container import services

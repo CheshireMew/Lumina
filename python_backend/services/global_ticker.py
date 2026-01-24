@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import List, Callable, Awaitable, Optional
+from typing import List, Callable, Awaitable
 from datetime import datetime
 
 logger = logging.getLogger("GlobalTicker")

@@ -7,12 +7,10 @@ Uses sounddevice + webrtcvad for precise device isolation and VAD detection
 import sounddevice as sd
 import webrtcvad
 import numpy as np
-import threading
 import logging
 from collections import deque
 from typing import Optional, Callable, Dict, List
 import json
-from pathlib import Path
 
 from app_config import CONFIG_ROOT
 

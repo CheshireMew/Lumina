@@ -1,5 +1,5 @@
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from prompt_manager import prompt_manager
 
 class SoulRenderer:

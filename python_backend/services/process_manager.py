@@ -4,7 +4,7 @@ import os
 import logging
 import asyncio
 import time
-from typing import Dict, Optional, List
+from typing import Dict, List
 from pathlib import Path
 
 logger = logging.getLogger("ProcessManager")

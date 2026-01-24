@@ -2,9 +2,7 @@
 import logging
 import contextvars
 from typing import Any, Dict, Optional, Callable, List
-from fastapi import FastAPI, APIRouter, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from fastapi import FastAPI, APIRouter
 
 from core.events import get_event_bus
 
@@ -70,7 +68,7 @@ class RouterManager:
             response_model = payload.get("response_model")
             
             # 1. Get or Create Plugin Router
-            router = self._get_plugin_router(plugin_id)
+            self._get_plugin_router(plugin_id)
             
             # 2. Add Route to Router
             # We wrap the handler to ensure async compatibility if needed, 
@@ -122,7 +120,7 @@ class RouterManager:
         # FastAPI stores routes in app.router.routes (a list)
         # We must iterate and rebuild or remove in place. Rebuilding is safer for concurrency.
         
-        original_count = len(self.app.router.routes)
+        len(self.app.router.routes)
         new_routes = []
         
         for route in self.app.router.routes:

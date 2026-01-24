@@ -113,7 +113,7 @@ def _resolve_data_root() -> Path:
     if not app_data.exists():
         try:
             app_data.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
+        except Exception:
             # Fallback to temp if strictly read-only system (unlikely but safe)
             import tempfile
             return Path(tempfile.gettempdir()) / "Lumina"

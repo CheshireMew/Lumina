@@ -3,8 +3,7 @@ import json
 import os
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
-from core.exceptions import PersistenceError
+from typing import Dict, Any
 from services.error_monitor import track_error
 
 logger = logging.getLogger("SoulPersistence")

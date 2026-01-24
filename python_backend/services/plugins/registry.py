@@ -1,6 +1,5 @@
 import os
 import logging
-import sys
 from typing import Dict, List, Optional
 from pathlib import Path
 from collections import defaultdict

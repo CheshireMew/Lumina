@@ -308,7 +308,6 @@ async def load_plugins(req: PluginLoadRequest, request: Request, background_task
     """
     from services.plugins.loader import PluginLoader
     from core.interfaces.driver import BaseSTTDriver
-    import capabilities.stt.globals as stt_globals
 
     loaded = []
     

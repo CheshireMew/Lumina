@@ -2,7 +2,7 @@
 import os
 import logging
 import threading
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, Any
 from app_config import config as app_settings
 from core.interfaces.driver import BaseSTTDriver
 

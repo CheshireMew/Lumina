@@ -1,6 +1,6 @@
 
 import logging
-from typing import List, Dict, Tuple, Set
+from typing import List
 from core.manifest import PluginManifest
 
 logger = logging.getLogger("PluginDeps")

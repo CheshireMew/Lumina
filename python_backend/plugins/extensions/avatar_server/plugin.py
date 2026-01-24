@@ -1,10 +1,9 @@
 import re
 import logging
-import asyncio
 from typing import Dict, Optional
 
 from core.interfaces.plugin import BaseSystemPlugin
-from core.protocol import EventPacket, EventType
+from core.protocol import EventType
 from .vmc_protocol import VMCClient
 
 logger = logging.getLogger("AvatarServer")

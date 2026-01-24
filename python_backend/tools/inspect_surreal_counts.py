@@ -1,5 +1,5 @@
 import asyncio
-from surrealdb import Surreal, AsyncSurreal
+from surrealdb import AsyncSurreal
 
 async def main():
     conn_str = "ws://127.0.0.1:8000/rpc"

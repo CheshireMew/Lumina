@@ -2,7 +2,6 @@ import os
 import logging
 import numpy as np
 import shutil
-import sys
 try:
     import sherpa_onnx
 except ImportError:
@@ -55,8 +54,8 @@ class SenseVoiceEngine:
             logger.info(f"Model path: {model_path}")
 
             # Check for optional rule files for emotion/event tags
-            rule_fsts_path = os.path.join(self.model_dir, "rule.fst")
-            rule_far_path = os.path.join(self.model_dir, "rule.far")
+            os.path.join(self.model_dir, "rule.fst")
+            os.path.join(self.model_dir, "rule.far")
             
             # Use the correct sherpa-onnx factory method for SenseVoice
             # Note: rule parameter enables emotion/event tag output

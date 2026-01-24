@@ -1,9 +1,6 @@
 import asyncio
 import json
 import logging
-import os
-import sys
-import uuid
 import aiohttp
 from typing import Optional, Dict, Any, Callable, Awaitable
 
@@ -123,7 +120,7 @@ class MCPClient:
                         logger.error(f"[{self.name}] Stderr handler error: {e}")
                 
                 logger.debug(f"[{self.name}] STDERR: {line_str}")
-        except Exception as e:
+        except Exception:
             pass 
 
     async def _handle_message(self, data: Dict):

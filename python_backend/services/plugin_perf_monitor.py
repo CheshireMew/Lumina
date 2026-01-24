@@ -11,12 +11,10 @@ Features:
 - Performance summary reports
 """
 
-import asyncio
 import logging
 import time
-from typing import Dict, Optional, Callable, Any
+from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
-from collections import defaultdict
 
 logger = logging.getLogger("PluginPerfMonitor")
 

@@ -3,7 +3,7 @@
 # Used to share state between Lifecycle (stt_server.py) and Routers (routers/stt_routes.py)
 
 import queue
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 # Audio Manager (Singleton)
 # Initialized in stt_server.startup_event

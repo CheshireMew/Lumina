@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import sys
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from app_config import config as app_settings, BASE_DIR
 from services.mcp.client import MCPClient
 
@@ -119,7 +119,7 @@ class MCPHost:
                     for p in parts:
                         val = getattr(val, p)
                     args[arg_name] = val
-                except Exception as e:
+                except Exception:
                     pass
         
         if tool:

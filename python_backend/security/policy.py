@@ -1,7 +1,7 @@
 import logging
 from typing import List, Tuple
 from core.manifest import PluginManifest
-from core.permissions import Permission, TIER_SAFE, TIER_TRUSTED, TIER_SYSTEM
+from core.permissions import TIER_SAFE, TIER_TRUSTED, TIER_SYSTEM
 from core.security.audit import AuditLogger
 
 logger = logging.getLogger("SecurityPolicy")

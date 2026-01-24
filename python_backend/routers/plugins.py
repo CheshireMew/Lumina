@@ -1,9 +1,8 @@
 import logging
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 
-from services.plugin_service import PluginService
 
 logger = logging.getLogger("PluginAPI")
 router = APIRouter(prefix="/plugins", tags=["Plugins"])

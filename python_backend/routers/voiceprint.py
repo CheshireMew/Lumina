@@ -8,9 +8,7 @@ Voiceprint management APIs moved from STT Worker to Main Process.
 """
 import logging
 import httpx
-import base64
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
-from typing import Optional
 from app_config import config
 from services.infra.bus_factory import get_lifecycle_bus
 
