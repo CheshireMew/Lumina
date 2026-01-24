@@ -51,7 +51,7 @@ class RemoteContextStub:
         self._queue.put({"type": "emit", "event": event_dict})
 
     def subscribe(self, topic, handler):
-        # TODO: Implement reverse subscription (Main -> Child)
+        # Note: Subscription forwarding is implemented in remote_context.py
         pass
 
     def register_service(self, name, service):
