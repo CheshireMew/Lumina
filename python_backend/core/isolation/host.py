@@ -151,7 +151,7 @@ class PluginHost:
                         "name": record.name
                     }
                     context.emit_log(log_entry)
-                except:
+                except Exception:
                     pass
         
         # Add handler to root logger
