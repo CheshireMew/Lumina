@@ -1,3 +1,20 @@
+"""
+[DEPRECATED] This module is scheduled for removal.
+
+Migration Path:
+- Use `memory.factory.MemoryDriverFactory` to get drivers directly
+- Use `services.container.services.get_memory()` for high-level access
+- RAG via `services.chat.pipeline.ChatPipeline`
+
+This file will be removed in a future version.
+"""
+import warnings
+warnings.warn(
+    "memory.core.MemoryService is deprecated. Use memory.factory.MemoryDriverFactory instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
 import logging
 import asyncio
 from datetime import datetime
