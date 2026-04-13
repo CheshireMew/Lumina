@@ -51,11 +51,11 @@ const LEVEL_COLORS: {[key: number]: string[]} = {
 
 interface GalGameHudProps {
     activeCharacterId: string;
-    onOpenSurrealViewer?: () => void;
+    onOpenMemoryInspector?: () => void;
     galgameEnabled?: boolean; // ⚡ New Prop
 }
 
-const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrealViewer, galgameEnabled = true }) => {
+const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenMemoryInspector, galgameEnabled = true }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [profile, setProfile] = useState<SoulProfile | null>(null);
 
@@ -245,7 +245,7 @@ const GalGameHud: React.FC<GalGameHudProps> = ({ activeCharacterId, onOpenSurrea
                 <button
                     onClick={() => {
                         setIsVisible(false); 
-                        onOpenSurrealViewer?.();
+                        onOpenMemoryInspector?.();
                     }}
                     style={{
                         background: 'rgba(0, 255, 157, 0.2)',

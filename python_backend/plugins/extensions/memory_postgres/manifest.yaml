@@ -1,20 +1,10 @@
 id: driver.memory.postgres
-name: PostgreSQL Memory Driver
-version: 1.0.0
-description: Professional Database Driver for Memory & Coordination
-entrypoint: none
-category: driver
-group_id: memory
-group_exclusive: true
-tags: [memory, core, database, postgres]
+api_version: "1.0"
+kind: provider
+capability: memory
+runtime_target: main
 permissions:
-  - network.outbound
-  - filesystem.read
-
+  - database.postgres
+config_schema: {}
 provides:
-  - type: memory.store
-    attributes:
-      backend: postgres
-      vector: true
-      graph: true
-      realtime: true
+  - chat.context

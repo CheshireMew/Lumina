@@ -178,7 +178,7 @@ class GatewayService:
                          # Forward to system (e.g. for clearing context)
                          await self.bus.emit(EventType.CONTROL_SESSION, packet, source="frontend") 
                     elif packet.type == EventType.INPUT_TEXT or packet.type == "chat":
-                        print("DEBUG: Gateway Emitting INPUT_TEXT")
+                        logger.debug("Gateway Emitting INPUT_TEXT")
                         # Publish to Bus (normalize to INPUT_TEXT)
                         packet.type = EventType.INPUT_TEXT
                         await self.bus.emit(EventType.INPUT_TEXT, packet, source="frontend")

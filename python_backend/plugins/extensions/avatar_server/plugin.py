@@ -1,211 +1,140 @@
-import re
 import logging
+import os
+import re
+from pathlib import Path
 from typing import Dict, Optional
 
-from core.interfaces.plugin import BaseSystemPlugin
+from app_config import IS_FROZEN, config
+from core.interfaces.plugin import Plugin as BasePlugin
 from core.protocol import EventType
+
 from .vmc_protocol import VMCClient
 
 logger = logging.getLogger("AvatarServer")
 
-class AvatarServerPlugin(BaseSystemPlugin):
-    """
-    Passive Avatar Driver.
-    Listens to BRAIN_RESPONSE and extracts emotion tags.
-    Broadcasts to VMC (OSC) and Frontend (WebSocket).
-    """
 
-    @property
-    def id(self) -> str:
-        return "system.avatar_server"
-
-    @property
-    def name(self) -> str:
-        return "Avatar Driver (VMC)"
-
-    @property
-    def description(self) -> str:
-        return "Synchronizes AI emotions with VMC-compatible avatars and Live2D models."
-
+class Plugin(BasePlugin):
     def __init__(self):
         super().__init__()
         self.vmc_client: Optional[VMCClient] = None
         self.mappings: Dict[str, str] = {}
-        # Regex to capture [emotion] or (emotion)
-        self.tag_pattern = re.compile(r'[\[\(](joy|sad|angry|surprised|neutral|thinking)[\]\)]', re.IGNORECASE)
+        self.tag_pattern = re.compile(r"[\[\(](joy|sad|angry|surprised|neutral|thinking)[\]\)]", re.IGNORECASE)
 
-    async def initialize(self, context):
-        super().initialize(context)
-        
-        # Load Config
+    async def load(self, context):
+        await super().load(context)
         vmc_ip = self.config.get("vmc_ip", "127.0.0.1")
         vmc_port = self.config.get("vmc_port", 39539)
         self.mappings = self.config.get("mappings", {})
-        
-        # Init Client
         self.vmc_client = VMCClient(ip=vmc_ip, port=vmc_port)
-        
-        # Subscribe to Brain Response (Stream)
-        # Note: We listen to the RAW stream chunks. 
-        # Ideally, we should listen to a "sentence_end" event or process chunks statefully.
-        # For this MVP, we scan chunks. Tag splitting across chunks is a known edge case.
-        if hasattr(self.context, 'bus'):
-            self.context.bus.subscribe(EventType.BRAIN_RESPONSE, self.handle_brain_response)
-        
-        logger.info(f"馃幁 Avatar Driver Listening via OSC on {vmc_ip}:{vmc_port}")
+
+    async def enable(self):
+        await super().enable()
+        self.context.subscribe(EventType.BRAIN_RESPONSE, self.handle_brain_response)
+
+    async def disable(self):
+        await super().disable()
+        self.vmc_client = None
 
     async def handle_brain_response(self, event):
-        """
-        Process text chunks for emotion tags.
-        """
-        # Unwrap Event wrapper
         packet = event.data
-        if not packet or not hasattr(packet, "payload"): return
-
+        if not packet or not hasattr(packet, "payload"):
+            return
         content = packet.payload.get("content", "")
-
-        # Simple Scan
-        matches = self.tag_pattern.findall(content)
-        for match in matches:
+        for match in self.tag_pattern.findall(content):
             emotion = match.lower()
-            logger.info(f"鉁?Detected Emotion Tag: {emotion}")
-            
-            # 1. Drive VMC (External)
             if self.vmc_client:
                 self.vmc_client.send_emotion(emotion, self.mappings)
-            
-            # 2. Drive Frontend (Internal)
-            # If "sync_frontend" is true, we emit a dedicated event
-            # so the Frontend doesn't HAVE to parse text anymore.
             if self.config.get("sync_frontend", True):
-                payload = {"emotion": emotion, "provider": "vmc_mirror"}
-                await self.context.bus.emit("avatar.emotion", payload)
+                await self.context.emit("avatar.emotion", {"emotion": emotion, "provider": "vmc"})
 
-    def scan_models(self) -> list:
-        """
-        Scan for available avatars (Live2D, VRM, Sprites).
-        Returns list of {name, path, type, thumbnail}.
-        """
-        from app_config import config, IS_FROZEN
-        from pathlib import Path
-        import os
-
-        # Root paths
-        if IS_FROZEN:
-             public_root = config.base_dir / "public"
-        else:
-             public_root = config.base_dir.parent / "public"
-
+    def scan_models(self) -> list[dict]:
+        public_root = config.base_dir / "public" if IS_FROZEN else config.base_dir.parent / "public"
         if not public_root.exists():
-            logger.warning(f"Public directory not found: {public_root}")
             return []
 
-        # Helper to find thumbnail
         def find_thumbnail(model_path: Path) -> Optional[str]:
-            # Priority: thumbnail.png/jpg -> preview.png/jpg -> model_name.png/jpg
-            candidates = [
-                "thumbnail.png", "thumbnail.jpg",
-                "preview.png", "preview.jpg",
-                f"{model_path.stem}.png", f"{model_path.stem}.jpg",
-                "icon.png"
-            ]
-            
-            parent = model_path.parent
-            for cand in candidates:
-                thumb_file = parent / cand
+            for candidate in (
+                "thumbnail.png",
+                "thumbnail.jpg",
+                "preview.png",
+                "preview.jpg",
+                f"{model_path.stem}.png",
+                f"{model_path.stem}.jpg",
+                "icon.png",
+            ):
+                thumb_file = model_path.parent / candidate
                 if thumb_file.exists():
-                    try:
-                        rel = thumb_file.relative_to(public_root)
-                        return f"/{rel.as_posix()}"
-                    except ValueError:
-                        continue
+                    return f"/{thumb_file.relative_to(public_root).as_posix()}"
             return None
 
-        # Helper to deduplicate
         seen_names = set()
-        unique_models = []
+        models: list[dict] = []
 
-        def add_model(model_data):
-            # Normalize key for loose deduplication (optional) or strict
-            key = model_data['name']
-            if key not in seen_names:
-                seen_names.add(key)
-                unique_models.append(model_data)
+        def add_model(model_data: dict):
+            if model_data["name"] in seen_names:
+                return
+            seen_names.add(model_data["name"])
+            models.append(model_data)
 
-        # 1. Scan Live2D (.model3.json)
         live2d_root = public_root / "live2d"
         if live2d_root.exists():
-            for root, dirs, files in os.walk(live2d_root):
+            for root, _dirs, files in os.walk(live2d_root):
                 for file in files:
-                    if file.endswith(".model3.json"):
-                        try:
-                            abs_path = Path(root) / file
-                            # Skip if inside hidden folders
-                            if any(p.startswith('.') for p in abs_path.parts): continue
-                            
-                            rel_path = abs_path.relative_to(public_root)
-                            web_path = f"/{rel_path.as_posix()}"
-                            
-                            name = abs_path.parent.name
-                            if name == "imported": name = file.replace(".model3.json", "")
-                            
-                            # Clean up name (optional)
-                            # name = name.replace("_", " ") 
-                            
-                            add_model({
-                                "name": name,
-                                "path": web_path,
-                                "type": "live2d",
-                                "thumbnail": find_thumbnail(abs_path)
-                            })
-                        except Exception as e:
-                            logger.warn(f"Error processing Live2D {file}: {e}")
+                    if not file.endswith(".model3.json"):
+                        continue
+                    abs_path = Path(root) / file
+                    add_model(
+                        {
+                            "name": abs_path.parent.name if abs_path.parent.name != "imported" else file.replace(".model3.json", ""),
+                            "path": f"/{abs_path.relative_to(public_root).as_posix()}",
+                            "type": "live2d",
+                            "thumbnail": find_thumbnail(abs_path),
+                        }
+                    )
 
-        # 2. Scan VRM (.vrm)
         vrm_root = public_root / "vrm"
         if vrm_root.exists():
-            for root, dirs, files in os.walk(vrm_root):
+            for root, _dirs, files in os.walk(vrm_root):
                 for file in files:
-                    if file.endswith(".vrm"):
-                        try:
-                            abs_path = Path(root) / file
-                            if any(p.startswith('.') for p in abs_path.parts): continue
-                            
-                            rel_path = abs_path.relative_to(public_root)
-                            web_path = f"/{rel_path.as_posix()}"
-                            
-                            add_model({
-                                "name": file.replace(".vrm", ""),
-                                "path": web_path,
-                                "type": "vrm",
-                                "thumbnail": find_thumbnail(abs_path)
-                            })
-                        except Exception: pass
+                    if not file.endswith(".vrm"):
+                        continue
+                    abs_path = Path(root) / file
+                    add_model(
+                        {
+                            "name": file.replace(".vrm", ""),
+                            "path": f"/{abs_path.relative_to(public_root).as_posix()}",
+                            "type": "vrm",
+                            "thumbnail": find_thumbnail(abs_path),
+                        }
+                    )
 
-        # 3. Scan Sprites (custom convention: folders in public/sprites)
         sprites_root = public_root / "sprites"
         if sprites_root.exists():
-             for entry in sprites_root.iterdir():
-                 if entry.is_dir():
-                     if entry.name.startswith('.'): continue
-                     
-                     # Check for main image
-                     candidates = ["default.png", "normal.png", "stand.png"]
-                     main_sprite = None
-                     for c in candidates:
-                         if (entry / c).exists():
-                             main_sprite = entry / c
-                             break
-                     
-                     if main_sprite:
-                         try:
-                             web_path = f"/{main_sprite.relative_to(public_root).as_posix()}"
-                             add_model({
-                                 "name": entry.name,
-                                 "path": web_path,
-                                 "type": "sprite",
-                                 "thumbnail": find_thumbnail(main_sprite) or web_path
-                             })
-                         except: pass
+            for entry in sprites_root.iterdir():
+                if not entry.is_dir():
+                    continue
+                for candidate in ("default.png", "normal.png", "stand.png"):
+                    main_sprite = entry / candidate
+                    if main_sprite.exists():
+                        add_model(
+                            {
+                                "name": entry.name,
+                                "path": f"/{main_sprite.relative_to(public_root).as_posix()}",
+                                "type": "sprite",
+                                "thumbnail": find_thumbnail(main_sprite) or f"/{main_sprite.relative_to(public_root).as_posix()}",
+                            }
+                        )
+                        break
 
-        return sorted(unique_models, key=lambda x: x['name'])
+        return sorted(models, key=lambda item: item["name"])
+
+    def get_metadata(self) -> dict:
+        metadata = super().get_metadata()
+        metadata.update(
+            {
+                "name": "Avatar Server",
+                "description": "Bridges chat emotion output into VMC avatars and frontend animation.",
+                "func_tag": "Avatar",
+            }
+        )
+        return metadata

@@ -3,7 +3,6 @@ import logging
 from typing import Callable, List, Dict, Any
 from fastapi import FastAPI
 from core.interfaces.capability import IWorkerCapability
-from services.container import services
 from .manager import VisionPluginManager
 from .routes import router as vision_router
 
@@ -27,12 +26,19 @@ class Capability(IWorkerCapability):
         return lambda: [{"id": "vision_service", "status": "active"}]
 
     async def on_startup(self, app: FastAPI):
+        container = app.state.container
         # 1. Initialize Manager
-        manager = VisionPluginManager()
+        def resolve_model_name(feature: str) -> str:
+            try:
+                return container.get_llm_manager().get_model_name(feature)
+            except Exception:
+                return "gpt-4o"
+
+        manager = VisionPluginManager(model_name_resolver=resolve_model_name)
         await manager.register_drivers()
         
         # 2. Register to Container
-        services.register_vision(manager)
+        container.register_vision(manager)
         
         logger.info(f"Vision Service Ready. Active Driver: {manager.active_driver_id}")
 

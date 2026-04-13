@@ -102,7 +102,7 @@ jobs:
           safety check \
             --file python_backend/requirements.txt \
             --json \
-            --output safety-results.json \
+            > safety-results.json \
             || true
 
       - name: Run safety check (full report)
@@ -142,12 +142,15 @@ jobs:
           fetch-depth: 0  # Full history for better detection
 
       - name: TruffleHog Secret Scanning
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --only-verified --json
+        run: |
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/repo" \
+            ghcr.io/trufflesecurity/trufflehog:latest \
+            filesystem /repo \
+            --only-verified \
+            --json \
+            --fail \
+            --no-update
 
   # ========================================================================
   # Job 4: Pytest Security Tests
@@ -167,14 +170,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio httpx
+          pip install pytest pytest-asyncio pytest-html httpx
 
       - name: Run security test suite
         working-directory: automation
         run: |
           pytest tests_pytest/security/ \
             -v \
-            -m security \
+            -m "security or security_scan" \
             --junitxml=security-test-results.xml \
             --html=security-test-report.html
 
@@ -188,12 +191,13 @@ jobs:
             automation/security-test-report.html
           retention-days: 30
 
-      - name: Publish test results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+      - name: Generate pytest summary
         if: always()
-        with:
-          files: automation/security-test-results.xml
-          check_name: Security Test Results
+        run: |
+          if [ -f automation/security-test-results.xml ]; then
+            echo "### Security Pytest Results" >> $GITHUB_STEP_SUMMARY
+            python -c "import xml.etree.ElementTree as ET; root = ET.parse('automation/security-test-results.xml').getroot(); print(f'- tests: {root.attrib.get(\"tests\", \"0\")}'); print(f'- failures: {root.attrib.get(\"failures\", \"0\")}'); print(f'- errors: {root.attrib.get(\"errors\", \"0\")}'); print(f'- skipped: {root.attrib.get(\"skipped\", \"0\")}')" >> $GITHUB_STEP_SUMMARY
+          fi
 
   # ========================================================================
   # Job 5: Snyk Security Scan (optional)
@@ -242,9 +246,6 @@ jobs:
     needs: [bandit-scan, safety-scan, secrets-scan, pytest-security]
     if: always()
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-
       - name: Generate security summary
         run: |
           echo "# Security Scan Summary" >> $GITHUB_STEP_SUMMARY

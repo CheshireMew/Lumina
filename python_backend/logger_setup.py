@@ -67,7 +67,7 @@ class TeeOutput:
             try:
                 self.stream.write(data.encode('utf-8').decode(sys.stdout.encoding, errors='ignore'))
                 self.stream.flush()
-            except:
+            except Exception:
                 pass # Give up on writing this chunk to console
         
         # 写入文件 (去除颜色)
@@ -161,8 +161,8 @@ def setup_logger(log_filename="server.log"):
     class LogFilter(logging.Filter):
         def filter(self, record):
             msg = record.getMessage()
-            # Ignore Registry Heartbeats and Slot Checks
-            if "/plugins/registry" in msg or "/plugins/slots" in msg:
+            # Ignore Slot Checks
+            if "/plugins/slots" in msg:
                 return False
             return True
 

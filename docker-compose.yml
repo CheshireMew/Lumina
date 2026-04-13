@@ -7,11 +7,11 @@ services:
     container_name: lumina_brain
     restart: always
     environment:
-      POSTGRES_USER: lumina_user
-      POSTGRES_PASSWORD: lumina_password
-      POSTGRES_DB: lumina_db
+      POSTGRES_USER: ${LUMINA_PG_USER:-lumina_user}
+      POSTGRES_PASSWORD: ${LUMINA_PG_PASSWORD:-lumina_password}
+      POSTGRES_DB: ${LUMINA_PG_DATABASE:-lumina_db}
     ports:
-      - "5432:5432"
+      - "${LUMINA_PG_PORT:-5432}:5432"
     volumes:
       # Persist data to local 'data/postgres' folder so it survives restarts
       - ./data/postgres:/var/lib/postgresql/data

@@ -1,0 +1,106 @@
+
+Starting Python Backend...
+[BackendManager] Starting all services...
+[BackendManager] Loaded ports from: E:\Work\Code\Lumina\config\ports.json
+[BackendManager] Services Configured: [ 'core:8010' ]
+[BackendManager] Launching dev core: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'core'
+] CWD: E:\Work\Code\Lumina\python_backend
+[core] 2026-04-12 19:20:07,180 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\lumina_core.log
+[core] 2026-04-12 19:20:07,235 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[core] [Launcher] Starting Core System on 127.0.0.1:8010...
+[core] 2026-04-12 19:20:07,280 [INFO] [-] [-] uvicorn.error: Started server process [31456]
+[core] 2026-04-12 19:20:07,280 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[core] 2026-04-12 19:20:07,286 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+[core] 2026-04-12 19:20:07,286 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+2026-04-12 19:20:07,286 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Configuration (0.00s)
+[core] 2026-04-12 19:20:07,373 [INFO] [-] [-] SDK.PluginLoader: Scanning driver directory: E:\Work\Code\Lumina\python_backend\plugins\extensions\memory_postgres\drivers\memory
+[core] 2026-04-12 19:20:07,470 [INFO] [-] [-] memory.factory: [MemoryFactory] Selected Driver: PostgreSQL Driver (driver.memory.postgres)
+2026-04-12 19:20:07,470 [INFO] [-] [-] ConsolidationBatch: [BatchManager] Initialized
+[core] 2026-04-12 19:20:07,618 [INFO] [-] [-] PostgresDriver.Schema: PostgreSQL schema initialized
+[core] 2026-04-12 19:20:07,619 [INFO] [-] [-] PostgresDriver: Connected to PostgreSQL at localhost:5433
+2026-04-12 19:20:07,619 [INFO] [-] [-] Bootstrap.Infra: ✅ Memory System Connected
+2026-04-12 19:20:07,619 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Memory Backend (0.33s)
+[core] 2026-04-12 19:20:07,625 [INFO] [-] [-] Bootstrap.Infra: ✅ EventBus Initialized
+[core] 2026-04-12 19:20:07,625 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: EventBus (0.01s)
+2026-04-12 19:20:07,625 [INFO] [-] [-] EventBus: ⚡ Bulk Registered 6 Event Schemas
+2026-04-12 19:20:07,625 [INFO] [-] [-] Bootstrap.Infra: ✅ Protocol Schema Validation Active (6 events)
+2026-04-12 19:20:07,625 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Event Protocol (Schemas) (0.00s)
+[core] 2026-04-12 19:20:07,625 [INFO] [-] [-] Bootstrap.Integration: ✅ RouterManager Bootstrapped & Subscribed
+2026-04-12 19:20:07,625 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: RouterManager (0.00s)
+[core] 2026-04-12 19:20:08,246 [INFO] [-] [-] GlobalTicker: 鈴憋笍 Global Ticker Started
+[core] 2026-04-12 19:20:08,246 [INFO] [-] [-] Bootstrap.Services: ✅ Core Services (LLM, Soul, Session, Ticker) Initialized
+2026-04-12 19:20:08,246 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Core Services (0.63s)
+[core] 2026-04-12 19:20:08,252 [INFO] [-] [-] Bootstrap.Services: ✅ Plugin Registry Service Initialized
+2026-04-12 19:20:08,252 [INFO] [-] [-] Bootstrap.Services: ✅ Worker-backed media services delegated to STT/TTS workers
+2026-04-12 19:20:08,252 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Plugin Services (Vision/TTS/STT) (0.00s)
+[core] 2026-04-12 19:20:08,255 [INFO] [-] [-] Bootstrap.Services: ✅ Middleware Registered
+2026-04-12 19:20:08,255 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Middleware (Context/Tools) (0.00s)
+[core] 2026-04-12 19:20:08,262 [INFO] [-] [-] SystemPluginManager: Starting unified plugin kernel for runtime main
+[core] 2026-04-12 19:20:08,274 [WARNING] [-] [-] PluginPermissionChecker: [system.avatar_server] 🟡 Trusted Permission Requested: network.udp
+2026-04-12 19:20:08,274 [WARNING] [-] [-] PluginPermissionChecker: [system.avatar_server] 🟡 Trusted Permission Requested: filesystem.read
+[core] 2026-04-12 19:20:08,286 [INFO] [-] [-] VMCProtocol: VMC OSC Client initialized at 127.0.0.1:39539
+[core] 2026-04-12 19:20:08,290 [INFO] [-] [-] LLMManager: Registered LLM driver type: deepseek
+[core] 2026-04-12 19:20:08,292 [INFO] [-] [-] LLMManager: Registered LLM driver type: gemini
+[core] 2026-04-12 19:20:08,292 [INFO] [-] [-] LLMManager: Registered LLM driver type: openai
+[core] 2026-04-12 19:20:08,292 [WARNING] [-] [-] PluginPermissionChecker: [driver.llm.pollinations] 🟡 Trusted Permission Requested: network.outbound
+[core] 2026-04-12 19:20:08,294 [INFO] [-] [-] LLMManager: Registered LLM driver type: pollinations
+[core] 2026-04-12 19:20:08,294 [WARNING] [-] [-] PluginPermissionChecker: [driver.memory.postgres] 🟡 Trusted Permission Requested: database.postgres
+[core] 2026-04-12 19:20:08,294 [WARNING] [-] [-] PluginPermissionChecker: [driver.tool.search.brave] 🟡 Trusted Permission Requested: network.outbound
+[core] 2026-04-12 19:20:08,296 [WARNING] [-] [-] PluginPermissionChecker: [driver.tool.search.duckduckgo] 🟡 Trusted Permission Requested: network.outbound
+[core] 2026-04-12 19:20:08,297 [INFO] [-] [-] SystemPluginManager: Unified plugin kernel ready
+[core] 2026-04-12 19:20:08,297 [INFO] [-] [-] Bootstrap.Services: ✅ System Plugin Manager Initialized
+2026-04-12 19:20:08,297 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: System Plugins (0.04s)
+[core] 2026-04-12 19:20:08,309 [INFO] [-] [-] Bootstrap.SDK: ✅ Lumina SDK Initialized
+2026-04-12 19:20:08,309 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Lumina SDK (0.01s)
+[core] 2026-04-12 19:20:08,310 [INFO] [-] [-] ChatBridge: ✅ Basic Chat Bridge Started (Listening to input_text)
+2026-04-12 19:20:08,310 [INFO] [-] [-] Bootstrap.Integration: ✅ ChatBridge Initialized
+[core] 2026-04-12 19:20:08,310 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ChatBridge (0.00s)
+[core] 2026-04-12 19:20:08,465 [INFO] [-] [-] Bootstrap.Integration: 🔌 MCP Host Initialized (Start Disabled)
+[core] 2026-04-12 19:20:08,465 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: MCPHost (0.15s)
+2026-04-12 19:20:08,465 [INFO] [-] [-] Bootstrap.Integration: ✅ System Plugin Routers Mounted
+2026-04-12 19:20:08,465 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: SystemPluginRouters (0.00s)
+2026-04-12 19:20:08,465 [INFO] [-] [-] WorkerControlHub: 🎛️ WorkerControlHub initialized
+[core] 2026-04-12 19:20:08,466 [INFO] [-] [-] PluginStateAggregator: ✅ PluginStateAggregator initialized
+2026-04-12 19:20:08,466 [INFO] [-] [-] Bootstrap.PostStartup: 🎛️ WorkerControlHub Ready
+2026-04-12 19:20:08,467 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: WorkerControlHub (0.00s)
+[core] 2026-04-12 19:20:08,467 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Scheduling Core Service Prewarm (TTS/STT)...
+2026-04-12 19:20:08,467 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Prewarm (0.00s)
+2026-04-12 19:20:08,467 [INFO] [-] [-] ReconciliationService: ⚖️ Reconciliation Service Started
+2026-04-12 19:20:08,467 [INFO] [-] [-] Bootstrap.PostStartup: ⚖️ Reconciliation Service Started
+2026-04-12 19:20:08,467 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ReconciliationService (0.00s)
+[core] 2026-04-12 19:20:08,468 [INFO] [-] [-] Bootstrap.PostStartup: 👀 ConfigWatcher Started
+[core] 2026-04-12 19:20:08,468 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ConfigWatcher (0.00s)
+2026-04-12 19:20:08,469 [INFO] [-] [-] WorkerSupervisor: Supervisor activated.
+2026-04-12 19:20:08,469 [INFO] [-] [-] Bootstrap.PostStartup: 🛡️ Process Supervisor Auto-Healing Enabled
+2026-04-12 19:20:08,469 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ProcessSupervisor (0.00s)
+[core] 2026-04-12 19:20:08,476 [INFO] [-] [-] Automation.Service: 🧠 ECA Engine Started
+[core] 2026-04-12 19:20:08,476 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: AutomationService (0.01s)
+2026-04-12 19:20:08,476 [INFO] [-] [-] Bootstrap: ✨ Bootstrap Sequence Complete.
+2026-04-12 19:20:08,476 [INFO] [-] [-] Lifecycle: 🚀 Startup complete
+2026-04-12 19:20:08,476 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\Lumina_Data\config.yaml
+[core] 2026-04-12 19:20:08,476 [INFO] [-] [-] uvicorn.error: Application startup complete.
+[core] 2026-04-12 19:20:08,477 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+[core] 2026-04-12 19:20:08,668 [INFO] [-] [-] uvicorn.access: 127.0.0.1:14635 - "GET /health HTTP/1.1" 200
+[core] Health check passed
+[BackendManager] All services started successfully.
+Python Backend started.
+[core] 2026-04-12 19:20:08,716 [INFO] [-] [-] uvicorn.error: 127.0.0.1:14636 - "WebSocket /lumina/gateway/ws" [accepted]
+2026-04-12 19:20:08,716 [INFO] [-] [-] Gateway: Client Connected [Session: 0]
+[core] 2026-04-12 19:20:08,717 [INFO] [-] [-] uvicorn.error: connection open
+[core] 2026-04-12 19:20:08,724 [INFO] [-] [-] uvicorn.access: 127.0.0.1:14637 - "GET /characters HTTP/1.1" 200
+[core] 2026-04-12 19:20:08,726 [INFO] [-] [-] uvicorn.access: 127.0.0.1:14638 - "GET /config/llm HTTP/1.1" 200
+[core] 2026-04-12 19:20:08,847 [INFO] [-] [-] uvicorn.error: 127.0.0.1:14621 - "WebSocket /ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6c3R0Iiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzU5ODg4NzMsImV4cCI6MTc3NjA3NTI3M30.2hy0bLtSEuu1GQ-JIM3sFOSKzyRTuetHsQrIA3O5Gj0" [accepted]
+[core] 2026-04-12 19:20:08,847 [INFO] [-] [-] uvicorn.error: connection open
+[core] 2026-04-12 19:20:08,847 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:stt at http://127.0.0.1:8765 (Caps: ['stt'])
+2026-04-12 19:20:08,847 [INFO] [-] [-] WorkerControlHub: ✅ Worker connected: worker:stt (stt:8765)
+[core] 2026-04-12 19:20:08,847 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:stt at http://127.0.0.1:8765 (Caps: ['stt'])
+[core] 2026-04-12 19:20:08,872 [INFO] [-] [-] uvicorn.error: 127.0.0.1:14622 - "WebSocket /ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6dHRzIiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzU5ODg4NzMsImV4cCI6MTc3NjA3NTI3M30.NJFFefqYWTi_89qYZQi9H0vSMfW6qQuhf4jlTbBnPSg" [accepted]
+[core] 2026-04-12 19:20:08,872 [INFO] [-] [-] uvicorn.error: connection open
+[core] 2026-04-12 19:20:08,873 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:tts at http://127.0.0.1:8766 (Caps: ['tts'])
+2026-04-12 19:20:08,873 [INFO] [-] [-] WorkerControlHub: ✅ Worker connected: worker:tts (tts:8766)
+[core] 2026-04-12 19:20:08,875 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:tts at http://127.0.0.1:8766 (Caps: ['tts'])
+[core] 2026-04-12 19:20:12,564 [INFO] [-] [-] ProcessManager: Service worker:tts detected via HTTP Probe (8766/health).
+[core] 2026-04-12 19:20:12,565 [INFO] [-] [-] ProcessManager: Service worker:stt detected via HTTP Probe (8765/health).
+2026-04-12 19:20:12,565 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Core worker prewarm dispatched

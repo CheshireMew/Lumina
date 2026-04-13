@@ -22,14 +22,15 @@ export interface ConversationSettings {
 export interface CharacterProfile {
   id: string;
   name: string;
+  displayName?: string;
   description: string;
   systemPrompt?: string; // Full system prompt instructions
   avatar?: string;
   voiceConfig: {
     service: string; // 'edge-tts' | 'azure' | ...
     voiceId: string; // e.g., "zh-CN-XiaoxiaoNeural"
-    rate: string; // "+0%"
-    pitch: string; // "+0Hz"
+    rate?: string; // "+0%"
+    pitch?: string; // "+0Hz"
   };
   modelPath?: string; // Path to Live2D model (relative to public)
   heartbeatEnabled?: boolean; // ⚡ Heartbeat Toggle
@@ -43,6 +44,7 @@ export interface CharacterProfile {
     enabled: boolean;
     roomId: number;
   };
+  metadata?: Record<string, unknown>;
 }
 
 export const DEFAULT_CHARACTERS: CharacterProfile[] = [

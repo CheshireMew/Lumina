@@ -19,7 +19,7 @@
 | `scripts/`          | **自动化脚本**。包含启动脚本、环境验证工具和构建配置文件。                               |
 | `mcp_servers/`      | **MCP 卫星服务**。独立的 Model Context Protocol 服务器插件。                             |
 | `package.json`      | 工程配置文件，定义 Node.js 依赖、脚本命令及 Electron 构建配置。                          |
-| `vite.config.ts`    | Vite 构建配置，定义前端编译选项和别名。                                                  |
+| `vite.config.mts`   | Vite 构建配置，定义前端编译选项和别名。                                                  |
 | `.gitignore`        | Git 忽略规则，保护敏感配置（如 API Key）和临时文件不被上传。                             |
 | `audio_config.json` | STT/TTS 音频配置，包含后端服务端口及录音参数。                                           |
 
@@ -44,14 +44,12 @@
 
 本目录包含 Electron 主进程使用的领域驱动服务，主要负责复杂业务逻辑的封装及与 Python 后端的 IPC/WebSocket 协调。
 
-- **`llm/`**:
-  - **`llm_service.ts`**: LLM 核心调度器。支持流式输出、上下文注入、以及在本地模型与云端 API 之间进行 Failover 切换。
-- **`stt/`**:
-  - **`python_stt_service.ts`**: STT 生命周期管理。负责监控后端进程状态，并通过 WebSocket 维持低延迟音频流传输。
+- **`backend/`**:
+  - **`backend_service.ts`**: Electron 侧后端进程编排入口。负责端口装载、健康检查、拉起和停止核心 Python 进程。
+- **`memory/`**:
+  - **`memory_service.ts`**: 长期记忆桥梁。负责配置后端记忆接口并提交检索/写入请求。
 - **`voice/`**:
   - **`tts_service.ts`**: 语音播放流水线。包含句子切分逻辑及音频缓冲区管理，确保语音输出无缝衔接。
-- **`memory/`**:
-  - **`memory_service.ts`**: 长期记忆桥梁。负责将对话记录转化为向量请求并推送到 SurrealDB 进行持久化检索。
 
 ---
 
@@ -60,13 +58,14 @@
 ### 核心进程
 
 - **`app/main/` (Electron 主进程)**:
-  - **`main.ts`**: 程序入口。负责窗口生命周期管理、Python 后端服务启动编排，以及处理渲染进程分发的 IPC 请求（如 LLM 对话、设置同步）。
+  - **`main.ts`**: 程序入口。负责窗口生命周期、受控 IPC 注册、本地协议注册，以及 Python 后端服务启动编排。
   - **`preload.ts`**: 安全网桥。定义了暴露给渲染进程的 API 安全接口。
-  - **`config_store.ts`**: 配置持久化。基于 `electron-store` 存储 API Key、模型偏好等本地设置。
+  - **`config_store.ts`**: 配置持久化。基于 `electron-store` 存储本地桌面偏好。
 - **`app/renderer/` (React 渲染进程)**:
-  - **`App.tsx`**: UI 根组件。管理全局显示逻辑及核心 Hook 的初始化。
+  - **`App.tsx`**: UI 根组件。只负责布局和模态层组合，核心业务状态来自统一 Hook。
   - **`core/events.ts`**: 全局事件总线。处理音频 VAD 状态、感知识别结果及 UI 指令的解耦通信。
-  - **`hooks/`**: 业务逻辑层。包含 `useGateway` (数据分发)、`useAudioPipeline` (音频流控) 等核心状态逻辑。
+  - **`hooks/`**: 业务逻辑层。`useCoreSystem` 组合 `useSettings`、`useCharacterState`、`useGateway`、`useAudioPipeline`。
+  - **`runtime/gatewayClient.ts`**: WebSocket 单例客户端，统一管理连接、重连和事件分发。
   - **`components/`**: UI 组件库。包含对话框、Live2D 画布及控制面板。
 
 ---
@@ -89,38 +88,39 @@
 
 Lumina 的后端采用分层架构，集成了 FastAPI 服务、高性能语音微服务以及基于插件的领域驱动设计 (DDD) 逻辑。
 
-### 核心微服务 (Entry Points)
+### 核心入口 (Entry Points)
 
-- **`main.py`**: **主应用网关**。运行基于 FastAPI 的 HTTP/WebSocket 接口，处理 REST 请求并编排全局业务状态。
-- **`stt_server.py`**: **语音识别引擎**。独立进程运行，基于 SenseVoice 实现高精度实时音频转录，并托管 VAD 后端检测逻辑。
-- **`tts_server.py`**: **语音合成引擎**。独立进程运行，驱动 GPT-SoVITS 及其它神经语音驱动，支持零延迟流式音频推送。
-- **`backend_launcher.py`**: **进程管理器**。负责主从微服务的协同启动、健康检查以及优雅退出。
+- **`main.py`**: **FastAPI 入口**。现在只负责扩展导入路径、初始化日志和调用应用装配工厂。
+- **`core/api/app_factory.py`**: **应用装配入口**。统一注册中间件、异常处理、路由、静态资源和 Worker 控制通道。
+- **`backend_launcher.py`**: **Worker 启动入口**。负责根据 capability 拉起 `stt` / `tts` / `vision` 等工作进程。
 
 ### 架构框架 (core/)
 
+- **`api/`**: **应用装配层**。集中管理 FastAPI app 的装配，不再把中间件和路由细节堆在 `main.py`。
 - **`bootstrap/`**: **生命周期引导**。实现基础设施（DB、EventBus）到核心服务的有序依赖注入。
 - **`events/`**: **异步事件总线**。提供基于消息驱动的组件通信机制，实现 UI 指令与业务逻辑的解耦。
-- **`db/`**: **持久化层**。封装对 SurrealDB 的底层连接与连接池管理。
+- **`db/`**: **持久化层**。封装查询构造和数据库抽象，供 PostgreSQL 驱动使用。
 - **`interfaces/`**: **契约定义**。包含插件、驱动及服务的抽象基类，确保系统的可扩展性。
-- **`isolation/`**: **插件沙箱**。提供基于 `multiprocessing` 的进程级隔离运行环境，确保第三方插件不干扰主系统稳定性。
 
 ### 业务与智能 (services/ & AI)
 
 - **`services/`**:
-  - **`container.py`**: **依赖注入容器**。中央服务注册表，控制所有核心组件的实例化与生存期。
-  - **`soul/`**: **灵魂引擎逻辑**。定义角色的人格、短期情绪波动以及对话风格偏好。
-  - **`chat/`**: **对话流水线**。包含基于 Pipes & Filters 模式的 `unified_chat.py` 逻辑。
-  - **`soul_service.py`**: **角色状态中枢**。统筹人设更新、长期记忆演化以及情感决策逻辑（替代了旧的 SoulManager）。
+  - **`container/`**: **依赖注入容器**。中央服务注册表，控制核心组件的实例化与生命周期。
+  - **`orchestrators/`**: **领域编排层**。包括角色灵魂和会话管理等高层服务。
+  - **`chat/`**: **对话流水线**。`pipeline.py` 负责上下文构建、工具准备和流式执行，`service.py` 提供单轮对话边界。
+  - **`process_manager.py`**: **Worker 编排器**。负责托管模式拉起、外部模式挂载和运行状态检查。
+  - **`plugin_state_aggregator.py`**: **插件运行态真源**。聚合主进程、Worker 和心跳状态。
 - **`llm/`**: **模型驱动层**。屏蔽 OpenAI、DeepSeek、Pollinations 等不同 API 的协议差异。
-- **`memory/`**: **记忆系统**。实现向量存储 (Vector DB) 与知识图谱 (Knowledge Graph) 的混合检索逻辑。
+- **`memory/`**: **记忆系统**。统一通过 PostgreSQL 驱动提供对话日志、向量检索和上下文召回。
 
 ### 路由与配置 (routers/ & config)
 
 - **`routers/`**:
   - **`gateway.py`**: WebSocket 中央网关，负责向渲染进程分发实时语音、动画及状态包。
   - **`llm_mgmt.py`**: 运行时模型配置管理，用于动态切换 AI 供应商。
-  - **`vision.py`**: 视觉分析路由，处理图片分析与模型加载。
-- **`app_config.py`**: **强类型配置中心**。基于 Pydantic 解析 `.env` 及本地 JSON 设置。
+  - **`runtime.py`**: 统一能力运行态视图，向前端暴露 capability 到 runtime 的映射结果。
+  - **`vision_routes.py`**: 视觉分析路由，处理图片分析与模型加载。
+- **`app_config.py`**: **强类型配置中心**。基于 Pydantic 解析 `.env` 与 `config.yaml`。
 - **`logger_setup.py`**: 实现多进程、多服务的日志收集与 RequestID 链路追踪。
 
 ---

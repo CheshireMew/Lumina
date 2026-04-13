@@ -1,33 +1,43 @@
 import Store from 'electron-store';
 
 interface UserSettings {
-    apiKey?: string;
-    apiBaseUrl?: string; // For compatible APIs like DeepSeek
-    modelName?: string;
+    activeCharacterId?: string;
+    backgroundImage?: string;
+    contextWindow?: number;
+    isTTSEnabled?: boolean;
+    live2d_high_dpi?: boolean;
+    thinking_enabled?: boolean;
     userName?: string;
-    aiName?: string;
 }
 
 const schema = {
-    apiKey: {
+    activeCharacterId: {
+        type: 'string',
+        default: 'hiyori',
+    },
+    backgroundImage: {
         type: 'string',
         default: '',
     },
-    apiBaseUrl: {
-        type: 'string',
-        default: 'https://api.deepseek.com/v1', // Default to DeepSeek
+    contextWindow: {
+        type: 'number',
+        default: 50,
     },
-    modelName: {
-        type: 'string',
-        default: 'deepseek-chat',
+    isTTSEnabled: {
+        type: 'boolean',
+        default: true,
+    },
+    live2d_high_dpi: {
+        type: 'boolean',
+        default: false,
+    },
+    thinking_enabled: {
+        type: 'boolean',
+        default: false,
     },
     userName: {
         type: 'string',
-        default: 'User',
-    },
-    aiName: {
-        type: 'string',
-        default: 'Lumina',
+        default: 'Master',
     }
 } as const;
 

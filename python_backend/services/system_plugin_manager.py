@@ -1,185 +1,248 @@
 import logging
-from typing import Dict, List, Optional
-
-from core.interfaces.plugin import BaseSystemPlugin
-# [Fix] CapabilityType is defined in schemas
-from core.capabilities.schemas import CapabilityType
-from services.plugins.registry import PluginRegistry
-from services.plugins.lifecycle import PluginLifecycleManager
-from services.plugins.sync import PluginStateSynchronizer
-from services.plugins.dispatcher import PluginDispatcher
+import inspect
+from pathlib import Path
+from typing import Any
 
 from core.events.bus import bus
-from core.events.definitions import PluginLoadedPayload, PluginDisabledPayload
+from core.interfaces.plugin import Plugin
+from core.manifest import PluginManifest, normalize_capability_id
+from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target
+from services.capability_registry import CapabilityRegistry
+from services.plugin_kernel import (
+    HookBinder,
+    ManifestRepository,
+    PermissionChecker,
+    PluginContextBinder,
+    PluginLoader,
+    PluginPermissionError,
+    PluginStateBuilder,
+    is_selectable_provider,
+)
 
 logger = logging.getLogger("SystemPluginManager")
 
-class SystemPluginManager:
-    """
-    [Facade] Unified access point for the Plugin System.
-    Delegates responsibilities to specialized sub-components.
-    
-    Components:
-    - registry: Dictionary of plugins, Discovery, Sorting.
-    - lifecycle: Start, Stop, Reload.
-    - sync: Updates to/from SurrealDB (SSOT).
-    - dispatcher: Pushing plugins to worker processes.
-    """
-    def __init__(self, container=None, router_manager=None):
-        # 1. Initialize Registry
-        self.registry = PluginRegistry(container, router_manager)
-        
-        # 2. Initialize Dispatcher
-        self.dispatcher = PluginDispatcher(self.registry)
-        
-        # 3. Initialize Lifecycle
-        # Lifecycle uses registry to act on plugins
-        self.lifecycle = PluginLifecycleManager(self.registry)
-        
-        # 4. Initialize Synchronizer
-        # Syncs state between Registry and DB, using Lifecycle to actuate changes
-        self.sync = PluginStateSynchronizer(self.registry, self.lifecycle)
-        
-        # Inject sync back into lifecycle (circular dependency resolution)
-        self.lifecycle.synchronizer = self.sync
 
-        # Backward Compatibility Attributes
+class SystemPluginManager:
+    def __init__(self, container=None, router_manager=None, runtime_target: str = MAIN_RUNTIME_TARGET, base_dir: Path | None = None):
         self.container = container
         self.router_manager = router_manager
+        self.event_bus = getattr(container, "event_bus", None) or bus
+        self.runtime_target = normalize_runtime_target(runtime_target)
+        self._plugin_root = Path(base_dir) if base_dir else Path(__file__).parent.parent / "plugins"
+        self._plugins: dict[str, Plugin] = {}
+        self._manifests: dict[str, PluginManifest] = {}
+        self._errors: dict[str, str] = {}
+        self._capability_registry = getattr(container, "capability_registry", None) or CapabilityRegistry()
+        if container is not None:
+            container.capability_registry = self._capability_registry
+        self._manifest_repository = ManifestRepository(self._plugin_root)
+        self._loader = PluginLoader()
+        self._permission_checker = PermissionChecker()
+        self._context_binder = PluginContextBinder(container, router_manager, self._capability_registry)
+        self._hook_binder = HookBinder()
+        self._state_builder = PluginStateBuilder(getattr(container, "config", None))
+        self._lifecycle_subscriptions: list[int] = []
 
     @property
-    def plugins(self) -> Dict[str, BaseSystemPlugin]:
-        return self.registry.plugins
+    def _config_service(self):
+        from services.config_service import ConfigService
+
+        return ConfigService(self.container)
 
     @property
-    def disabled_manifests(self):
-        return self.registry.disabled_manifests
+    def plugins(self) -> dict[str, Plugin]:
+        return self._plugins
 
     async def start(self):
-        """Facade for System Start Sequence"""
-        logger.info("🚀 SystemPluginManager: Starting up...")
-        
-        # 1. Connect Sync Bus
-        await self.sync.connect()
-        
-        # 2. Discover & Load (Memory)
-        self.registry.load_all_plugins()
-        
-        # 3. Sync with DB (Restore State)
-        await self.sync.sync_with_db()
-        
-        # 4. Initialize Instances (Async)
-        await self.lifecycle.initialize_all()
-        
-        # 5. Dispatch to Workers
-        await self.dispatcher.distribute_plugins()
-        
-        # 6. Subscribe to Bus Events
-        self._subscribe_events()
-        
-        logger.info("✨ SystemPluginManager: Ready.")
+        logger.info("Starting unified plugin kernel for runtime %s", self.runtime_target)
+        self._subscribe_lifecycle_requests()
+        self.refresh_manifests()
 
-    def _subscribe_events(self):
-        bus.subscribe("plugin.lifecycle.request_enable", self._on_enable_request)
-        bus.subscribe("plugin.lifecycle.request_disable", self._on_disable_request)
+        for plugin_id, manifest in self._manifests.items():
+            if not self.container.config.is_plugin_desired_enabled(plugin_id):
+                continue
+            await self._load_and_enable(plugin_id)
+
+        await self._emit_all_states()
+        logger.info("Unified plugin kernel ready")
+
+    def _subscribe_lifecycle_requests(self):
+        if self._lifecycle_subscriptions:
+            return
+        self._lifecycle_subscriptions.append(
+            self.event_bus.subscribe("plugin.lifecycle.request_enable", self._on_enable_request)
+        )
+        self._lifecycle_subscriptions.append(
+            self.event_bus.subscribe("plugin.lifecycle.request_disable", self._on_disable_request)
+        )
 
     async def _on_enable_request(self, event):
-        pid = event.data.plugin_id
-        try:
-            success = self.lifecycle.enable_plugin(pid)
-            if success:
-                # Initialize call if needed happens inside enable_plugin or we do it here?
-                # For now enable_plugin does load.
-                plugin = self.get_plugin(pid)
-                if plugin and hasattr(plugin, 'initialize'):
-                     # Clean async handling wrapper
-                     import inspect
-                     if inspect.iscoroutinefunction(plugin.initialize):
-                         await plugin.initialize(getattr(plugin, 'context', None))
-                     else:
-                         plugin.initialize(getattr(plugin, 'context', None))
-
-                # [Fix] Use canonical field names
-                await self.sync.broadcast_state_change(pid, {
-                    "desired_enabled": True,
-                    "active_status": "ready"
-                })
-                await bus.emit("plugin.lifecycle.enabled", PluginLoadedPayload(plugin_id=pid, enabled=True))
-                
-                # [Aggregator] Emit state for centralized cache
-                await self._emit_local_state(pid, enabled=True)
-        except Exception as e:
-            logger.error(f"Enable Event Failed: {e}")
+        plugin_id = self._extract_plugin_id(event)
+        if not plugin_id:
+            return
+        result = self.enable_plugin(plugin_id)
+        if inspect.isawaitable(result):
+            await result
 
     async def _on_disable_request(self, event):
-        pid = event.data.plugin_id
-        try:
-            success = self.lifecycle.disable_plugin(pid)
-            if success:
-                # [Fix] Use canonical field names
-                await self.sync.broadcast_state_change(pid, {
-                    "desired_enabled": False,
-                    "active_status": "stopped"
-                })
-                await bus.emit("plugin.lifecycle.disabled", PluginDisabledPayload(plugin_id=pid, reason="manual"))
-                
-                # [Aggregator] Emit state for centralized cache
-                await self._emit_local_state(pid, enabled=False)
-        except Exception as e:
-             logger.error(f"Disable Event Failed: {e}")
+        plugin_id = self._extract_plugin_id(event)
+        if not plugin_id:
+            return
+        result = self.disable_plugin(plugin_id)
+        if inspect.isawaitable(result):
+            await result
 
-    async def _emit_local_state(self, plugin_id: str, enabled: bool):
-        """Emit plugin state to aggregator"""
-        plugin = self.get_plugin(plugin_id)
-        manifest = None
-        
-        if plugin:
-            manifest = getattr(plugin, '_manifest', None)
-        else:
-            manifest = self.registry.disabled_manifests.get(plugin_id)
-        
-        state = {
-            "id": plugin_id,
-            "name": getattr(manifest, 'name', plugin_id) if manifest else plugin_id,
-            "category": getattr(manifest, 'category', 'system') if manifest else 'system',
-            "desired_enabled": enabled,
-            "active_status": "ready" if enabled else "stopped",
-            "runtime_target": "main",
-            "worker_id": "main",
+    def _extract_plugin_id(self, event) -> str | None:
+        payload = getattr(event, "data", event)
+        if isinstance(payload, dict):
+            return payload.get("plugin_id")
+        return getattr(payload, "plugin_id", None)
+
+    def refresh_manifests(self):
+        previous_manifest_ids = set(self._manifests)
+        retained_load_errors = {
+            plugin_id: error
+            for plugin_id, error in self._errors.items()
+            if plugin_id in self._plugins
         }
-        
-        await bus.emit("plugin.state.local", state)
+        result = self._manifest_repository.discover(self.runtime_target)
+        self._manifests = result.manifests
+        self._errors = {**retained_load_errors, **result.errors}
 
-    # --- Facade Methods ---
+        for plugin_id in previous_manifest_ids - set(self._manifests):
+            self._capability_registry.unregister_plugin(plugin_id)
 
-    def get_plugin(self, plugin_id: str) -> Optional[BaseSystemPlugin]:
-        return self.registry.get_plugin(plugin_id)
+        for plugin_id, manifest in self._manifests.items():
+            self._capability_registry.register_plugin(
+                plugin_id=plugin_id,
+                capabilities=manifest.all_capabilities(),
+                runtime_target=manifest.runtime_target,
+                kind=manifest.kind,
+                enabled=bool(self._plugins.get(plugin_id) and self._plugins[plugin_id].enabled),
+            )
 
-    def list_plugins(self) -> List[dict]:
-        return self.registry.list_plugins()
+    async def _load_and_enable(self, plugin_id: str) -> Plugin | None:
+        plugin = self._plugins.get(plugin_id)
+        if plugin is None:
+            plugin = await self._instantiate_plugin(plugin_id)
+            if plugin is None:
+                return None
+        await plugin.enable()
+        self._hook_binder.register(plugin)
+        self._capability_registry.set_enabled(plugin_id, True)
+        await self._emit_state(plugin_id)
+        return plugin
+
+    async def _instantiate_plugin(self, plugin_id: str) -> Plugin | None:
+        manifest = self._manifests.get(plugin_id)
+        if manifest is None:
+            return None
+
+        try:
+            self._permission_checker.ensure_allowed(manifest)
+            plugin = self._loader.instantiate(manifest)
+            await self._context_binder.bind(plugin, manifest)
+            self._plugins[plugin_id] = plugin
+            self._errors.pop(plugin_id, None)
+            return plugin
+        except PluginPermissionError:
+            self._errors[plugin_id] = "permission_check_failed"
+            return None
+        except Exception as exc:
+            logger.error("Failed to load plugin %s: %s", plugin_id, exc, exc_info=True)
+            self._errors[plugin_id] = str(exc)
+            return None
+
+    def get_plugin(self, plugin_id: str) -> Plugin | None:
+        return self._plugins.get(plugin_id)
+
+    def get_manifest(self, plugin_id: str) -> PluginManifest | None:
+        return self._manifests.get(plugin_id)
+
+    def is_plugin_active(self, plugin_id: str) -> bool:
+        plugin = self._plugins.get(plugin_id)
+        return bool(plugin and plugin.enabled)
+
+    def find_provider(self, capability: str, runtime_target: str | None = None, **_: Any) -> str | None:
+        normalized = normalize_capability_id(capability)
+        selected = self.container.config.get_selected_provider(normalized)
+        if selected is None and "." in normalized:
+            selected = self.container.config.get_selected_provider(normalized.split(".")[0])
+        return self._capability_registry.find_provider(
+            capability=normalized,
+            runtime_target=runtime_target,
+            selected_provider=selected,
+            only_enabled=True,
+            predicate=lambda provider: provider.is_provider,
+        )
+
+    def list_plugins(self) -> list[dict[str, Any]]:
+        return self._state_builder.build_all(self._manifests, self._plugins, self._errors)
+
+    def list_manifest_errors(self) -> dict[str, str]:
+        return dict(self._errors)
+
+    async def enable_plugin(self, plugin_id: str) -> bool:
+        manifest = self._manifests.get(plugin_id)
+        if manifest is None:
+            return False
+        persist = not bool(getattr(self.container.config, "is_read_only", False))
+        self._config_service.set_plugin_desired_state(plugin_id, True, persist=persist)
+        plugin = await self._load_and_enable(plugin_id)
+        if plugin and is_selectable_provider(manifest):
+            self._config_service.set_selected_provider(manifest.capability, plugin_id, persist=persist)
+        return plugin is not None
+
+    async def disable_plugin(self, plugin_id: str) -> bool:
+        plugin = self._plugins.get(plugin_id)
+        manifest = self._manifests.get(plugin_id)
+        persist = not bool(getattr(self.container.config, "is_read_only", False))
+        self._config_service.set_plugin_desired_state(plugin_id, False, persist=persist)
+        if manifest and is_selectable_provider(manifest):
+            current_provider = self.container.config.get_selected_provider(manifest.capability)
+            if current_provider == plugin_id:
+                self._config_service.clear_selected_provider(manifest.capability, persist=persist)
+        if plugin:
+            self._hook_binder.unregister(plugin_id)
+            await plugin.disable()
+        self._capability_registry.set_enabled(plugin_id, False)
+        await self._emit_state(plugin_id)
+        return True
 
     def reload_plugin(self, plugin_id: str) -> bool:
-        return self.lifecycle.reload_plugin(plugin_id)
+        logger.warning("Hot reload is disabled in the unified kernel: %s", plugin_id)
+        return False
 
-    def disable_plugin(self, plugin_id: str) -> bool:
-        return self.lifecycle.disable_plugin(plugin_id)
+    def get_active_ui_slots(self) -> list[dict[str, Any]]:
+        return self._state_builder.active_ui_slots(self._plugins)
 
-    def enable_plugin(self, plugin_id: str) -> bool:
-        return self.lifecycle.enable_plugin(plugin_id)
+    async def shutdown(self):
+        for sub_id in self._lifecycle_subscriptions:
+            self.event_bus.unsubscribe(sub_id)
+        self._lifecycle_subscriptions.clear()
+        for plugin_id, plugin in list(self._plugins.items()):
+            try:
+                self._hook_binder.unregister(plugin_id)
+                if plugin.enabled:
+                    await plugin.disable()
+                await plugin.unload()
+            finally:
+                self._capability_registry.set_enabled(plugin_id, False)
 
-    def find_provider(self, cap_type: CapabilityType, **attributes) -> Optional[str]:
-        return self.registry.find_provider(cap_type, **attributes)
+    def _build_state(self, plugin_id: str) -> dict[str, Any]:
+        error = self._errors.get(plugin_id)
+        manifest = self._manifests.get(plugin_id)
+        if manifest:
+            return self._state_builder.build(plugin_id, manifest, self._plugins.get(plugin_id), error)
+        if error:
+            return self._state_builder.build_error(plugin_id, error)
+        raise KeyError(plugin_id)
 
-    def get_active_ui_slots(self) -> List[dict]:
-        """Return UI slots from all active plugins."""
-        slots = []
-        for pid, plugin in self.plugins.items():
-            if not plugin.enabled:
-                continue
-            status = plugin.get_status()
-            ui_slots = status.get("ui_slots", [])
-            for slot in ui_slots:
-                slot["_source"] = "system"
-                slot["_plugin_id"] = pid
-                slots.append(slot)
-        return slots
+    async def _emit_state(self, plugin_id: str):
+        if plugin_id not in self._manifests and plugin_id not in self._errors:
+            return
+        await self.event_bus.emit("plugin.state.local", self._build_state(plugin_id))
+
+    async def _emit_all_states(self):
+        for plugin_id in sorted(set(self._manifests) | set(self._errors)):
+            await self._emit_state(plugin_id)

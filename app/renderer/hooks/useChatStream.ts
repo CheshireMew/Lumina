@@ -1,10 +1,14 @@
 import { useRef, useCallback, useState } from "react";
+import {
+    finalizeAssistantContent,
+    formatAssistantDisplay,
+} from "../utils/chatContent";
 
 /**
  * useChatStream Hook
  *
  * Manages chat stream state and processing.
- * Handles token accumulation, emotion tag detection, and display cleanup.
+ * Handles token accumulation and response cleanup.
  *
  * Extracted from App.tsx to improve modularity.
  */
@@ -13,7 +17,6 @@ export function useChatStream() {
     const [reasoningContent, setReasoningContent] = useState<string>("");
 
     const fullRawResponseRef = useRef<string>("");
-    const emotionBufferRef = useRef<string>("");
     const reasoningBufferRef = useRef<string>("");
 
     /**
@@ -22,7 +25,6 @@ export function useChatStream() {
     const reset = useCallback(() => {
         console.log("[useChatStream] 🔄 RESET called - clearing all buffers");
         fullRawResponseRef.current = "";
-        emotionBufferRef.current = "";
         reasoningBufferRef.current = "";
         setDisplayMessage("");
         setReasoningContent("");
@@ -32,14 +34,9 @@ export function useChatStream() {
      * Process an incoming token.
      * @param token The token received from the stream
      * @param type 'content' for main response, 'reasoning' for thinking content
-     * @param onEmotionDetected Callback when an emotion tag is detected
      */
     const processToken = useCallback(
-        (
-            token: string,
-            type: "content" | "reasoning" = "content",
-            onEmotionDetected?: (emotion: string) => void,
-        ) => {
+        (token: string, type: "content" | "reasoning" = "content") => {
             if (type === "reasoning") {
                 reasoningBufferRef.current += token;
                 setReasoningContent(reasoningBufferRef.current);
@@ -52,39 +49,7 @@ export function useChatStream() {
             );
 
             fullRawResponseRef.current += token;
-            emotionBufferRef.current += token;
-
-            // Emotion Detection
-            if (token.includes(")") || token.includes("]")) {
-                // Check for emotion tags like [joy] or (happy)
-                const emotionMatch = emotionBufferRef.current.match(
-                    /[\[\(](joy|happy|sad|angry|surprised|neutral|thinking)[\]\)]/i,
-                );
-                if (emotionMatch && onEmotionDetected) {
-                    onEmotionDetected(emotionMatch[1].toLowerCase());
-                    emotionBufferRef.current = "";
-                }
-
-                // Keep buffer from growing too large
-                if (emotionBufferRef.current.length > 50) {
-                    emotionBufferRef.current =
-                        emotionBufferRef.current.slice(-20);
-                }
-            }
-
-            // Display Processing (cleanup tags)
-            let displayUpdate = fullRawResponseRef.current;
-
-            // Strip emotion tags like [happy], [sad], [neutral] etc.
-            displayUpdate = displayUpdate.replace(/\[[^\]]+\]\n?/g, "");
-
-            // Clean specific system tokens if any (e.g. <|...|>)
-            displayUpdate = displayUpdate.replace(/<\|.*?\|>/g, "");
-
-            // Strip leading whitespace that might remain after tag removal
-            displayUpdate = displayUpdate.trimStart();
-
-            setDisplayMessage(displayUpdate);
+            setDisplayMessage(formatAssistantDisplay(fullRawResponseRef.current));
         },
         [],
     );
@@ -93,7 +58,7 @@ export function useChatStream() {
      * Get the final cleaned content for saving to history.
      */
     const getFinalContent = useCallback(() => {
-        return fullRawResponseRef.current.replace(/<\|.*?\|>/g, "").trim();
+        return finalizeAssistantContent(fullRawResponseRef.current);
     }, []);
 
     /**

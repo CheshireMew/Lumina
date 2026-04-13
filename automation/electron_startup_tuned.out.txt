@@ -1,0 +1,12 @@
+
+Starting Python Backend...
+[BackendManager] Starting all services...
+[BackendManager] Loaded ports from: E:\Work\Code\Lumina\config\ports.json
+[BackendManager] Services Configured: [ 'core:8010' ]
+[BackendManager] Launching dev core: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'core'
+] CWD: E:\Work\Code\Lumina\python_backend
+[core] Health check passed
+[BackendManager] All services started successfully.
+Python Backend started.

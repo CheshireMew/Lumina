@@ -4,8 +4,8 @@ import httpx
 from typing import Callable, List, Dict, Any
 from fastapi import FastAPI
 from core.interfaces.capability import IWorkerCapability
-from services.container import services
-from .manager import TTSPluginManager
+from core.runtime import resolve_contract_url, runtime_target_for_capability
+from services.managers.tts import TTSPluginManager
 from .routes import router as tts_router
 from . import globals as tts_globals
 from app_config import config as app_settings
@@ -24,15 +24,17 @@ class Capability(IWorkerCapability):
         return self._gather_tts_state
 
     async def on_startup(self, app: FastAPI):
+        container = app.state.container
         # 1. Initialize HTTP Client
         tts_globals.http_client = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
         
         # 2. Initialize Manager
-        manager = TTSPluginManager()
+        manager = TTSPluginManager(config=app_settings)
         await manager.register_drivers()
         
         # 3. Register to Container
-        services.register_tts(manager)
+        container.register_tts(manager)
+        tts_globals.tts_manager = manager
         logger.info(f"TTS Service Ready. Active Driver: {manager.active_driver_id}")
 
     async def on_shutdown(self):
@@ -40,17 +42,15 @@ class Capability(IWorkerCapability):
             await tts_globals.http_client.aclose()
 
     def _gather_tts_state(self) -> List[Dict[str, Any]]:
-        from services.container import services
         from services.reporting.driver_state_collector import DriverStateCollector
         from app_config import config
         
-        tts_manager = getattr(services, 'tts', None)
-        # Port lookup
-        tts_url = f"http://127.0.0.1:{config.network.tts_port}/models/switch"
+        tts_manager = tts_globals.tts_manager
+        tts_url = resolve_contract_url(config, "tts", "switch")
         
         return DriverStateCollector.gather_driver_states(
             manager=tts_manager,
             category="tts",
-            runtime_target="tts_server",
+            runtime_target=runtime_target_for_capability("tts"),
             service_url=tts_url
         )

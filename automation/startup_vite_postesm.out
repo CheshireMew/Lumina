@@ -1,0 +1,28 @@
+
+> lumina@0.1.0 dev
+> vite
+
+[36mvite v5.4.21 [32mbuilding for development...[36m[39m
+[36m
+watching for file changes...[39m
+[36mvite v5.4.21 [32mbuilding for development...[36m[39m
+[36m
+watching for file changes...[39m
+[36m
+build started...[39m
+[36m
+build started...[39m
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m1187[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+transforming...
+[32m✓[39m 1 modules transformed.
+transforming...
+rendering chunks...
+[2mdist-electron/[22m[36mpreload.js  [39m[1m[2m2.22 kB[22m[1m[22m
+[36mbuilt in 3508ms.[39m
+[32m✓[39m 5 modules transformed.
+rendering chunks...

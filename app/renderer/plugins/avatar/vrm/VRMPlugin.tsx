@@ -15,8 +15,8 @@ import { IAvatarRenderer, FaceTrackingData } from '../../../core/avatar/types';
 // Extend Three.js loader with VRM plugin
 // Note: We need to register the plugin in the loader
 function VRMModel({ url, onVRMLoaded }: { url: string; onVRMLoaded: (vrm: any) => void }) {
-    const gltf = useGLTF(url, (loader) => {
-        loader.register((parser) => {
+    const gltf = (useGLTF as any)(url, (loader: any) => {
+        loader.register((parser: any) => {
             return new VRMLoaderPlugin(parser);
         });
     });
@@ -46,7 +46,7 @@ const VRMPlugin = forwardRef<IAvatarRenderer, VRMPluginProps>(({ modelPath }, re
     const blendShapeTarget = useRef<Map<string, number>>(new Map());
 
     useImperativeHandle(ref, () => ({
-        initialize: async (container) => {
+        initialize: async (_container: any) => {
             console.log('[VRM] Initialized');
             setSceneReady(true);
         },
@@ -57,14 +57,14 @@ const VRMPlugin = forwardRef<IAvatarRenderer, VRMPluginProps>(({ modelPath }, re
                 VRMUtils.deepDispose(vrmRef.current.scene);
             }
         },
-        speak: async (audioUrl, visemes) => {
+        speak: async (audioUrl: string, _visemes?: any) => {
             if (!vrmRef.current) return;
             // Simple lip sync simulation if visemes provided
             // In a real app, we would play audio and analyze FFT or use visemes array
             // detailed lip sync logic would go here
             console.log('[VRM] Speak:', audioUrl);
         },
-        setExpression: (emotion, intensity = 1.0) => {
+        setExpression: (emotion: string, intensity = 1.0) => {
             if (!vrmRef.current) return;
             // Map standard emotions to VRM presets or custom blendshapes
             // VRM 0.0 uses presets like LOOKUP, DOWN, LEFT, RIGHT, BLINK, etc.
@@ -84,6 +84,30 @@ const VRMPlugin = forwardRef<IAvatarRenderer, VRMPluginProps>(({ modelPath }, re
                    expressionManager.setValue(vrmEmotion, intensity);
                }
             }
+        },
+        setEmotion: (emotionId: string) => {
+            if (!vrmRef.current) return;
+            const expressionManager = vrmRef.current.expressionManager;
+            if (!expressionManager) return;
+            expressionManager.setValue('happy', 0);
+            expressionManager.setValue('angry', 0);
+            expressionManager.setValue('sad', 0);
+            expressionManager.setValue('relaxed', 0);
+            expressionManager.setValue('surprised', 0);
+            const vrmEmotion = mapEmotionToVRM(emotionId);
+            if (vrmEmotion && vrmEmotion !== 'neutral') {
+                expressionManager.setValue(vrmEmotion, 1);
+            }
+        },
+        stopExpression: () => {
+            if (!vrmRef.current) return;
+            const expressionManager = vrmRef.current.expressionManager;
+            if (!expressionManager) return;
+            expressionManager.setValue('happy', 0);
+            expressionManager.setValue('angry', 0);
+            expressionManager.setValue('sad', 0);
+            expressionManager.setValue('relaxed', 0);
+            expressionManager.setValue('surprised', 0);
         },
         lookAt: (x: number, y: number) => {
              if (!vrmRef.current || !vrmRef.current.lookAt) return;
@@ -132,7 +156,7 @@ const VRMPlugin = forwardRef<IAvatarRenderer, VRMPluginProps>(({ modelPath }, re
     
     // Updater component to hook into R3F loop
     const VRMUpdater = () => {
-        useFrame((state, delta) => {
+        useFrame((_state, delta) => {
             if (vrmRef.current) {
                 vrmRef.current.update(delta);
             }

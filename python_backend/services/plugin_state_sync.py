@@ -3,13 +3,14 @@ import logging
 import asyncio
 from typing import Any, Dict
 from services.infra.bus_factory import get_lifecycle_bus
+from core.runtime import normalize_runtime_target
 
 logger = logging.getLogger("PluginStateSync")
 
 class PluginStateSync:
     """
     Worker-side service that synchronizes local plugin state 
-    with the distributed Lifecycle Bus (SurrealDB).
+    with the distributed Lifecycle Bus.
     
     [Architecture 6.0] Workers ONLY process plugins matching their runtime_target.
     """
@@ -19,9 +20,15 @@ class PluginStateSync:
         self.bus = get_lifecycle_bus()
         import socket
         self.worker_id = worker_id or f"worker:{socket.gethostname()}"
-        # [P0 Fix] Filter control signals by runtime_target
-        self.expected_target = expected_target  # e.g. "stt_server", "tts_server"
+        self.expected_target = normalize_runtime_target(expected_target)
         self.reporter = reporter # [Fix] Direct reference to Status Reporter
+        self._desired_state_cache: Dict[str, bool] = {}
+
+    def _get_local_desired_state(self, plugin_id: str) -> bool | None:
+        config = getattr(self.plugin_manager, "config", None)
+        if config and hasattr(config, "is_plugin_desired_enabled"):
+            return bool(config.is_plugin_desired_enabled(plugin_id))
+        return None
 
     async def start(self):
         """Start listening for state changes."""
@@ -69,6 +76,7 @@ class PluginStateSync:
         """Callback for new state events"""
         # [P0 Fix] Filter by runtime_target - ignore plugins not meant for this Worker
         runtime_target = state.get("runtime_target")
+        normalized_target = normalize_runtime_target(runtime_target)
         
         if self.expected_target:
             if not runtime_target:
@@ -76,7 +84,7 @@ class PluginStateSync:
                 # If a worker expects filtering, it shouldn't guess.
                 return
                 
-            if runtime_target != self.expected_target:
+            if normalized_target != self.expected_target:
                 # This plugin belongs to a different worker, ignore
                 return
         
@@ -87,6 +95,17 @@ class PluginStateSync:
         if desired is None:
             # [P1 Fix] Strict mode: No fallback to 'enabled'
             # Old plugins without desired_enabled are ignored until migrated
+            return
+
+        local_desired = self._get_local_desired_state(plugin_id)
+        if local_desired is not None and local_desired != desired:
+            logger.info(
+                f"🧭 Ignoring stale bus state for {plugin_id}: bus={desired}, config={local_desired}"
+            )
+            return
+
+        if self._desired_state_cache.get(plugin_id) is desired:
+            logger.debug(f"⏭️ Ignoring duplicate desired state for {plugin_id}: {desired}")
             return
             
         logger.info(f"⚡ [Bus] Control Signal: {plugin_id} -> Desired={desired}")
@@ -118,6 +137,8 @@ class PluginStateSync:
             if self.reporter:
                 logger.info(f"⚡ Triggering Immediate Status Report for {plugin_id}...")
                 asyncio.create_task(self.reporter.force_report())
+
+            self._desired_state_cache[plugin_id] = desired
                     
         except Exception as e:
             logger.error(f"❌ Failed to sync state for {plugin_id}: {e}")

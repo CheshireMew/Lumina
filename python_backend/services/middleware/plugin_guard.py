@@ -37,7 +37,7 @@ class PluginGuardMiddleware(BaseHTTPMiddleware):
             # These are management endpoints, not specific plugins.
             RESERVED_PATHS = {
                 "list", "slots", "registry", "config", "toggle", 
-                "upload", "search", "brave-key"
+                "upload", "search", "brave-key", "capabilities", "debug", "marketplace"
             }
             if plugin_id in RESERVED_PATHS:
                 # [Security] Management Endpoints are Localhost Only
@@ -85,5 +85,10 @@ class PluginGuardMiddleware(BaseHTTPMiddleware):
             
         except Exception as e:
             logger.error(f"Guard Middleware Error: {e}")
-            
+            # Fail-closed: block request on guard error
+            return JSONResponse(
+                status_code=503,
+                content={"error": "Plugin system temporarily unavailable"}
+            )
+
         return await call_next(request)

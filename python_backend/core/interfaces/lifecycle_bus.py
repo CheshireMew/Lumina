@@ -4,7 +4,7 @@ from typing import Any, Callable, Awaitable, Dict, List
 class AbstractLifecycleBus(ABC):
     """
     Abstract Interface for the Distributed Lifecycle Bus.
-    Decouples the business logic (Main/Worker) from the underlying transport (SurrealDB, Redis, ZMQ).
+    Decouples the business logic (Main/Worker) from the underlying transport layer.
     """
 
     @abstractmethod

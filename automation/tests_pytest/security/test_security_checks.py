@@ -7,7 +7,6 @@ authorization, and protection against common vulnerabilities.
 import sys
 from pathlib import Path
 import pytest
-from unittest.mock import MagicMock, patch
 import re
 
 # Add python_backend to path
@@ -71,13 +70,16 @@ def test_malicious_input_detection(malicious_input, attack_type):
 @pytest.mark.security
 def test_sql_injection_prevention_in_query_builder():
     """Test that query builder prevents SQL injection"""
-    from core.db.query_builder import SurrealQueryBuilder
+    from core.db.query_builder import SecurityException, SurrealQueryBuilder
 
     builder = SurrealQueryBuilder()
 
     # Safe input
     safe_table = "memories"
-    builder.select(safe_table).where("id = $id").build()
+    query, params = builder.select(safe_table, where={"id": "memory:1"})
+    assert "SELECT * FROM memories" in query
+    assert "DROP TABLE" not in query
+    assert params["p_0"] == "memory:1"
 
     # Unsafe input attempts
     unsafe_inputs = [
@@ -87,11 +89,8 @@ def test_sql_injection_prevention_in_query_builder():
     ]
 
     for unsafe_input in unsafe_inputs:
-        # Should not allow unsafe table names
-        result = builder.select(unsafe_input).build()
-        # Query builder should escape or reject the input
-        assert "DROP TABLE" not in result
-        assert "UNION SELECT" not in result
+        with pytest.raises(SecurityException):
+            builder.select(unsafe_input)
 
 
 # ============================================================================
@@ -117,7 +116,7 @@ def test_path_traversal_blocked(unsafe_path):
             r"\.\.\\",
             r"/etc/",
             r"/proc/",
-            r"C:\\Windows",
+            r"c:\\windows",
             r"\\Device\\",
             r"%2e"
         ]

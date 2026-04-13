@@ -1,65 +1,41 @@
-# Database Management & Security Guide
+# Database Management Guide
 
 ## Overview
 
-Lumina V2 uses **SurrealDB** as its core memory store.
-To improve security, we have implemented a **Role-Based Access Control (RBAC)** system.
+Lumina 当前使用 **PostgreSQL + pgvector** 作为统一记忆存储。
+主配置入口是 `config.yaml` 中的 `memory.postgres` 段，或对应环境变量：
 
-### Credentials Architecture
+- `LUMINA_PG_HOST`
+- `LUMINA_PG_PORT`
+- `LUMINA_PG_USER`
+- `LUMINA_PG_PASSWORD`
+- `LUMINA_PG_DATABASE`
 
-| Role              | Username (Default) | Password (Default)   | Permissions                                     |
-| :---------------- | :----------------- | :------------------- | :---------------------------------------------- |
-| **Root (Admin)**  | `root`             | `root`               | Full Access, Schema Definition, User Management |
-| **App (Service)** | `lumina_app`       | `lumina_secure_pass` | Read/Write Data (DML), No Schema Changes (DDL)  |
+## Local Startup
 
-> **⚠️ SECURITY WARNING**: In production, you MUST change these passwords via `memory_config.json` or Environment Variables.
+推荐直接使用根目录的 [`start_lumina.ps1`](/E:/Work/Code/Lumina/start_lumina.ps1)，脚本会：
 
-### Environment Variables
+1. 读取 `Lumina_Data/config.yaml` 中的 PostgreSQL 配置。
+2. 检查目标端口是否可达。
+3. 本地没有数据库时尝试用 Docker 拉起 `db` 服务。
+4. 数据库就绪后再启动 Electron + Vite。
 
-You can override credentials without touching files (Recommended for Docker/Prod):
+## Manual Inspection
 
-- `SURREAL_ROOT_USER` / `SURREAL_ROOT_PASS`
-- `SURREAL_APP_USER` / `SURREAL_APP_PASS`
-- `SURREAL_URL` (Default: `ws://127.0.0.1:8001/rpc`)
+可以使用任意 PostgreSQL 客户端查看数据，例如 `psql`、DBeaver、TablePlus。
 
----
+常用表：
 
-## How to Debug Data (Surrealist)
-
-We have removed the dangerous `/debug/*` API endpoints.
-To inspect or modify data manually, please use **Surrealist**, the official GUI for SurrealDB.
-
-### 1. Download Surrealist
-
-Download the desktop app from: [https://surrealdb.com/surrealist](https://surrealdb.com/surrealist)
-Or use the web version: [https://surrealist.app/](https://surrealist.app/) (Requires allowing connection to localhost)
-
-### 2. Connect to Local DB
-
-1.  **Name**: Lumina Local
-2.  **Endpoint**: `ws://127.0.0.1:8001/rpc`
-3.  **Namespace**: `lumina`
-4.  **Database**: `memory`
-5.  **Auth Mode**: Root
-6.  **Username**: `root`
-7.  **Password**: `root` (or your configured password)
-
-### 3. Verify RBAC
-
-Try connecting with the App User to verify restrictions:
-
-- **Username**: `lumina_app`
-- **Password**: `lumina_secure_pass`
-
-You should be able to `SELECT * FROM episodic_memory`, but `REMOVE TABLE episodic_memory` should fail.
-
----
+- `conversation_log`
+- `episodic_memory`
+- `plugin_state`
+- `worker_heartbeats`
+- `security_audit`
 
 ## Troubleshooting
 
-**Q: "Surreal Connection Failed" on startup?**
-A: Ensure your SurrealDB server is running on port 8001.
-If you changed the root password in the DB but not in `memory_config.json`, the app cannot initialize the schema.
+**Q: 启动时提示 memory backend unavailable？**  
+A: 先确认 PostgreSQL 进程是否存活，以及 `memory.postgres` 的主机、端口、用户名和数据库名是否匹配。
 
-**Q: I see "Auth Error" in logs?**
-A: Check if `memory_config.json` contains old keys (`user`/`password`). Please update them to `root_user`/`root_password` and `app_user`/`app_password`.
+**Q: 主进程能启动，但记忆功能返回 503？**  
+A: 这表示后端已经降级启动，UI 仍可用，但数据库连接没有建立成功。优先检查 PostgreSQL 日志和 `LUMINA_PG_PASSWORD`。

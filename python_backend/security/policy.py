@@ -1,7 +1,7 @@
 import logging
 from typing import List, Tuple
 from core.manifest import PluginManifest
-from core.permissions import TIER_SAFE, TIER_TRUSTED, TIER_SYSTEM
+from core.permissions import TIER_SAFE, TIER_TRUSTED, TIER_SYSTEM, validate_permissions
 from core.security.audit import AuditLogger
 
 logger = logging.getLogger("SecurityPolicy")
@@ -30,10 +30,14 @@ class SecurityPolicy:
         """
         warnings = []
         is_risky = False
+        invalid_permissions = []
         
         # Normalize permissions in the manifest dynamically for this check
         # (We don't modify the manifest object here, just the list we check)
         requested_perms = [SecurityPolicy.normalize_permission(p) for p in manifest.permissions]
+        invalid_permissions = validate_permissions(requested_perms)
+        if invalid_permissions:
+            warnings.append(f"❌ Invalid permissions: {', '.join(invalid_permissions)}")
         
         for perm in requested_perms:
             # TIER_* lists contain strings (Enum.value)
@@ -46,45 +50,26 @@ class SecurityPolicy:
                 # Check known safe/default permissions from permissions.py if needed
                 # For now, treat unknown as warning
                 warnings.append(f"❓ Unknown Permission: {perm}")
+                invalid_permissions.append(perm)
         
         # Policy Logic
-        is_system_plugin = manifest.id.startswith("system.") or manifest.id.startswith("driver.")
-        
-        if manifest.isolation_mode == "local" and is_risky:
-            if is_system_plugin:
-                # System/Driver plugins are allowed to run locally with high privs
-                AuditLogger.log_event_sync(
-                    actor_id=manifest.id,
-                    action="permission_check",
-                    target="system.local_execution",
-                    status="granted",
-                    metadata={"permissions": requested_perms, "warnings": warnings}
-                )
-                return True, warnings
-            else:
-                # Dangerous: Community Plugin requests SYSTEM permissions in LOCAL capability
-                logger.error(f"⛔ SECURITY BLOCK: Plugin '{manifest.id}' requests SYSTEM permissions in LOCAL mode.")
-                AuditLogger.log_event_sync(
-                    actor_id=manifest.id,
-                    action="permission_check",
-                    target="system.local_execution",
-                    status="blocked",
-                    metadata={"permissions": requested_perms, "warnings": warnings}
-                )
-                return False, warnings
-            
-        return True, warnings 
+        if is_risky or invalid_permissions:
+            AuditLogger.log_event_sync(
+                actor_id=manifest.id,
+                action="permission_check",
+                target="plugin.permissions",
+                status="warning",
+                metadata={
+                    "permissions": requested_perms,
+                    "warnings": warnings,
+                    "invalid_permissions": invalid_permissions,
+                }
+            )
+        return (not is_risky and not invalid_permissions), warnings
 
     @staticmethod
     def enforce_isolation_policy(manifest: PluginManifest) -> PluginManifest:
         """
-        [Hardening] Force 'process' isolation for community plugins (non-system).
-        This modifies the manifest in-place if needed (or we returns a copy).
+        Compatibility no-op: isolation mode was removed from the unified contract.
         """
-        is_system = manifest.id.startswith("system.") or manifest.id.startswith("driver.")
-        
-        if not is_system and manifest.isolation_mode == "local":
-            logger.warning(f"🔒 Enforcing Isolation: Plugin '{manifest.id}' switched to PROCESS mode (Community plugins cannot run locally).")
-            manifest.isolation_mode = "process"
-            
         return manifest

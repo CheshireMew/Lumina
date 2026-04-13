@@ -1,24 +1,14 @@
-id: "system.emotion_broker"
-type: "system"
-name: "Emotion Broker"
-version: "1.0.0"
-description: "Parses emotion tags from LLM output and broadcasts to all subscribers (TTS, Avatar, Frontend)."
-entrypoint: "plugin:EmotionBrokerPlugin"
-
-capabilities:
-  - "emotion.parse"
-  - "emotion.broadcast"
-
+id: system.emotion_broker
+api_version: "1.0"
+kind: processor
+capability: chat.post_processor
+runtime_target: main
 permissions:
-  - "eventbus:subscribe"
-  - "eventbus:emit"
-  - "filesystem.read"
-
-config:
-  enabled: true
-  # Regex pattern to match emotion tags: [emotion] or (emotion)
-  tag_pattern: '\[(joy|happy|sad|angry|surprised|neutral|thinking|embarrassed)\]'
-  # Strip tags from output sent to frontend?
+  - eventbus.subscribe
+  - eventbus.emit
+config_schema:
+  tag_pattern: "\\[(joy|happy|sad|angry|surprised|neutral|thinking|embarrassed)\\]"
   strip_tags: false
-  # Default emotion when none detected
-  default_emotion: "neutral"
+  default_emotion: neutral
+provides:
+  - avatar

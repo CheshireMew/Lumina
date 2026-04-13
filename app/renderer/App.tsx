@@ -7,22 +7,18 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import ChatBubble from './components/ChatBubble'
 import InputBox from './components/InputBox'
-import VoiceInput from './components/VoiceInput'
 import GalGameHud from './components/GalGameHud'
 import { events } from './core/events';
-import { API_CONFIG } from './config';
-import { Message, CharacterProfile } from '@core/llm/types'
-import { memoryService } from '@core/memory/memory_service'
+import { API_CONFIG, updateApiConfig } from './config';
+import { CharacterProfile } from '@core/llm/types'
 import { ttsService } from '@core/voice/tts_service'
+import { GeneralSettingsInput } from './hooks/useSettings';
+import type { ProviderType } from './components/LLMConfig/types';
 
 // Core Hooks
-import { useGateway } from './hooks/useGateway';
 import { useCoreSystem } from './hooks/useCoreSystem';
-import { useCharacterState } from './hooks/useCharacterState';
-import { useAudioPipeline } from './hooks/useAudioPipeline';
-import { useChatStream } from './hooks/useChatStream';
-import { useSettings } from './hooks/useSettings';
-import { transformImageSrc } from './utils/srcUtils';
+import { useBackendState } from './hooks/useBackendState';
+import { resolveBundledAssetSrc, transformImageSrc } from './utils/srcUtils';
 
 // Avatar System
 import AvatarContainer from './core/avatar/AvatarContainer';
@@ -30,21 +26,33 @@ import { AvatarRendererRef } from './core/avatar/types';
 
 // UI Components
 import { AppToolbar } from './components/AppToolbar';
-import { ModalLayer } from './components/ModalLayer';
-import { WidgetContainer } from './components/plugins/WidgetContainer';
+
+const LazyModalLayer = React.lazy(() =>
+    import('./components/ModalLayer').then((module) => ({
+        default: module.ModalLayer,
+    })),
+);
+
+const LazyWidgetContainer = React.lazy(() =>
+    import('./components/plugins/WidgetContainer').then((module) => ({
+        default: module.WidgetContainer,
+    })),
+);
 
 function App() {
     // ==================== HOOKS ====================
     // Refs
     const avatarRef = useRef<AvatarRendererRef>(null);
+    const backendState = useBackendState();
+    const isBackendReady = backendState.status === 'ready';
     
     // Core System Hook (Unified)
     const {
-        activeCharacter, activeCharacterId, characters, setCharacters, updateCharacterModel, switchCharacter,
-        settings, isSettingsLoaded, updateLLMSettings, saveSetting,
+        activeCharacter, activeCharacterId, characters, setCharacters, switchCharacter,
+        settings, isSettingsLoaded, updateLLMSettings, saveGeneralSettings,
         isProcessing, isStreaming, displayMessage, reasoningContent,
         sendMessage, interrupt, saveCharacters
-    } = useCoreSystem(avatarRef);
+    } = useCoreSystem(avatarRef, isBackendReady);
     
     // ==================== LOCAL STATE ====================
     const [chatMode, setChatMode] = useState<'text' | 'voice'>('text');
@@ -53,22 +61,14 @@ function App() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isPluginStoreOpen, setIsPluginStoreOpen] = useState(false);
     const [isMotionTesterOpen, setIsMotionTesterOpen] = useState(false);
-    const [isSurrealViewerOpen, setIsSurrealViewerOpen] = useState(false);
+    const [isMemoryInspectorOpen, setIsMemoryInspectorOpen] = useState(false);
     const [isAvatarSelectorOpen, setIsAvatarSelectorOpen] = useState(false);
     const [isLLMConfigOpen, setIsLLMConfigOpen] = useState(false);
-    const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'voice' | 'characters' | 'interaction'>('general');
-    const [backgroundImage, setBackgroundImage] = useState<string>('');
-    
-    // Sync background from settings
-    useEffect(() => {
-        if (settings?.backgroundImage) {
-            setBackgroundImage(settings.backgroundImage);
-        }
-    }, [settings.backgroundImage]);
+    const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'voice' | 'interaction'>('general');
+    const [showPluginWidgets, setShowPluginWidgets] = useState(false);
+    const [visibleBackgroundImage, setVisibleBackgroundImage] = useState('');
     
     // Other Refs
-    const currentSystemPromptRef = useRef<string>('');
-
     // ==================== HANDLERS ====================
     const handleSend = useCallback((text: string) => {
         sendMessage(text);
@@ -84,34 +84,17 @@ function App() {
         await switchCharacter(newId);
     }, [switchCharacter]);
 
-    const handleClearHistory = useCallback(() => {
-        console.log('[Memory] History cleared (via System Prompt reset or manual action)');
-        // history clearing logic is inside core system ref usually, or we expose a clear method
-    }, []);
-
-    const handleLLMSettingsChange = useCallback((apiKey: string, baseUrl: string, model: string, temperature: number, thinkingEnabled: boolean, historyLimit: number, overflowStrategy: 'slide' | 'reset', topP?: number, presencePenalty?: number, frequencyPenalty?: number) => {
-        updateLLMSettings({ apiKey, baseUrl, model, temperature, thinkingEnabled, historyLimit, overflowStrategy, topP, presencePenalty, frequencyPenalty });
+    const handleLLMSettingsChange = useCallback((apiKey: string, baseUrl: string, model: string, temperature: number, thinkingEnabled: boolean, historyLimit: number, overflowStrategy: 'slide' | 'reset', topP?: number, presencePenalty?: number, frequencyPenalty?: number, providerType: ProviderType = 'custom') => {
+        updateLLMSettings({ providerType, apiKey, baseUrl, model, temperature, thinkingEnabled, historyLimit, overflowStrategy, topP, presencePenalty, frequencyPenalty });
     }, [updateLLMSettings]);
-
-    const handleCharactersUpdated = useCallback((newCharacters: CharacterProfile[], newActiveId: string) => {
-        setCharacters(newCharacters);
-        if (newActiveId !== activeCharacterId) {
-            handleCharacterSwitch(newActiveId);
-        }
-    }, [setCharacters, activeCharacterId, handleCharacterSwitch]);
-
-    const handleUserNameUpdated = useCallback((newName: string) => {
-        saveSetting('userName', 'userName', newName);
-    }, [saveSetting]);
-
-    const handleModelSelect = useCallback(async (modelPath: string) => {
-        if (!activeCharacter) return;
-        await updateCharacterModel(activeCharacterId, modelPath);
-    }, [activeCharacter, activeCharacterId, updateCharacterModel]);
 
     const handleSaveCharacters = useCallback(async (chars: CharacterProfile[], deletedIds: string[]) => {
         await saveCharacters(chars, deletedIds);
     }, [saveCharacters]);
+
+    const handleSaveGeneralSettings = useCallback(async (next: GeneralSettingsInput) => {
+        await saveGeneralSettings(next);
+    }, [saveGeneralSettings]);
     
     const toggleChatMode = useCallback(() => {
         setChatMode(prev => prev === 'text' ? 'voice' : 'text');
@@ -139,21 +122,68 @@ function App() {
             if (activeCharacter.voiceConfig?.voiceId) {
                 ttsService.setDefaultVoice(activeCharacter.voiceConfig.voiceId);
             }
-            // Fetch soul prompt...
-            fetch(`${API_CONFIG.BASE_URL}/soul`)
-                .then(res => res.ok ? res.json() : null)
-                .then(soul => {
-                    if (soul?.system_prompt && soul.system_prompt !== currentSystemPromptRef.current) {
-                        window.llm?.setSystemPrompt?.(soul.system_prompt);
-                        currentSystemPromptRef.current = soul.system_prompt;
-                    }
-                })
-                .catch(e => console.warn('[App] Failed to fetch soul:', e));
         }
     }, [activeCharacterId, activeCharacter]);
 
+    useEffect(() => {
+        if (Object.keys(backendState.ports).length === 0) {
+            return;
+        }
+
+        console.log("🔌 [App] Syncing runtime ports:", backendState.ports);
+        updateApiConfig(backendState.ports);
+    }, [backendState.ports]);
+
+    useEffect(() => {
+        if (!isBackendReady) {
+            setShowPluginWidgets(false);
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setShowPluginWidgets(true);
+        }, 1200);
+
+        return () => window.clearTimeout(timer);
+    }, [isBackendReady]);
+
+    useEffect(() => {
+        setVisibleBackgroundImage('');
+
+        if (!isSettingsLoaded || !settings.backgroundImage) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setVisibleBackgroundImage(settings.backgroundImage);
+        }, 1000);
+
+        return () => window.clearTimeout(timer);
+    }, [isSettingsLoaded, settings.backgroundImage]);
+
     // ==================== RENDER ====================
     const modelPath = activeCharacter?.modelPath || API_CONFIG.DEFAULT_MODEL_PATH;
+    const resolvedModelPath = modelPath.startsWith('/live2d/')
+        ? resolveBundledAssetSrc(modelPath)
+        : modelPath;
+    const canLoadAvatar = isSettingsLoaded;
+    const hasOpenModal = isSettingsOpen
+        || isPluginStoreOpen
+        || isMotionTesterOpen
+        || isMemoryInspectorOpen
+        || isAvatarSelectorOpen
+        || isLLMConfigOpen;
+    const showStartupStatus = !isSettingsLoaded || backendState.status !== 'ready';
+    const startupLabel = backendState.status === 'error'
+        ? '后端启动失败'
+        : backendState.status === 'ready'
+            ? '加载中'
+            : '正在启动';
+    const startupDetail = backendState.status === 'error'
+        ? backendState.errorMessage || '请检查调试控制台'
+        : isSettingsLoaded
+            ? '正在连接核心服务'
+            : '正在准备界面';
 
     return (
         <div style={{ 
@@ -162,17 +192,17 @@ function App() {
             position: 'relative', 
             overflow: 'hidden',
             backgroundColor: '#f3f4f6', // Fallback color
-            backgroundImage: backgroundImage ? `url("${transformImageSrc(backgroundImage)}")` : 'linear-gradient(135deg, #eef2ff 0%, #fae8ff 50%, #f0fdf4 100%)',
+            backgroundImage: visibleBackgroundImage ? `url("${transformImageSrc(visibleBackgroundImage)}")` : 'linear-gradient(135deg, #eef2ff 0%, #fae8ff 50%, #f0fdf4 100%)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             transition: 'background-image 0.5s ease-in-out'
         }}>
             {/* Avatar */}
-            {isSettingsLoaded ? (
+            {canLoadAvatar ? (
                 <AvatarContainer
                     ref={avatarRef}
-                    modelPath={modelPath}
+                    modelPath={resolvedModelPath}
                     highDpi={settings.live2dHighDpi}
                 />
             ) : (
@@ -182,10 +212,10 @@ function App() {
             )}
 
             {/* HUD */}
-            {isSettingsLoaded && (
+            {isSettingsLoaded && isBackendReady && (
                 <GalGameHud
                     activeCharacterId={activeCharacterId}
-                    onOpenSurrealViewer={() => setIsSurrealViewerOpen(true)}
+                    onOpenMemoryInspector={() => setIsMemoryInspectorOpen(true)}
                     galgameEnabled={activeCharacter?.galgameModeEnabled ?? true}
                 />
             )}
@@ -238,7 +268,7 @@ function App() {
                     <div style={{ width: '100%' }}>
                         <InputBox 
                             onSend={handleSend} 
-                            disabled={isProcessing && !isStreaming}
+                            disabled={!isBackendReady || (isProcessing && !isStreaming)}
                             embedded={true}
                             chatMode={chatMode}
                             onToggleChatMode={toggleChatMode}
@@ -250,8 +280,6 @@ function App() {
 
             {/* UI Layer */}
             <AppToolbar 
-                chatMode={chatMode}
-                onToggleChatMode={toggleChatMode}
                 onOpenAvatarSelector={() => {
                     setIsAvatarSelectorOpen(true);
                 }}
@@ -264,68 +292,133 @@ function App() {
                 onOpenMotionTester={() => setIsMotionTesterOpen(true)}
             />
 
-            <ModalLayer 
-                isSettingsOpen={isSettingsOpen}
-                onCloseSettings={() => setIsSettingsOpen(false)}
-                isPluginStoreOpen={isPluginStoreOpen}
-                onClosePluginStore={() => setIsPluginStoreOpen(false)}
-                isMotionTesterOpen={isMotionTesterOpen}
-                onCloseMotionTester={() => setIsMotionTesterOpen(false)}
-                isSurrealViewerOpen={isSurrealViewerOpen}
-                onCloseSurrealViewer={() => setIsSurrealViewerOpen(false)}
-                isAvatarSelectorOpen={isAvatarSelectorOpen}
-                onCloseAvatarSelector={() => setIsAvatarSelectorOpen(false)}
-                
-                onClearHistory={handleClearHistory}
-
-                // LLM Settings
-                isLLMConfigOpen={isLLMConfigOpen}
-                onOpenLLMConfig={() => setIsLLMConfigOpen(true)} // Passed here
-                onCloseLLMConfig={() => setIsLLMConfigOpen(false)}
-                currentLlmSettings={{
-                    apiKey: settings.llm.apiKey,
-                    apiBaseUrl: settings.llm.baseUrl,
-                    modelName: settings.llm.model,
-                    temperature: settings.llm.temperature,
-                    thinkingEnabled: settings.llm.thinkingEnabled,
-                    historyLimit: settings.llm.historyLimit,
-                    overflowStrategy: settings.llm.overflowStrategy,
-                    topP: settings.llm.topP,
-                    presencePenalty: settings.llm.presencePenalty,
-                    frequencyPenalty: settings.llm.frequencyPenalty
-                }}
-                onContextWindowChange={(n) => saveSetting('contextWindow', 'contextWindow', n)}
-                onLLMSettingsChange={handleLLMSettingsChange}
-                onCharactersUpdated={handleCharactersUpdated}
-                onUserNameUpdated={handleUserNameUpdated}
-                onLive2DHighDpiChange={(e) => saveSetting('live2dHighDpi', 'live2d_high_dpi', e)}
-                onCharacterSwitch={handleCharacterSwitch}
-                onThinkingModeChange={enable => updateLLMSettings({ ...settings.llm, thinkingEnabled: enable })}
-                onBackgroundImageChange={url => {
-                    setBackgroundImage(url);
-                    // [Fix] Do not save blob: URLs to settings (they are transient previews)
-                    if (url && !url.startsWith('blob:')) {
-                        saveSetting('backgroundImage', 'backgroundImage', url);
-                    }
-                }}
-                
-                // Character Props (Passed to AvatarSelectorModal)
-                characters={characters}
-                setCharacters={setCharacters}
-                onSaveCharacters={handleSaveCharacters}
-
-                activeCharacter={activeCharacter}
-                activeCharacterId={activeCharacterId}
-                galgameEnabled={activeCharacter?.galgameModeEnabled ?? true}
-                onModelSelect={handleModelSelect}
-                avatarRef={avatarRef}
-                settingsInitialTab={settingsInitialTab}
-            />
+            {hasOpenModal && (
+                <React.Suspense fallback={null}>
+                    <LazyModalLayer
+                        settings={{
+                            isOpen: isSettingsOpen,
+                            onClose: () => setIsSettingsOpen(false),
+                            initialTab: settingsInitialTab,
+                            currentSettings: {
+                                userName: settings.userName,
+                                backgroundImage: settings.backgroundImage,
+                                live2dHighDpi: settings.live2dHighDpi,
+                            },
+                            onSave: handleSaveGeneralSettings,
+                        }}
+                        pluginStore={{
+                            isOpen: isPluginStoreOpen,
+                            onClose: () => setIsPluginStoreOpen(false),
+                            onOpenLlmSettings: () => setIsLLMConfigOpen(true),
+                        }}
+                        motionTester={{
+                            isOpen: isMotionTesterOpen,
+                            onClose: () => setIsMotionTesterOpen(false),
+                        }}
+                        memoryInspector={{
+                            isOpen: isMemoryInspectorOpen,
+                            onClose: () => setIsMemoryInspectorOpen(false),
+                            activeCharacterId,
+                        }}
+                        avatarSelector={{
+                            isOpen: isAvatarSelectorOpen,
+                            onClose: () => setIsAvatarSelectorOpen(false),
+                            activeCharacterId,
+                            activeCharacter,
+                            characters,
+                            setCharacters,
+                            onActivateCharacter: handleCharacterSwitch,
+                            onSaveCharacters: handleSaveCharacters,
+                        }}
+                        llmConfig={{
+                            isOpen: isLLMConfigOpen,
+                            onClose: () => setIsLLMConfigOpen(false),
+                            currentSettings: {
+                                apiKey: settings.llm.apiKey,
+                                providerType: settings.llm.providerType,
+                                apiBaseUrl: settings.llm.baseUrl,
+                                modelName: settings.llm.model,
+                                temperature: settings.llm.temperature,
+                                thinkingEnabled: settings.llm.thinkingEnabled,
+                                historyLimit: settings.llm.historyLimit,
+                                overflowStrategy: settings.llm.overflowStrategy,
+                                topP: settings.llm.topP,
+                                presencePenalty: settings.llm.presencePenalty,
+                                frequencyPenalty: settings.llm.frequencyPenalty,
+                            },
+                            onSettingsChange: handleLLMSettingsChange,
+                            activeCharacterId,
+                        }}
+                        avatarRef={avatarRef}
+                    />
+                </React.Suspense>
+            )}
 
             {/* Plugin Widgets Layer */}
             <div className="fixed top-24 right-4 z-40 w-80 pointer-events-none flex flex-col gap-4">
-                 <WidgetContainer location="sidebar_right" className="w-full" />
+                {isBackendReady && showPluginWidgets && (
+                    <React.Suspense fallback={null}>
+                        <LazyWidgetContainer location="sidebar_right" className="w-full" />
+                    </React.Suspense>
+                )}
             </div>
+
+            {showStartupStatus && (
+                <div style={{
+                    position: 'absolute',
+                    top: '20px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 200,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                }}>
+                    <div style={{
+                        maxWidth: '420px',
+                        padding: '10px 14px',
+                        borderRadius: '999px',
+                        background: 'rgba(255, 255, 255, 0.78)',
+                        border: '1px solid rgba(255, 255, 255, 0.55)',
+                        backdropFilter: 'blur(12px)',
+                        boxShadow: '0 12px 32px rgba(15, 23, 42, 0.12)',
+                        color: '#334155',
+                    }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                        }}>
+                            <div style={{
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '999px',
+                                backgroundColor: backendState.status === 'error' ? '#ef4444' : '#f59e0b',
+                                boxShadow: backendState.status === 'error'
+                                    ? '0 0 16px rgba(239, 68, 68, 0.35)'
+                                    : '0 0 16px rgba(245, 158, 11, 0.35)',
+                            }} />
+                            <div style={{
+                                fontSize: '14px',
+                                fontWeight: 700,
+                            }}>
+                                {startupLabel}
+                            </div>
+                            <div style={{
+                                fontSize: '13px',
+                                color: '#64748b',
+                                maxWidth: '280px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}>
+                                {startupDetail}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             
         </div>
     );

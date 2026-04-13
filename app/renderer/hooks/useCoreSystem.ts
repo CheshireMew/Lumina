@@ -8,9 +8,11 @@ import { useChatStore } from "../store/useChatStore";
 import { API_CONFIG } from "../config";
 import { Message } from "@core/llm/types";
 import { AvatarRendererRef } from "../core/avatar/types";
+import { syncFrontendRuntime } from "../runtime/appRuntime";
 
 export const useCoreSystem = (
     avatarRef: React.RefObject<AvatarRendererRef>,
+    backendReady: boolean,
 ) => {
     // Basic Hooks
     const {
@@ -21,13 +23,13 @@ export const useCoreSystem = (
         setCharacters,
         updateCharacterModel,
         saveCharacters,
-    } = useCharacterState();
+    } = useCharacterState(backendReady);
     const {
         settings,
         isLoaded: isSettingsLoaded,
         updateLLMSettings,
-        saveSetting,
-    } = useSettings();
+        saveGeneralSettings,
+    } = useSettings(backendReady);
     const {
         initPipeline,
         enqueueSynthesis,
@@ -82,9 +84,7 @@ export const useCoreSystem = (
 
     const handleChatStream = useCallback(
         (token: string) => {
-            processToken(token, "content", (emotion) => {
-                avatarRef.current?.setEmotion?.(emotion);
-            });
+            processToken(token, "content");
 
             if (settings.isTTSEnabled) {
                 feedToken(token);
@@ -124,8 +124,6 @@ export const useCoreSystem = (
         (emotion: string) => {
             console.log("[Core] Emotion:", emotion);
             avatarRef.current?.setEmotion?.(emotion);
-            // Window dispatch is handled by useGateway now (legacy compat)
-            // But we keep this for consistency if useGateway invokes it.
         },
         [avatarRef],
     );
@@ -152,6 +150,7 @@ export const useCoreSystem = (
         onEmotion: handleEmotion,
         onSessionReset: handleSessionReset,
         baseUrl: API_CONFIG.BASE_URL,
+        enabled: backendReady,
     });
 
     // --- Actions ---
@@ -193,6 +192,30 @@ export const useCoreSystem = (
         setStreaming(false);
     }, [clearAudio, avatarRef, setProcessing, setStreaming]);
 
+    useEffect(() => {
+        if (!backendReady || !isSettingsLoaded || !activeCharacterId) {
+            return;
+        }
+
+        void syncFrontendRuntime({
+            llm: {
+                apiKey: settings.llm.apiKey,
+                baseUrl: settings.llm.baseUrl,
+                model: settings.llm.model,
+                providerType: settings.llm.providerType,
+                characterId: activeCharacterId,
+            },
+        });
+    }, [
+        activeCharacterId,
+        backendReady,
+        isSettingsLoaded,
+        settings.llm.apiKey,
+        settings.llm.baseUrl,
+        settings.llm.model,
+        settings.llm.providerType,
+    ]);
+
     // Character Switch Logic wrapping
     const handleSwitchCharacter = useCallback(
         async (newId: string) => {
@@ -227,8 +250,6 @@ export const useCoreSystem = (
         updateCharacterModel,
         saveCharacters,
         updateLLMSettings,
-        saveSetting,
-
-        // Removed conversationHistoryRef, as 'messages' from store replaces it
+        saveGeneralSettings,
     };
 };

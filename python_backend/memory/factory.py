@@ -4,7 +4,8 @@ import logging
 from typing import Optional
 from app_config import config
 from core.interfaces.driver import BaseMemoryDriver
-from services.plugins.loader import PluginLoader
+from sdk.lumina.loader import PluginLoader
+from services.provider_aliases import normalize_provider_id
 
 logger = logging.getLogger("memory.factory")
 
@@ -47,7 +48,10 @@ class MemoryDriverFactory:
         """
         try:
             # 1. Determine Target Provider
-            target_provider = config_provider or config.memory.provider
+            target_provider = normalize_provider_id(
+                "memory",
+                config_provider or config.get_selected_provider("memory") or config.memory.provider,
+            )
             
             # 2. Locate Drivers Directory
             # Assuming this file is in python_backend/memory/factory.py
@@ -93,22 +97,6 @@ class MemoryDriverFactory:
                 if d.id == target_provider:
                     selected_driver = d
                     break
-            
-            # 4b. Alias Handling
-            if not selected_driver:
-                aliases = {
-                    "surreal": "driver.memory.surreal",
-                    "postgres": "driver.memory.postgres",
-                    "surreal-db": "driver.memory.surreal",
-                    "postgres-db": "driver.memory.postgres"
-                }
-                
-                target_id = aliases.get(target_provider, target_provider)
-
-                for d in loaded_drivers:
-                    if d.id == target_id:
-                        selected_driver = d
-                        break
             
             # 5. Fallback Strategy
             if selected_driver:

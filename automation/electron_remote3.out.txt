@@ -1,0 +1,8 @@
+
+Starting Python Backend...
+[BackendManager] Starting all services...
+[BackendManager] Loaded ports from: E:\Work\Code\Lumina\config\ports.json
+[BackendManager] Services Configured: [ 'core:8010' ]
+[BackendManager] Service core is already active (Port 8010). Skipping spawn.
+[BackendManager] All services started successfully.
+Python Backend started.

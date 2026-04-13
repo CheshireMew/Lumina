@@ -8,7 +8,7 @@ logger = logging.getLogger("WorkerReporter")
 class WorkerStatusReporter:
     """
     [Architecture 6.1] Mesh Worker Reporter (Scheme C).
-    Directly writes Worker and Plugin state to SurrealDB via LifecycleBus.
+    Directly writes Worker and Plugin state to PostgreSQL via LifecycleBus.
     """
     def __init__(self, 
                  worker_id: str, 
@@ -63,7 +63,7 @@ class WorkerStatusReporter:
                     host=self.host,
                     port=self.port,
                     status="healthy",
-                    load=0.0 # TODO: Measure load
+                    load=self._get_system_load()
                 )
                 await self.bus.update_worker_state(w_state)
 
@@ -90,6 +90,23 @@ class WorkerStatusReporter:
                 logger.error(f"Reporter Error: {e}")
             
             await asyncio.sleep(self.interval)
+
+    def _get_system_load(self) -> float:
+        """
+        Calculate system load (0.0 - 1.0).
+        Uses psutil if available, otherwise returns simulated low load.
+        """
+        try:
+            import psutil
+            cpu = psutil.cpu_percent(interval=None) / 100.0
+            mem = psutil.virtual_memory().percent / 100.0
+            return max(cpu, mem)
+        except ImportError:
+            # Fallback for environments without psutil
+            return 0.1
+        except Exception as e:
+            logger.warning(f"Failed to get system load: {e}")
+            return 0.0
 
     async def force_report(self):
         """

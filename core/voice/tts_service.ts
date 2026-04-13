@@ -11,7 +11,7 @@ export class TTSService implements ITTSProvider {
   private defaultEngine: string;
 
   constructor(
-    baseUrl: string = "http://127.0.0.1:8766",
+    baseUrl: string = "http://127.0.0.1:8010/tts",
     defaultVoice: string = "zh-CN-XiaoxiaoNeural"
   ) {
     this.baseUrl = baseUrl;
@@ -46,7 +46,7 @@ export class TTSService implements ITTSProvider {
         )}...", voice=${requestVoice}, engine=${requestEngine}`
       );
 
-      const response = await fetch(`${this.baseUrl}/tts/synthesize`, {
+      const response = await fetch(`${this.baseUrl}/synthesize`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -92,21 +92,19 @@ export class TTSService implements ITTSProvider {
 
   async listVoices(engine: string = "edge-tts"): Promise<VoiceInfo[]> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/tts/voices?engine=${engine}`
-      );
+      const query = engine ? `?engine=${encodeURIComponent(engine)}` : "";
+      const response = await fetch(`${this.baseUrl}/voices${query}`);
       if (!response.ok) {
         throw new Error("Failed to fetch voices");
       }
       const data = await response.json();
-
-      if (engine === "gpt-sovits") {
-        // GPT-SoVITS returns { voices: [...] }
-        return data.voices || [];
-      } else {
-        // Edge TTS returns { chinese: [], english: [] }
-        return [...(data.chinese || []), ...(data.english || [])];
+      if (Array.isArray(data)) {
+        return data;
       }
+      if (Array.isArray(data.voices)) {
+        return data.voices;
+      }
+      return [...(data.chinese || []), ...(data.english || [])];
     } catch (error) {
       console.error("Failed to list voices:", error);
       return [];

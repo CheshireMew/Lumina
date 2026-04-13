@@ -5,6 +5,11 @@ from typing import Any
 
 logger = logging.getLogger("Bootstrap")
 
+
+class BootstrapError(RuntimeError):
+    """Raised when a bootstrap stage cannot complete."""
+
+
 class Bootstrapper(ABC):
     """
     Interface for a startup phase.

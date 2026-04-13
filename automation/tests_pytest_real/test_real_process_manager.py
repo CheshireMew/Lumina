@@ -217,16 +217,19 @@ def test_external_service_health():
     manager = ProcessManager()
 
     # Mock external service worker
-    external_worker = MagicMock()
-    external_worker.service_type = "external"
-    external_worker.port = 8010
+    from services.process_manager import WorkerProcess
+    external_worker = WorkerProcess(None, time.time())
+    external_worker.is_external = True
+    manager.register_service_def("memory", port=8010)
 
     if hasattr(manager, 'workers'):
         manager.workers["memory"] = external_worker
 
     # Mock HTTP health check
-    with patch('services.process_manager._check_http_health') as mock_check:
-        mock_check.return_value = True
+    with patch(
+        'services.health_probe.HealthProbe.is_service_reachable',
+        return_value=(True, "http"),
+    ):
 
         # Check health
         if hasattr(manager, 'is_running'):

@@ -7,10 +7,12 @@ Plugins receive a SandboxedContext if they have restricted permissions.
 """
 
 import logging
-from typing import Any, Optional, Dict, Set, List
+from pathlib import Path
+from typing import Any, Optional, Set, List
 
 from .context import LuminaContext
 from core.permissions import Permission, DEFAULT_PERMISSIONS
+from core.services.service_registry import ServiceRegistry
 
 logger = logging.getLogger("SandboxedContext")
 
@@ -37,8 +39,24 @@ class SandboxedContext(LuminaContext):
         context.memory.write(...)  # Lacks "memory.write" permission
     """
     
-    def __init__(self, container: Any, plugin_id: str, event_bus=None, permissions: List[str] = None, router_manager=None):
-        super().__init__(container, plugin_id, event_bus=event_bus, router_manager=router_manager)
+    def __init__(
+        self,
+        container: Any,
+        plugin_id: str,
+        manifest: Any = None,
+        event_bus=None,
+        permissions: List[str] = None,
+        router_manager=None,
+        service_registry: ServiceRegistry | None = None,
+    ):
+        super().__init__(
+            container,
+            plugin_id,
+            manifest,
+            event_bus=event_bus,
+            router_manager=router_manager,
+            service_registry=service_registry,
+        )
         
         # Combine default + requested permissions (Ensure strings)
         defaults = {p.value if hasattr(p, 'value') else str(p) for p in DEFAULT_PERMISSIONS}
@@ -48,6 +66,14 @@ class SandboxedContext(LuminaContext):
         
         logger.debug(f"馃敀 SandboxedContext created with permissions: {self._permissions}")
     
+    def _log_denial(self, perm: str, action: str):
+        logger.warning(
+            "Sandboxed plugin %s denied permission %s while trying to %s",
+            self.plugin_id,
+            perm,
+            action,
+        )
+
     def _check_permission(self, perm: str, action: str = "access this resource"):
         """
         Check if the plugin has the required permission.
@@ -60,9 +86,7 @@ class SandboxedContext(LuminaContext):
             PermissionError: If permission is not granted
         """
         if perm not in self._permissions:
-            # [Architecture 6.0] Audit Denial
-            self.audit("access_check", f"permission:{perm}", "denied", metadata={"reason": action})
-            
+            self._log_denial(perm, action)
             raise PermissionError(
                 f"Plugin lacks '{perm}' permission required to {action}. "
                 f"Add '{perm}' to permissions in manifest.yaml."
@@ -83,55 +107,46 @@ class SandboxedContext(LuminaContext):
     def memory(self) -> Any:
         """Access to Memory System (requires memory.read permission)."""
         self._check_permission(Permission.MEMORY_READ.value, "read from memory system")
-        return super().memory
+        return self.get_service("memory")
     
     @property
     def llm_manager(self) -> Any:
         """Access to LLM Manager (requires llm.invoke permission)."""
         self._check_permission(Permission.LLM_INVOKE.value, "invoke LLM")
-        return super().llm_manager
+        return self.get_service("llm_manager")
     
     @property
     def ticker(self) -> Any:
         """Access to Global Ticker (requires ticker.subscribe permission)."""
         self._check_permission(Permission.TICKER_SUBSCRIBE.value, "subscribe to ticker")
-        return super().ticker
+        return self.get_service("ticker")
     
     def find_capability(self, cap_type: str, **attributes) -> Optional[str]:
         """Discovery API (requires plugin.discovery permission)."""
         self._check_permission(Permission.PLUGIN_DISCOVERY.value, "find capability providers")
         return super().find_capability(cap_type, **attributes)
 
-    def register_route_def(self, path: str, method: str, handler_name: str, handler: Any):
+    async def register_route(self, path: str, method: str, handler: Any):
         """Register API route (requires network.listen permission)."""
-        # [Security] Prevent arbitrary port/route exposure
         self._check_permission(Permission.NETWORK_LISTEN.value, "register API route")
-        return super().register_route_def(path, method, handler_name, handler)
+        return await super().register_route(path, method, handler)
 
     # --- Permission-Gated Methods ---
     
-    def load_data(self, plugin_id: str) -> Dict:
-        """Loads plugin-specific JSON data (Strict Isolation)."""
-        if plugin_id != self.plugin_id:
-            # [Security] Prevent Cross-Plugin Data Access
-            self.audit("access_check", f"read_data:{plugin_id}", "denied", metadata={"reason": "cross-plugin access"})
-            raise PermissionError("Sandboxed plugins can only load their own data.")
-            
-        # Permission Check (Self-Data read doesn't technically need extra permission beyond default, 
-        # but let's require filesystem.read per spec if strictly interpreted? 
-        # Actually legacy 'filesystem.read' meant OWN data. So yes.)
+    def load_data(self) -> dict[str, Any]:
+        """Load the plugin's own persisted data."""
         self._check_permission(Permission.FILESYSTEM_READ.value, "read plugin data")
-        return super().load_data(plugin_id)
+        return super().load_data()
 
-    def save_data(self, plugin_id: str, data: Dict):
-        """Saves plugin-specific JSON data (requires filesystem.write)."""
+    def save_data(self, data: dict[str, Any]):
+        """Persist the plugin's own data."""
         self._check_permission(Permission.FILESYSTEM_WRITE.value, "write plugin data")
-        super().save_data(plugin_id, data)
+        super().save_data(data)
     
-    def get_data_dir(self, plugin_id: str) -> Optional[str]:
-        """Returns Path to plugin data directory (requires filesystem.read)."""
+    def get_data_dir(self) -> Path | None:
+        """Return the plugin's data directory."""
         self._check_permission(Permission.FILESYSTEM_READ.value, "access data directory")
-        return super().get_data_dir(plugin_id)
+        return super().get_data_dir()
     
     # --- Non-Gated APIs (available to all plugins) ---
     # These inherit from LuminaContext without additional checks:
@@ -139,5 +154,4 @@ class SandboxedContext(LuminaContext):
     # - soul (read-only access to character state)
     # - config (read-only configuration)
     # - load_data() (read plugin's own data)
-    # - register_service() (expose plugin capabilities)
     # - get_logger() (logging)

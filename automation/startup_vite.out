@@ -1,0 +1,1073 @@
+
+> lumina@0.1.0 dev
+> vite --host 127.0.0.1 --strictPort
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m6950[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5173[22m/[39m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[36mvite v5.4.21 [32mbuilding for development...[36m[39m
+[36m
+watching for file changes...[39m
+[36mvite v5.4.21 [32mbuilding for development...[36m[39m
+[36m
+watching for file changes...[39m
+[36m
+build started...[39m
+[36m
+build started...[39m
+transforming...
+[32m✓[39m 1 modules transformed.
+rendering chunks...
+transforming...
+computing gzip size...
+[2mdist-electron/[22m[36mpreload.js  [39m[1m[2m2.22 kB[22m[1m[22m[2m │ gzip: 0.73 kB[22m
+[36mbuilt in 4376ms.[39m
+[32m✓[39m 5 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist-electron/[22m[36mmain.js  [39m[1m[2m30.04 kB[22m[1m[22m[2m │ gzip: 8.13 kB[22m
+[36mbuilt in 9261ms.[39m
+
+Starting Python Backend...
+[BackendManager] Starting all services...
+[BackendManager] Loaded ports from: E:\Work\Code\Lumina\config\ports.json
+[BackendManager] Services Configured: [ 'memory:8010' ]
+[BackendManager] Launching dev memory: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'memory'
+] CWD: E:\Work\Code\Lumina\python_backend
+[memory] DEBUG_TRACE: Loading backend_launcher.py from E:\Work\Code\Lumina\python_backend\backend_launcher.py
+[memory] 2026-04-10 23:23:40,571 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\memory_server.log
+[memory] 2026-04-10 23:23:40,710 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[memory] 2026-04-10 23:23:40,920 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[Launcher] Starting Core System (Soul/Gateway) on port 8010...
+[memory] 2026-04-10 23:23:40,981 [INFO] [-] [-] uvicorn.error: Started server process [8460]
+[memory] 2026-04-10 23:23:40,981 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[memory] 2026-04-10 23:23:40,994 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+[memory] 2026-04-10 23:23:40,994 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+[memory] 2026-04-10 23:23:41,040 [CRITICAL] [-] [-] Bootstrap: ❌ Bootstrap Step 'SurrealDB' Failed: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:23:41,040 [CRITICAL] [-] [-] Lifecycle: Startup Failed: module 'functools' has no attribute '_iscoroutinefunction'
+Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:23:41,063 [ERROR] [-] [-] uvicorn.error: Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 105, in lifespan
+    sys.exit(1)
+SystemExit: 1
+[memory] 2026-04-10 23:23:41,065 [ERROR] [-] [-] uvicorn.error: Application startup failed. Exiting.
+[memory] Process exited with code 3
+[memory] 🔄 Auto-restarting in 2000ms... (Attempt 1)
+[BackendManager] Launching dev memory: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'memory'
+] CWD: E:\Work\Code\Lumina\python_backend
+[memory] DEBUG_TRACE: Loading backend_launcher.py from E:\Work\Code\Lumina\python_backend\backend_launcher.py
+[memory] 2026-04-10 23:23:45,908 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\memory_server.log
+[memory] 2026-04-10 23:23:46,051 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[memory] 2026-04-10 23:23:46,248 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[memory] [Launcher] Starting Core System (Soul/Gateway) on port 8010...
+[memory] 2026-04-10 23:23:46,301 [INFO] [-] [-] uvicorn.error: Started server process [30484]
+[memory] 2026-04-10 23:23:46,301 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[memory] 2026-04-10 23:23:46,310 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+[memory] 2026-04-10 23:23:46,310 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+[memory] 2026-04-10 23:23:46,329 [CRITICAL] [-] [-] Bootstrap: ❌ Bootstrap Step 'SurrealDB' Failed: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:23:46,329 [CRITICAL] [-] [-] Lifecycle: Startup Failed: module 'functools' has no attribute '_iscoroutinefunction'
+Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:23:46,344 [ERROR] [-] [-] uvicorn.error: Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 105, in lifespan
+    sys.exit(1)
+SystemExit: 1
+[memory] 2026-04-10 23:23:46,345 [ERROR] [-] [-] uvicorn.error: Application startup failed. Exiting.
+[memory] Process exited with code 3
+[memory] 🔄 Auto-restarting in 4000ms... (Attempt 2)
+[BackendManager] Launching dev memory: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'memory'
+] CWD: E:\Work\Code\Lumina\python_backend
+[memory] DEBUG_TRACE: Loading backend_launcher.py from E:\Work\Code\Lumina\python_backend\backend_launcher.py
+[memory] 2026-04-10 23:23:54,536 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\memory_server.log
+[memory] 2026-04-10 23:23:54,663 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[memory] 2026-04-10 23:23:54,845 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[memory] [Launcher] Starting Core System (Soul/Gateway) on port 8010...
+[memory] 2026-04-10 23:23:54,893 [INFO] [-] [-] uvicorn.error: Started server process [19200]
+[memory] 2026-04-10 23:23:54,893 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[memory] 2026-04-10 23:23:54,905 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+[memory] 2026-04-10 23:23:54,906 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+[memory] 2026-04-10 23:23:54,947 [CRITICAL] [-] [-] Bootstrap: ❌ Bootstrap Step 'SurrealDB' Failed: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:23:54,947 [CRITICAL] [-] [-] Lifecycle: Startup Failed: module 'functools' has no attribute '_iscoroutinefunction'
+Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:23:54,968 [ERROR] [-] [-] uvicorn.error: Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 105, in lifespan
+    sys.exit(1)
+SystemExit: 1
+[memory] 2026-04-10 23:23:54,968 [ERROR] [-] [-] uvicorn.error: Application startup failed. Exiting.
+[memory] Process exited with code 3
+[memory] 🔄 Auto-restarting in 8000ms... (Attempt 3)
+[BackendManager] Launching dev memory: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'memory'
+] CWD: E:\Work\Code\Lumina\python_backend
+[memory] DEBUG_TRACE: Loading backend_launcher.py from E:\Work\Code\Lumina\python_backend\backend_launcher.py
+[memory] 2026-04-10 23:24:14,399 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\memory_server.log
+[memory] 2026-04-10 23:24:15,269 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[memory] 2026-04-10 23:24:15,783 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[memory] [Launcher] Starting Core System (Soul/Gateway) on port 8010...
+[memory] 2026-04-10 23:24:16,134 [INFO] [-] [-] uvicorn.error: Started server process [30188]
+[memory] 2026-04-10 23:24:16,140 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[memory] 2026-04-10 23:24:16,322 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+2026-04-10 23:24:16,323 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+[memory] 2026-04-10 23:24:16,516 [CRITICAL] [-] [-] Bootstrap: ❌ Bootstrap Step 'SurrealDB' Failed: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:24:16,518 [CRITICAL] [-] [-] Lifecycle: Startup Failed: module 'functools' has no attribute '_iscoroutinefunction'
+Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:24:16,558 [ERROR] [-] [-] uvicorn.error: Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 105, in lifespan
+    sys.exit(1)
+SystemExit: 1
+[memory] 2026-04-10 23:24:16,559 [ERROR] [-] [-] uvicorn.error: Application startup failed. Exiting.
+[memory] Process exited with code 3
+[memory] 🔄 Auto-restarting in 16000ms... (Attempt 4)
+[BackendManager] Launching dev memory: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'memory'
+] CWD: E:\Work\Code\Lumina\python_backend
+[memory] DEBUG_TRACE: Loading backend_launcher.py from E:\Work\Code\Lumina\python_backend\backend_launcher.py
+[memory] 2026-04-10 23:24:51,380 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\memory_server.log
+[memory] 2026-04-10 23:24:52,784 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[memory] 2026-04-10 23:24:53,414 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[memory] [Launcher] Starting Core System (Soul/Gateway) on port 8010...
+[memory] 2026-04-10 23:24:53,666 [INFO] [-] [-] uvicorn.error: Started server process [21416]
+2026-04-10 23:24:53,666 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[memory] 2026-04-10 23:24:53,807 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+[memory] 2026-04-10 23:24:53,807 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+[memory] 2026-04-10 23:24:54,038 [CRITICAL] [-] [-] Bootstrap: ❌ Bootstrap Step 'SurrealDB' Failed: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:24:54,038 [CRITICAL] [-] [-] Lifecycle: Startup Failed: module 'functools' has no attribute '_iscoroutinefunction'
+Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:24:54,063 [ERROR] [-] [-] uvicorn.error: Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 105, in lifespan
+    sys.exit(1)
+SystemExit: 1
+[memory] 2026-04-10 23:24:54,064 [ERROR] [-] [-] uvicorn.error: Application startup failed. Exiting.
+[memory] Process exited with code 3
+[memory] 🔄 Auto-restarting in 30000ms... (Attempt 5)
+[BackendManager] Launching dev memory: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'memory'
+] CWD: E:\Work\Code\Lumina\python_backend
+[memory] DEBUG_TRACE: Loading backend_launcher.py from E:\Work\Code\Lumina\python_backend\backend_launcher.py
+[memory] 2026-04-10 23:25:32,365 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\memory_server.log
+[memory] 2026-04-10 23:25:33,178 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[memory] 2026-04-10 23:25:33,720 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[memory] [Launcher] Starting Core System (Soul/Gateway) on port 8010...
+[memory] 2026-04-10 23:25:34,024 [INFO] [-] [-] uvicorn.error: Started server process [32164]
+2026-04-10 23:25:34,024 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[memory] 2026-04-10 23:25:34,082 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+2026-04-10 23:25:34,083 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+[memory] 2026-04-10 23:25:34,396 [CRITICAL] [-] [-] Bootstrap: ❌ Bootstrap Step 'SurrealDB' Failed: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:25:34,396 [CRITICAL] [-] [-] Lifecycle: Startup Failed: module 'functools' has no attribute '_iscoroutinefunction'
+Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+[memory] 2026-04-10 23:25:34,428 [ERROR] [-] [-] uvicorn.error: Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 25, in start
+    raise e
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 21, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 54, in bootstrap
+    from memory.core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\__init__.py", line 1, in <module>
+    from .core import MemoryService
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 23, in <module>
+    from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\memory\factory.py", line 7, in <module>
+    from sdk.lumina.loader import PluginLoader
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\__init__.py", line 27, in <module>
+    from .sdk import LuminaSDK
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\sdk.py", line 8, in <module>
+    from .modules.tts import TTSModule
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 21, in <module>
+    class TTSModule:
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\tts.py", line 37, in TTSModule
+    @driver_error_handler("TTS", "speak")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\utils.py", line 66, in decorator
+    if functools._iscoroutinefunction(func):  # Check if async
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'functools' has no attribute '_iscoroutinefunction'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 105, in lifespan
+    sys.exit(1)
+SystemExit: 1
+[memory] 2026-04-10 23:25:34,431 [ERROR] [-] [-] uvicorn.error: Application startup failed. Exiting.
+[memory] Process exited with code 3

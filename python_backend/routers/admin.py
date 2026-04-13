@@ -2,25 +2,49 @@
 """
 Admin Router
 Safe replacements for deleted Debug endpoints.
-Provides restricted access to SurrealDB for frontend management tools.
-
-Refactored: Removed inject_dependencies
+Provides restricted access to the active memory store for frontend management tools.
 """
 import logging
 import re
 from typing import Dict, Optional, Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from services.container import services
+from routers.deps import get_memory_service
 
 logger = logging.getLogger("AdminRouter")
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
-def _get_memory_service():
-    return services.get_memory()
+def _require_memory_system(memory_system):
+    if not memory_system:
+        raise HTTPException(status_code=503, detail="Memory service unavailable")
+    if not getattr(memory_system, "available", True):
+        detail = getattr(memory_system, "degraded_reason", None) or "Memory backend unavailable"
+        raise HTTPException(status_code=503, detail=detail)
+    return memory_system
 
+
+def _serialize_value(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool, list, dict, type(None))):
+        return value
+    return str(value)
+
+
+def _serialize_rows(rows: Any) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+
+    serialized: list[dict[str, Any]] = []
+    for record in rows:
+        if hasattr(record, "keys"):
+            row = {key: _serialize_value(record[key]) for key in record.keys()}
+        elif isinstance(record, dict):
+            row = {key: _serialize_value(value) for key, value in record.items()}
+        else:
+            row = {"value": _serialize_value(record)}
+        serialized.append(row)
+    return serialized
 
 # --- Schemas ---
 
@@ -55,13 +79,17 @@ async def get_tables():
 # qb = SurrealQueryBuilder()
 
 @router.get("/table/{table_name}")
-async def get_table_data(table_name: str, limit: int = 50, character_id: Optional[str] = None):
+async def get_table_data(
+    table_name: str,
+    limit: int = 50,
+    character_id: Optional[str] = None,
+    memory_system=Depends(get_memory_service),
+):
     """Get data from a table (Safe Read via QueryBuilder)."""
-    memory_system = _get_memory_service()
-
     try:
+        memory_system = _require_memory_system(memory_system)
         # [Refactored] Use Dynamic QueryBuilder from Driver
-        qb = services.get_memory().driver.get_query_builder()
+        qb = memory_system.driver.get_query_builder()
         
         # [Phase 12] Use SafeQueryBuilder
         # This prevents injections via table_name or character_id construction
@@ -71,38 +99,17 @@ async def get_table_data(table_name: str, limit: int = 50, character_id: Optiona
         
         logger.info(f"[Admin] Reading table {table_name} (Safe): {query} | {params}")
         
-        # Execute via Driver to support parameters
-        # Driver.query(sql, vars) -> returns list of asyncpg.Record for Postgres
         response = await memory_system.driver.query(query, params)
-        
-        # [Fix] Convert asyncpg.Record objects to dicts for JSON serialization
-        # asyncpg.Record is dict-like but not JSON serializable directly
-        if response and hasattr(response[0], 'keys'):
-            # Convert each Record to dict, handling special types
-            data = []
-            for record in response:
-                row = {}
-                for key in record.keys():
-                    val = record[key]
-                    # Handle UUID, datetime, etc.
-                    if hasattr(val, '__str__') and not isinstance(val, (str, int, float, bool, list, dict, type(None))):
-                        row[key] = str(val)
-                    else:
-                        row[key] = val
-                data.append(row)
-            return {"status": "success", "data": data}
-            
-        return {"status": "success", "data": response if response else []}
+        return {"status": "success", "data": _serialize_rows(response)}
 
     except Exception as e:
         logger.error(f"[Admin] Read Error: {e}", exc_info=True)
         return {"status": "error", "data": [], "detail": str(e)}
 
 @router.post("/query")
-async def safe_query(request: SafeQueryRequest):
+async def safe_query(request: SafeQueryRequest, memory_system=Depends(get_memory_service)):
     """Execute a Safe SELECT Query."""
-    memory_system = _get_memory_service()
-
+    memory_system = _require_memory_system(memory_system)
     q = request.query.strip().upper()
     
     # 1. Security: Prevent Multiple Statements
@@ -122,18 +129,16 @@ async def safe_query(request: SafeQueryRequest):
          
     try:
         logger.info(f"[Admin] Executing Safe Query: {request.query}")
-        # Pass through to driver directly for consistency
         results = await memory_system.driver.query(request.query)
-        return {"status": "success", "result": results}
+        return {"status": "success", "result": _serialize_rows(results)}
     except Exception as e:
         logger.error(f"[Admin] Query Error: {e}", exc_info=True)
         return {"status": "error", "detail": str(e)}
 
 @router.delete("/record/{table_name}/{record_safe_id}")
-async def delete_record(table_name: str, record_safe_id: str):
+async def delete_record(table_name: str, record_safe_id: str, memory_system=Depends(get_memory_service)):
     """Safe Delete Record."""
-    memory_system = _get_memory_service()
-        
+    memory_system = _require_memory_system(memory_system)
     # Validate Inputs
     if not table_name.replace("_", "").isalnum():
          raise HTTPException(400, "Invalid table name")
@@ -144,24 +149,17 @@ async def delete_record(table_name: str, record_safe_id: str):
         raise HTTPException(403, f"Deletion not allowed for table '{table_name}'")
 
     try:
-        # Construct ID (table:id)
-        full_id = record_safe_id
-        if ":" not in full_id:
-            full_id = f"{table_name}:{record_safe_id}"
-            
-        logger.info(f"[Admin] Deleting {full_id}")
-        # Fix: Access driver directly
-        await memory_system.driver.delete(table_name, full_id) # Driver.delete(table, id)
-        return {"status": "success", "id": full_id}
+        logger.info(f"[Admin] Deleting {record_safe_id}")
+        await memory_system.driver.delete(table_name, record_safe_id)
+        return {"status": "success", "id": record_safe_id}
     except Exception as e:
         logger.error(f"[Admin] Delete Error: {e}", exc_info=True)
         raise HTTPException(500, str(e))
 
 @router.post("/record/{table_name}/new")
-async def create_record(table_name: str, request: UpdateRecordRequest):
+async def create_record(table_name: str, request: UpdateRecordRequest, memory_system=Depends(get_memory_service)):
     """Create New Record."""
-    memory_system = _get_memory_service()
-    
+    memory_system = _require_memory_system(memory_system)
     if table_name not in ["episodic_memory", "conversation_log", "knowledge_facts", "user_profile"]:
          raise HTTPException(403, "Creation restricted for this table.")
          
@@ -175,26 +173,20 @@ async def create_record(table_name: str, request: UpdateRecordRequest):
         raise HTTPException(500, str(e))
 
 @router.put("/record/{table_name}/{record_safe_id}")
-async def update_record(table_name: str, record_safe_id: str, request: UpdateRecordRequest):
+async def update_record(table_name: str, record_safe_id: str, request: UpdateRecordRequest, memory_system=Depends(get_memory_service)):
     """Safe Update (Merge)."""
-    memory_system = _get_surreal()
-        
+    memory_system = _require_memory_system(memory_system)
     if table_name not in ["episodic_memory", "conversation_log", "knowledge_facts", "user_profile", "character_profile"]:
          raise HTTPException(403, "Update restricted to content tables.")
 
     try:
-        full_id = record_safe_id
-        if ":" not in full_id:
-             full_id = f"{table_name}:{record_safe_id}"
-             
         # Remove protected fields
         safe_data = request.data.copy()
         for k in ["id", "created_at", "uuid"]:
             if k in safe_data: del safe_data[k]
             
-        logger.info(f"[Admin] Updating {full_id} with {safe_data.keys()}")
-        # Fix: Access driver directly. Driver.update(table, id, data)
-        await memory_system.driver.update(table_name, full_id, safe_data)
+        logger.info(f"[Admin] Updating {record_safe_id} with {safe_data.keys()}")
+        await memory_system.driver.update(table_name, record_safe_id, safe_data)
         return {"status": "success"}
     except Exception as e:
          raise HTTPException(500, str(e))

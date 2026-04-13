@@ -23,7 +23,7 @@
     },
     "types": ["vite/client"]
   },
-  "include": ["app/**/*.ts", "app/**/*.tsx", "core/**/*.ts", "vite.config.ts"],
+  "include": ["app/**/*.ts", "app/**/*.tsx", "core/**/*.ts", "vite.config.mts"],
   "exclude": [
     "node_modules",
     "example",

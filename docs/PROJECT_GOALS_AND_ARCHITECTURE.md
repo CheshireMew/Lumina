@@ -2,6 +2,7 @@
 
 > 生成时间:2026-01-13
 > 参考依据:`README.md`、`docs/ARCHITECTURE.md`、`docs/ARCHITECTURE_MCP.md`、代码结构(`python_backend/`、`core/`、`app/`)
+> 状态: 历史理解稿。当前生效架构以 `docs/ARCHITECTURE.md` 与代码为准。
 
 ## 1. 项目目标(我的理解)
 

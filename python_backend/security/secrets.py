@@ -34,8 +34,6 @@ class SecretKey(Enum):
     
     # Database Credentials
     POSTGRES_PASSWORD = "LUMINA_PG_PASSWORD"
-    SURREAL_ROOT_PASS = "SURREAL_ROOT_PASS"
-    SURREAL_APP_PASS = "SURREAL_APP_PASS"
     
     # Audio Service Keys
     FISH_AUDIO_API_KEY = "FISH_AUDIO_API_KEY"

@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import json
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -8,7 +9,7 @@ logger = logging.getLogger("AuditLogger")
 class AuditLogger:
     """
     Asynchronous Security Audit Logger.
-    Writes events to SurrealDB 'security_audit' table.
+    Writes events to PostgreSQL 'security_audit' table.
     """
     
     @staticmethod
@@ -34,33 +35,32 @@ class AuditLogger:
             if not getattr(bus, "_is_connected", False):
                 await bus.connect()
             
-            # We use the underlying DB if reachable
-            # Note: SurrealLifecycleBus has a .db (AsyncSurreal) instance
-            # PostgresLifecycleBus has a .db (asyncpg.Pool) instance
-            if hasattr(bus, "db") and bus.db:
+            pool = getattr(bus, "db", None)
+            if pool:
                 data = {
                     "timestamp": datetime.now(),
                     "actor_id": actor_id,
                     "action": action,
                     "target": target,
                     "status": status,
-                    "metadata": json.dumps(metadata or {}) if not hasattr(bus.db, "create") else (metadata or {})
+                    "metadata": json.dumps(metadata or {}),
                 }
-                
-                # SurrealDB (Legacy)
-                if hasattr(bus.db, "create"):
-                    data["timestamp"] = data["timestamp"].isoformat()
-                    await bus.db.create("security_audit", data)
-                # PostgreSQL (New)
-                else:
-                    await bus.db.execute("""
-                        INSERT INTO security_audit (timestamp, actor_id, action, target, status, metadata)
-                        VALUES ($1, $2, $3, $4, $5, $6)
-                    """, data["timestamp"], data["actor_id"], data["action"], data["target"], data["status"], data["metadata"])
-                
+
+                await pool.execute(
+                    """
+                    INSERT INTO security_audit (timestamp, actor_id, action, target, status, metadata)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    """,
+                    data["timestamp"],
+                    data["actor_id"],
+                    data["action"],
+                    data["target"],
+                    data["status"],
+                    data["metadata"],
+                )
+
                 logger.info(f"🛡️ [Audit] {status.upper()}: {actor_id} -> {action} on {target}")
             else:
-                # Log to console at least
                 logger.warning(f"⚠️ [Audit] Bus/DB not available. Event: {actor_id} {action}")
                 
         except Exception as e:

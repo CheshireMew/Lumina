@@ -1,287 +1,124 @@
-import React, { useState, useEffect } from 'react';
-import GalgameSelect from './GalgameSelect';
-import GalgameToggle from './GalgameToggle';
-import { API_CONFIG } from '../../config';
+import React, { useEffect, useState } from "react";
+
+import { API_CONFIG } from "../../config";
+import { PluginConfigFormSection } from "./PluginConfigFormSection";
+import { PluginLlmRoutesSection } from "./PluginLlmRoutesSection";
+import { VoiceprintConfigPanel } from "./VoiceprintConfigPanel";
 
 interface PluginConfigModalProps {
     plugin: any;
     onClose: () => void;
     onSave: (key: string, value: any) => Promise<void>;
-    // existingGroups removed
 }
 
-import { Trash2, FolderOpen, Mic, ToggleLeft, ToggleRight } from 'lucide-react';
-
-const VoiceprintConfigPanel = ({ threshold, onThresholdChange }: { threshold: number, onThresholdChange: (val: number) => void }) => {
-    const [profiles, setProfiles] = useState<any[]>([]);
-    const [name, setName] = useState("");
-    const [file, setFile] = useState<File | null>(null);
-    const [loading, setLoading] = useState(false); // For registration action
-    const [isFetching, setIsFetching] = useState(true); // For initial load
-    const [msg, setMsg] = useState("");
-    const [localThreshold, setLocalThreshold] = useState(threshold);
-
-    // Sync external threshold
-    useEffect(() => {
-        setLocalThreshold(threshold);
-    }, [threshold]);
-
-    // [Cleanup] 'categories' was unused. Removed.
-
-    const fetchProfiles = async () => {
-        setIsFetching(true);
-        try {
-            const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/voiceprint/list`);
-            const data = await res.json();
-            if (data.profiles) setProfiles(data.profiles);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsFetching(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchProfiles();
-    }, []);
-
-    const handleRegister = async () => {
-        if (!file || !name) return;
-        setLoading(true);
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-            
-            const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/voiceprint/upload?name=${encodeURIComponent(name)}`, {
-                method: "POST",
-                body: formData
-            });
-            
-            if (res.ok) {
-                setMsg("✅ Registered successfully!");
-                setFile(null);
-                setName("");
-                fetchProfiles();
-            } else {
-                setMsg("❌ Registration failed.");
-            }
-        } catch (e) {
-            setMsg("❌ Error: " + e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDelete = async (pName: string) => {
-        if (!confirm(`Delete voiceprint '${pName}'?`)) return;
-        try {
-            await fetch(`${API_CONFIG.BASE_URL}/plugins/voiceprint/${pName}`, { method: "DELETE" });
-            fetchProfiles();
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
-    const handleToggle = async (pName: string, currentEnabled: boolean) => {
-        try {
-            const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/voiceprint/toggle/${pName}?enabled=${!currentEnabled}`, { method: "POST" });
-            if (res.ok) {
-                fetchProfiles();
-            }
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
-    const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = parseFloat(e.target.value);
-        setLocalThreshold(val);
-    };
-
-    const handleSliderCommit = () => {
-        onThresholdChange(localThreshold);
-    };
-
-    return (
-        <div style={{marginTop: 10}}>
-             <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '8px', marginBottom: '20px'}}>
-                <label style={{display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontWeight: 'bold', color: '#ccc'}}>
-                    <span>Similarity Threshold</span>
-                    <span style={{color: '#fff'}}>{localThreshold}</span>
-                </label>
-                <input 
-                    type="range" 
-                    min="0.1" 
-                    max="0.9" 
-                    step="0.05" 
-                    value={localThreshold} 
-                    onChange={handleSliderChange}
-                    onMouseUp={handleSliderCommit}
-                    onTouchEnd={handleSliderCommit}
-                    style={{width: '100%', cursor: 'pointer', accentColor: '#7928ca'}}
-                />
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.75em', color: '#888', marginTop: '5px'}}>
-                    <span>Low (Permissive)</span>
-                    <span>High (Strict)</span>
-                </div>
-            </div>
-
-            <h4 style={{margin: "0 0 10px 0", color: "#ddd", display:'flex', alignItems:'center', gap:8}}>
-                <Mic size={16} /> Active Voiceprints
-            </h4>
-            <div style={{maxHeight: 150, overflowY: "auto", background: "rgba(0,0,0,0.2)", borderRadius: 6, padding: 5, marginBottom: 15}}>
-                {isFetching ? (
-                    <div style={{padding: 20, textAlign: "center", color: "#888", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10}}>
-                         <div className="spinner" style={{width: 16, height: 16, border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "#a78bfa", borderRadius: "50%", animation: "spin 1s linear infinite"}}></div>
-                         <span>Loading profiles...</span>
-                    </div>
-                ) : profiles.length === 0 ? (
-                    <div style={{padding:10, color:"#888", textAlign:"center", fontSize: "0.9em"}}>No voiceprints yet</div>
-                ) : (
-                    profiles.map(p => (
-                    <div key={p.name} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding: "6px 10px", borderBottom: "1px solid rgba(255,255,255,0.05)"}}>
-                        <div style={{opacity: p.enabled ? 1 : 0.5, transition: 'opacity 0.2s'}}>
-                            <span style={{fontWeight:"bold", color:"#fff", marginRight: 8}}>{p.name}</span>
-                            <span style={{fontSize:"0.75em", color:"#aaa"}}>{new Date(p.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <div style={{display:'flex', gap: 10, alignItems:'center'}}>
-                            <button 
-                                onClick={() => handleToggle(p.name, p.enabled)} 
-                                title={p.enabled ? "Disable" : "Enable"}
-                                style={{
-                                    background:"transparent", 
-                                    border:"none", 
-                                    color: p.enabled ? "#4caf50" : "#666", 
-                                    cursor:"pointer", 
-                                    display:'flex', 
-                                    alignItems:'center'
-                                }}
-                            >
-                                {p.enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-                            </button>
-                            <button 
-                                onClick={() => handleDelete(p.name)} 
-                                title="Delete"
-                                style={{background:"transparent", border:"none", color:"#ff4444", cursor:"pointer", display:'flex'}}
-                            >
-                                {loading && name === p.name ? "..." : <Trash2 size={16} />}
-                            </button>
-                        </div>
-                    </div>
-                ))
-                )}
-            </div>
-            <style>{`
-                @keyframes spin { to { transform: rotate(360deg); } }
-            `}</style>
-
-            <h4 style={{margin: "0 0 10px 0", color: "#ddd", fontSize:'0.9em'}}>Register New Voice</h4>
-            {/* ... Rest of Registration UI ... */}
-            <div style={{display:"flex", gap: 10, flexDirection: "column"}}>
-                <input 
-                    type="text" 
-                    placeholder="User Name (e.g. Master)" 
-                    className="galgame-input"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                />
-                <div style={{display:"flex", gap: 10}}>
-                    <label style={{flex:1, cursor:"pointer", background:"rgba(255,255,255,0.1)", padding: "8px", borderRadius: 6, textAlign:"center", border: "1px dashed #666", display:'flex', alignItems:'center', justifyContent:'center', gap:6, fontSize:'0.9em', color:'#ccc'}}>
-                        <FolderOpen size={14} />
-                        {file ? file.name : "Select WAV File..."}
-                        <input type="file" accept=".wav" style={{display:"none"}} onChange={e => e.target.files && setFile(e.target.files[0])} />
-                    </label>
-                    <button 
-                        className="galgame-btn primary" 
-                        disabled={!file || !name || loading}
-                        onClick={handleRegister}
-                        style={{flex:1, opacity: (!file||!name) ? 0.5 : 1}}
-                    >
-                        {loading ? "Processing..." : "Register"}
-                    </button>
-                </div>
-                {msg && <div style={{marginTop: 5, color: msg.startsWith("✅") ? "#4caf50" : "#ff4444", fontSize: "0.9em"}}>{msg}</div>}
-            </div>
-        </div>
-    );
-};
-
-// [Cleanup] Removed unused 'categories' and 'existingGroups'
-const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, onSave }) => {
-    // console.log("[PluginConfigModal] Current Plugin Group:", plugin.group_id);
-    const [values, setValues] = useState<{[key: string]: any}>({});
+const PluginConfigModal: React.FC<PluginConfigModalProps> = ({
+    plugin,
+    onClose,
+    onSave,
+}) => {
+    const [values, setValues] = useState<Record<string, any>>({});
     const [saving, setSaving] = useState(false);
-    
-    // ⚡ LLM State
     const [llmRoutes, setLlmRoutes] = useState<any[]>([]);
     const [llmProviders, setLlmProviders] = useState<any[]>([]);
     const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
 
     useEffect(() => {
-        const initVal: any = {};
+        const initialValues: Record<string, any> = {};
         if (plugin?.config_schema) {
-            initVal[plugin.config_schema.key] = plugin.current_value || "";
+            initialValues[plugin.config_schema.key] =
+                plugin.current_config?.[plugin.config_schema.key] ?? "";
         }
-        initVal['__group_id'] = plugin?.group_id || "";
-        initVal['__category'] = plugin?.category || "";
-        initVal['__group_behavior'] = plugin?.group_exclusive === false ? 'independent' : 'exclusive';
 
-        setValues(initVal);
+        initialValues.__group_id = plugin?.group_id || "";
+        initialValues.__category = plugin?.category || "";
+        initialValues.__group_behavior =
+            plugin?.group_exclusive === false ? "independent" : "exclusive";
 
-        // ⚡ Fetch LLM Data if plugin has routes
+        setValues(initialValues);
+
         if (plugin?.llm_routes?.length > 0) {
-            fetchLlmData();
+            void fetchLlmData();
         }
     }, [plugin]);
 
     const fetchLlmData = async () => {
         try {
-            const BASE_URL = API_CONFIG.BASE_URL; 
-            const routesRes = await fetch(`${BASE_URL}/llm-mgmt/routes`);
-            const provRes = await fetch(`${BASE_URL}/llm-mgmt/providers`);
-            
-            if (routesRes.ok && provRes.ok) {
-                const rData = await routesRes.json();
-                const pData = await provRes.json();
-                setLlmRoutes(rData.routes || []);
-                setLlmProviders(pData.providers || []);
+            const [routesResponse, providersResponse] = await Promise.all([
+                fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/routes`),
+                fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/providers`),
+            ]);
+
+            if (!routesResponse.ok || !providersResponse.ok) {
+                return;
             }
-        } catch (e) {
-            console.error("Failed to fetch LLM data", e);
+
+            const routesData = await routesResponse.json();
+            const providersData = await providersResponse.json();
+            setLlmRoutes(routesData.routes || []);
+            setLlmProviders(providersData.providers || []);
+        } catch (error) {
+            console.error("Failed to fetch LLM data", error);
         }
     };
 
-    const handleRouteUpdate = async (feature: string, providerId: string, model: string, temp?: number, topP?: number, presPenalty?: number, freqPenalty?: number) => {
+    const handleRouteUpdate = async (
+        feature: string,
+        providerId: string,
+        model: string,
+        temperature?: number,
+        topP?: number,
+        presencePenalty?: number,
+        frequencyPenalty?: number,
+    ) => {
         try {
-             // Optimistic Update
-            setLlmRoutes(prev => prev.map(r => 
-                r.feature === feature 
-                ? { ...r, provider_id: providerId, model, temperature: temp, top_p: topP, presence_penalty: presPenalty, frequency_penalty: freqPenalty } 
-                : r
-            ));
+            setLlmRoutes((previous) =>
+                previous.map((route) =>
+                    route.feature === feature
+                        ? {
+                              ...route,
+                              provider_id: providerId,
+                              model,
+                              temperature,
+                              top_p: topP,
+                              presence_penalty: presencePenalty,
+                              frequency_penalty: frequencyPenalty,
+                          }
+                        : route,
+                ),
+            );
 
             await fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/routes/${feature}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    provider_id: providerId, 
-                    model: model, 
-                    temperature: temp,
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider_id: providerId,
+                    model,
+                    temperature,
                     top_p: topP,
-                    presence_penalty: presPenalty,
-                    frequency_penalty: freqPenalty
-                })
+                    presence_penalty: presencePenalty,
+                    frequency_penalty: frequencyPenalty,
+                }),
             });
-        } catch (e) {
-            console.error("Failed to update route", e);
-            fetchLlmData(); // Revert on fail
+        } catch (error) {
+            console.error("Failed to update route", error);
+            void fetchLlmData();
         }
     };
 
-    if (!plugin) return null;
+    if (!plugin) {
+        return null;
+    }
 
     const schema = plugin.config_schema;
-    const currentVal = schema ? (values[schema.key] !== undefined ? values[schema.key] : (plugin.current_value ?? "")) : "";
+    const currentValue = schema
+        ? values[schema.key] !== undefined
+            ? values[schema.key]
+            : plugin.current_config?.[schema.key] ?? ""
+        : "";
+    const pluginRoutes = llmRoutes.filter((route) =>
+        plugin.llm_routes?.includes(route.feature),
+    );
+    const hasLlmRoutes = pluginRoutes.length > 0;
 
     const handleSave = async () => {
         setSaving(true);
@@ -289,218 +126,84 @@ const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, 
             if (schema) {
                 if (schema.fields) {
                     for (const field of schema.fields) {
-                        const val = values[field.key] !== undefined ? values[field.key] : (plugin.config?.[field.key] ?? field.default ?? "");
-                        await onSave(field.key, val);
+                                const value =
+                                    values[field.key] !== undefined
+                                        ? values[field.key]
+                                        : plugin.current_config?.[field.key] ?? field.default ?? "";
+                        await onSave(field.key, value);
                     }
                 } else {
-                    await onSave(schema.key, currentVal);
+                    await onSave(schema.key, currentValue);
                 }
             }
             onClose();
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            console.error(error);
         } finally {
             setSaving(false);
         }
     };
 
-    // Filter routes relevant to this plugin
-    const pluginRoutes = llmRoutes.filter(r => plugin.llm_routes?.includes(r.feature));
-    const hasLLM = pluginRoutes.length > 0;
-
     return (
         <div className="plugin-modal-overlay">
             <div className="plugin-config-modal glass-panel">
                 <div className="modal-header">
-                    <h3>⚙️ Configure {plugin.name}</h3>
-                    <button className="close-btn" onClick={onClose}>×</button>
+                    <h3>Configure {plugin.name}</h3>
+                    <button className="close-btn" onClick={onClose}>
+                        x
+                    </button>
                 </div>
-                
+
                 <div className="modal-body">
                     <p className="config-desc">{plugin.description}</p>
-                    
-                    {/* 🧠 LLM Configuration Section */}
-                    {hasLLM && (
-                        <div style={{ marginBottom: '25px', background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                            <h4 style={{ margin: '0 0 12px 0', color: '#a78bfa', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95em' }}>
-                                🧠 Neural Configuration
-                            </h4>
-                            {pluginRoutes.map(route => {
-                                const isExpanded = expandedRoutes.has(route.feature);
-                                const currentProv = llmProviders.find(p => p.id === route.provider_id);
-                                
-                                const toggleExpand = () => {
-                                    const next = new Set(expandedRoutes);
-                                    if (next.has(route.feature)) next.delete(route.feature);
-                                    else next.add(route.feature);
-                                    setExpandedRoutes(next);
-                                };
 
-                                const update = (changes: any) => {
-                                    handleRouteUpdate(
-                                        route.feature, 
-                                        changes.provider_id ?? route.provider_id, 
-                                        changes.model ?? route.model,
-                                        changes.temperature ?? route.temperature ?? 0.7,
-                                        changes.top_p ?? route.top_p ?? 1.0,
-                                        changes.presence_penalty ?? route.presence_penalty ?? 0.0,
-                                        changes.frequency_penalty ?? route.frequency_penalty ?? 0.0
-                                    );
-                                };
+                    <PluginLlmRoutesSection
+                        pluginRoutes={pluginRoutes}
+                        llmProviders={llmProviders}
+                        expandedRoutes={expandedRoutes}
+                        setExpandedRoutes={setExpandedRoutes}
+                        onRouteUpdate={handleRouteUpdate}
+                    />
 
-                                return (
-                                    <div key={route.feature} style={{ marginBottom: '10px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '6px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: isExpanded ? '10px' : '0' }}>
-                                            <div style={{ flex: 1, fontWeight: 600, color: '#e0e0e0', textTransform: 'capitalize' }}>
-                                                {route.feature}
-                                            </div>
-                                            
-                                            {/* Compact Provider/Model Selects */}
-                                            <select 
-                                                className="galgame-input"
-                                                style={{ width: '100px', padding: '4px', height: '28px', fontSize: '12px' }}
-                                                value={route.provider_id} 
-                                                onChange={(e) => update({ provider_id: e.target.value })}
-                                            >
-                                                {llmProviders.map(p => <option key={p.id} value={p.id}>{p.id}</option>)}
-                                            </select>
-                                            <select 
-                                                className="galgame-input"
-                                                style={{ width: '140px', padding: '4px', height: '28px', fontSize: '12px' }}
-                                                value={route.model}
-                                                onChange={(e) => update({ model: e.target.value })}
-                                            >
-                                                {currentProv?.models?.map((m: string) => <option key={m} value={m}>{m}</option>)}
-                                                {!currentProv?.models?.includes(route.model) && <option value={route.model}>{route.model}</option>}
-                                            </select>
-                                            
-                                            <button 
-                                                onClick={toggleExpand}
-                                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#a78bfa', padding: '4px' }}
-                                                title="Advanced Params"
-                                            >
-                                                ⚙️
-                                            </button>
-                                        </div>
-
-                                        {/* Expanded Sliders */}
-                                        {isExpanded && (
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                                                {[
-                                                    { label: "Temp", key: "temperature", min: 0, max: 2, step: 0.1, val: route.temperature },
-                                                    { label: "Top P", key: "top_p", min: 0, max: 1, step: 0.05, val: route.top_p },
-                                                    { label: "Pres. Penalty", key: "presence_penalty", min: 0, max: 2, step: 0.1, val: route.presence_penalty },
-                                                    { label: "Freq. Penalty", key: "frequency_penalty", min: 0, max: 2, step: 0.1, val: route.frequency_penalty },
-                                                ].map(param => (
-                                                     <div key={param.key}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                            <label style={{ fontSize: '11px', color: '#aaa' }}>{param.label}</label>
-                                                            <span style={{ fontSize: '11px', color: '#a78bfa' }}>{param.val ?? 0}</span>
-                                                        </div>
-                                                        <input 
-                                                            type="range" 
-                                                            min={param.min} max={param.max} step={param.step} 
-                                                            value={param.val ?? (param.key === 'top_p' ? 1.0 : (param.key === 'temperature' ? 0.7 : 0.0))} 
-                                                            onChange={(e) => update({ [param.key]: parseFloat(e.target.value) })}
-                                                            style={{ width: '100%', accentColor: '#a78bfa', height: '4px', cursor: 'pointer' }} 
-                                                        />
-                                                     </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-
-                    {plugin.id === 'system.voiceprint' ? (
-                        <VoiceprintConfigPanel 
-                            threshold={Number(currentVal) || 0.6}
-                            onThresholdChange={(v) => {
+                    {plugin.id === "system.voiceprint" ? (
+                        <VoiceprintConfigPanel
+                            threshold={Number(currentValue) || 0.6}
+                            onThresholdChange={(value) => {
                                 if (plugin.config_schema?.key) {
-                                    setValues(prev => ({ ...prev, [plugin.config_schema.key]: v }));
+                                    setValues((previous) => ({
+                                        ...previous,
+                                        [plugin.config_schema.key]: value,
+                                    }));
                                 }
                             }}
                         />
-                    ) : ( 
-                        <>
-                        {/* Standard Config Form */}
-                        {schema ? (
-                            <>
-                            {schema.fields ? (
-                                /* Multi-field Schema (New V2) */
-                                schema.fields.map((field: any) => {
-                                    const fieldVal = values[field.key] !== undefined ? values[field.key] : (plugin.config?.[field.key] ?? field.default ?? "");
-                                    return (
-                                        <div key={field.key} className="form-group">
-                                            <label>{field.label}</label>
-                                            {field.type === 'select' ? (
-                                                 <GalgameSelect
-                                                    value={fieldVal}
-                                                    options={field.options}
-                                                    onChange={(val) => setValues(prev => ({ ...prev, [field.key]: val }))}
-                                                />
-                                            ) : (
-                                                <input 
-                                                    type={field.type === 'number' ? 'number' : 'text'}
-                                                    className="galgame-input"
-                                                    value={fieldVal}
-                                                    onChange={(e) => {
-                                                        const val = field.type === 'number' ? Number(e.target.value) : e.target.value;
-                                                        setValues(prev => ({ ...prev, [field.key]: val }));
-                                                    }}
-                                                />
-                                            )}
-                                        </div>
-                                    );
-                                })
-                            ) : (
-                                /* Single-field Schema (Legacy V1) */
-                                <div className="form-group">
-                                    <label>{schema.label}</label>
-                                    
-                                    {schema.type === 'select' && schema.options ? (
-                                        <GalgameSelect
-                                            value={currentVal}
-                                            options={schema.options}
-                                            onChange={(val) => setValues({ ...values, [schema.key]: val })}
-                                        />
-                                    ) : (
-                                        <input 
-                                            type={schema.type === 'number' ? 'number' : 'text'}
-                                            className="galgame-input"
-                                            value={currentVal}
-                                            onChange={(e) => setValues({ ...values, [schema.key]: e.target.value })}
-                                            step={schema.type === 'number' ? '0.1' : undefined}
-                                        />
-                                    )}
-                                </div>
-                            )}
-                            </>
-                        ) : (
-                            !hasLLM && ( // Only show "No config" if also no LLM config
-                                <div className="no-config-message" style={{marginBottom: '20px', fontStyle: 'italic', color: '#888'}}>
-                                    No standard configuration available for this plugin.
-                                </div>
-                            )
-                        )}
-                        </>
-
+                    ) : (
+                        <PluginConfigFormSection
+                            plugin={plugin}
+                            hasLlmRoutes={hasLlmRoutes}
+                            schema={schema}
+                            values={values}
+                            setValues={setValues}
+                        />
                     )}
-
-
                 </div>
 
                 <div className="modal-footer">
-                    <button className="galgame-btn secondary" onClick={onClose}>Cancel</button>
-                    <button className="galgame-btn primary" onClick={handleSave} disabled={saving}>
-                        {saving ? 'Saving...' : 'Save Changes'}
+                    <button className="galgame-btn secondary" onClick={onClose}>
+                        Cancel
+                    </button>
+                    <button
+                        className="galgame-btn primary"
+                        onClick={() => {
+                            void handleSave();
+                        }}
+                        disabled={saving}
+                    >
+                        {saving ? "Saving..." : "Save Changes"}
                     </button>
                 </div>
             </div>
-            
+
             <style>{`
                 .plugin-config-modal {
                     width: 500px;
@@ -527,7 +230,7 @@ const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, 
                     flex: 1;
                     overflow-y: auto;
                     overflow-x: hidden;
-                    padding-right: 5px; /* Spacing for scrollbar */
+                    padding-right: 5px;
                 }
                 .config-desc {
                     color: #aaa;
@@ -551,7 +254,7 @@ const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, 
                     border: 1px solid rgba(255,255,255,0.2);
                     border-radius: 6px;
                     color: white;
-                    box-sizing: border-box; /* Fix horizontal overflow */
+                    box-sizing: border-box;
                 }
                 .modal-footer {
                     display: flex;
@@ -559,7 +262,7 @@ const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, 
                     gap: 10px;
                     margin-top: 20px;
                     padding-top: 15px;
-                    border-top: 1px solid rgba(255,255,255,0.05); /* Visual separation */
+                    border-top: 1px solid rgba(255,255,255,0.05);
                     flex-shrink: 0;
                 }
                 .galgame-btn {
@@ -578,11 +281,6 @@ const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, 
                     background: rgba(255,255,255,0.1);
                     color: white;
                 }
-                .galgame-btn:hover {
-                    opacity: 0.9;
-                    transform: translateY(-1px);
-                }
-                /* Custom Scrollbar */
                 .modal-body::-webkit-scrollbar {
                     width: 6px;
                 }
@@ -592,6 +290,9 @@ const PluginConfigModal: React.FC<PluginConfigModalProps> = ({ plugin, onClose, 
                 }
                 .modal-body::-webkit-scrollbar-thumb:hover {
                     background: rgba(255,255,255,0.2);
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
                 }
             `}</style>
         </div>

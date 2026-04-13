@@ -144,6 +144,13 @@ class PostgresLifecycleBus(AbstractLifecycleBus):
                 # Upsert with Smart Intent Protection (COALESCE)
                 # If desired_enabled is provided (by Controller), update it.
                 # If not provided (by Worker), keep existing value.
+                # Helper for JSON serialization
+                def json_serializer(o):
+                    if hasattr(o, "model_dump"): return o.model_dump()
+                    if hasattr(o, "dict"): return o.dict()
+                    if hasattr(o, "value"): return o.value
+                    return str(o)
+
                 await conn.execute("""
                     INSERT INTO plugin_state (id, plugin_id, desired_enabled, active_status, last_updated, data)
                     VALUES ($1, $2, $3, $4, NOW(), $5)
@@ -152,10 +159,10 @@ class PostgresLifecycleBus(AbstractLifecycleBus):
                         active_status = EXCLUDED.active_status,
                         last_updated = NOW(),
                         data = EXCLUDED.data
-                """, record_id, plugin_id, desired_enabled, active_status, json.dumps(state))
+                """, record_id, plugin_id, desired_enabled, active_status, json.dumps(state, default=json_serializer))
                 
                 # Notify
-                payload = json.dumps({"plugin_id": plugin_id, "state": state})
+                payload = json.dumps({"plugin_id": plugin_id, "state": state}, default=json_serializer)
                 await conn.execute(f"SELECT pg_notify($1, $2)", self.channel, payload)
                 
                 logger.debug(f"💾 State Published (Postgres): {plugin_id}")

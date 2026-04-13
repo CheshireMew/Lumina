@@ -86,10 +86,10 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_check_port_open(self):
         """Test port availability check"""
-        from services.process_manager import _check_port_open
+        from services.health_probe import HealthProbe
 
         # Test with likely closed port
-        result = _check_port_open(59999)  # Unlikely to be in use
+        result = HealthProbe().is_port_open(59999)  # Unlikely to be in use
 
         # Should return False for closed port
         self.assertFalse(result)
@@ -97,10 +97,10 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_check_http_health(self):
         """Test HTTP health check"""
-        from services.process_manager import _check_http_health
+        from services.health_probe import HealthProbe
 
         # Test with non-existent service
-        result = _check_http_health(59999, "/health")
+        result = HealthProbe().is_http_healthy(59999, "/health")
 
         # Should return False when no service running
         self.assertFalse(result)
@@ -183,33 +183,36 @@ class TestProcessManager(unittest.TestCase):
         self.assertIn("worker1", active)
         print("✅ ProcessManager get active workers verified")
 
-    async def test_process_manager_shutdown_all(self):
+    def test_process_manager_shutdown_all(self):
         """Test shutting down all workers"""
-        from services.process_manager import ProcessManager
-        from services.process_manager import WorkerProcess
+        async def run_test():
+            from services.process_manager import ProcessManager
+            from services.process_manager import WorkerProcess
 
-        manager = ProcessManager()
+            manager = ProcessManager()
 
-        # Add some mock workers
-        mock_proc1 = MagicMock()
-        mock_proc1.terminate = MagicMock()
-        mock_proc1.wait = MagicMock(return_value=0)
-        worker1 = WorkerProcess(mock_proc1, time.time())
+            # Add some mock workers
+            mock_proc1 = MagicMock()
+            mock_proc1.terminate = MagicMock()
+            mock_proc1.wait = MagicMock(return_value=0)
+            worker1 = WorkerProcess(mock_proc1, time.time())
 
-        mock_proc2 = MagicMock()
-        mock_proc2.terminate = MagicMock()
-        mock_proc2.wait = MagicMock(return_value=0)
-        worker2 = WorkerProcess(mock_proc2, time.time())
+            mock_proc2 = MagicMock()
+            mock_proc2.terminate = MagicMock()
+            mock_proc2.wait = MagicMock(return_value=0)
+            worker2 = WorkerProcess(mock_proc2, time.time())
 
-        manager.workers["worker1"] = worker1
-        manager.workers["worker2"] = worker2
+            manager.workers["worker1"] = worker1
+            manager.workers["worker2"] = worker2
 
-        await manager.shutdown_all()
+            await manager.shutdown_all()
 
-        # Both workers should be stopped and removed
-        self.assertNotIn("worker1", manager.workers)
-        self.assertNotIn("worker2", manager.workers)
-        print("✅ ProcessManager shutdown all verified")
+            # Both workers should be stopped and removed
+            self.assertNotIn("worker1", manager.workers)
+            self.assertNotIn("worker2", manager.workers)
+            print("✅ ProcessManager shutdown all verified")
+
+        asyncio.run(run_test())
 
     def test_process_manager_start_worker_already_running(self):
         """Test starting worker that's already running"""
@@ -250,15 +253,18 @@ class TestProcessManager(unittest.TestCase):
         from services.process_manager import ProcessManager
 
         manager = ProcessManager()
-        manager.register_service_def("external_test", port=59999)
+        manager.register_service_def("external_test", port=59999, script="missing.py")
 
         # Mock health check to return False (service not running)
-        with patch('services.process_manager._check_http_health', return_value=False):
-            with patch('services.process_manager._check_port_open', return_value=False):
-                # Should not create fake worker
-                result = manager.start_worker("external_test")
-                # Service doesn't exist, so this test just verifies the logic path
-                print("✅ ProcessManager external service detection verified")
+        with patch(
+            'services.health_probe.HealthProbe.is_service_reachable',
+            return_value=(False, "none"),
+        ):
+            result = manager.start_worker("external_test")
+
+        self.assertFalse(result)
+        self.assertNotIn("external_test", manager.workers)
+        print("✅ ProcessManager external service detection verified")
 
     def test_process_manager_terminate_timeout(self):
         """Test process kill after terminate timeout"""

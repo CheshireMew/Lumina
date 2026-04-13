@@ -1,127 +1,38 @@
 """
 Config Router
-Includes: /configure, /health
-
-Refactored: Removed inject_dependencies pattern
-Now uses EventBus for service access
+Includes runtime configuration and health endpoints.
 """
-import time
 import logging
-from typing import Dict
-from collections import defaultdict
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from schemas.requests import ConfigRequest
+from schemas.runtime_settings import RuntimeLlmSettings
+from routers.deps import get_config_controller, get_optional_soul_service
 
 logger = logging.getLogger("ConfigRouter")
 
 router = APIRouter(tags=["Config"])
 
-# Config state (local to this module, not injected)
-_config_timestamps: Dict[str, float] = defaultdict(float)
-CONFIG_COOLDOWN = 30  # 30s cooldown
-
-
-def _get_service(name: str):
-    """Helper to get service from EventBus"""
-    from core.events.bus import get_event_bus
-    bus = get_event_bus()
-    return bus.get_service(name) if bus else None
-
 
 @router.post("/configure")
-async def configure_memory(config: ConfigRequest):
-    """Configure Memory Service"""
+async def configure_memory(config: ConfigRequest, config_service=Depends(get_config_controller)):
+    """Configure LLM and memory settings without changing the active character."""
 
-    
-    character_id = config.character_id
-    
-    logger.info(f"=== /configure Request Received ===")
-    logger.info(f"Character: {character_id}, BaseURL: {config.base_url}, Model: {config.model}")
-    
-    # Debounce check
-    current_time = time.time()
-    last_config_time = _config_timestamps.get(character_id, 0)
-    if current_time - last_config_time < CONFIG_COOLDOWN:
-        elapsed = int(current_time - last_config_time)
-        logger.warning(f"⚡ Duplicate /configure blocked (last configured {elapsed}s ago)")
-        return {
-            "status": "skipped", 
-            "message": f"Configuration recently updated {elapsed}s ago. Wait {CONFIG_COOLDOWN}s between configurations."
-        }
-    
+    logger.info("=== /configure Request Received ===")
+    logger.info(f"BaseURL: {config.base_url}, Model: {config.model}")
+
     try:
-        # Update timestamp
-        _config_timestamps[character_id] = current_time
-        
-        # Access SoulService
-        from services.container import services
-        soul_service = services.soul
-        
-        if not soul_service:
-             raise ValueError("SoulService not available in Container")
+        config_service.update_llm_runtime(
+            api_key=config.api_key,
+            base_url=config.base_url,
+            model=config.model,
+            history_limit=config.history_limit,
+            overflow_strategy=config.overflow_strategy,
+            provider_type=config.provider_type,
+        )
 
-        # Switch Character
-        logger.info(f"Switching Active Character to '{character_id}'...")
-        soul_service.set_active_character(character_id)
-        
-        # Load existing config to update it
-        char_config = soul_service.load_character_config()
-        
-        # Update Config
-        if config.heartbeat_enabled is not None:
-            char_config["heartbeat_enabled"] = config.heartbeat_enabled
-        if config.proactive_threshold_minutes is not None:
-            char_config["proactive_threshold_minutes"] = config.proactive_threshold_minutes
-        if config.galgame_mode_enabled is not None:
-            char_config["galgame_mode_enabled"] = config.galgame_mode_enabled
-        if config.soul_evolution_enabled is not None:
-            char_config["soul_evolution_enabled"] = config.soul_evolution_enabled
-            
-        soul_service.save_character_config(char_config)
-        
-        # Get services via EventBus
-        heartbeat_service = _get_service("heartbeat_service")
-        dreaming_service = _get_service("dreaming_service")
-        
-        # Update Heartbeat Service (In-place)
-        if heartbeat_service:
-            logger.info("Updating Heartbeat Service for new character...")
-            try:
-                heartbeat_service.soul = soul_service
-            except Exception as e:
-                logger.warning(f"Could not update heartbeat_service.soul: {e}")
-
-        # Update Dreaming Service LLM Config
-        if dreaming_service:
-            dreaming_service.update_llm_config(
-                api_key=config.api_key,
-                base_url=config.base_url,
-                model=config.model
-            )
-        
-        # Save config
-        try:
-            from app_config import ConfigManager
-            cm = ConfigManager()
-            
-            if config.character_id:
-                cm.memory.character_id = config.character_id
-            if config.base_url:
-                cm.llm.base_url = config.base_url
-            if config.api_key:
-                cm.llm.api_key = config.api_key
-            if config.model:
-                cm.llm.model = config.model
-            
-            cm.save()
-            logger.info("✅ Saved configuration via ConfigManager")
-            
-        except Exception as e:
-            logger.error(f"Failed to save config via ConfigManager: {e}")
-
-        logger.info(f"✅ Memory configured successfully for '{character_id}' (Surreal)")
-        return {"status": "ok", "message": f"Memory configured for {character_id}"}
+        logger.info("✅ Configuration updated without changing character")
+        return {"status": "ok", "message": "Configuration updated"}
     except Exception as e:
         logger.error(f"INIT ERROR: {e}")
         import traceback
@@ -129,13 +40,41 @@ async def configure_memory(config: ConfigRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/config/llm", response_model=RuntimeLlmSettings)
+async def get_llm_runtime_settings(config_service=Depends(get_config_controller)):
+    return config_service.get_llm_runtime_settings()
+
+
+@router.put("/config/llm", response_model=RuntimeLlmSettings)
+async def update_llm_runtime_settings(
+    payload: RuntimeLlmSettings,
+    config_service=Depends(get_config_controller),
+):
+    try:
+        config_service.update_llm_runtime(
+            api_key=payload.apiKey,
+            base_url=payload.baseUrl,
+            model=payload.model,
+            temperature=payload.temperature,
+            top_p=payload.topP,
+            presence_penalty=payload.presencePenalty,
+            frequency_penalty=payload.frequencyPenalty,
+            history_limit=payload.historyLimit,
+            overflow_strategy=payload.overflowStrategy,
+            provider_type=payload.providerType,
+        )
+        return config_service.get_llm_runtime_settings()
+    except Exception as exc:
+        logger.error("Failed to update LLM runtime settings: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.get("/health")
-async def health_check():
+async def health_check(soul_service=Depends(get_optional_soul_service)):
     """Health Check"""
-    from services.container import services
     return {
         "status": "healthy",
-        "soul_client": services.soul is not None
+        "soul_client": soul_service is not None
     }
 
 @router.get("/network")
@@ -146,8 +85,8 @@ async def get_network_config():
         "memory_port": app_config.network.memory_port,
         "stt_port": app_config.network.stt_port,
         "tts_port": app_config.network.tts_port,
-        "stt_url": app_config.network.stt_url,
-        "tts_url": app_config.network.tts_url,
+        "stt_url": f"{app_config.network.memory_url}/stt",
+        "tts_url": f"{app_config.network.memory_url}/tts",
         "memory_url": app_config.network.memory_url,
         "host": app_config.network.host
     }

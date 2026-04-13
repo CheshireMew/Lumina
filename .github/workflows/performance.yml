@@ -246,9 +246,6 @@ jobs:
     needs: [benchmarks, memory-leaks]
     if: always()
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-
       - name: Generate summary
         run: |
           echo "# Performance Test Summary" >> $GITHUB_STEP_SUMMARY

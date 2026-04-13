@@ -13,14 +13,22 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from services.tts_manager import TTSPluginManager
+from services.managers.tts import TTSPluginManager
+
+
+class ConfigStub:
+    def get_selected_provider(self, _capability):
+        return None
+
+    def is_plugin_desired_enabled(self, _plugin_id):
+        return True
 
 @pytest.mark.asyncio
 async def test_tts_manager_driver_discovery():
-    tm = TTSPluginManager()
+    tm = TTSPluginManager(ConfigStub())
     
     # Mock PluginLoader
-    with patch("services.plugins.loader.PluginLoader.load_plugins") as mock_load:
+    with patch("sdk.lumina.loader.PluginLoader.load_plugins") as mock_load:
         mock_driver = MagicMock()
         mock_driver.id = "test.tts.driver"
         mock_driver.name = "Test TTS"
@@ -33,7 +41,7 @@ async def test_tts_manager_driver_discovery():
 
 @pytest.mark.asyncio
 async def test_tts_manager_activation():
-    tm = TTSPluginManager()
+    tm = TTSPluginManager(ConfigStub())
     
     mock_driver = MagicMock()
     mock_driver.id = "test.tts.driver"
@@ -49,7 +57,7 @@ async def test_tts_manager_activation():
 
 @pytest.mark.asyncio
 async def test_tts_manager_unload():
-    tm = TTSPluginManager()
+    tm = TTSPluginManager(ConfigStub())
     mock_driver = MagicMock()
     mock_driver.unload = AsyncMock()
     

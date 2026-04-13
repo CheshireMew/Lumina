@@ -3,37 +3,29 @@ Voiceprint Management Router (Main Process)
 
 [Architecture 6.0] Scheme C Migration
 Voiceprint management APIs moved from STT Worker to Main Process.
-- list/toggle/delete: Direct SurrealDB operations
+- list/toggle/delete: direct database-backed profile operations
 - upload: Proxy to STT Worker for embedding generation
 """
 import logging
 import httpx
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from app_config import config
-from services.infra.bus_factory import get_lifecycle_bus
+from core.runtime import resolve_capability_base_url
+from plugins.extensions.voiceprint.store import (
+    delete_profile as delete_voiceprint_profile,
+    list_profiles as list_voiceprint_profiles,
+    set_profile_enabled,
+    upsert_profile,
+)
 
 logger = logging.getLogger("VoiceprintRouter")
 router = APIRouter(prefix="/plugins/voiceprint", tags=["Voiceprint"])
 
-# SurrealDB table name
-TABLE = "voiceprint_profiles"
-
-
-async def _get_db():
-    """Get connected lifecycle bus for DB operations."""
-    bus = get_lifecycle_bus()
-    if not getattr(bus, "_is_connected", False):
-        await bus.connect()
-    return bus.db
-
-
 @router.get("/list")
 async def list_profiles():
-    """List all voiceprint profiles from SurrealDB."""
+    """List all voiceprint profiles."""
     try:
-        db = await _get_db()
-        results = await db.select(TABLE)
-        
+        results = await list_voiceprint_profiles()
         profiles = []
         for row in results if isinstance(results, list) else []:
             profiles.append({
@@ -52,15 +44,7 @@ async def list_profiles():
 async def toggle_profile(name: str, enabled: bool = Query(...)):
     """Toggle a voiceprint profile's enabled status."""
     try:
-        db = await _get_db()
-        record_id = f"{TABLE}:{name}"
-        
-        import datetime
-        await db.query(
-            f"UPDATE {record_id} SET enabled = $enabled, updated_at = $now",
-            {"enabled": enabled, "now": datetime.datetime.now(datetime.timezone.utc).isoformat()}
-        )
-        
+        await set_profile_enabled(name, enabled)
         return {"status": "ok", "name": name, "enabled": enabled}
     except Exception as e:
         logger.error(f"Failed to toggle profile {name}: {e}")
@@ -71,11 +55,7 @@ async def toggle_profile(name: str, enabled: bool = Query(...)):
 async def delete_profile(name: str):
     """Delete a voiceprint profile."""
     try:
-        db = await _get_db()
-        record_id = f"{TABLE}:{name}"
-        
-        await db.delete(record_id)
-        
+        await delete_voiceprint_profile(name)
         return {"status": "ok", "name": name}
     except Exception as e:
         logger.error(f"Failed to delete profile {name}: {e}")
@@ -96,8 +76,10 @@ async def upload_voiceprint(name: str, file: UploadFile = File(...)):
         audio_bytes = await file.read()
         
         # 2. Proxy to STT Worker for embedding generation
-        stt_port = config.network.stt_port
-        url = f"http://127.0.0.1:{stt_port}/internal/voiceprint/generate-embedding"
+        stt_base_url = resolve_capability_base_url(config, "stt")
+        if not stt_base_url:
+            raise HTTPException(status_code=503, detail="STT worker unavailable")
+        url = f"{stt_base_url}/internal/voiceprint/generate-embedding"
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -114,23 +96,7 @@ async def upload_voiceprint(name: str, file: UploadFile = File(...)):
             if not embedding_b64:
                 raise HTTPException(status_code=500, detail="No embedding returned from STT Worker")
         
-        # 3. Save to SurrealDB
-        db = await _get_db()
-        record_id = f"{TABLE}:{name}"
-        
-        import datetime
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        
-        data = {
-            "id": record_id,
-            "name": name,
-            "enabled": True,
-            "embedding": embedding_b64,
-            "created_at": now,
-            "updated_at": now,
-        }
-        
-        await db.query(f"UPDATE {record_id} MERGE $data", {"data": data})
+        await upsert_profile(name, embedding_b64, enabled=True)
         
         logger.info(f"✅ Voiceprint registered: {name}")
         return {"status": "ok", "name": name, "message": f"Registered {name}"}

@@ -1,9 +1,0 @@
-id: driver.voiceauth.sherpa
-name: Sherpa VoiceAuth Driver
-version: 1.0.0
-description: Sherpa-ONNX Voiceprint & Face Auth
-entrypoint: none
-category: driver
-group_id: voiceauth
-group_exclusive: true
-tags: [auth, security, local]

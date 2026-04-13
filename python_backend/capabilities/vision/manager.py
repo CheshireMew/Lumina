@@ -3,7 +3,7 @@ import mss
 import mss.tools
 import base64
 import logging
-from typing import Optional, Dict
+from typing import Callable, Optional, Dict
 from core.interfaces.driver import BaseVisionDriver
 import os
 
@@ -14,8 +14,9 @@ class VisionPluginManager:
     Central Vision Manager (previously VisionService).
     Manages Vision Drivers and Screen Capture.
     """
-    def __init__(self):
+    def __init__(self, model_name_resolver: Callable[[str], str] | None = None):
         self.mss = mss.mss()
+        self.model_name_resolver = model_name_resolver
         self.drivers: Dict[str, BaseVisionDriver] = {}
         self.active_driver_id: str = "moondream" # Default, or None
         self.active_driver: Optional[BaseVisionDriver] = None
@@ -24,7 +25,7 @@ class VisionPluginManager:
     async def register_drivers(self, auto_activate: bool = True):
         """Load vision drivers from plugins directory."""
         try:
-            from services.plugins.loader import PluginLoader
+            from sdk.lumina.loader import PluginLoader
             
             # Resolve root (python_backend)
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -132,17 +133,9 @@ class VisionPluginManager:
         
         try:
             # [Fix] Dynamic Model Selection
-            from services.container import services
             model_name = "gpt-4o" # Default fallback
-            try:
-                # This assumes we are in Monolith mode if services.get_llm_manager() works.
-                # In distributed mode, generic_worker has no LLM Manager.
-                # This function might break in distributed mode unless we route via Gateway.
-                # Use a simpler fallback for now.
-                if hasattr(services, 'get_llm_manager'):
-                     model_name = services.get_llm_manager().get_model_name("vision")
-            except:
-                pass
+            if self.model_name_resolver:
+                model_name = self.model_name_resolver("vision")
 
             response = ""
             async for token in llm_driver.chat_completion(messages, model=model_name, stream=True):

@@ -2,7 +2,7 @@
 import logging
 import json
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
@@ -11,20 +11,11 @@ logger = logging.getLogger("FreeLLMRouter")
 
 # from llm.manager import llm_manager
 from app_config import config as app_config
-
-# Search Imports removed. Uses dynamic lookup in handle_tool_call.
-# from plugins.skills.brave_search import BraveSearch
-# BraveSearch = None
-# DuckDuckGoSearch = None
+from routers.deps import get_chat_turn_service, get_optional_soul_service
 
 router = APIRouter(
-    # prefix="/free-llm", # ⚙️ Disabled prefix to serve as default /v1 handler
     tags=["Unified LLM"]
 )
-
-def _get_soul_service():
-    from services.container import services
-    return services.soul
 
 # OpenAI-compatible Request Models
 class ChatMessage(BaseModel):
@@ -40,11 +31,9 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     max_tokens: Optional[int] = None
     temperature: Optional[float] = 0.7
-
-# --- Tool Definitions ---
-# Search tool definitions removed (DEPRECATED): Logic handled by UnifiedChatProcessor directly.
-
-
+    top_p: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = None
 
 def mask_log(text: str) -> str:
     """Mask sensitive content in logs unless in DEV mode."""
@@ -61,13 +50,15 @@ def mask_log(text: str) -> str:
 # --- Main Logic ---
 
 @router.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest):
+async def chat_completions(
+    request: ChatCompletionRequest,
+    chat_service=Depends(get_chat_turn_service),
+    soul_service=Depends(get_optional_soul_service),
+):
     """
     Unified Chat Endpoint (Phase 19).
     Delegates to UnifiedChatProcessor for RAG, Tools, and LLM.
     """
-    soul_service = _get_soul_service()
-    
     # [Security] Input Guardrails
     from core.security.guardrails import InputGuard
     
@@ -85,12 +76,6 @@ async def chat_completions(request: ChatCompletionRequest):
     if soul_service:
         soul_service.update_last_interaction()
     
-    # Import processor
-    # Import processor
-    from services.chat.instance import chat_pipeline
-    
-    # Convert Pydantic messages to dicts
-    # Convert Pydantic messages to dicts, preserving tool usage
     messages = []
     for m in request.messages:
         msg_dict = {"role": m.role, "content": m.content}
@@ -99,16 +84,14 @@ async def chat_completions(request: ChatCompletionRequest):
         if m.tool_call_id: msg_dict["tool_call_id"] = m.tool_call_id
         messages.append(msg_dict)
     
-    # Extract user_id and character_id from context if available
+    # Extract user_id and character_id from the active runtime context.
     user_id = "default_user"
-    character_id = "default_char"
-    if soul_service:
-        character_id = getattr(soul_service, "_active_character_id", character_id)
+    character_id = chat_service.active_character_id("default_char")
     
     try:
         if request.stream:
             async def stream_generator():
-                async for token in chat_pipeline.run(
+                async for token in chat_service.stream_response(
                     messages=messages,
                     user_id=user_id,
                     character_id=character_id,
@@ -124,8 +107,7 @@ async def chat_completions(request: ChatCompletionRequest):
             return StreamingResponse(stream_generator(), media_type="text/event-stream")
         else:
             # Non-streaming: collect full response
-            full_response = ""
-            async for token in chat_pipeline.run(
+            full_response = await chat_service.collect_response(
                 messages=messages,
                 user_id=user_id,
                 character_id=character_id,
@@ -133,9 +115,7 @@ async def chat_completions(request: ChatCompletionRequest):
                 enable_tools=True,
                 model=request.model,
                 temperature=request.temperature,
-                stream=False,
-            ):
-                full_response += token
+            )
             
             return {
                 "id": "chatcmpl-unified",
@@ -154,8 +134,6 @@ async def chat_completions(request: ChatCompletionRequest):
     except Exception as e:
         logger.error(f"[UnifiedChat] Generation Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# _sse_formatter removed (DEPRECATED): Logic handled by stream_generator inside chat_completions.
 
 def _mock_chunk(content: str, model: str) -> str:
     """Helper to create OpenAI-compatible delta chunk"""

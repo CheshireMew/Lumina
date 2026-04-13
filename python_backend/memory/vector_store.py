@@ -33,7 +33,7 @@ class VectorStore:
             }
             return await self.driver.create("episodic_memory", data)
         except Exception as e:
-            logger.error(f"鉂?Error adding episodic memory: {e}")
+            logger.error(f"❌ Error adding episodic memory: {e}")
             raise
 
     async def search(self, 

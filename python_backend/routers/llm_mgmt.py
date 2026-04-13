@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any
+from routers.deps import get_llm_service, get_optional_soul_service
 
 router = APIRouter(
     prefix="/llm-mgmt",
@@ -10,39 +11,31 @@ import logging
 
 logger = logging.getLogger("LLMManagementRouter")
 
-def _get_soul_client():
-    from services.container import services
-    return services.soul  # Fixed: was soul_client which doesn't exist
-
-def _get_llm_manager():
-    from services.container import services
-    return services.get_llm_manager()
-
 @router.get("/providers")
-async def get_providers():
-    return {"providers": _get_llm_manager().list_providers()}
+async def get_providers(llm_manager=Depends(get_llm_service)):
+    return {"providers": llm_manager.list_providers()}
 
 @router.post("/providers/{provider_id}")
-async def update_provider_config(provider_id: str, config: Dict[str, Any]):
+async def update_provider_config(provider_id: str, config: Dict[str, Any], llm_manager=Depends(get_llm_service)):
     try:
         # Filter allowed keys
         allowed = {"base_url", "api_key", "models", "type", "enabled"}
         updates = {k: v for k, v in config.items() if k in allowed}
-        _get_llm_manager().update_provider(provider_id, updates)
-        return {"status": "ok", "provider": _get_llm_manager().config.providers[provider_id]}
+        llm_manager.update_provider(provider_id, updates)
+        return {"status": "ok", "provider": llm_manager.config.providers[provider_id]}
     except KeyError:
         raise HTTPException(status_code=404, detail="Provider not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/routes")
-async def get_routes():
+async def get_routes(llm_manager=Depends(get_llm_service)):
     # Ensure default keys exist for frontend convenience
-    routes = _get_llm_manager().list_routes()
+    routes = llm_manager.list_routes()
     return {"routes": routes}
 
 @router.post("/routes/{feature}")
-async def update_route(feature: str, payload: Dict[str, Any]):
+async def update_route(feature: str, payload: Dict[str, Any], llm_manager=Depends(get_llm_service)):
     """
     Payload: { "provider_id": "...", "model": "...", "temperature": ..., "top_p": ..., "presence_penalty": ..., "frequency_penalty": ... }
     """
@@ -68,7 +61,7 @@ async def update_route(feature: str, payload: Dict[str, Any]):
         # Filter out None values to allow partial updates (and prevent Pydantic validation errors)
         clean_updates = {k: v for k, v in updates.items() if v is not None}
             
-        _get_llm_manager().update_route(feature, **clean_updates)
+        llm_manager.update_route(feature, **clean_updates)
         return {"status": "ok"}
     except ValueError as e:
          raise HTTPException(status_code=400, detail=str(e))
@@ -76,32 +69,21 @@ async def update_route(feature: str, payload: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/params/{feature}")
-async def get_feature_params(feature: str):
+async def get_feature_params(
+    feature: str,
+    llm_manager=Depends(get_llm_service),
+    soul_client=Depends(get_optional_soul_service),
+):
     """Fetch all generation parameters for a specific feature, with dynamic soul-based adjustments"""
-    soul_client = _get_soul_client()
-    
     soul_state = None
     
-    # ⚙️ Check if Soul Evolution is enabled for dynamic adjustments
     if soul_client and feature in ["chat", "proactive"]:
-        # Safety: Refresh soul profile from disk
-        soul_client._load_profile()
-        
-        # Check Master Switch: soul_evolution_enabled
-        if soul_client.config.get("soul_evolution_enabled", True):
-            personality = soul_client.profile.get("personality", {})
-            state = soul_client.profile.get("state", {})
-            rel = soul_client.profile.get("relationship", {})
+        if hasattr(soul_client, "get_llm_adjustment_state"):
+            soul_state = soul_client.get_llm_adjustment_state() or None
+            if soul_state:
+                logger.info(f"[LLM Mgmt] Calculating dynamic params for {feature} using soul state: {soul_state}")
             
-            soul_state = {
-                "pad": personality.get("pad_model", {"pleasure": 0.5, "arousal": 0.5, "dominance": 0.5}),
-                "big_five": personality.get("big_five", {"openness": 0.5, "conscientiousness": 0.5, "extraversion": 0.5, "agreeableness": 0.5, "neuroticism": 0.5}),
-                "energy": state.get("energy_level", 100),
-                "rel_level": rel.get("level", 0)
-            }
-            logger.info(f"[LLM Mgmt] Calculating dynamic params for {feature} using soul state: {soul_state}")
-            
-    params = _get_llm_manager().get_parameters(feature, soul_state=soul_state)
+    params = llm_manager.get_parameters(feature, soul_state=soul_state)
     return params
 
 # --- New Models Router (for /models/list) ---
@@ -111,11 +93,9 @@ models_router = APIRouter(
 )
 
 @models_router.get("/list")
-async def list_models():
+async def list_models(llm_manager=Depends(get_llm_service)):
     """List available LLM models for frontend configuration"""
     try:
-        llm_manager = _get_llm_manager()
-        
         # Try to find Pollinations driver first (as it has the list logic)
         driver = await llm_manager.get_driver("chat") 
         if driver and hasattr(driver, "list_models"):

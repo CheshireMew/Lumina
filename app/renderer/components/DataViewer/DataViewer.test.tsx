@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
 import DataViewer from './DataViewer'
@@ -21,9 +21,10 @@ describe('DataViewer Component', () => {
     })
   })
 
-  it('renders correctly when open', () => {
+  it('renders correctly when open', async () => {
     render(<DataViewer {...defaultProps} />)
     expect(screen.getByText('Memory Core')).toBeDefined()
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
   })
 
   it('does not render when closed', () => {
@@ -31,8 +32,9 @@ describe('DataViewer Component', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('calls onClose when close button is clicked', () => {
+  it('calls onClose when close button is clicked', async () => {
     render(<DataViewer {...defaultProps} />)
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
     // The close button has the X icon, but we can find it by its parent or the X
     // In our case, the button doesn't have an aria-label, so we might need to find it differently.
     // Let's use the X icon's container or just look for the button.

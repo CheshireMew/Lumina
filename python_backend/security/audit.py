@@ -20,7 +20,7 @@ class AuditLogger:
     [Architecture 6.0] Security Audit System.
     Records 'Who did What' to a persistent audit log.
     Current Setup: Local JSONL file.
-    Future: SurrealDB.
+    Future: unified database-backed audit stream.
     """
     
     _instance = None

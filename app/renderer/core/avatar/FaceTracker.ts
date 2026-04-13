@@ -1,15 +1,33 @@
-import { FaceMesh, Results } from "@mediapipe/face_mesh";
-import { Camera } from "@mediapipe/camera_utils";
 import { FaceTrackingData } from "./types";
 import { events } from "../events";
+
+type FaceLandmark = { x: number; y: number };
+type FaceMeshResults = {
+    multiFaceLandmarks?: FaceLandmark[][];
+};
 
 /**
  * Service to handle MediaPipe FaceMesh and emit tracking events.
  * Singleton pattern recommended.
  */
 class FaceTrackerService {
-    private faceMesh: FaceMesh | null = null;
-    private camera: Camera | null = null;
+    private cameraCtor:
+        | (new (
+              videoElement: HTMLVideoElement,
+              options: {
+                  onFrame: () => Promise<void>;
+                  width: number;
+                  height: number;
+              },
+          ) => { start: () => Promise<void>; stop: () => void })
+        | null = null;
+    private faceMesh: {
+        setOptions: (options: Record<string, unknown>) => void;
+        onResults: (callback: (results: FaceMeshResults) => void) => void;
+        send: (input: { image: HTMLVideoElement }) => Promise<void>;
+    } | null = null;
+    private camera: { start: () => Promise<void>; stop: () => void } | null =
+        null;
     private videoElement: HTMLVideoElement | null = null;
     private isRunning = false;
     private debugCanvas: HTMLCanvasElement | null = null;
@@ -23,6 +41,12 @@ class FaceTrackerService {
         this.debugCanvas = debugCanvas || null;
 
         console.log("[FaceTracker] Initializing MediaPipe FaceMesh...");
+        const [{ FaceMesh }, { Camera }] = await Promise.all([
+            import("@mediapipe/face_mesh"),
+            import("@mediapipe/camera_utils"),
+        ]);
+        this.cameraCtor = Camera;
+
         this.faceMesh = new FaceMesh({
             locateFile: (file) => {
                 return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
@@ -51,7 +75,11 @@ class FaceTrackerService {
 
         console.log("[FaceTracker] Starting Camera...");
         try {
-            this.camera = new Camera(this.videoElement, {
+            if (!this.cameraCtor) {
+                throw new Error("Face tracker camera runtime is unavailable");
+            }
+
+            this.camera = new this.cameraCtor(this.videoElement, {
                 onFrame: async () => {
                     if (this.videoElement && this.faceMesh) {
                         await this.faceMesh.send({ image: this.videoElement });
@@ -85,7 +113,7 @@ class FaceTrackerService {
         this.isRunning = false;
     }
 
-    private onResults(results: Results) {
+    private onResults(results: FaceMeshResults) {
         if (
             !results.multiFaceLandmarks ||
             results.multiFaceLandmarks.length === 0

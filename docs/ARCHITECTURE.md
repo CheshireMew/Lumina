@@ -1,9 +1,9 @@
-# Lumina 系统架构文档 (v2026.1)
+# Lumina 系统架构文档 (v2026.4)
 
-> 最后更新: 2026-01-18
-> 状态: 稳定 / 混合微服务架构 (Hybrid-Microservice)
+> 最后更新: 2026-04-10
+> 状态: 稳定 / 微内核主进程 + Worker 能力进程
 
-本文档详细描述了 Lumina 项目当前的架构设计，重点涵盖 **混合进程模型 (Hybrid Process Model)**、**插件系统 2.0** 以及 **记忆架构**。
+本文档描述 Lumina 当前真实生效的运行底座，重点是 **统一插件内核**、**主进程/Worker 分工** 和 **记忆架构**。
 
 ---
 
@@ -14,7 +14,7 @@ Lumina 是一个**本地优先 (Local-First)**、**以隐私为中心**的 AI �
 1.  **Electron (前端)**: 负责用户界面、Live2D 渲染、操作系统集成。
 2.  **FastAPI (主后端)**: 负责核心编排、记忆管理、插件系统、LLM 逻辑。
 3.  **Worker Services (微服务子进程)**: 负责 CPU/GPU 密集型任务（如 STT 语音转文字、TTS 语音合成），运行在独立进程中以避免阻塞主线程。
-4.  **SurrealDB**: 嵌入式/服务器模式数据库，提供图数据库 (Graph) 和向量数据库 (Vector) 能力。
+4.  **PostgreSQL + pgvector**: 统一承载结构化数据、向量检索和生命周期状态。
 
 ```mermaid
 graph TD
@@ -28,7 +28,7 @@ graph TD
     end
 
     subgraph "数据层"
-        MainBackend -->|查询/写入| DB[(SurrealDB)]
+        MainBackend -->|查询/写入| DB[(PostgreSQL + pgvector)]
         MainBackend -->|文件读写| FS[文件系统]
     end
 ```
@@ -52,45 +52,75 @@ graph TD
 
 ---
 
-## 3. 插件系统 2.0 (Plugin System)
+## 3. 统一插件内核 (Plugin Kernel)
 
-新的插件架构强调 **安全性**、**热重载** 和 **远程能力**。
+插件系统现在只有一套 contract，不再同时维护旧插件基类和 SDK 基类。
 
-### 3.1 插件清单 (`manifest.yaml`)
+### 3.1 稳定 Manifest
 
-每个插件（无论是逻辑、驱动还是 UI 组件）都由清单文件定义：
+每个插件目录只保留一个 `manifest.yaml`，稳定字段固定为：
 
 ```yaml
-id: system.voiceprint
-version: 1.0.0
-category: driver # stt, tts, skill, system, driver
-group_id: stt # 用于 UI 分组 (如 SenseVoice 属于 STT 组)
-runtime_target: main # 'main' (在主进程运行) 或 'stt_server' (在远程进程运行)
-permissions: # 安全策略
-  - file_system_read
+id: system.emotion_broker
+api_version: "1.0"
+kind: processor
+capability: chat.post_processor
+runtime_target: main
+permissions:
+  - eventbus.subscribe
+  - eventbus.emit
+config_schema: {}
+provides:
+  - avatar
 ```
 
-### 3.2 加载机制
+### 3.2 唯一生命周期
 
-1.  **发现 (Discovery)**: 扫描 `plugins/system/` 和 `plugins/extensions/` 目录。
-2.  **清单解析**: 读取 YAML 并确定 `runtime_target`。
-    - **Main Target**: 将 Python 类加载到主进程中。
-    - **Remote Target**: 在主进程中创建一个 `RemotePluginStub`（远程插件桩）。实际代码在 Worker 进程中运行。
-3.  **沙箱化 (Sandboxing)**:
-    - 带有 `permissions` 的插件会获得 `SandboxedContext`（受限 API）。
-    - 受信任的系统插件获得标准的 `LuminaContext`。
+所有正式插件统一实现以下方法：
 
-### 3.3 热重载 (Hot Reload)
+1. `load(context)`
+2. `enable()`
+3. `disable()`
+4. `unload()`
+5. `health()`
+6. `get_metadata()`
 
-- **启用/禁用**: 支持运行时动态切换。
-- **重载**: 支持卸载 Python 模块并重新导入（实验性功能）。
-- **配置**: 通过 UI 中的 `config_schema` 进行动态配置。
+插件上下文只暴露事件、能力发现、插件配置、插件数据和路由注册，不允许直接碰容器内部对象。
+
+### 3.3 内核只保留六类职责
+
+1. 配置
+2. 权限
+3. 安全
+4. 进程管理
+5. 能力注册表
+6. 统一网关
+
+### 3.4 能力注册表
+
+系统现在只认 capability，不认具体实现类。主进程和 Worker 汇报都会收敛到同一套能力标识，例如：
+
+- `stt`
+- `tts`
+- `llm`
+- `memory`
+- `avatar`
+- `tool.search`
+- `chat.context`
+- `chat.post_processor`
+
+### 3.5 配置与状态
+
+- 所有启停意图和当前 provider 只从 `config.plugins` 读取。
+- `desired_state` 可写，是唯一用户意图真源。
+- `runtime state` 只读，由 `plugin_state_aggregator` 汇总。
+- 前端插件列表只看聚合后的运行态视图，不再各模块各算一份状态。
 
 ---
 
-## 4. 记忆架构 (SurrealDB)
+## 4. 记忆架构 (PostgreSQL)
 
-利用 SurrealDB 的多模态能力（图 + 文档 + 向量）。
+当前记忆层统一建立在 PostgreSQL + pgvector 之上。
 
 ### 4.1 记忆层级
 
@@ -100,8 +130,8 @@ permissions: # 安全策略
 
 ### 4.2 安全性
 
-- **基于角色的访问控制 (RBAC)**: 应用以 `app_user` (Owner 角色) 身份连接，确保在其命名空间内拥有完全控制权。
-- **权限自愈**: `SurrealDriver` 在连接时会自动检查并修复受损的权限配置。
+- **数据库账号隔离**: 后端统一通过 `memory.postgres` 配置连接 PostgreSQL。
+- **降级启动**: 数据库不可用时主进程仍可启动，记忆能力退化为不可用而不是整机崩溃。
 
 ---
 
@@ -109,14 +139,17 @@ permissions: # 安全策略
 
 ### 5.1 状态与配置
 
-- **PluginStoreModal**: 统一的插件市场，涵盖技能 (Skills)、驱动 (STT/TTS) 和系统模块。
-- **SWR 缓存**: 采用 "Stale-While-Revalidate" 策略，实现 UI **秒开**体验。
-- **VoiceprintConfigPanel**: 专门的生物识别管理面板。
+- **`useCoreSystem`**: 前端唯一应用编排入口，统一组合角色、设置、聊天流和音频流水线。
+- **`useSettings`**: 本地桌面偏好与运行时 LLM 配置的唯一写入口。设置弹窗只编辑草稿，不直接触碰存储。
+- **`useCharacterState`**: 角色列表、当前角色和持久化切换的单一边界。
+- **`runtime/gatewayClient.ts`**: WebSocket 单例客户端，统一负责连接、重连、会话号和事件分发。
+- **`PluginStoreModal` / `VoiceprintConfigPanel`**: 插件与声纹配置 UI，消费后端聚合态，不再各自计算运行状态。
 
 ### 5.2 通信
 
-- **REST API**: 用于配置管理、插件开关。
-- **WebSocket**: 用于实时聊天流、音频流传输、状态推送。
+- **Electron IPC**: 只暴露受控的 `settings`、`app`、`stt` 接口给渲染进程。
+- **REST API**: 用于配置管理、角色管理、插件控制和能力查询。
+- **WebSocket**: 通过统一网关传输聊天流、情绪、Widget 和插件状态事件。
 
 ---
 

@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import * as PIXI from 'pixi.js';
-import { Live2DModel } from 'pixi-live2d-display/cubism4';
 import { IAvatarRenderer } from '../../../core/avatar/types';
+import { ensureCubismCoreLoaded } from './cubismCore';
 
 // Expose PIXI to window for pixi-live2d-display to use
 (window as any).PIXI = PIXI;
+
+const MOTION_PRELOAD_NONE = 'NONE';
 
 interface Live2DPluginProps {
     modelPath: string;
@@ -14,8 +16,9 @@ interface Live2DPluginProps {
 const Live2DPlugin = forwardRef<IAvatarRenderer, Live2DPluginProps>(({ modelPath, highDpi = false }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<PIXI.Application | null>(null);
-    const modelRef = useRef<Live2DModel | null>(null);
+    const modelRef = useRef<any | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
     const lastInteractionRef = useRef<number>(Date.now());
@@ -113,7 +116,14 @@ const Live2DPlugin = forwardRef<IAvatarRenderer, Live2DPluginProps>(({ modelPath
         const loadModel = async () => {
             try {
                 console.log(`[Live2DPlugin] Loading model from: ${modelPath}`);
-                const model = await Live2DModel.from(modelPath);
+                setIsLoading(true);
+                setError(null);
+                await ensureCubismCoreLoaded();
+
+                const { Live2DModel } = await import('pixi-live2d-display/cubism4');
+                const model = await Live2DModel.from(modelPath, {
+                    motionPreload: MOTION_PRELOAD_NONE as any,
+                });
 
                 if (!isMounted || !appRef.current) {
                     model.destroy();
@@ -216,9 +226,12 @@ const Live2DPlugin = forwardRef<IAvatarRenderer, Live2DPluginProps>(({ modelPath
                     }
                 });
 
+                setIsLoading(false);
+
             } catch (error) {
                 console.error('[Live2DPlugin] Failed to load model:', error);
                 setError(error instanceof Error ? error.message : String(error));
+                setIsLoading(false);
             }
         };
 
@@ -233,7 +246,30 @@ const Live2DPlugin = forwardRef<IAvatarRenderer, Live2DPluginProps>(({ modelPath
     }, [modelPath, highDpi]);
 
     if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
-    return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+    return (
+        <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+            {isLoading && (
+                <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                }}>
+                    <div style={{
+                        width: '72px',
+                        height: '72px',
+                        borderRadius: '999px',
+                        background: 'rgba(255,255,255,0.35)',
+                        border: '1px solid rgba(255,255,255,0.6)',
+                        backdropFilter: 'blur(8px)',
+                        boxShadow: '0 16px 40px rgba(15, 23, 42, 0.10)',
+                    }} />
+                </div>
+            )}
+        </div>
+    );
 });
 
 export default Live2DPlugin;
