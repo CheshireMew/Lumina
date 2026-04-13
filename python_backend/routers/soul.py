@@ -1,135 +1,88 @@
-"""
-Soul/Personality Router
-Includes: /soul, /soul/mutate, /soul/switch_character, /galgame etc.
-
-Refactored: Uses SoulService instead of SoulManager
-"""
+"""Soul and personality routes."""
 import logging
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
-
-from schemas.requests import UpdateIdentityRequest, UpdateUserNameRequest
+from fastapi import APIRouter, Depends, HTTPException
+from routers.deps import get_soul_service
 
 logger = logging.getLogger("SoulRouter")
 
 router = APIRouter(tags=["Soul"])
-
-# Helper functions to access services
-def _get_soul_service():
-    from services.container import services
-    if not services.soul:
-         raise HTTPException(status_code=503, detail="Soul Service not initialized")
-    return services.soul
-
-def _get_heartbeat_service():
-    from core.events.bus import get_event_bus
-    bus = get_event_bus()
-    return bus.get_service("heartbeat_service") if bus else None
-
 
 class SwitchCharacterRequest(BaseModel):
     character_id: str
 
 
 @router.get("/soul/{character_id}")
-async def get_soul_data(character_id: str):
-    """Get evolved personality data (Read-only)"""
-    # ⚡ Legacy Support: This reads raw soul data from disk for a specific char
+async def get_soul_data(character_id: str, soul_service=Depends(get_soul_service)):
+    """Get character personality data without switching the active runtime."""
     try:
-        # We can implement a helper or simple JSON read here to avoid SoulManager dep
-        # For now, just return empty if not active, or implement simple reader
-        return {} 
+        if hasattr(soul_service, "load_character_profile"):
+            return soul_service.load_character_profile(character_id)
+        return {}
     except Exception as e:
         logger.error(f"[API] Error getting soul data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/soul")
-async def get_soul():
-    """Get Soul State"""
-    soul_service = _get_soul_service()
+@router.get("/galgame/{character_id}/state")
+async def get_galgame_state(character_id: str, soul_service=Depends(get_soul_service)):
+    """Get character interaction state from the soul data boundary."""
     try:
-        # Request prompt render to ensure state is fresh?
-        # Or just return state
-        
-        # We need to construct the 'profile' dict expected by frontend
-        # For universal plugins, we might need a standard "UI State" protocol
-        
-        if soul_service.profile:
-             return soul_service.profile
-        
-        return {}
+        return soul_service.load_galgame_state(character_id)
+    except Exception as e:
+        logger.error(f"[API] Error getting galgame state: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/soul")
+async def get_soul(soul_service=Depends(get_soul_service)):
+    """Get Soul State"""
+    try:
+        result = dict(soul_service.profile) if soul_service.profile else {}
+
+        # Ensure system_prompt is included (frontend depends on it)
+        if "system_prompt" not in result:
+            try:
+                prompt = await soul_service.get_system_prompt()
+                if prompt:
+                    result["system_prompt"] = prompt
+            except Exception:
+                pass
+
+        return result
     except Exception as e:
         logger.error(f"[API] Error in /soul endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/soul/interact")
-async def register_interaction():
+async def register_interaction(soul_service=Depends(get_soul_service)):
     """
     Centralized Endpoint to signal User Activity.
     """
-    soul_service = _get_soul_service()
     try:
         soul_service.update_last_interaction()
+        if hasattr(soul_service, "clear_pending_interaction"):
+            soul_service.clear_pending_interaction()
         return {
             "status": "ok", 
             "message": "Heartbeat reset"
         }
     except Exception as e:
         logger.error(f"[API] Interaction update failed: {e}")
-    except Exception as e:
-        logger.error(f"[API] Interaction update failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/soul/switch_character")
-async def switch_character(request: SwitchCharacterRequest):
-    """Switch to specified character"""
-    
-    # ⚡ TODO: Implement clean Switch in SoulService
-    # For now, we assume the Frontend handles the character_id persistence config
-    # and reboots the backend or we hot-swap config.
-    
-    # and reboots the backend or we hot-swap config.
-    
-    raise HTTPException(status_code=501, detail="Hot switching not yet implemented in Universal Architecture")
-
-
-@router.post("/soul/update_identity")
-async def update_identity(request: UpdateIdentityRequest):
-    """Update Identity"""
-    _get_soul_service()
+async def switch_character(request: SwitchCharacterRequest, soul_service=Depends(get_soul_service)):
+    """Single formal character switching route."""
     try:
-        # Delegate to service/driver
-        # soul_service.update_identity(request)
-        return {"status": "updated", "identity": {}}
+        soul_service.set_active_character(request.character_id)
+        return {
+            "status": "ok",
+            "character_id": request.character_id,
+            "message": f"Switched to {request.character_id}",
+        }
     except Exception as e:
-        logger.error(f"[API] Failed to update identity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/soul/update_user_name")
-async def update_user_name(request: UpdateUserNameRequest):
-    """Update User Name"""
-    _get_soul_service()
-    try:
-        # Delegate
-        # soul_service.update_user_name(request.user_name)
-        return {"status": "updated", "user_name": request.user_name}
-    except Exception as e:
-        logger.error(f"[API] Failed to update user_name: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/soul/user_name_bulk")
-async def bulk_update_user_name(request: UpdateUserNameRequest):
-    """
-    Bulk update user_name for ALL characters on disk.
-    """
-    soul_service = _get_soul_service()
-    try:
-        count = soul_service.bulk_update_user_name(request.user_name)
-        return {"status": "ok", "updated_count": count, "user_name": request.user_name}
-    except Exception as e:
-        logger.error(f"[API] Failed to bulk update user_name: {e}")
+        logger.error(f"[API] Character switch failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

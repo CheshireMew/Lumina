@@ -1,0 +1,5 @@
+
+DevTools listening on ws://127.0.0.1:9223/devtools/browser/ce6ad5c6-1038-4c49-a57d-a53bc9ac974b
+(node:34040) electron: Failed to load URL: http://localhost:5173/ with error: ERR_CONNECTION_REFUSED
+(Use `electron --trace-warnings ...` to show where the warning was created)
+(node:34040) electron: Failed to load URL: http://localhost:5173/ with error: ERR_CONNECTION_REFUSED

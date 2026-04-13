@@ -214,7 +214,7 @@ export const VoiceTab: React.FC<VoiceManagerData> = (props) => {
                         <span>1. 运行 <code>python python_backend/register_voiceprint.py</code></span><br />
                         <span>2. 启用声纹验证开关</span><br />
                         <span>3. 调整阈值以达到最佳效果</span><br />
-                        <span>4. 重启 stt_server.py 使配置生效</span>
+                        <span>4. 如语音服务正在使用中，重新连接语音输入即可</span>
                     </div>
                 </div>
             </div>

@@ -1,17 +1,18 @@
 from abc import abstractmethod
 from typing import AsyncGenerator, Any, Optional, Dict, Tuple, TYPE_CHECKING
-from core.interfaces.plugin import BaseSystemPlugin
+
+from core.interfaces.plugin import Plugin
 
 if TYPE_CHECKING:
     from core.db.query_builder import QueryBuilder
 
-class BaseDriver(BaseSystemPlugin):
+class BaseDriver(Plugin):
     def __init__(self, id: str, name: str, description: str = ""):
+        super().__init__()
         self._id = id
         self._name = name
         self.description = description
-        # self.config removal: Handled by BaseSystemPlugin property
-        # self.enabled removal: Handled by BaseSystemPlugin property
+        self._config: Dict[str, Any] = {}
         
     @property
     def id(self) -> str:
@@ -21,9 +22,21 @@ class BaseDriver(BaseSystemPlugin):
     def name(self) -> str:
         return self._name
 
+    @property
+    def config(self) -> Dict[str, Any]:
+        return self._config
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    @enabled.setter
+    def enabled(self, value: bool):
+        self._enabled = bool(value)
+
     def load_config(self, config: dict):
-        self.config.update(config)
-        self.enabled = self.config.get("enabled", self.enabled)
+        self._config.update(config)
+        self._enabled = self._config.get("enabled", True)
 
     @property
     def config_schema(self) -> Optional[Dict[str, Any]]:

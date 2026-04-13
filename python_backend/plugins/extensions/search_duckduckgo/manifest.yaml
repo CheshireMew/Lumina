@@ -1,0 +1,13 @@
+id: driver.tool.search.duckduckgo
+api_version: "1.0"
+kind: provider
+capability: tool.search
+runtime_target: main
+permissions:
+  - network.outbound
+config_schema:
+  count:
+    type: number
+    label: Result Count
+    default: 5
+provides: []

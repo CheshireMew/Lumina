@@ -7,21 +7,19 @@ network:
   memory_port: 8010
   stt_port: 8765
   tts_port: 8766
-  surreal_port: 8001
   bind_localhost_only: true
 
 memory:
-  provider: "surreal"
-  url: "ws://127.0.0.1:8001/rpc"
+  provider: "driver.memory.postgres"
   namespace: "lumina"
   database: "memory"
   character_id: "hiyori"
-  # Credentials - Use environment variables in production!
-  # Set SURREAL_ROOT_PASS and SURREAL_APP_PASS instead of editing here.
-  root_user: "root"
-  root_password: "" # SURREAL_ROOT_PASS
-  app_user: "lumina_app"
-  app_password: "" # SURREAL_APP_PASS
+  postgres:
+    host: "127.0.0.1"
+    port: 5432
+    user: "lumina_user"
+    password: "" # LUMINA_PG_PASSWORD
+    database: "lumina_db"
 
 llm:
   model: "deepseek-chat"

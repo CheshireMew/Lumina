@@ -1,133 +1,113 @@
-import os
-import re
-import sys
-import yaml
+import argparse
 from pathlib import Path
 
-def sanitize_id(plugin_id):
-    """Normalize ID to safe folder name"""
-    return re.sub(r'[^a-z0-9_\-\.]', '', plugin_id.lower())
 
-def create_plugin():
-    print("🚀 Lumina Plugin Scaffolder")
-    print("===========================")
-    
-    # 1. Gather Info
-    name = input("Plugin Name (e.g., Stock Ticker): ").strip()
-    plugin_id = input("Plugin ID (e.g., extensions.stock_ticker): ").strip()
-    description = input("Description: ").strip()
-    author = input("Author: ").strip()
-    
-    safe_name = plugin_id.split(".")[-1]
-    
-    # 2. Paths
-    # Assume script is run from project root or scripts folder
-    root = Path.cwd()
-    if (root / "python_backend").exists():
-        target_dir = root / "python_backend" / "plugins" / "extensions" / safe_name
-    elif (root / "plugins").exists():
-        target_dir = root / "plugins" / "extensions" / safe_name
-    else:
-        # Fallback
-        target_dir = root / "extensions" / safe_name
-        
-    if target_dir.exists():
-        print(f"❌ Error: Directory {target_dir} already exists.")
-        sys.exit(1)
-        
-    os.makedirs(target_dir, exist_ok=True)
-    
-    # 3. Manifest
-    manifest = {
-        "id": plugin_id,
-        "name": name,
-        "description": description,
-        "version": "0.1.0",
-        "author": author,
-        "entrypoint": "main:MyPlugin",
-        "isolation_mode": "local", # Default to local for simpler routing/debugging
-        "permissions": [
-            "network.external"
-        ],
-        "ui_slots": [
-            {
-                "slot": "sidebar_right",
-                # "type": "iframe", # Implicit/Removed
-                "src": "/assets/index.html",
-                "name": name, # Was title
-                "height": "300px",
-                "width": "100%"
-            }
-        ]
-    }
-    
-    with open(target_dir / "manifest.yaml", "w", encoding="utf-8") as f:
-        yaml.dump(manifest, f, sort_keys=False)
-        
-    # 4. Entrypoint (main.py)
-    code = f"""from core.interfaces.plugin import BaseSystemPlugin
-import logging
+MANIFEST_TEMPLATE = """id: "{plugin_id}"
+api_version: "1.0"
+kind: "{kind}"
+capability: "{capability}"
+runtime_target: "{runtime_target}"
+permissions: []
+config_schema: {{}}
+provides: []
+"""
+
+PLUGIN_TEMPLATE = """import logging
+
+from core.interfaces.plugin import Plugin as BasePlugin
 
 logger = logging.getLogger("{plugin_id}")
 
-class MyPlugin(BaseSystemPlugin):
-    @property
-    def id(self):
-        return "{plugin_id}"
 
-    @property
-    def name(self):
-        return "{name}"
+class Plugin(BasePlugin):
+    async def load(self, context):
+        await super().load(context)
 
-    def initialize(self, context):
-        super().initialize(context)
-        logger.info("INIT: {name} Plugin Loaded!")
-        
-        # Register API Route
-        self.register_route(
-            method="GET",
-            path="/status",
-            handler=self.handle_status
+    async def enable(self):
+        await super().enable()
+        logger.info("Enabled {plugin_id}")
+
+    async def disable(self):
+        await super().disable()
+
+    async def unload(self):
+        await super().unload()
+
+    def get_metadata(self):
+        metadata = super().get_metadata()
+        metadata.update(
+            {{
+                "name": "{plugin_name}",
+                "description": "{description}",
+                "func_tag": "{func_tag}",
+            }}
         )
-
-    async def handle_status(self):
-        return {{"status": "active", "plugin": self.id}}
+        return metadata
 """
-    with open(target_dir / "main.py", "w", encoding="utf-8") as f:
-        f.write(code)
-        
-    # 5. UI Assets
-    ui_dir = target_dir / "ui"
-    os.makedirs(ui_dir, exist_ok=True)
-    
-    html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ background: #1a1a1a; color: white; font-family: sans-serif; padding: 10px; }}
-        h3 {{ margin: 0 0 10px 0; color: #ff69b4; }}
-    </style>
-</head>
-<body>
-    <h3>{name}</h3>
-    <p>{description}</p>
-    <div id="status">Loading...</div>
-    
-    <script>
-        // Use Backend API
-        fetch('/api/plugins/{plugin_id}/status')
-            .then(res => res.json())
-            .then(data => {{
-                document.getElementById('status').innerText = JSON.stringify(data, null, 2);
-            }});
-    </script>
-</body>
-</html>"""
-    with open(ui_dir / "index.html", "w", encoding="utf-8") as f:
-        f.write(html)
-        
-    print(f"\n✅ Plugin created at: {target_dir}")
-    print("Restart backend to load!")
+
+
+def to_plugin_name(plugin_id: str) -> str:
+    parts = plugin_id.replace("-", " ").replace(".", " ").replace("_", " ").split()
+    return " ".join(word.capitalize() for word in parts)
+
+
+def create_scaffold(
+    plugin_id: str,
+    kind: str,
+    capability: str,
+    runtime_target: str,
+    description: str,
+    target_root: str | None = None,
+) -> Path:
+    root = Path(target_root) if target_root else Path(__file__).resolve().parent.parent / "plugins" / "extensions"
+    plugin_dir = root / plugin_id.split(".")[-1].replace("-", "_")
+    if plugin_dir.exists():
+        raise FileExistsError(f"Plugin directory already exists: {plugin_dir}")
+
+    plugin_dir.mkdir(parents=True)
+    plugin_name = to_plugin_name(plugin_id)
+
+    (plugin_dir / "manifest.yaml").write_text(
+        MANIFEST_TEMPLATE.format(
+            plugin_id=plugin_id,
+            kind=kind,
+            capability=capability,
+            runtime_target=runtime_target,
+        ),
+        encoding="utf-8",
+    )
+    (plugin_dir / "plugin.py").write_text(
+        PLUGIN_TEMPLATE.format(
+            plugin_id=plugin_id,
+            plugin_name=plugin_name,
+            description=description,
+            func_tag=kind.title(),
+        ),
+        encoding="utf-8",
+    )
+    return plugin_dir
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Scaffold a unified Lumina plugin")
+    parser.add_argument("plugin_id")
+    parser.add_argument("--kind", choices=["provider", "extension", "gateway", "processor"], default="extension")
+    parser.add_argument("--capability", default="chat.post_processor")
+    parser.add_argument("--runtime-target", default="main")
+    parser.add_argument("--description", default="TODO: Describe what this plugin does")
+    parser.add_argument("--target-root")
+    args = parser.parse_args()
+
+    created = create_scaffold(
+        plugin_id=args.plugin_id,
+        kind=args.kind,
+        capability=args.capability,
+        runtime_target=args.runtime_target,
+        description=args.description,
+        target_root=args.target_root,
+    )
+    print(f"Plugin scaffold created at {created}")
+
 
 if __name__ == "__main__":
-    create_plugin()
+    main()

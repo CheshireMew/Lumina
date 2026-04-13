@@ -40,8 +40,9 @@ class Permission(str, Enum):
     INPUT_SIMULATE = "input.simulate"     # Simulate Keyboard/Mouse [Mapped from input:simulate]
 
     # Memory System
-    MEMORY_READ = "memory.read"               # Read from memory system (SurrealDB)
+    MEMORY_READ = "memory.read"               # Read from memory system
     MEMORY_WRITE = "memory.write"             # Write to memory system
+    DATABASE_POSTGRES = "database.postgres"   # Access configured Postgres backend
     
     # LLM Access
     LLM_INVOKE = "llm.invoke"                 # Invoke LLM API calls
@@ -94,6 +95,7 @@ TIER_SAFE: Set[str] = {
 
 TIER_TRUSTED: Set[str] = {
     Permission.NETWORK_EXTERNAL.value,
+    Permission.DATABASE_POSTGRES.value,
     Permission.FILESYSTEM_USER.value,
     Permission.FILESYSTEM_READ.value,  # Legacy
     Permission.FILESYSTEM_WRITE.value, # Legacy

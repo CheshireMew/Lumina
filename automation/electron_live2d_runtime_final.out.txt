@@ -1,0 +1,105 @@
+
+Starting Python Backend...
+[BackendManager] Starting all services...
+[BackendManager] Loaded ports from: E:\Work\Code\Lumina\config\ports.json
+[BackendManager] Services Configured: [ 'core:8010' ]
+[BackendManager] Launching dev core: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'core'
+] CWD: E:\Work\Code\Lumina\python_backend
+[core] 2026-04-12 19:26:08,097 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\lumina_core.log
+[core] 2026-04-12 19:26:08,152 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[core] [Launcher] Starting Core System on 127.0.0.1:8010...
+[core] 2026-04-12 19:26:08,200 [INFO] [-] [-] uvicorn.error: Started server process [14476]
+2026-04-12 19:26:08,200 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[core] 2026-04-12 19:26:08,206 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+[core] 2026-04-12 19:26:08,206 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+2026-04-12 19:26:08,206 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Configuration (0.00s)
+[core] 2026-04-12 19:26:08,281 [INFO] [-] [-] SDK.PluginLoader: Scanning driver directory: E:\Work\Code\Lumina\python_backend\plugins\extensions\memory_postgres\drivers\memory
+[core] 2026-04-12 19:26:08,403 [INFO] [-] [-] memory.factory: [MemoryFactory] Selected Driver: PostgreSQL Driver (driver.memory.postgres)
+2026-04-12 19:26:08,404 [INFO] [-] [-] ConsolidationBatch: [BatchManager] Initialized
+[core] 2026-04-12 19:26:08,554 [INFO] [-] [-] PostgresDriver.Schema: PostgreSQL schema initialized
+[core] 2026-04-12 19:26:08,555 [INFO] [-] [-] PostgresDriver: Connected to PostgreSQL at localhost:5433
+2026-04-12 19:26:08,555 [INFO] [-] [-] Bootstrap.Infra: ✅ Memory System Connected
+2026-04-12 19:26:08,555 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Memory Backend (0.35s)
+[core] 2026-04-12 19:26:08,560 [INFO] [-] [-] Bootstrap.Infra: ✅ EventBus Initialized
+2026-04-12 19:26:08,560 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: EventBus (0.01s)
+[core] 2026-04-12 19:26:08,560 [INFO] [-] [-] EventBus: ⚡ Bulk Registered 6 Event Schemas
+2026-04-12 19:26:08,561 [INFO] [-] [-] Bootstrap.Infra: ✅ Protocol Schema Validation Active (6 events)
+2026-04-12 19:26:08,561 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Event Protocol (Schemas) (0.00s)
+2026-04-12 19:26:08,561 [INFO] [-] [-] Bootstrap.Integration: ✅ RouterManager Bootstrapped & Subscribed
+2026-04-12 19:26:08,561 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: RouterManager (0.00s)
+[core] 2026-04-12 19:26:09,182 [INFO] [-] [-] GlobalTicker: 鈴憋笍 Global Ticker Started
+[core] 2026-04-12 19:26:09,182 [INFO] [-] [-] Bootstrap.Services: ✅ Core Services (LLM, Soul, Session, Ticker) Initialized
+2026-04-12 19:26:09,182 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Core Services (0.62s)
+[core] 2026-04-12 19:26:09,184 [INFO] [-] [-] Bootstrap.Services: ✅ Plugin Registry Service Initialized
+2026-04-12 19:26:09,184 [INFO] [-] [-] Bootstrap.Services: ✅ Worker-backed media services delegated to STT/TTS workers
+2026-04-12 19:26:09,184 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Plugin Services (Vision/TTS/STT) (0.00s)
+[core] 2026-04-12 19:26:09,186 [INFO] [-] [-] Bootstrap.Services: ✅ Middleware Registered
+[core] 2026-04-12 19:26:09,186 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Middleware (Context/Tools) (0.00s)
+[core] 2026-04-12 19:26:09,193 [INFO] [-] [-] SystemPluginManager: Starting unified plugin kernel for runtime main
+[core] 2026-04-12 19:26:09,208 [WARNING] [-] [-] PluginPermissionChecker: [system.avatar_server] 🟡 Trusted Permission Requested: network.udp
+[core] 2026-04-12 19:26:09,208 [WARNING] [-] [-] PluginPermissionChecker: [system.avatar_server] 🟡 Trusted Permission Requested: filesystem.read
+[core] 2026-04-12 19:26:09,219 [INFO] [-] [-] VMCProtocol: VMC OSC Client initialized at 127.0.0.1:39539
+[core] 2026-04-12 19:26:09,224 [INFO] [-] [-] LLMManager: Registered LLM driver type: deepseek
+[core] 2026-04-12 19:26:09,225 [INFO] [-] [-] LLMManager: Registered LLM driver type: gemini
+[core] 2026-04-12 19:26:09,226 [INFO] [-] [-] LLMManager: Registered LLM driver type: openai
+[core] 2026-04-12 19:26:09,226 [WARNING] [-] [-] PluginPermissionChecker: [driver.llm.pollinations] 🟡 Trusted Permission Requested: network.outbound
+[core] 2026-04-12 19:26:09,228 [INFO] [-] [-] LLMManager: Registered LLM driver type: pollinations
+[core] 2026-04-12 19:26:09,228 [WARNING] [-] [-] PluginPermissionChecker: [driver.memory.postgres] 🟡 Trusted Permission Requested: database.postgres
+[core] 2026-04-12 19:26:09,228 [WARNING] [-] [-] PluginPermissionChecker: [driver.tool.search.brave] 🟡 Trusted Permission Requested: network.outbound
+[core] 2026-04-12 19:26:09,230 [WARNING] [-] [-] PluginPermissionChecker: [driver.tool.search.duckduckgo] 🟡 Trusted Permission Requested: network.outbound
+[core] 2026-04-12 19:26:09,230 [INFO] [-] [-] SystemPluginManager: Unified plugin kernel ready
+[core] 2026-04-12 19:26:09,230 [INFO] [-] [-] Bootstrap.Services: ✅ System Plugin Manager Initialized
+2026-04-12 19:26:09,231 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: System Plugins (0.04s)
+[core] 2026-04-12 19:26:09,243 [INFO] [-] [-] Bootstrap.SDK: ✅ Lumina SDK Initialized
+2026-04-12 19:26:09,243 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Lumina SDK (0.01s)
+[core] 2026-04-12 19:26:09,244 [INFO] [-] [-] ChatBridge: ✅ Basic Chat Bridge Started (Listening to input_text)
+[core] 2026-04-12 19:26:09,244 [INFO] [-] [-] Bootstrap.Integration: ✅ ChatBridge Initialized
+2026-04-12 19:26:09,244 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ChatBridge (0.00s)
+[core] 2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap.Integration: 🔌 MCP Host Initialized (Start Disabled)
+2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: MCPHost (0.14s)
+[core] 2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap.Integration: ✅ System Plugin Routers Mounted
+2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: SystemPluginRouters (0.00s)
+2026-04-12 19:26:09,381 [INFO] [-] [-] WorkerControlHub: 🎛️ WorkerControlHub initialized
+[core] 2026-04-12 19:26:09,381 [INFO] [-] [-] PluginStateAggregator: ✅ PluginStateAggregator initialized
+[core] 2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap.PostStartup: 🎛️ WorkerControlHub Ready
+2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: WorkerControlHub (0.00s)
+2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Scheduling Core Service Prewarm (TTS/STT)...
+2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Prewarm (0.00s)
+[core] 2026-04-12 19:26:09,381 [INFO] [-] [-] ReconciliationService: ⚖️ Reconciliation Service Started
+2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap.PostStartup: ⚖️ Reconciliation Service Started
+2026-04-12 19:26:09,381 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ReconciliationService (0.00s)
+[core] 2026-04-12 19:26:09,387 [INFO] [-] [-] Bootstrap.PostStartup: 👀 ConfigWatcher Started
+[core] 2026-04-12 19:26:09,387 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ConfigWatcher (0.00s)
+2026-04-12 19:26:09,388 [INFO] [-] [-] WorkerSupervisor: Supervisor activated.
+2026-04-12 19:26:09,388 [INFO] [-] [-] Bootstrap.PostStartup: 🛡️ Process Supervisor Auto-Healing Enabled
+2026-04-12 19:26:09,388 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ProcessSupervisor (0.00s)
+[core] 2026-04-12 19:26:09,394 [INFO] [-] [-] Automation.Service: 🧠 ECA Engine Started
+[core] 2026-04-12 19:26:09,394 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: AutomationService (0.01s)
+2026-04-12 19:26:09,394 [INFO] [-] [-] Bootstrap: ✨ Bootstrap Sequence Complete.
+2026-04-12 19:26:09,394 [INFO] [-] [-] Lifecycle: 🚀 Startup complete
+2026-04-12 19:26:09,394 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\Lumina_Data\config.yaml
+[core] 2026-04-12 19:26:09,394 [INFO] [-] [-] uvicorn.error: Application startup complete.
+[core] 2026-04-12 19:26:09,395 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+[core] 2026-04-12 19:26:09,422 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10735 - "GET /health HTTP/1.1" 200
+[core] Health check passed
+[BackendManager] All services started successfully.
+Python Backend started.
+[core] 2026-04-12 19:26:09,472 [INFO] [-] [-] uvicorn.error: 127.0.0.1:10736 - "WebSocket /lumina/gateway/ws" [accepted]
+[core] 2026-04-12 19:26:09,472 [INFO] [-] [-] Gateway: Client Connected [Session: 0]
+[core] 2026-04-12 19:26:09,473 [INFO] [-] [-] uvicorn.error: connection open
+[core] 2026-04-12 19:26:09,481 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10737 - "GET /characters HTTP/1.1" 200
+[core] 2026-04-12 19:26:09,484 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10738 - "GET /config/llm HTTP/1.1" 200
+[core] 2026-04-12 19:26:09,964 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10738 - "GET /live2d/Hiyori/Hiyori.model3.json HTTP/1.1" 200
+[core] 2026-04-12 19:26:09,981 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10738 - "GET /live2d/Hiyori/Hiyori.moc3 HTTP/1.1" 200
+[core] 2026-04-12 19:26:09,982 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10737 - "GET /live2d/Hiyori/Hiyori.2048/texture_00.png HTTP/1.1" 200
+[core] 2026-04-12 19:26:09,982 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10739 - "GET /live2d/Hiyori/Hiyori.2048/texture_01.png HTTP/1.1" 200
+[core] 2026-04-12 19:26:10,047 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10739 - "GET /live2d/Hiyori/Hiyori.pose3.json HTTP/1.1" 200
+[core] 2026-04-12 19:26:10,047 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10737 - "GET /live2d/Hiyori/Hiyori.physics3.json HTTP/1.1" 200
+[core] 2026-04-12 19:26:13,499 [INFO] [-] [-] ProcessManager: Service worker:stt detected via HTTP Probe (8765/health).
+[core] 2026-04-12 19:26:13,499 [INFO] [-] [-] ProcessManager: Service worker:tts detected via HTTP Probe (8766/health).
+2026-04-12 19:26:13,500 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Core worker prewarm dispatched
+[core] 2026-04-12 19:26:24,399 [INFO] [-] [-] PostgresLifecycleBus: 🆕 PostgresLifecycleBus Instance Created
+[core] 2026-04-12 19:26:24,399 [INFO] [-] [-] ReconciliationService: 🐢 Single Node Detected. Relaxing Reconciliation to 30.0s interval.
+[core] 2026-04-12 19:26:25,061 [INFO] [-] [-] uvicorn.access: 127.0.0.1:10864 - "GET /live2d/Hiyori/motions/Hiyori_m09.motion3.json HTTP/1.1" 200

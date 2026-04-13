@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { API_CONFIG } from "../config";
-import { ttsService } from "@core/voice/tts_service";
-import { memoryService } from "@core/memory/memory_service";
+import {
+    fetchRuntimeLlmSettings,
+    updateRuntimeLlmSettings,
+} from "../api/settingsApi";
+import { syncFrontendRuntime } from "../runtime/appRuntime";
+import { electronSettings, loadBootstrapState } from "../platform/electron";
 
 export interface LLMSettings {
+    providerType: "free" | "custom";
     apiKey: string;
     baseUrl: string;
     model: string;
@@ -22,12 +26,25 @@ export interface AppSettings {
     contextWindow: number;
     live2dHighDpi: boolean;
     isTTSEnabled: boolean;
-    backgroundImage: string; // Add this
-    // isThinkingEnabled is now part of LLMSettings
+    backgroundImage: string;
+}
+
+type LocalSettingKey =
+    | "userName"
+    | "contextWindow"
+    | "live2dHighDpi"
+    | "isTTSEnabled"
+    | "backgroundImage";
+
+export interface GeneralSettingsInput {
+    userName: string;
+    live2dHighDpi: boolean;
+    backgroundImage: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
     llm: {
+        providerType: "custom",
         apiKey: "",
         baseUrl: "https://api.deepseek.com/v1",
         model: "deepseek-chat",
@@ -43,7 +60,15 @@ const DEFAULT_SETTINGS: AppSettings = {
     contextWindow: 50,
     live2dHighDpi: false,
     isTTSEnabled: true,
-    backgroundImage: "", // Add default
+    backgroundImage: "",
+};
+
+const LOCAL_SETTING_STORE_KEYS: Record<LocalSettingKey, string> = {
+    userName: "userName",
+    contextWindow: "contextWindow",
+    live2dHighDpi: "live2d_high_dpi",
+    isTTSEnabled: "isTTSEnabled",
+    backgroundImage: "backgroundImage",
 };
 
 /**
@@ -54,7 +79,7 @@ const DEFAULT_SETTINGS: AppSettings = {
  *
  * Extracted from App.tsx to improve modularity.
  */
-export function useSettings() {
+export function useSettings(backendReady: boolean) {
     const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -66,105 +91,38 @@ export function useSettings() {
      */
     useEffect(() => {
         const load = async () => {
-            const store = window.settings;
-            if (!store) {
-                console.warn("[useSettings] No settings store available");
-                setIsLoaded(true);
-                return;
-            }
-
             try {
-                // Load dynamic ports if available (Electron packaged mode)
-                if (window.app?.getPorts) {
-                    try {
-                        const ports = await window.app.getPorts();
-                        if (ports?.memory && ports?.tts) {
-                            console.log("[useSettings] Dynamic ports:", ports);
-                            API_CONFIG.BASE_URL = `http://127.0.0.1:${ports.memory}`;
-                            API_CONFIG.TTS_BASE_URL = `http://127.0.0.1:${ports.tts}`;
-                            memoryService.setBaseUrl(API_CONFIG.BASE_URL);
-                            ttsService.setBaseUrl(API_CONFIG.TTS_BASE_URL);
-                        }
-                    } catch (e) {
-                        console.warn("[useSettings] Failed to load ports:", e);
-                    }
-                }
-
-                // Load all settings
-                const [
-                    apiKey,
-                    baseUrl,
-                    model,
-                    temperature,
-                    thinkingEnabled,
-                    userName,
-                    highDpi,
-                    historyLimit,
-                    overflowStrategy,
-                    contextWindow,
-                    backgroundImage,
-                    topP,
-                    presencePenalty,
-                    frequencyPenalty,
-                ] = await Promise.all([
-                    store.get("apiKey"),
-                    store.get("apiBaseUrl"),
-                    store.get("modelName"),
-                    store.get("llm_temperature"),
-                    store.get("thinking_enabled"),
-                    store.get("userName"),
-                    store.get("live2d_high_dpi"),
-                    store.get("history_limit"),
-                    store.get("overflow_strategy"),
-                    store.get("contextWindow"),
-                    store.get("backgroundImage"),
-                    store.get("llm_top_p"),
-                    store.get("llm_presence_penalty"),
-                    store.get("llm_frequency_penalty"),
-                ]);
+                const { localSettings } = await loadBootstrapState();
 
                 const loaded: AppSettings = {
                     llm: {
-                        apiKey: apiKey || "",
-                        baseUrl: baseUrl || DEFAULT_SETTINGS.llm.baseUrl,
-                        model: model || DEFAULT_SETTINGS.llm.model,
-                        temperature:
-                            temperature ?? DEFAULT_SETTINGS.llm.temperature,
-                        topP: topP ?? DEFAULT_SETTINGS.llm.topP,
-                        presencePenalty:
-                            presencePenalty ??
-                            DEFAULT_SETTINGS.llm.presencePenalty,
-                        frequencyPenalty:
-                            frequencyPenalty ??
-                            DEFAULT_SETTINGS.llm.frequencyPenalty,
+                        ...DEFAULT_SETTINGS.llm,
                         thinkingEnabled:
-                            thinkingEnabled ??
+                            localSettings.thinkingEnabled ??
                             DEFAULT_SETTINGS.llm.thinkingEnabled,
-                        historyLimit:
-                            historyLimit ?? DEFAULT_SETTINGS.llm.historyLimit,
-                        overflowStrategy:
-                            overflowStrategy ??
-                            DEFAULT_SETTINGS.llm.overflowStrategy,
                     },
-                    userName: userName || DEFAULT_SETTINGS.userName,
+                    userName: localSettings.userName || DEFAULT_SETTINGS.userName,
                     contextWindow:
-                        contextWindow || DEFAULT_SETTINGS.contextWindow,
-                    live2dHighDpi: highDpi || false,
-                    isTTSEnabled: DEFAULT_SETTINGS.isTTSEnabled,
-                    backgroundImage: backgroundImage || "", // Assign
+                        localSettings.contextWindow ||
+                        DEFAULT_SETTINGS.contextWindow,
+                    live2dHighDpi: localSettings.live2dHighDpi ?? false,
+                    isTTSEnabled:
+                        localSettings.isTTSEnabled ??
+                        DEFAULT_SETTINGS.isTTSEnabled,
+                    backgroundImage: localSettings.backgroundImage || "",
                 };
 
                 prevLLMRef.current = loaded.llm;
                 setSettings(loaded);
 
-                // Configure memory service if API key exists
-                if (loaded.llm.apiKey) {
-                    memoryService.configure(
-                        loaded.llm.apiKey,
-                        loaded.llm.baseUrl,
-                        loaded.llm.model,
-                    );
-                }
+                void syncFrontendRuntime({
+                    llm: {
+                        apiKey: loaded.llm.apiKey,
+                        baseUrl: loaded.llm.baseUrl,
+                        model: loaded.llm.model,
+                        providerType: loaded.llm.providerType,
+                    },
+                });
 
                 console.log("[useSettings] Loaded");
             } catch (error) {
@@ -177,27 +135,106 @@ export function useSettings() {
         load();
     }, []);
 
+    const refreshRuntimeSettings = useCallback(async () => {
+        if (!backendReady) {
+            return;
+        }
+
+        try {
+            const llm = await fetchRuntimeLlmSettings();
+            setSettings((prev) => {
+                const nextLlm: LLMSettings = {
+                    apiKey: llm.apiKey ?? prev.llm.apiKey,
+                    providerType: llm.providerType ?? prev.llm.providerType,
+                    baseUrl: llm.baseUrl || prev.llm.baseUrl,
+                    model: llm.model || prev.llm.model,
+                    temperature: llm.temperature ?? prev.llm.temperature,
+                    topP: llm.topP ?? prev.llm.topP,
+                    presencePenalty:
+                        llm.presencePenalty ?? prev.llm.presencePenalty,
+                    frequencyPenalty:
+                        llm.frequencyPenalty ?? prev.llm.frequencyPenalty,
+                    thinkingEnabled: prev.llm.thinkingEnabled,
+                    historyLimit: llm.historyLimit ?? prev.llm.historyLimit,
+                    overflowStrategy:
+                        llm.overflowStrategy ?? prev.llm.overflowStrategy,
+                };
+
+                prevLLMRef.current = nextLlm;
+
+                void syncFrontendRuntime({
+                    llm: {
+                        apiKey: nextLlm.apiKey,
+                        baseUrl: nextLlm.baseUrl,
+                        model: nextLlm.model,
+                        providerType: nextLlm.providerType,
+                    },
+                });
+
+                return {
+                    ...prev,
+                    llm: nextLlm,
+                };
+            });
+        } catch (error) {
+            console.warn("[useSettings] Runtime settings refresh failed:", error);
+        }
+    }, [backendReady]);
+
+    useEffect(() => {
+        void refreshRuntimeSettings();
+    }, [refreshRuntimeSettings]);
+
+    const persistLocalSettings = useCallback(
+        async (partial: Partial<Pick<AppSettings, LocalSettingKey>>) => {
+            const entries = Object.entries(partial) as [
+                LocalSettingKey,
+                AppSettings[LocalSettingKey],
+            ][];
+
+            if (entries.length === 0) {
+                return;
+            }
+
+            await Promise.all(
+                entries.map(([key, value]) =>
+                    electronSettings.set(LOCAL_SETTING_STORE_KEYS[key], value),
+                ),
+            );
+
+            setSettings((prev) => ({
+                ...prev,
+                ...partial,
+            }));
+        },
+        [],
+    );
+
     /**
      * Update a specific setting.
      */
     const updateSetting = useCallback(
         <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
             setSettings((prev) => ({ ...prev, [key]: value }));
+            if (key === "isTTSEnabled") {
+                void persistLocalSettings({
+                    isTTSEnabled: value as AppSettings["isTTSEnabled"],
+                });
+            }
         },
-        [],
+        [persistLocalSettings],
     );
 
     /**
-     * Update LLM settings and reconfigure services.
+     * Update LLM settings and sync runtime state.
      */
     const updateLLMSettings = useCallback(async (llm: LLMSettings) => {
-        const store = window.settings;
-
         // Check if changed
         const prev = prevLLMRef.current;
         const changed =
             !prev ||
             prev.apiKey !== llm.apiKey ||
+            prev.providerType !== llm.providerType ||
             prev.baseUrl !== llm.baseUrl ||
             prev.model !== llm.model ||
             prev.temperature !== llm.temperature ||
@@ -210,26 +247,47 @@ export function useSettings() {
 
         if (!changed) return;
 
-        // Save to store
-        if (store) {
-            await store.set("apiKey", llm.apiKey);
-            await store.set("apiBaseUrl", llm.baseUrl);
-            await store.set("modelName", llm.model);
-            await store.set("llm_temperature", llm.temperature);
-            await store.set("llm_top_p", llm.topP);
-            await store.set("llm_presence_penalty", llm.presencePenalty);
-            await store.set("llm_frequency_penalty", llm.frequencyPenalty);
-            await store.set("thinking_enabled", llm.thinkingEnabled);
-            await store.set("history_limit", llm.historyLimit);
-            await store.set("overflow_strategy", llm.overflowStrategy);
-        }
+        await electronSettings.set("thinking_enabled", llm.thinkingEnabled);
+
+        const persisted = await updateRuntimeLlmSettings({
+            apiKey: llm.apiKey,
+            providerType: llm.providerType,
+            baseUrl: llm.baseUrl,
+            model: llm.model,
+            temperature: llm.temperature,
+            topP: llm.topP,
+            presencePenalty: llm.presencePenalty,
+            frequencyPenalty: llm.frequencyPenalty,
+            historyLimit: llm.historyLimit,
+            overflowStrategy: llm.overflowStrategy,
+        });
+
+        const next = {
+            ...llm,
+            providerType: persisted.providerType,
+            apiKey: persisted.apiKey,
+            baseUrl: persisted.baseUrl,
+            model: persisted.model,
+            temperature: persisted.temperature,
+            topP: persisted.topP,
+            presencePenalty: persisted.presencePenalty,
+            frequencyPenalty: persisted.frequencyPenalty,
+            historyLimit: persisted.historyLimit,
+            overflowStrategy: persisted.overflowStrategy,
+        };
 
         // Update local state
-        setSettings((prev) => ({ ...prev, llm }));
-        prevLLMRef.current = llm;
+        setSettings((prev) => ({ ...prev, llm: next }));
+        prevLLMRef.current = next;
 
-        // Reconfigure services
-        memoryService.configure(llm.apiKey, llm.baseUrl, llm.model);
+        void syncFrontendRuntime({
+            llm: {
+                apiKey: next.apiKey,
+                baseUrl: next.baseUrl,
+                model: next.model,
+                providerType: next.providerType,
+            },
+        });
 
         console.log("[useSettings] LLM settings updated");
     }, []);
@@ -238,18 +296,24 @@ export function useSettings() {
      * Save a simple setting to the store.
      */
     const saveSetting = useCallback(
-        async <K extends keyof AppSettings>(
-            key: K,
-            storeKey: string,
-            value: AppSettings[K],
-        ) => {
-            const store = window.settings;
-            if (store) {
-                await store.set(storeKey, value);
-            }
-            updateSetting(key, value);
+        async <K extends LocalSettingKey>(key: K, value: AppSettings[K]) => {
+            await persistLocalSettings({ [key]: value } as Pick<
+                AppSettings,
+                K
+            >);
         },
-        [updateSetting],
+        [persistLocalSettings],
+    );
+
+    const saveGeneralSettings = useCallback(
+        async (next: GeneralSettingsInput) => {
+            await persistLocalSettings({
+                userName: next.userName,
+                live2dHighDpi: next.live2dHighDpi,
+                backgroundImage: next.backgroundImage,
+            });
+        },
+        [persistLocalSettings],
     );
 
     return {
@@ -258,5 +322,6 @@ export function useSettings() {
         updateSetting,
         updateLLMSettings,
         saveSetting,
+        saveGeneralSettings,
     };
 }

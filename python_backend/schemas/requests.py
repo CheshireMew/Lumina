@@ -3,7 +3,7 @@ Pydantic Request/Response Models
 Extracted from memory_server.py for shared use
 """
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 
 
@@ -20,6 +20,7 @@ class ConfigRequest(BaseModel):
     base_url: str
     api_key: Optional[str] = "sk-dummy-key"
     model: Optional[str] = "deepseek-chat"
+    provider_type: Optional[Literal["free", "custom"]] = None
     embedder: Optional[str] = "paraphrase-multilingual-MiniLM-L12-v2"
     character_id: str = "hiyori"
     # Heartbeat Settings
@@ -66,26 +67,3 @@ class SearchRequest(BaseModel):
     empower_factor: Optional[float] = 0.5
 
 
-class ConsolidateRequest(BaseModel):
-    """Consolidate History Request"""
-    user_id: str = "user"
-    character_id: Optional[str] = None
-    user_name: str = "User"
-    character_name: str = Field(default="AI", alias="char_name")
-    messages: List[MessageModel]
-
-    class Config:
-        populate_by_name = True
-
-
-
-
-class UpdateIdentityRequest(BaseModel):
-    """Update Identity Request"""
-    name: str
-    description: str
-
-
-class UpdateUserNameRequest(BaseModel):
-    """Update User Name Request"""
-    user_name: str

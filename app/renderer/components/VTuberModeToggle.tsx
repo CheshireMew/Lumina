@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Video, VideoOff, Camera } from 'lucide-react';
-import { faceTracker } from '../core/avatar/FaceTracker';
+import React, { useState } from 'react';
+import { Video, Camera } from 'lucide-react';
 
 interface VTuberModeToggleProps {
     onToggle?: (enabled: boolean) => void;
@@ -17,6 +16,8 @@ const VTuberModeToggle: React.FC<VTuberModeToggleProps> = ({ onToggle }) => {
         setIsInitializing(true);
 
         try {
+            const { faceTracker } = await import('../core/avatar/FaceTracker');
+
             if (isEnabled) {
                 faceTracker.stop();
                 setIsEnabled(false);

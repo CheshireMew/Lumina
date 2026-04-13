@@ -4,12 +4,21 @@ import time
 from typing import Dict, List, Optional
 from pydantic import BaseModel
 
+from app_config import config as app_config
+from core.runtime import (
+    MAIN_RUNTIME_TARGET,
+    normalize_runtime_target,
+    resolve_runtime_port,
+    runtime_target_for_capability,
+)
+
 logger = logging.getLogger("ServiceDiscovery")
 
 class WorkerNode(BaseModel):
     id: str
     host: str
     port: int
+    runtime_target: str = MAIN_RUNTIME_TARGET
     capabilities: List[str] = []
     last_seen: float = 0.0
 
@@ -35,17 +44,19 @@ class ServiceDiscovery:
             cls._instance = ServiceDiscovery()
         return cls._instance
 
-    def register(self, worker_id: str, host: str, port: int, capabilities: List[str] = []):
+    def register(self, worker_id: str, host: str, port: int, capabilities: List[str] = None, runtime_target: str = None):
         """Register or update a worker node."""
+        normalized_target = normalize_runtime_target(runtime_target or worker_id)
         node = WorkerNode(
             id=worker_id,
             host=host,
             port=port,
-            capabilities=capabilities,
+            runtime_target=normalized_target,
+            capabilities=capabilities or [],
             last_seen=time.time()
         )
         self.nodes[worker_id] = node
-        logger.info(f"🛰️ Registered worker: {worker_id} at {node.base_url} (Caps: {capabilities})")
+        logger.info(f"🛰️ Registered worker: {worker_id} at {node.base_url} (Caps: {node.capabilities})")
 
     def get_node(self, worker_id: str) -> Optional[WorkerNode]:
         """Get node by ID, pruning if stale."""
@@ -58,15 +69,27 @@ class ServiceDiscovery:
 
     def get_url(self, worker_id: str, fallback_port: int = None) -> str:
         """Resolve worker URL with local fallback."""
+        normalized_target = normalize_runtime_target(worker_id)
         node = self.get_node(worker_id)
         if node:
             return node.base_url
+
+        for candidate in self.nodes.values():
+            if normalize_runtime_target(candidate.runtime_target) == normalized_target:
+                return candidate.base_url
         
         # Fallback to localhost if not registered
         if fallback_port:
              return f"http://127.0.0.1:{fallback_port}"
+        configured_port = resolve_runtime_port(app_config, normalized_target)
+        if configured_port:
+            return f"http://127.0.0.1:{configured_port}"
         
         raise ValueError(f"Worker {worker_id} not discovered and no fallback provided")
+
+    def get_url_for_capability(self, capability: str) -> str:
+        runtime_target = runtime_target_for_capability(capability)
+        return self.get_url(runtime_target)
 
     def find_by_capability(self, capability: str) -> List[WorkerNode]:
         """Find all nodes providing a specific capability."""

@@ -1,0 +1,178 @@
+2026-04-13 13:13:31,614 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\..\logs\lumina_core.log
+2026-04-13 13:13:31,678 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\live2d
+[Launcher] Starting Core System on 127.0.0.1:8940...
+2026-04-13 13:13:31,808 [INFO] [-] [-] uvicorn.error: Started server process [10752]
+2026-04-13 13:13:31,812 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+2026-04-13 13:13:31,822 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+2026-04-13 13:13:31,825 [WARNING] [-] [-] Bootstrap.Infra: Configured character 'hiyori' not found.
+2026-04-13 13:13:31,826 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+2026-04-13 13:13:31,827 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Configuration (0.00s)
+2026-04-13 13:13:31,949 [INFO] [-] [-] SDK.PluginLoader: Scanning driver directory: E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\memory_postgres\drivers\memory
+2026-04-13 13:13:33,860 [INFO] [-] [-] memory.factory: [MemoryFactory] Selected Driver: PostgreSQL Driver (driver.memory.postgres)
+2026-04-13 13:13:33,861 [INFO] [-] [-] ConsolidationBatch: [BatchManager] Initialized
+2026-04-13 13:13:34,386 [ERROR] [-] [-] PostgresDriver: PostgreSQL connection failed: connection was closed in the middle of operation
+2026-04-13 13:13:34,388 [ERROR] [-] [-] Bootstrap.Infra: Memory backend unavailable, continuing in degraded mode: connection was closed in the middle of operation
+2026-04-13 13:13:34,388 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Memory Backend (2.56s)
+2026-04-13 13:13:34,398 [INFO] [-] [-] Bootstrap.Infra: ✅ EventBus Initialized
+2026-04-13 13:13:34,399 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: EventBus (0.01s)
+2026-04-13 13:13:34,400 [INFO] [-] [-] EventBus: ⚡ Bulk Registered 6 Event Schemas
+2026-04-13 13:13:34,400 [INFO] [-] [-] Bootstrap.Infra: ✅ Protocol Schema Validation Active (6 events)
+2026-04-13 13:13:34,401 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Event Protocol (Schemas) (0.00s)
+2026-04-13 13:13:34,401 [INFO] [-] [-] Bootstrap.Integration: ✅ RouterManager Bootstrapped & Subscribed
+2026-04-13 13:13:34,402 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: RouterManager (0.00s)
+2026-04-13 13:13:35,455 [INFO] [-] [-] GlobalTicker: 鈴憋笍 Global Ticker Started
+2026-04-13 13:13:35,456 [INFO] [-] [-] Bootstrap.Services: ✅ Core Services (LLM, Soul, Session, Ticker) Initialized
+2026-04-13 13:13:35,456 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Core Services (1.05s)
+2026-04-13 13:13:35,459 [INFO] [-] [-] Bootstrap.Services: ✅ Plugin Registry Service Initialized
+2026-04-13 13:13:35,459 [INFO] [-] [-] Bootstrap.Services: ✅ Worker-backed media services delegated to STT/TTS workers
+2026-04-13 13:13:35,460 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Plugin Services (Vision/TTS/STT) (0.00s)
+2026-04-13 13:13:35,463 [INFO] [-] [-] Bootstrap.Services: ✅ Middleware Registered
+2026-04-13 13:13:35,464 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Middleware (Context/Tools) (0.00s)
+2026-04-13 13:13:35,473 [INFO] [-] [-] SystemPluginManager: Starting unified plugin kernel for runtime main
+2026-04-13 13:13:35,533 [WARNING] [-] [-] PluginPermissionChecker: [system.avatar_server] 🟡 Trusted Permission Requested: network.udp
+2026-04-13 13:13:35,533 [WARNING] [-] [-] PluginPermissionChecker: [system.avatar_server] 🟡 Trusted Permission Requested: filesystem.read
+2026-04-13 13:13:35,553 [INFO] [-] [-] VMCProtocol: VMC OSC Client initialized at 127.0.0.1:39539
+2026-04-13 13:13:35,602 [INFO] [-] [-] LLMManager: Registered LLM driver type: deepseek
+2026-04-13 13:13:35,613 [INFO] [-] [-] LLMManager: Registered LLM driver type: gemini
+2026-04-13 13:13:35,621 [INFO] [-] [-] LLMManager: Registered LLM driver type: openai
+2026-04-13 13:13:35,622 [WARNING] [-] [-] PluginPermissionChecker: [driver.llm.pollinations] 🟡 Trusted Permission Requested: network.outbound
+2026-04-13 13:13:35,669 [INFO] [-] [-] LLMManager: Registered LLM driver type: pollinations
+2026-04-13 13:13:35,671 [WARNING] [-] [-] PluginPermissionChecker: [driver.memory.postgres] 🟡 Trusted Permission Requested: database.postgres
+2026-04-13 13:13:35,679 [WARNING] [-] [-] PluginPermissionChecker: [driver.tool.search.brave] 🟡 Trusted Permission Requested: network.outbound
+2026-04-13 13:13:35,687 [WARNING] [-] [-] PluginPermissionChecker: [driver.tool.search.duckduckgo] 🟡 Trusted Permission Requested: network.outbound
+2026-04-13 13:13:35,694 [INFO] [-] [-] SystemPluginManager: Unified plugin kernel ready
+2026-04-13 13:13:35,695 [INFO] [-] [-] Bootstrap.Services: ✅ System Plugin Manager Initialized
+2026-04-13 13:13:35,696 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: System Plugins (0.23s)
+2026-04-13 13:13:35,716 [INFO] [-] [-] Bootstrap.SDK: ✅ Lumina SDK Initialized
+2026-04-13 13:13:35,718 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Lumina SDK (0.02s)
+2026-04-13 13:13:35,720 [INFO] [-] [-] ChatBridge: ✅ Basic Chat Bridge Started (Listening to input_text)
+2026-04-13 13:13:35,720 [INFO] [-] [-] Bootstrap.Integration: ✅ ChatBridge Initialized
+2026-04-13 13:13:35,721 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ChatBridge (0.00s)
+2026-04-13 13:13:36,519 [INFO] [-] [-] Bootstrap.Integration: 🔌 MCP Host Initialized (Start Disabled)
+2026-04-13 13:13:36,520 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: MCPHost (0.80s)
+2026-04-13 13:13:36,520 [INFO] [-] [-] Bootstrap.Integration: ✅ System Plugin Routers Mounted
+2026-04-13 13:13:36,521 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: SystemPluginRouters (0.00s)
+2026-04-13 13:13:36,521 [INFO] [-] [-] WorkerControlHub: 🎛️ WorkerControlHub initialized
+2026-04-13 13:13:36,524 [INFO] [-] [-] PluginStateAggregator: ✅ PluginStateAggregator initialized
+2026-04-13 13:13:36,525 [INFO] [-] [-] Bootstrap.PostStartup: 🎛️ WorkerControlHub Ready
+2026-04-13 13:13:36,526 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: WorkerControlHub (0.00s)
+2026-04-13 13:13:36,527 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Scheduling Core Service Prewarm (TTS/STT)...
+2026-04-13 13:13:36,527 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Prewarm (0.00s)
+2026-04-13 13:13:36,528 [INFO] [-] [-] ReconciliationService: ⚖️ Reconciliation Service Started
+2026-04-13 13:13:36,528 [INFO] [-] [-] Bootstrap.PostStartup: ⚖️ Reconciliation Service Started
+2026-04-13 13:13:36,529 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ReconciliationService (0.00s)
+2026-04-13 13:13:36,534 [INFO] [-] [-] Bootstrap.PostStartup: 👀 ConfigWatcher Started
+2026-04-13 13:13:36,535 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ConfigWatcher (0.00s)
+2026-04-13 13:13:36,536 [INFO] [-] [-] WorkerSupervisor: Supervisor activated.
+2026-04-13 13:13:36,536 [INFO] [-] [-] Bootstrap.PostStartup: 🛡️ Process Supervisor Auto-Healing Enabled
+2026-04-13 13:13:36,536 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ProcessSupervisor (0.00s)
+2026-04-13 13:13:36,548 [INFO] [-] [-] Automation.Service: 🧠 ECA Engine Started
+2026-04-13 13:13:36,549 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: AutomationService (0.01s)
+2026-04-13 13:13:36,549 [INFO] [-] [-] Bootstrap: ✨ Bootstrap Sequence Complete.
+2026-04-13 13:13:36,550 [INFO] [-] [-] Lifecycle: 🚀 Startup complete
+2026-04-13 13:13:36,550 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\automation\dist_backend_contract3\data\config.yaml
+2026-04-13 13:13:36,551 [INFO] [-] [-] uvicorn.error: Application startup complete.
+2026-04-13 13:13:36,553 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8940 (Press CTRL+C to quit)
+2026-04-13 13:13:37,339 [INFO] [-] [-] uvicorn.access: 127.0.0.1:6867 - "GET /health HTTP/1.1" 200
+2026-04-13 13:13:42,249 [INFO] [-] [-] ProcessManager: Spawning Worker: worker:tts (backend_launcher.py)...
+2026-04-13 13:13:42,250 [INFO] [-] [-] ProcessManager: Spawning Worker: worker:stt (backend_launcher.py)...
+2026-04-13 13:13:42,359 [INFO] [-] [-] ProcessManager: Worker worker:tts started (PID: 28736)
+2026-04-13 13:13:42,375 [INFO] [-] [-] ProcessManager: Worker worker:stt started (PID: 25780)
+2026-04-13 13:13:42,376 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Core worker prewarm dispatched
+[worker:tts] 2026-04-13 13:13:45,299 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\..\logs\tts_server.log
+[worker:tts] [Launcher] Starting Worker Host [tts] on 127.0.0.1:8942...
+[worker:tts] 2026-04-13 13:13:45,429 [INFO] [-] [-] uvicorn.error: Started server process [28736]
+[worker:tts] 2026-04-13 13:13:45,431 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[worker:tts] 2026-04-13 13:13:45,431 [INFO] [-] [-] LuminaCore: Loading capability module: capabilities.tts
+[worker:tts] 2026-04-13 13:13:45,894 [INFO] [-] [-] LuminaCore: Loaded capability: tts
+[worker:tts] 2026-04-13 13:13:45,895 [WARNING] [-] [-] LuminaCore: SDK initialization skipped: No module named 'lumina'
+[worker:tts] 2026-04-13 13:13:45,895 [INFO] [-] [-] ConfigManager: Configuration Mode: read_only
+[worker:stt] 2026-04-13 13:13:46,115 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\..\logs\stt_server.log
+[worker:stt] [Launcher] Starting Worker Host [stt] on 127.0.0.1:8941...
+[worker:stt] 2026-04-13 13:13:46,220 [INFO] [-] [-] uvicorn.error: Started server process [25780]
+[worker:stt] 2026-04-13 13:13:46,221 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[worker:stt] 2026-04-13 13:13:46,222 [INFO] [-] [-] LuminaCore: Loading capability module: capabilities.stt
+[worker:tts] 2026-04-13 13:13:47,141 [INFO] [-] [-] TTSManager: Scanning Extensions for TTS Drivers in: E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions
+[worker:tts] 2026-04-13 13:13:47,147 [WARNING] [-] [-] DriverLoader: [driver.tts.edge] 🟡 Trusted Permission Requested: network.outbound
+[worker:tts] 2026-04-13 13:13:47,148 [INFO] [-] [-] TTSManager: Scanning Extension Drivers: E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\tts_edge\drivers\tts
+[worker:tts] 2026-04-13 13:13:47,148 [INFO] [-] [-] SDK.PluginLoader: Scanning driver directory: E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\tts_edge\drivers\tts
+[worker:tts] 2026-04-13 13:13:47,198 [WARNING] [-] [-] SDK.PluginLoader: Failed to load driver module edge_tts_driver.py: No module named 'edge_tts'
+[worker:tts] 2026-04-13 13:13:47,200 [INFO] [-] [-] TTSCapability: TTS Service Ready. Active Driver: none
+[worker:tts] 2026-04-13 13:13:47,215 [INFO] [-] [-] SystemPluginManager: Starting unified plugin kernel for runtime worker:tts
+[worker:tts] 2026-04-13 13:13:47,249 [WARNING] [-] [-] PluginPermissionChecker: [driver.tts.edge] 🟡 Trusted Permission Requested: network.outbound
+[worker:tts] 2026-04-13 13:13:47,294 [ERROR] [-] [-] SystemPluginManager: Failed to load plugin driver.tts.edge: No module named 'edge_tts'
+[worker:tts] Traceback (most recent call last):
+[worker:tts] File "services\system_plugin_manager.py", line 143, in _instantiate_plugin
+[worker:tts] plugin = self._loader.instantiate(manifest)
+[worker:tts] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:tts] File "services\plugin_kernel\loader.py", line 30, in instantiate
+[worker:tts] spec.loader.exec_module(module)
+[worker:tts] File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+[worker:tts] File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+[worker:tts] File "E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\tts_edge\plugin.py", line 7, in <module>
+[worker:tts] from .drivers.tts.edge_tts_driver import EdgeTTSDriver
+[worker:tts] File "E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\tts_edge\drivers\tts\edge_tts_driver.py", line 3, in <module>
+[worker:tts] import edge_tts
+[worker:tts] ModuleNotFoundError: No module named 'edge_tts'
+[worker:tts] 2026-04-13 13:13:47,366 [INFO] [-] [-] SystemPluginManager: Unified plugin kernel ready
+[worker:tts] 2026-04-13 13:13:47,367 [INFO] [-] [-] LuminaCore: Worker plugin kernel initialized
+[worker:tts] 2026-04-13 13:13:47,447 [INFO] [-] [-] PostgresLifecycleBus: 🆕 PostgresLifecycleBus Instance Created
+[worker:tts] 2026-04-13 13:13:47,447 [INFO] [-] [-] WorkerReporter: 📡 Status Reporter (Mesh Mode) started for worker:tts
+[worker:tts] 2026-04-13 13:13:47,447 [INFO] [-] [-] LuminaCore: Worker status reporter activated at 127.0.0.1:8942
+[worker:tts] 2026-04-13 13:13:47,448 [INFO] [-] [-] LuminaCore: Distributed plugin state sync started
+[worker:tts] 2026-04-13 13:13:47,451 [INFO] [-] [-] LuminaCore: Config watcher activated
+[worker:tts] 2026-04-13 13:13:47,509 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[worker:tts] 2026-04-13 13:13:47,511 [INFO] [-] [-] WorkerControlClient: 🚀 WorkerControlClient started for worker:tts
+[worker:tts] 2026-04-13 13:13:47,511 [INFO] [-] [-] LuminaCore: WebSocket control client activated
+[worker:tts] 2026-04-13 13:13:47,525 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\automation\dist_backend_contract3\data\config.yaml
+[worker:tts] 2026-04-13 13:13:47,525 [INFO] [-] [-] WorkerControlClient: 🔗 Connecting to ws://127.0.0.1:8940/ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6dHRzIiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzYwNTcyMjIsImV4cCI6MTc3NjE0MzYyMn0.c-6Ha9BO7fABc6R4td_j7mhSNFUzjzLmorCwznrXpbU...
+[worker:tts] 2026-04-13 13:13:47,545 [INFO] [-] [-] uvicorn.error: Application startup complete.
+[worker:tts] 2026-04-13 13:13:47,547 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8942 (Press CTRL+C to quit)
+2026-04-13 13:13:47,551 [INFO] [-] [-] uvicorn.error: 127.0.0.1:6900 - "WebSocket /ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6dHRzIiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzYwNTcyMjIsImV4cCI6MTc3NjE0MzYyMn0.c-6Ha9BO7fABc6R4td_j7mhSNFUzjzLmorCwznrXpbU" [accepted]
+2026-04-13 13:13:47,553 [INFO] [-] [-] uvicorn.error: connection open
+2026-04-13 13:13:47,554 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:tts at http://127.0.0.1:8942 (Caps: ['tts'])
+2026-04-13 13:13:47,555 [INFO] [-] [-] WorkerControlHub: ✅ Worker connected: worker:tts (tts:8942)
+[worker:tts] 2026-04-13 13:13:47,558 [INFO] [-] [-] WorkerControlClient: ✅ Connected to Main, session=worker:tts
+[worker:stt] 2026-04-13 13:13:47,821 [INFO] [-] [-] LuminaCore: Loaded capability: stt
+[worker:stt] 2026-04-13 13:13:47,822 [WARNING] [-] [-] LuminaCore: SDK initialization skipped: No module named 'lumina'
+[worker:stt] 2026-04-13 13:13:47,823 [INFO] [-] [-] ConfigManager: Configuration Mode: read_only
+[worker:stt] 2026-04-13 13:13:47,864 [INFO] [-] [-] SDK.PluginLoader: Scanning driver directory: E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\stt_sensevoice\drivers\stt
+[worker:stt] 2026-04-13 13:13:47,960 [INFO] [-] [-] SenseVoiceDriver: DEBUG: Attempting relative import of engine...
+2026-04-13 13:13:48,352 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:tts at http://127.0.0.1:8942 (Caps: ['tts'])
+[worker:tts] 2026-04-13 13:13:48,491 [ERROR] [-] [-] PostgresLifecycleBus: ❌ Failed to connect to PostgreSQL Bus: connection was closed in the middle of operation
+[worker:tts] 2026-04-13 13:13:48,492 [INFO] [-] [-] PluginStateSync: ♻️ Syncing initial plugin state from Bus...
+[worker:stt] 2026-04-13 13:13:48,676 [INFO] [-] [-] SenseVoiceDriver: DEBUG: Instantiating SenseVoiceEngine...
+[worker:stt] 2026-04-13 13:13:48,676 [INFO] [-] [-] SenseVoiceDriver: SenseVoice Driver Loaded
+[worker:stt] 2026-04-13 13:13:48,677 [INFO] [-] [-] STTManager: Activated STT provider driver.stt.sensevoice
+[worker:stt] 2026-04-13 13:13:48,677 [INFO] [-] [-] STTCapability: AudioManager initialized.
+[worker:stt] 2026-04-13 13:13:48,692 [INFO] [-] [-] SystemPluginManager: Starting unified plugin kernel for runtime worker:stt
+[worker:stt] 2026-04-13 13:13:48,774 [WARNING] [-] [-] PluginPermissionChecker: [system.voiceprint] 🟡 Trusted Permission Requested: filesystem.read
+[worker:stt] 2026-04-13 13:13:48,888 [INFO] [-] [-] PostgresLifecycleBus: 🆕 PostgresLifecycleBus Instance Created
+[worker:tts] 2026-04-13 13:13:49,012 [ERROR] [-] [-] PostgresLifecycleBus: ❌ Failed to connect to PostgreSQL Bus: connection was closed in the middle of operation
+[worker:tts] 2026-04-13 13:13:49,225 [INFO] [-] [-] uvicorn.access: 127.0.0.1:7463 - "GET /health HTTP/1.1" 200
+[worker:stt] 2026-04-13 13:13:49,307 [ERROR] [-] [-] PostgresLifecycleBus: ❌ Failed to connect to PostgreSQL Bus: connection was closed in the middle of operation
+[worker:stt] 2026-04-13 13:13:49,308 [ERROR] [-] [-] VoiceprintPlugin: Failed to refresh voiceprint profiles: 'NoneType' object has no attribute 'acquire'
+[worker:stt] 2026-04-13 13:13:49,308 [INFO] [-] [-] AudioFilterChain: ✅ Registered audio filter: system.voiceprint (priority: 10)
+[worker:stt] 2026-04-13 13:13:49,308 [INFO] [-] [-] SystemPluginManager: Unified plugin kernel ready
+[worker:stt] 2026-04-13 13:13:49,309 [INFO] [-] [-] LuminaCore: Worker plugin kernel initialized
+[worker:stt] 2026-04-13 13:13:49,312 [INFO] [-] [-] WorkerReporter: 📡 Status Reporter (Mesh Mode) started for worker:stt
+[worker:stt] 2026-04-13 13:13:49,313 [INFO] [-] [-] LuminaCore: Worker status reporter activated at 127.0.0.1:8941
+[worker:stt] 2026-04-13 13:13:49,314 [INFO] [-] [-] LuminaCore: Distributed plugin state sync started
+[worker:stt] 2026-04-13 13:13:49,319 [INFO] [-] [-] LuminaCore: Config watcher activated
+[worker:stt] 2026-04-13 13:13:49,383 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[worker:stt] 2026-04-13 13:13:49,384 [INFO] [-] [-] WorkerControlClient: 🚀 WorkerControlClient started for worker:stt
+[worker:stt] 2026-04-13 13:13:49,384 [INFO] [-] [-] LuminaCore: WebSocket control client activated
+[worker:stt] 2026-04-13 13:13:49,389 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\automation\dist_backend_contract3\data\config.yaml
+[worker:stt] 2026-04-13 13:13:49,393 [INFO] [-] [-] WorkerControlClient: 🔗 Connecting to ws://127.0.0.1:8940/ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6c3R0Iiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzYwNTcyMjIsImV4cCI6MTc3NjE0MzYyMn0.vyp7R3CV5ip9vnAG-0v3K92v3wIXBDjoYNqPFCClh-o...
+[worker:stt] 2026-04-13 13:13:49,405 [INFO] [-] [-] uvicorn.error: Application startup complete.
+2026-04-13 13:13:49,413 [INFO] [-] [-] uvicorn.error: 127.0.0.1:7468 - "WebSocket /ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6c3R0Iiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzYwNTcyMjIsImV4cCI6MTc3NjE0MzYyMn0.vyp7R3CV5ip9vnAG-0v3K92v3wIXBDjoYNqPFCClh-o" [accepted]
+[worker:stt] 2026-04-13 13:13:49,411 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8941 (Press CTRL+C to quit)
+2026-04-13 13:13:49,415 [INFO] [-] [-] uvicorn.error: connection open
+2026-04-13 13:13:49,418 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:stt at http://127.0.0.1:8941 (Caps: ['stt'])
+2026-04-13 13:13:49,419 [INFO] [-] [-] WorkerControlHub: ✅ Worker connected: worker:stt (stt:8941)
+[worker:stt] 2026-04-13 13:13:49,421 [INFO] [-] [-] WorkerControlClient: ✅ Connected to Main, session=worker:stt
+2026-04-13 13:13:49,495 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:stt at http://127.0.0.1:8941 (Caps: ['stt'])
+[worker:stt] 2026-04-13 13:13:49,715 [ERROR] [-] [-] PostgresLifecycleBus: ❌ Failed to connect to PostgreSQL Bus: connection was closed in the middle of operation
+[worker:stt] 2026-04-13 13:13:49,715 [INFO] [-] [-] PluginStateSync: ♻️ Syncing initial plugin state from Bus...
+[worker:stt] 2026-04-13 13:13:49,760 [INFO] [-] [-] uvicorn.access: 127.0.0.1:7471 - "GET /health HTTP/1.1" 200
+[worker:stt] 2026-04-13 13:13:49,988 [ERROR] [-] [-] PostgresLifecycleBus: ❌ Failed to connect to PostgreSQL Bus: connection was closed in the middle of operation

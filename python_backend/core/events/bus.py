@@ -5,7 +5,6 @@ Pub/Sub Event-Driven Plugin Communication
 Features:
 - Async event subscription and publishing
 - Wildcard subscriptions (e.g., "system.*")
-- Service registration via events
 - Runtime plugin loading/unloading support
 """
 
@@ -67,8 +66,6 @@ class EventBus:
         self._subscriptions: Dict[str, List[Callable]] = defaultdict(list)
         # Wildcard subscriptions
         self._wildcard_subscriptions: List[tuple] = []  # (pattern, callback)
-        # Service registry
-        self._services: Dict[str, Any] = {}
         # Event Schemas
         self._schemas: Dict[str, EventSchema] = {}
         # Track subscription IDs for unsubscribe
@@ -135,7 +132,6 @@ class EventBus:
             schema = self._schemas[event_type]
             payload = data
             
-            # [Architecture 4.2] Extract payload from EventPacket container if needed
             from core.protocol import EventPacket
             if isinstance(data, EventPacket):
                 payload = data.payload
@@ -143,15 +139,18 @@ class EventBus:
             try:
                 # Validate payload against Pydantic model
                 if payload is None:
-                    # Allow None if it matches schema expectations?
-                    pass 
-                elif isinstance(payload, dict):
-                    # Validate dict matches model
-                    schema.payload_model(**payload)
+                    # Treat None as empty dict for validation validation
+                    schema.payload_model(**{})
                 elif isinstance(payload, BaseModel):
-                    # Ensure it matches the expected model type or is compatible
+                    # If it's already a model, ensure compatibility or re-validate
                     if not isinstance(payload, schema.payload_model):
-                         schema.payload_model(**payload.dict())
+                        schema.payload_model(**payload.dict())
+                else: 
+                    # Dict or other (assume dict-like)
+                    if isinstance(payload, dict):
+                        schema.payload_model(**payload)
+                    else:
+                        raise ValueError(f"Invalid payload type: {type(payload)}")
             except ValidationError as ve:
                 logger.error(f"❌ Event Validation Failed for '{event_type}': {ve}")
                 # [Hardening] Log the faulty data for easier debugging
@@ -238,39 +237,6 @@ class EventBus:
             # No running loop
             asyncio.run(self.emit(event_type, data, source))
     
-    # --- Service Registry ---
-    
-    def register_service(self, name: str, instance: Any):
-        """
-        Register a service (plugin instance) to the bus.
-        This allows other plugins to discover and use services.
-        
-        Args:
-            name: Service identifier (e.g., "heartbeat", "voiceprint")
-            instance: The service instance
-        """
-        self._services[name] = instance
-        logger.info(f"馃攲 Service Registered: {name}")
-        # Emit event for dynamic discovery
-        self.emit_sync("service.registered", {"name": name, "instance": instance})
-    
-    def unregister_service(self, name: str) -> bool:
-        """Unregister a service."""
-        if name in self._services:
-            del self._services[name]
-            logger.info(f"馃攲 Service Unregistered: {name}")
-            self.emit_sync("service.unregistered", {"name": name})
-            return True
-        return False
-    
-    def get_service(self, name: str) -> Optional[Any]:
-        """Get a registered service by name."""
-        return self._services.get(name)
-    
-    def list_services(self) -> List[str]:
-        """List all registered service names."""
-        return list(self._services.keys())
-    
     # --- Plugin Lifecycle Events ---
     
     async def plugin_loaded(self, plugin_id: str, plugin_instance: Any):
@@ -324,7 +290,6 @@ class EventBus:
                 "total_subscriptions": int,
                 "event_types": int,
                 "wildcard_subscriptions": int,
-                "services": int,
                 "schemas": int,
                 "top_events": [(event_type, count), ...]
             }
@@ -342,7 +307,6 @@ class EventBus:
             "total_subscriptions": sum(len(cbs) for cbs in self._subscriptions.values()),
             "event_types": len(self._subscriptions),
             "wildcard_subscriptions": len(self._wildcard_subscriptions),
-            "services": len(self._services),
             "schemas": len(self._schemas),
             "top_events": top_events,
         }
@@ -381,7 +345,7 @@ class EventBus:
             f"📊 EventBus Stats: "
             f"{stats['total_subscriptions']} subs, "
             f"{stats['event_types']} events, "
-            f"{stats['services']} services"
+            f"{stats['schemas']} schemas"
         )
         
         # Check for leaks

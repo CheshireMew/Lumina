@@ -3,6 +3,9 @@ from typing import Dict, Any
 from core.interfaces.tool import ToolProvider
 
 class WebSearchTool(ToolProvider):
+    def __init__(self, services_container):
+        self.services = services_container
+
     @property
     def name(self) -> str:
         return "web_search"
@@ -27,16 +30,20 @@ class WebSearchTool(ToolProvider):
         query = args.get("query", "")
         if not query:
             return "Error: No query provided"
-            
-        # Dynamic Lookup via ServiceContainer
-        from services.container import services
+
         from app_config import config as app_config
-        
-        provider_id = app_config.search.provider # e.g. "brave" or "duckduckgo"
-        provider = services.get_search_provider(provider_id)
-        
-        if not provider:
-             return f"Error: Search provider '{provider_id}' is not active or installed."
+        spm = self.services.system_plugin_manager
+
+        provider_id = app_config.get_selected_provider("tool.search")
+        if spm and not provider_id:
+            provider_id = spm.find_provider("tool.search")
+
+        if not spm or not provider_id:
+            return "Error: No search provider is configured."
+
+        provider = spm.get_plugin(provider_id)
+        if not provider or not hasattr(provider, "search"):
+            return f"Error: Search provider '{provider_id}' is not active or installed."
 
         try:
              return await provider.search(query)

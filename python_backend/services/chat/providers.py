@@ -2,7 +2,6 @@
 import logging
 from typing import Optional, Any
 from core.interfaces.context import ContextProvider
-from services.container import services
 
 logger = logging.getLogger("ContextProviders")
 
@@ -10,10 +9,13 @@ class RAGContextProvider(ContextProvider):
     """
     Retrieves execution-time memories (Long-Term Memory).
     """
+    def __init__(self, services_container):
+        self.services = services_container
+
     async def provide(self, ctx: Any) -> Optional[str]:
-        if not ctx.enable_rag or not services.surreal_system:
+        if not ctx.enable_rag:
             return None
-            
+
         try:
             return await self._retrieve_memory(ctx)
         except Exception as e:
@@ -21,73 +23,25 @@ class RAGContextProvider(ContextProvider):
             return None
 
     async def _retrieve_memory(self, ctx) -> Optional[str]:
-        # 1. Extract Query
         user_text = ""
         for msg in reversed(ctx.original_messages):
             if msg.get("role") == "user":
                 user_text = msg.get("content", "")
                 break
         
-        if not user_text or len(user_text) < 3: return None
-
-        # 2. Embedding + Search (with caching)
-        from services.embedding_cache import get_embedding_cached
-        
-        llm_manager = services.get_llm_manager()
-        vector = None
-        
-        # Check if model is loaded
-        if hasattr(llm_manager, "embedding_model") and llm_manager.embedding_model:
-            # Use cached embedding
-            vector = get_embedding_cached(
-                user_text, 
-                llm_manager.embedding_model,
-                model_name="all-MiniLM-L6-v2"
-            )
-        else:
-            # Fallback: Load model and cache it
-            try:
-                from model_manager import model_manager
-                path = model_manager.ensure_embedding_model("all-MiniLM-L6-v2")
-                llm_manager.embedding_model = model_manager.load_embedding_model(path)
-                vector = get_embedding_cached(
-                    user_text,
-                    llm_manager.embedding_model,
-                    model_name="all-MiniLM-L6-v2"
-                )
-            except ImportError:
-                logger.error("ModelManager not available")
-                return None
-        
-        route = llm_manager.get_route("chat")
-        
-        # Default: Paid/Local Tier -> Episodic Memory (High Context)
-        target_table = "episodic_memory"
-        limit = 10
-        min_results = 3
-        
-        # Free Tier -> Conversation Logs (Low Context)
-        if route and route.provider_id == "free_tier":
-            target_table = "conversation_log"
-            limit = 3
-            min_results = 1
-        
-        results = await services.surreal_system.search_hybrid(
-            query=user_text,
-            query_vector=vector,
-            character_id=ctx.character_id,
-            limit=limit,
-            target_table=target_table,
-            min_results=min_results
-        )
-        
-        if results:
-            content = "\n".join([f"- {r.get('content') or r.get('narrative', '')} ({r.get('created_at','')})" for r in results])
-            # Set into context for pipeline to format consistently
-            ctx.rag_context = content
-            # Return None so it's not double-added via 'prompts' list
+        if not user_text or len(user_text) < 3:
             return None
-            
+
+        memory = self.services.get_memory()
+        rag_context = await memory.retrieve_context(
+            query=user_text,
+            character_id=ctx.character_id,
+            limit=10,
+        )
+        if rag_context:
+            ctx.rag_context = rag_context
+            return None
+
         return None
 
 
@@ -95,13 +49,16 @@ class SoulContextProvider(ContextProvider):
     """
     Renders personality and dynamic state (Short-Term Mood/State).
     """
+    def __init__(self, services_container):
+        self.services = services_container
+
     async def provide(self, ctx: Any) -> Optional[str]:
-        if not services.soul:
+        if not self.services.soul:
             return None
             
         try:
             # Use unified get_system_prompt which handles fallback to config
-            return await services.soul.get_system_prompt({'context': ctx})
+            return await self.services.soul.get_system_prompt({'context': ctx})
             
         except Exception as e:
             logger.warning(f"Soul Provider failed: {e}")

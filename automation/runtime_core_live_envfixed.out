@@ -1,0 +1,180 @@
+2026-04-11 13:28:22,856 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\lumina_core.log
+2026-04-11 13:28:22,942 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+2026-04-11 13:28:23,056 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[Launcher] Starting Core System on 127.0.0.1:8010...
+2026-04-11 13:28:23,098 [INFO] [-] [-] uvicorn.error: Started server process [31616]
+2026-04-11 13:28:23,101 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+2026-04-11 13:28:23,113 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+2026-04-11 13:28:23,114 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+2026-04-11 13:28:23,114 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Configuration (0.00s)
+2026-04-11 13:28:23,137 [INFO] [-] [-] SDK.PluginLoader: Scanning driver directory: E:\Work\Code\Lumina\python_backend\plugins\extensions\memory_postgres\drivers\memory
+2026-04-11 13:28:23,245 [WARNING] [-] [-] memory.factory: [MemoryFactory] Configured provider 'surreal' not found or valid.
+2026-04-11 13:28:23,246 [WARNING] [-] [-] memory.factory: [MemoryFactory] Falling back to default driver: PostgreSQL Driver
+2026-04-11 13:28:23,391 [ERROR] [-] [-] PostgresDriver: ❌ PostgreSQL Connection Failed: connection was closed in the middle of operation
+2026-04-11 13:28:23,392 [CRITICAL] [-] [-] Bootstrap.Infra: Memory System Failed: connection was closed in the middle of operation
+2026-04-11 13:28:23,402 [ERROR] [-] [-] uvicorn.error: Traceback (most recent call last):
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\asyncio\windows_events.py", line 462, in finish_socket_func
+    return ov.getresult()
+           ^^^^^^^^^^^^^^
+OSError: [WinError 64] 指定的网络名不再可用。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\asyncio\proactor_events.py", line 286, in _loop_reading
+    length = fut.result()
+             ^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\asyncio\windows_events.py", line 803, in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\asyncio\windows_events.py", line 466, in finish_socket_func
+    raise ConnectionResetError(*exc.args)
+ConnectionResetError: [WinError 64] 指定的网络名不再可用。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 67, in bootstrap
+    await memory_svc.connect()
+  File "E:\Work\Code\Lumina\python_backend\memory\core.py", line 68, in connect
+    await self.driver.connect()
+  File "E:\Work\Code\Lumina\python_backend\plugins\extensions\memory_postgres\drivers\memory\postgres_driver.py", line 143, in connect
+    self._pool = await asyncpg.create_pool(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\pool.py", line 439, in _async__init__
+    await self._initialize()
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\pool.py", line 466, in _initialize
+    await first_ch.connect()
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\pool.py", line 153, in connect
+    self._con = await self._pool._get_new_connection()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\pool.py", line 538, in _get_new_connection
+    con = await self._connect(
+          ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.ConnectionDoesNotExistError: connection was closed in the middle of operation
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 153, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Work\Code\Lumina\python_backend\services\lifecycle.py", line 101, in lifespan
+    await manager.start(service_instance)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\manager.py", line 23, in start
+    await step.bootstrap(container)
+  File "E:\Work\Code\Lumina\python_backend\core\bootstrap\infrastructure.py", line 79, in bootstrap
+    sys.exit(1)
+SystemExit: 1
+
+2026-04-11 13:28:23,403 [ERROR] [-] [-] uvicorn.error: Application startup failed. Exiting.

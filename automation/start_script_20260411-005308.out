@@ -1,0 +1,177 @@
+馃殌 Starting Lumina...
+鉁?PostgreSQL already running on localhost:5433
+馃枼锔?Starting Electron + Vite...
+
+> lumina@0.1.0 dev
+> vite
+
+[36mvite v5.4.21 [32mbuilding for development...[36m[39m
+[36m
+watching for file changes...[39m
+[36mvite v5.4.21 [32mbuilding for development...[36m[39m
+[36m
+watching for file changes...[39m
+[36m
+build started...[39m
+[36m
+build started...[39m
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m1342[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+transforming...
+transforming...
+[32m✓[39m 1 modules transformed.
+rendering chunks...
+[2mdist-electron/[22m[36mpreload.js  [39m[1m[2m2.22 kB[22m[1m[22m
+[36mbuilt in 4096ms.[39m
+[32m✓[39m 5 modules transformed.
+rendering chunks...
+[2mdist-electron/[22m[36mmain.js  [39m[1m[2m29.67 kB[22m[1m[22m
+[36mbuilt in 14893ms.[39m
+
+Starting Python Backend...
+[BackendManager] Starting all services...
+[BackendManager] Loaded ports from: E:\Work\Code\Lumina\config\ports.json
+[BackendManager] Services Configured: [ 'core:8010' ]
+[BackendManager] Launching dev core: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'core'
+] CWD: E:\Work\Code\Lumina\python_backend
+[core] 2026-04-11 00:53:46,080 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\memory_server.log
+[core] 2026-04-11 00:53:46,711 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[core] 2026-04-11 00:53:47,510 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[core] [Launcher] Starting Core System on 127.0.0.1:8010...
+[core] 2026-04-11 00:53:47,665 [INFO] [-] [-] uvicorn.error: Started server process [2108]
+2026-04-11 00:53:47,665 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[core] 2026-04-11 00:53:47,717 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+[core] 2026-04-11 00:53:47,717 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+2026-04-11 00:53:47,718 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Configuration (0.00s)
+[core] 2026-04-11 00:53:47,917 [INFO] [-] [-] SDK.PluginLoader: Scanning driver directory: E:\Work\Code\Lumina\python_backend\plugins\extensions\memory_postgres\drivers\memory
+[core] 2026-04-11 00:53:48,244 [INFO] [-] [-] memory.factory: [MemoryFactory] Selected Driver: PostgreSQL Driver (driver.memory.postgres)
+[core] 2026-04-11 00:53:48,676 [INFO] [-] [-] PostgresDriver: ✅ Connected to PostgreSQL at localhost:5433
+[core] 2026-04-11 00:53:48,693 [INFO] [-] [-] PostgresDriver: ✨ PostgreSQL Schema Initialized.
+[core] 2026-04-11 00:53:48,695 [INFO] [-] [-] ConsolidationBatch: [BatchManager] Initialized
+2026-04-11 00:53:48,695 [INFO] [-] [-] Bootstrap.Infra: ✅ Memory System Connected
+[core] 2026-04-11 00:53:48,695 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Memory Backend (0.98s)
+[core] 2026-04-11 00:53:48,707 [INFO] [-] [-] Bootstrap.Infra: ✅ EventBus Initialized
+[core] 2026-04-11 00:53:48,707 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: EventBus (0.01s)
+2026-04-11 00:53:48,707 [INFO] [-] [-] EventBus: ⚡ Bulk Registered 6 Event Schemas
+2026-04-11 00:53:48,708 [INFO] [-] [-] Bootstrap.Infra: ✅ Protocol Schema Validation Active (6 events)
+2026-04-11 00:53:48,708 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Event Protocol (Schemas) (0.00s)
+2026-04-11 00:53:48,708 [INFO] [-] [-] Bootstrap.Integration: ✅ RouterManager Bootstrapped & Subscribed
+2026-04-11 00:53:48,708 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: RouterManager (0.00s)
+[core] 2026-04-11 00:53:50,816 [INFO] [-] [-] GlobalTicker: 鈴憋笍 Global Ticker Started
+[core] 2026-04-11 00:53:50,817 [INFO] [-] [-] Bootstrap.Services: ✅ Core Services (LLM, Soul, Session, Ticker) Initialized
+2026-04-11 00:53:50,817 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Core Services (2.11s)
+[core] 2026-04-11 00:53:50,835 [INFO] [-] [-] Bootstrap.Services: ✅ Plugin Registry Service Initialized
+[core] 2026-04-11 00:53:50,835 [INFO] [-] [-] Bootstrap.Services: ✅ Worker-backed media services delegated to STT/TTS workers
+2026-04-11 00:53:50,835 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Plugin Services (Vision/TTS/STT) (0.02s)
+[core] 2026-04-11 00:53:50,843 [INFO] [-] [-] Bootstrap.Services: ✅ Middleware Registered
+[core] 2026-04-11 00:53:50,843 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Middleware (Context/Tools) (0.01s)
+[core] 2026-04-11 00:53:50,864 [INFO] [-] [-] SystemPluginManager: Starting unified plugin kernel
+[core] 2026-04-11 00:53:50,913 [INFO] [-] [-] VMCProtocol: VMC OSC Client initialized at 127.0.0.1:39539
+[core] 2026-04-11 00:53:50,920 [INFO] [-] [-] SystemPluginManager: Unified plugin kernel ready
+[core] 2026-04-11 00:53:50,920 [INFO] [-] [-] Bootstrap.Services: ✅ System Plugin Manager Initialized
+2026-04-11 00:53:50,920 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: System Plugins (0.08s)
+[core] 2026-04-11 00:53:50,951 [INFO] [-] [-] Bootstrap.SDK: ✅ Lumina SDK Initialized
+2026-04-11 00:53:50,951 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Lumina SDK (0.03s)
+[core] 2026-04-11 00:53:50,974 [INFO] [-] [-] ChatBridge: ✅ Basic Chat Bridge Started (Listening to input_text)
+[core] 2026-04-11 00:53:50,974 [INFO] [-] [-] Bootstrap.Integration: ✅ ChatBridge Initialized
+2026-04-11 00:53:50,974 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ChatBridge (0.02s)
+[core] 2026-04-11 00:53:50,978 [INFO] [-] [-] Bootstrap.Integration: 🔌 MCP Host Initialized (Start Disabled)
+[core] 2026-04-11 00:53:50,979 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: MCPHost (0.00s)
+2026-04-11 00:53:50,979 [INFO] [-] [-] Bootstrap.Integration: ✅ System Plugin Routers Mounted
+2026-04-11 00:53:50,979 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: SystemPluginRouters (0.00s)
+2026-04-11 00:53:50,979 [INFO] [-] [-] WorkerControlHub: 🎛️ WorkerControlHub initialized
+[core] 2026-04-11 00:53:50,985 [INFO] [-] [-] PluginStateAggregator: ✅ PluginStateAggregator initialized
+[core] 2026-04-11 00:53:50,986 [INFO] [-] [-] Bootstrap.PostStartup: 🎛️ WorkerControlHub Ready
+[core] 2026-04-11 00:53:50,986 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: WorkerControlHub (0.01s)
+2026-04-11 00:53:50,986 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Scheduling Core Service Prewarm (TTS/STT)...
+2026-04-11 00:53:50,986 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Prewarm (0.00s)
+[core] 2026-04-11 00:53:50,986 [INFO] [-] [-] ReconciliationService: ⚖️ Reconciliation Service Started
+2026-04-11 00:53:50,986 [INFO] [-] [-] Bootstrap.PostStartup: ⚖️ Reconciliation Service Started
+2026-04-11 00:53:50,986 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ReconciliationService (0.00s)
+[core] 2026-04-11 00:53:50,990 [INFO] [-] [-] Bootstrap.PostStartup: 👀 ConfigWatcher Started
+[core] 2026-04-11 00:53:50,991 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ConfigWatcher (0.00s)
+2026-04-11 00:53:50,991 [INFO] [-] [-] ProcessManager: 🛡️ Supervisor activated.
+2026-04-11 00:53:50,991 [INFO] [-] [-] Bootstrap.PostStartup: 🛡️ Process Supervisor Auto-Healing Enabled
+2026-04-11 00:53:50,991 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ProcessSupervisor (0.00s)
+[core] 2026-04-11 00:53:51,009 [INFO] [-] [-] Automation.Service: 🧠 ECA Engine Started
+[core] 2026-04-11 00:53:51,009 [INFO] [-] [-] Automation.Service: Registered Rule: Proactive Idle Chat
+2026-04-11 00:53:51,009 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: AutomationService (0.02s)
+2026-04-11 00:53:51,010 [INFO] [-] [-] Bootstrap: ✨ Bootstrap Sequence Complete.
+2026-04-11 00:53:51,010 [INFO] [-] [-] Lifecycle: 🚀 Startup complete
+[core] 2026-04-11 00:53:51,010 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\Lumina_Data\config.yaml
+2026-04-11 00:53:51,011 [INFO] [-] [-] uvicorn.error: Application startup complete.
+[core] 2026-04-11 00:53:51,188 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+[core] 2026-04-11 00:53:51,410 [INFO] [-] [-] uvicorn.access: 127.0.0.1:12615 - "GET /health HTTP/1.1" 200
+[core] Health check passed
+[BackendManager] All services started successfully.
+Python Backend started.
+[Main] Initializing LLM Proxy to http://127.0.0.1:8010
+[LLMService] Initialized Proxy to Backend: http://127.0.0.1:8010
+[core] 2026-04-11 00:53:52,699 [INFO] [-] [-] ProcessManager: 🚀 Spawning Worker: worker:tts (None)...
+[core] 2026-04-11 00:53:52,701 [INFO] [-] [-] ProcessManager: 🚀 Spawning Worker: worker:stt (None)...
+[core] 2026-04-11 00:53:52,720 [INFO] [-] [-] ProcessManager: Worker worker:tts started (PID: 28948)
+[core] 2026-04-11 00:53:52,721 [INFO] [-] [-] ProcessManager: Worker worker:stt started (PID: 25312)
+[core] 2026-04-11 00:53:52,722 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Core worker prewarm dispatched
+[core] [worker:tts] 2026-04-11 00:53:54,815 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\generic_worker_server.log
+[core] [worker:stt] 2026-04-11 00:53:54,822 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\generic_worker_server.log
+[core] [worker:tts] [Launcher] Starting Worker Host [tts] on 127.0.0.1:8766...
+[core] [worker:stt] [Launcher] Starting Worker Host [stt] on 127.0.0.1:8765...
+[core] [worker:tts] 2026-04-11 00:53:55,154 [INFO] [-] [-] uvicorn.error: Started server process [28948]
+[core] [worker:tts] 2026-04-11 00:53:55,154 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[worker:tts] 2026-04-11 00:53:55,155 [INFO] [-] [-] LuminaCore: 🔌 Loading Capability Module: capabilities.tts
+[core] [worker:stt] 2026-04-11 00:53:55,242 [INFO] [-] [-] uvicorn.error: Started server process [25312]
+[core] [worker:stt] 2026-04-11 00:53:55,243 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[worker:stt] 2026-04-11 00:53:55,244 [INFO] [-] [-] LuminaCore: 🔌 Loading Capability Module: capabilities.stt
+[core] [worker:tts] 2026-04-11 00:53:55,989 [INFO] [-] [-] LuminaCore: ✨ Loaded Capability: tts
+[core] [worker:tts] 2026-04-11 00:53:56,026 [INFO] [-] [-] LuminaCore: ✅ Lumina SDK Initialized (Worker Mode)
+[worker:tts] 2026-04-11 00:53:56,027 [INFO] [-] [-] ConfigManager: 🛡️ Configuration Mode: read_only
+[core] 
+[core] [worker:stt] C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\webrtcvad.py:1: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+[worker:stt] import pkg_resources
+[core] [worker:stt] 2026-04-11 00:53:57,194 [INFO] [-] [-] LuminaCore: ✨ Loaded Capability: stt
+[core] [worker:stt] 2026-04-11 00:53:57,233 [INFO] [-] [-] LuminaCore: ✅ Lumina SDK Initialized (Worker Mode)
+[core] [worker:stt] 2026-04-11 00:53:57,233 [INFO] [-] [-] ConfigManager: 🛡️ Configuration Mode: read_only
+[core] [worker:stt] 2026-04-11 00:53:57,253 [ERROR] [-] [-] uvicorn.error: Traceback (most recent call last):
+[core] [worker:stt] File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+[worker:stt] async with self.lifespan_context(app) as maybe_state:
+[worker:stt] ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:stt] File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 571, in __aenter__
+[worker:stt] await self._router.startup()
+[worker:stt] File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 671, in startup
+[worker:stt] await handler()
+[worker:stt] File "E:\Work\Code\Lumina\python_backend\generic_worker.py", line 163, in startup_event
+[worker:stt] await current_capability.on_startup(app)
+[core] [worker:stt] File "E:\Work\Code\Lumina\python_backend\capabilities\stt\__init__.py", line 33, in on_startup
+[worker:stt] manager = STTPluginManager()
+[worker:stt] ^^^^^^^^^^^^^^^^^^
+[worker:stt] TypeError: STTPluginManager.__init__() missing 1 required positional argument: 'config'
+[worker:stt] 2026-04-11 00:53:57,254 [ERROR] [-] [-] uvicorn.error: Application startup failed. Exiting.
+[core] [worker:tts] 2026-04-11 00:53:57,547 [ERROR] [-] [-] uvicorn.error: Traceback (most recent call last):
+[worker:tts] File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+[core] [worker:tts] async with self.lifespan_context(app) as maybe_state:
+[worker:tts] ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:tts] File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 571, in __aenter__
+[worker:tts] await self._router.startup()
+[worker:tts] File "C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 671, in startup
+[worker:tts] await handler()
+[worker:tts] File "E:\Work\Code\Lumina\python_backend\generic_worker.py", line 163, in startup_event
+[worker:tts] await current_capability.on_startup(app)
+[worker:tts] File "E:\Work\Code\Lumina\python_backend\capabilities\tts\__init__.py", line 32, in on_startup
+[worker:tts] manager = TTSPluginManager()
+[worker:tts] ^^^^^^^^^^^^^^^^^^
+[worker:tts] TypeError: TTSPluginManager.__init__() missing 1 required positional argument: 'config'
+[worker:tts] 2026-04-11 00:53:57,548 [ERROR] [-] [-] uvicorn.error: Application startup failed. Exiting.
+[core] 2026-04-11 00:53:58,032 [WARNING] [-] [-] ProcessManager: 🚨 Worker worker:tts exited with code 3
+[core] 2026-04-11 00:53:58,032 [INFO] [-] [-] ProcessManager: Worker worker:tts scheduled for restart in 1s (Attempt 1)
+2026-04-11 00:53:58,032 [WARNING] [-] [-] ProcessManager: 🚨 Worker worker:stt exited with code 3
+2026-04-11 00:53:58,033 [INFO] [-] [-] ProcessManager: Worker worker:stt scheduled for restart in 1s (Attempt 1)
+[core] 2026-04-11 00:53:59,032 [INFO] [-] [-] ProcessManager: ♻️ Restarting Worker worker:tts...
+[core] 2026-04-11 00:53:59,044 [INFO] [-] [-] ProcessManager: Worker worker:tts restarted (PID: 28116)
+[core] 2026-04-11 00:53:59,044 [INFO] [-] [-] ProcessManager: ♻️ Restarting Worker worker:stt...
+[core] 2026-04-11 00:53:59,071 [INFO] [-] [-] ProcessManager: Worker worker:stt restarted (PID: 29668)

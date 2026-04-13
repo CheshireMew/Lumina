@@ -1,0 +1,9 @@
+id: driver.llm.pollinations
+api_version: "1.0"
+kind: driver
+capability: llm
+runtime_target: main
+permissions:
+  - network.outbound
+config_schema: {}
+provides: []

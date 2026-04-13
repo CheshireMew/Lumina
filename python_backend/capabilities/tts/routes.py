@@ -8,11 +8,12 @@ from pydantic import BaseModel
 
 from routers.deps import get_tts_service
 from app_config import config as app_settings
+from core.protocols.lipp import LippProtocol, LippLifecycleRequest, LippConfigRequest
 
 logger = logging.getLogger("TTS_API")
 router = APIRouter()
 
-# --- Models ---
+# --- Models (Domain Specific) ---
 class TTSRequest(BaseModel):
     text: str
     voice: str = "zh-CN-XiaoxiaoNeural"
@@ -35,7 +36,59 @@ class LifecyclePayload(BaseModel):
     plugin_id: str
     config: Optional[Dict] = None
 
-# --- Endpoints ---
+# --- LIPP Handlers ---
+
+async def tts_lifecycle_handler(payload: LippLifecycleRequest):
+    """LIPP Lifecycle Implementation"""
+    manager = tts_globals.tts_manager
+    if not manager: return
+    
+    logger.info(f"📢 [LIPP] Lifecycle: {payload.action} -> {payload.target_id}")
+    did = payload.target_id
+    
+    if payload.action == "disable":
+        if manager.active_driver and manager.active_driver.id == did:
+            logger.warning(f"🛑 Active driver {did} disabled remotely. Unloading...")
+            manager.active_driver = None
+            manager.active_driver_id = "none"
+            
+    elif payload.action == "enable":
+        app_settings.load_configs()
+        target = app_settings.get_selected_provider("tts")
+        if target == did:
+            logger.info(f"🟢 Configured driver {did} enabled remotely. Loading...")
+            if did in manager.drivers:
+                await manager.activate(did)
+
+async def tts_config_handler(payload: LippConfigRequest):
+    """LIPP Config Implementation"""
+    manager = tts_globals.tts_manager
+    
+    logger.info(f"⚙️ [LIPP] Config: {payload.target_id} -> {payload.key}={payload.value}")
+    
+    if payload.target_id in manager.drivers:
+        driver = manager.drivers[payload.target_id]
+        driver.config[payload.key] = payload.value
+        return {"config": driver.config}
+        
+    raise ValueError(f"Driver {payload.target_id} not found")
+
+async def tts_health_check():
+    from core.protocols.lipp import LippHealthResponse
+    return LippHealthResponse(status="ok")
+
+# --- Mount LIPP Router ---
+
+lipp_router = LippProtocol.create_router(
+    service_name="worker:tts",
+    lifecycle_handler=tts_lifecycle_handler,
+    config_handler=tts_config_handler,
+    health_handler=tts_health_check,
+    capabilities=["tts"]
+)
+router.include_router(lipp_router)
+
+# --- Domain Endpoints ---
 
 @router.post("/generate")
 async def generate_tts(request: TTSRequest, manager: Any = Depends(get_tts_service)):
@@ -83,7 +136,7 @@ async def generate_tts(request: TTSRequest, manager: Any = Depends(get_tts_servi
         logger.error(f"TTS Generation Failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/tts/synthesize")
+@router.post("/synthesize")
 async def synthesize_proxy(request: TTSRequest, manager: Any = Depends(get_tts_service)):
     return await generate_tts(request, manager)
 
@@ -121,7 +174,7 @@ async def switch_model(req: SwitchRequest, request: Request, manager: Any = Depe
         
     return {"status": "ok", "active": driver_id}
 
-@router.get("/tts/voices")
+@router.get("/voices")
 async def list_voices(engine: Optional[str] = None, manager: Any = Depends(get_tts_service)):
     target_driver = manager.active_driver
     if engine and engine in manager.drivers:
@@ -143,49 +196,6 @@ async def reset_connection_pool():
     # if tts_globals.http_client: ...
     return {"status": "ok"}
 
-@router.post("/plugins/config")
-async def update_plugin_config(req: PluginConfigRequest, manager: Any = Depends(get_tts_service)):
-    """Unified Config Endpoint for Workers"""
-    logger.info(f"⚙️ [Worker Config] {req.id} -> {req.key}={req.value}")
-    
-    if req.id in manager.drivers:
-        driver = manager.drivers[req.id]
-        driver.config[req.key] = req.value
-        return {"status": "ok", "config": driver.config}
-
-    return {"status": "error", "message": f"Plugin {req.id} not found on this worker"}
-
-# --- Scheme D: Lifecycle Broadcast ---
-@router.post("/system/lifecycle")
-async def handle_lifecycle(payload: LifecyclePayload, request: Request, manager: Any = Depends(get_tts_service)):
-    """
-    [Scheme D] The 'Shout' Receiver.
-    """
-    # [Security] Localhost only
-    if request.client.host not in ["127.0.0.1", "::1", "localhost"]:
-        raise HTTPException(status_code=403, detail="Access Denied")
-    logger.info(f"📢 [Lifecycle] Received: {payload.type} -> {payload.plugin_id}")
-    did = payload.plugin_id
-    
-    if payload.type == "disabled":
-        if manager.active_driver and manager.active_driver.id == did:
-            logger.warning(f"🛑 Active driver {did} disabled remotely. Unloading...")
-            manager.active_driver = None
-            manager.active_driver_id = "none"
-            
-    elif payload.type == "enabled":
-        app_settings.load_configs()
-        target = app_settings.tts.provider
-        if target == did:
-            logger.info(f"🟢 Configured driver {did} enabled remotely. Loading...")
-            if did in manager.drivers:
-                await manager.activate(did)
-            else:
-                logger.warning(f"Driver {did} enabled but not found in local registry.")
-
-    # [Scheme D] Immediate Registry Update for SSOT Reconciliation
-    if hasattr(request.app.state, "reporter") and request.app.state.reporter:
-        await request.app.state.reporter.force_report()
-        logger.info("🚀 Force-pushed lifecycle result to Registry")
-
-    return {"status": "ok"}
+# [Legacy Adapters REMOVED - 2026-01-24]
+# /plugins/config and /system/lifecycle endpoints were removed.
+# All clients should use LIPP endpoints (/lipp/v1/*) or Main Process proxy.

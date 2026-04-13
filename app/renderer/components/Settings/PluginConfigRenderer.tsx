@@ -9,12 +9,12 @@ interface PluginConfigRendererProps {
 }
 
 export const PluginConfigRenderer: React.FC<PluginConfigRendererProps> = ({ plugin, onUpdate }) => {
-    const [localConfig, setLocalConfig] = useState<any>(plugin.current_value ?? plugin.config ?? {});
+    const [localConfig, setLocalConfig] = useState<any>(plugin.current_config ?? {});
     const [isSaving, setIsSaving] = useState(false);
 
     // Sync when plugin changes
     useEffect(() => {
-        setLocalConfig(plugin.current_value ?? plugin.config ?? {});
+        setLocalConfig(plugin.current_config ?? {});
     }, [plugin]);
 
     const handleSave = async (key: string, val: any) => {
@@ -113,10 +113,10 @@ export const PluginConfigRenderer: React.FC<PluginConfigRendererProps> = ({ plug
         <div className="bg-black/20 rounded p-4 border border-white/5 mb-2">
              {/* If root schema is single object */}
              {!plugin.config_schema.fields ? (
-                 renderField(plugin.config_schema, localConfig[plugin.config_schema.key] ?? plugin.current_value)
+                 renderField(plugin.config_schema, localConfig[plugin.config_schema.key] ?? localConfig)
              ) : (
                  // Root schema has multiple fields
-                 plugin.config_schema.fields.map(f => renderField(f, localConfig?.[f.key]))
+                 plugin.config_schema.fields.map((f: PluginConfigSchema) => renderField(f, localConfig?.[f.key]))
              )}
         </div>
     );

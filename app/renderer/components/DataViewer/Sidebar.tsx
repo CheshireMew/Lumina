@@ -1,6 +1,5 @@
 import React from 'react';
 import { ScrollText, Brain, Network, Braces } from 'lucide-react';
-import { TableInfo } from './types';
 
 interface SidebarProps {
     activeTab: 'tables' | 'query' | 'stats' | 'graph';

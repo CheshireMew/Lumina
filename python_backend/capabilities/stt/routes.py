@@ -10,12 +10,14 @@ from starlette.websockets import WebSocketDisconnect
 from routers.deps import get_stt_service
 from .globals import audio_manager, active_websockets, message_queue
 from app_config import config as app_settings
+from core.protocols.lipp import LippProtocol, LippLifecycleRequest, LippConfigRequest
+from services.config_service import ConfigService
 
 logger = logging.getLogger("STTRouter")
 
 router = APIRouter()
 
-# --- Data Models ---
+# --- Data Models (Domain Specific) ---
 
 class SwitchModelRequest(BaseModel):
     model_name: str
@@ -29,9 +31,6 @@ class UnifiedAudioConfig(BaseModel):
     speech_end_threshold: Optional[float] = None
     min_speech_frames: Optional[int] = None
 
-class PluginLoadRequest(BaseModel):
-    manifests: List[str]
-
 class LifecyclePayload(BaseModel):
     type: str # 'enabled' | 'disabled'
     plugin_id: str
@@ -42,8 +41,66 @@ class PluginConfigRequest(BaseModel):
     key: str
     value: Any
 
+# --- LIPP Handlers ---
 
-# --- Endpoints ---
+async def stt_lifecycle_handler(payload: LippLifecycleRequest):
+    """LIPP Lifecycle Implementation"""
+    stt_manager = stt_globals.stt_manager
+    if not stt_manager: return
+
+    logger.info(f"📢 [LIPP] Lifecycle: {payload.action} -> {payload.target_id}")
+    
+    if payload.action == "disable":
+        if stt_manager.active_driver_id == payload.target_id:
+             logger.info(f"🛑 Unloading disabled driver {payload.target_id}")
+             await stt_manager.unload_active_driver()
+             
+    elif payload.action == "enable":
+        app_settings.load_configs()
+        if app_settings.get_selected_provider("stt") == payload.target_id:
+             logger.info(f"🟢 Loading enabled driver {payload.target_id}")
+             await stt_manager.activate(payload.target_id)
+
+async def stt_config_handler(payload: LippConfigRequest):
+    """LIPP Config Implementation"""
+    stt_manager = stt_globals.stt_manager
+    
+    logger.info(f"⚙️ [LIPP] Config: {payload.target_id} -> {payload.key}={payload.value}")
+    
+    if payload.target_id in stt_manager.drivers:
+        driver = stt_manager.drivers[payload.target_id]
+        driver.config[payload.key] = payload.value
+        
+        # Hot Reload
+        if payload.key in ["model_size", "fw_model_size"]:
+            await stt_manager.switch_model_background(payload.value)
+            
+        return {"config": driver.config}
+        
+    raise ValueError(f"Driver {payload.target_id} not found")
+
+async def stt_health_check():
+    from core.protocols.lipp import LippHealthResponse
+    status = "ok"
+    details = {}
+    if audio_manager:
+        if not audio_manager.is_running and len(active_websockets) > 0:
+            status = "degraded"
+            details["audio"] = "stalled"
+    return LippHealthResponse(status=status, details=details)
+
+# --- Mount LIPP Router ---
+
+lipp_router = LippProtocol.create_router(
+    service_name="worker:stt",
+    lifecycle_handler=stt_lifecycle_handler,
+    config_handler=stt_config_handler,
+    health_handler=stt_health_check,
+    capabilities=["stt", "vad", "voiceprint"]
+)
+router.include_router(lipp_router)
+
+# --- Domain Endpoints ---
 
 @router.get("/models/list")
 async def get_models(stt_manager: Any = Depends(get_stt_service)):
@@ -68,9 +125,7 @@ async def get_models(stt_manager: Any = Depends(get_stt_service)):
     
     # 3. Dynamic Drivers
     for pid, drv in stt_manager.drivers.items():
-         # Avoid duplicates if they map to above engines
          if pid in ["driver.stt.sensevoice", "driver.stt.whisper"]: continue
-         
          models.append({
              "id": pid,
              "name": drv.name,
@@ -80,8 +135,11 @@ async def get_models(stt_manager: Any = Depends(get_stt_service)):
          })
 
     return {
+        "current_model": stt_manager.current_model_name,
         "active_model": stt_manager.current_model_name,
+        "engine_type": stt_manager.engine_type,
         "engine": stt_manager.engine_type,
+        "loading_status": stt_manager.loading_status,
         "models": models,
         "vad_status": "active" if audio_manager and audio_manager.is_running else "idle"
     }
@@ -95,42 +153,27 @@ async def switch_model(
 ):
     """Switch STT Model/Engine"""
     logger.info(f"Recursive Switch Request: {payload.model_name}")
-    
-    # Validation
     valid = False
     target = payload.model_name
-    
-    # Check drivers
-    if target in stt_manager.drivers:
-        valid = True
-    elif target in ["faster-whisper", "sense-voice"]: # Legacy aliases
-        valid = True
+    if target in stt_manager.drivers: valid = True
+    elif target in ["faster-whisper", "sense-voice"]: valid = True
         
-    if not valid:
-        raise HTTPException(status_code=400, detail=f"Unknown model/driver: {target}")
+    if not valid: raise HTTPException(status_code=400, detail=f"Unknown model/driver: {target}")
 
-    # Stop Audio First
     if audio_manager and audio_manager.is_running:
-        logger.info("Pausing Audio for Switch...")
         audio_manager.stop()
         
-    # Execute Switch
     await stt_manager.switch_model_background(target)
+    # [Config] Local Update for runtime consistency
+    ConfigService(stt_manager).set_selected_provider("stt", stt_manager.active_driver_id, persist=False)
 
-    # Save Config
-    app_settings.stt.provider = stt_manager.active_driver_id
-    app_settings.save()
-
-    # Restart Audio
     if audio_manager:
-        logger.info("Resuming Audio...")
         background_tasks.add_task(audio_manager.start)
 
-    # [Scheme D] Active Notification for SSOT Reconciliation
-    # Reporter is injected into app.state by generic_worker
+    # [Scheme D] Active Notification to Main
+    # Main process will handle persistence if needed via its own controller logic
     if hasattr(request.app.state, "reporter"):
         await request.app.state.reporter.force_report()
-        logger.info("🚀 Force-pushed switch result to Registry")
 
     return {"status": "ok", "active_model": stt_manager.active_driver_id}
 
@@ -138,61 +181,74 @@ async def switch_model(
 
 @router.get("/audio/devices")
 async def list_audio_devices():
-    import sounddevice as sd
-    logger.info("🎤 [Debug] Querying Audio Devices...")
+    from . import globals as stt_globals
+    from services.managers.audio_devices import AudioDeviceSelector
+
     try:
-        devices = sd.query_devices()
-        logger.info(f"🎤 [Debug] Raw Device Count: {len(devices)}")
-        
+        selector = (
+            stt_globals.audio_manager.device_selector
+            if stt_globals.audio_manager
+            else AudioDeviceSelector(sample_rate=16000, frame_size=480)
+        )
+        devices = selector.list_input_devices(check_available=False)
         input_devices = []
-        for i, d in enumerate(devices):
-            # logger.info(f"   Device {i}: {d['name']} (In: {d['max_input_channels']})")
-            if d['max_input_channels'] > 0:
-                input_devices.append({
-                    "index": i, 
-                    "name": d['name'], 
-                    "host_api": d['hostapi']
-                })
-        
-        logger.info(f"🎤 [Debug] Filtered Input Devices: {len(input_devices)}")
-        return input_devices
+        for device in devices:
+            input_devices.append({
+                "index": device["index"],
+                "name": device["name"],
+                "host_api": device["host_api"]
+            })
+        current_device = None
+        if stt_globals.audio_manager:
+            current_device = stt_globals.audio_manager.device_name
+
+        return {
+            "devices": input_devices,
+            "current": current_device,
+        }
     except Exception as e:
-        logger.error(f"❌ Audio Device List Error: {e}", exc_info=True)
-        return []
+        logger.error(f"❌ Audio Device List Error: {e}")
+        return {"devices": [], "current": None}
 
-@router.post("/config/audio")
+@router.post("/audio/config")
 async def update_audio_config(request: UnifiedAudioConfig):
-    """Update Audio / VAD / Voiceprint settings"""
     if not audio_manager:
-        raise HTTPException(status_code=503, detail="Audio System not initialized")
+         raise HTTPException(status_code=503, detail="Audio System not initialized")
 
-    # 1. Device
     if request.device_name:
-        success = audio_manager.switch_device(request.device_name)
-        logger.info(f"🔄 Device switch: {request.device_name} -> {'OK' if success else 'FAIL'}")
-        
-    # 2. VAD Params
-    if request.speech_start_threshold is not None:
-        audio_manager.speech_start_threshold = request.speech_start_threshold
-    
-    if request.speech_end_threshold is not None:
-         audio_manager.speech_end_threshold = request.speech_end_threshold
-         
-    if request.min_speech_frames is not None:
-        audio_manager.min_speech_frames = request.min_speech_frames
+        audio_manager.switch_device(request.device_name)
 
-    return {"status": "updated", "config": request.dict(exclude_none=True)}
+    if (
+        request.speech_start_threshold is not None
+        or request.speech_end_threshold is not None
+        or request.min_speech_frames is not None
+    ):
+        audio_manager.update_params(
+            start_threshold=request.speech_start_threshold,
+            end_threshold=request.speech_end_threshold,
+            min_frames=request.min_speech_frames,
+        )
+
+    return {
+        "status": "updated",
+        "current": audio_manager.device_name,
+        "config": request.dict(exclude_none=True),
+    }
 
 @router.get("/status/voiceprint")
-@router.get("/voiceprint/status") # Alias for frontend compatibility
+@router.get("/voiceprint/status")
 async def get_voiceprint_status():
-    from . import globals as stt_globals # Dynamic import
-    
+    from . import globals as stt_globals
     if not stt_globals.voiceprint_manager:
-        return {"active": False, "loaded": False}
-        
+        return {
+            "enabled": False,
+            "loaded": False,
+            "threshold": getattr(audio_manager, "voiceprint_threshold", 0.6),
+            "profile": "default",
+            "profile_loaded": False,
+        }
     return {
-        "active": True,
+        "enabled": True,
         "loaded": True,
         "threshold": getattr(audio_manager, 'voiceprint_threshold', 0.6),
         "profile": getattr(stt_globals.voiceprint_manager, 'current_profile', None) or "default",
@@ -203,7 +259,6 @@ async def get_voiceprint_status():
 async def get_audio_status():
     if not audio_manager: return {"status": "uninitialized"}
     status = audio_manager.get_status()
-    # Ensure VAD params are included
     status.update({
         "speech_start_threshold": audio_manager.speech_start_threshold,
         "speech_end_threshold": audio_manager.speech_end_threshold,
@@ -215,174 +270,75 @@ async def get_audio_status():
 
 @router.websocket("/ws/stt")
 async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=1008, reason="Missing stream token")
+        return
+
+    try:
+        from security.tokens import TokenManager
+
+        payload = TokenManager.verify_token(token, expected_scope="worker_access")
+        worker_id = getattr(websocket.app.state, "worker_id", None)
+        if not payload or (worker_id and payload.get("sub") != worker_id):
+            await websocket.close(code=1008, reason="Invalid stream token")
+            return
+    except Exception:
+        await websocket.close(code=1008, reason="Invalid stream token")
+        return
+
     await websocket.accept()
     import uuid
     connection_id = str(uuid.uuid4())
     active_websockets[connection_id] = websocket
-    logger.info(f"Client connected: {connection_id} (Total: {len(active_websockets)})")
     
-    # Auto-Start Audio Manager if first client
     if len(active_websockets) == 1 and audio_manager:
         if not audio_manager.is_running:
-            logger.info("[Auto-Start] Starting AudioManager (First Client)")
             audio_manager.start()
-            
-            # Clear queue
             while not message_queue.empty():
                 try: message_queue.get_nowait()
                 except queue.Empty: break
-                except Exception: pass
+                except Exception as e: 
+                    logger.debug(f"Queue drain error (ignorable): {e}")
+                    break
 
     async def sender_task():
         try:
             while True:
-                # Poll queue
                 if not message_queue.empty():
                     msg = message_queue.get_nowait()
                     await websocket.send_json(msg)
                 await asyncio.sleep(0.02)
-        except WebSocketDisconnect:
-            logger.info(f"WS Sender Disconnect: {connection_id}")
-        except Exception as e:
-            logger.error(f"WS Sender Error: {e}")
+        except WebSocketDisconnect: pass
+        except Exception as e: logger.error(f"WS Sender Error: {e}")
 
     async def receiver_task():
         try:
             while True:
-                try:
-                    await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                try: await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
                 except asyncio.TimeoutError:
-                    if websocket.client_state == 3: # Disconnected
-                         raise WebSocketDisconnect()
+                    if websocket.client_state == 3: raise WebSocketDisconnect()
                     continue
-        except WebSocketDisconnect:
-            logger.info(f"WS Receiver Disconnect: {connection_id}")
+        except WebSocketDisconnect: pass
 
     try:
-        # Run both tasks
         sender = asyncio.create_task(sender_task())
         receiver = asyncio.create_task(receiver_task())
-        done, pending = await asyncio.wait(
-            [sender, receiver], 
-            return_when=asyncio.FIRST_COMPLETED
-        )
+        done, pending = await asyncio.wait([sender, receiver], return_when=asyncio.FIRST_COMPLETED)
         for task in pending: task.cancel()
-        
-    except Exception as e:
-        logger.error(f"WS Connection Error: {e}")
     finally:
-        # Cleanup
-        if connection_id in active_websockets:
-            del active_websockets[connection_id]
-        
-        # Auto-Stop
+        if connection_id in active_websockets: del active_websockets[connection_id]
         if len(active_websockets) == 0 and audio_manager and audio_manager.is_running:
-             logger.info("[Auto-Stop] Stopping AudioManager (No Clients)")
              audio_manager.stop()
 
-# --- Lifecycle Endpoints ---
-
-@router.post("/plugins/config")
-async def update_plugin_config(req: PluginConfigRequest, stt_manager: Any = Depends(get_stt_service)):
-    """Unified Config Endpoint for Workers"""
-    logger.info(f"⚙️ [Worker Config] {req.id} -> {req.key}={req.value}")
-    
-    # 1. Target: STT Driver
-    if req.id in stt_manager.drivers:
-        driver = stt_manager.drivers[req.id]
-        driver.config[req.key] = req.value
-        
-        # Trigger hot-reload if it's a model switch
-        if req.key == "model_size" or req.key == "fw_model_size":
-            await stt_manager.switch_model_background(req.value)
-            
-        return {"status": "ok", "config": driver.config}
-    
-    return {"status": "error", "message": f"Plugin {req.id} not found on this worker"}
-
-@router.post("/plugins/load")
-async def load_plugins(req: PluginLoadRequest, request: Request, background_tasks: BackgroundTasks, stt_manager: Any = Depends(get_stt_service)):
-    """
-    Refactored Load Endpoint
-    Called by SystemPluginManager to load plugins on this worker.
-    """
-    from services.plugins.loader import PluginLoader
-    from core.interfaces.driver import BaseSTTDriver
-
-    loaded = []
-    
-    for manifest_path in req.manifests:
-        try:
-            # 1. Load Instance
-            plugin = PluginLoader.load_from_file(manifest_path)
-            if not plugin:
-                logger.error(f"Failed to load plugin from {manifest_path}")
-                continue
-                
-            # 2. Register based on Type
-            if isinstance(plugin, BaseSTTDriver):
-                stt_manager.register_driver(plugin)
-                loaded.append(plugin.id)
-            else:
-                logger.warning(f"Unknown plugin type loaded on STT Server: {plugin.id} ({type(plugin)})")
-
-        except Exception as e:
-            logger.error(f"Error loading {manifest_path}: {e}", exc_info=True)
-            
-    # [Scheme D] Active Event Emission
-    if hasattr(request.app.state, "reporter"):
-        await request.app.state.reporter.force_report()
-        logger.info("🚀 Force-pushed new capabilities to Registry")
-
-    return {"status": "ok", "loaded": loaded}
-
-@router.post("/system/lifecycle")
-async def handle_lifecycle(payload: LifecyclePayload, request: Request, stt_manager: Any = Depends(get_stt_service)):
-    """
-    [Scheme D] The 'Shout' Receiver.
-    """
-    # [Security] Localhost only
-    if request.client.host not in ["127.0.0.1", "::1", "localhost"]:
-        raise HTTPException(status_code=403, detail="Access Denied")
-    logger.info(f"📢 [Lifecycle] Received: {payload.type} -> {payload.plugin_id}")
-    p_id = payload.plugin_id
-    p_type = payload.type
-    
-    try:
-        if p_type == "disabled":
-             # 1. Check STT Driver
-             if stt_manager and p_id in stt_manager.drivers:
-                 if stt_manager.active_driver_id == p_id:
-                      logger.info(f"🛑 Active Driver {p_id} disabled. Unloading...")
-                      await stt_manager.unload_active_driver()
-             
-        elif p_type == "enabled":
-             app_settings.load_configs()
-             target = app_settings.stt.provider
-             
-             # Driver Check
-             if target == p_id and stt_manager:
-                  logger.info(f"🟢 Configured driver {p_id} enabled. Loading...")
-                  await stt_manager.activate(p_id)
-             
-    except Exception as e:
-        logger.error(f"Lifecycle Error: {e}")
-
-    # [Scheme D] Immediate Registry Update
-    if hasattr(request.app.state, "reporter"):
-        await request.app.state.reporter.force_report()
-        logger.info("🚀 Force-pushed lifecycle result to Registry")
-
-    return {"status": "ok"}
-
+# [Legacy Adapters REMOVED - 2026-01-24]
+# /plugins/config and /system/lifecycle endpoints were removed.
+# All clients should use LIPP endpoints (/lipp/v1/*) or Main Process proxy.
 
 # ========== [Scheme C] Internal Endpoints for Main Process Proxy ==========
 
 @router.post("/internal/voiceprint/generate-embedding")
 async def generate_voiceprint_embedding(audio: UploadFile = File(...), request: Request = None):
-    """
-    [Scheme C] Internal endpoint for embedding generation.
-    """
     # Security: Localhost only
     if request and request.client and request.client.host not in ["127.0.0.1", "::1", "localhost"]:
         raise HTTPException(status_code=403, detail="Internal endpoint: localhost only")
@@ -395,15 +351,9 @@ async def generate_voiceprint_embedding(audio: UploadFile = File(...), request: 
     import asyncio
     
     vp_manager = stt_globals.voiceprint_manager
-    # ... rest of logic (simplified for readability, keeping core)
-    # Actually, legacy voiceprint code was disabled in original file comments.
-    # But if enabled, it would be here.
-    
     if not vp_manager:
-        raise HTTPException(status_code=503, detail="Voiceprint service not available on this worker")
-    
-    if not hasattr(vp_manager, 'driver') or not vp_manager.driver:
         raise HTTPException(status_code=503, detail="Voiceprint driver not loaded")
+    await vp_manager.ensure_driver_loaded()
     
     tmp_path = None
     try:
@@ -413,31 +363,19 @@ async def generate_voiceprint_embedding(audio: UploadFile = File(...), request: 
             tmp_path = tmp.name
         
         audio_data, sr = sf.read(tmp_path)
-        if audio_data.ndim > 1:
-            audio_data = audio_data[:, 0]  # Mono
+        if audio_data.ndim > 1: audio_data = audio_data[:, 0]
         
         loop = asyncio.get_running_loop()
-        embedding = await loop.run_in_executor(
-            None,
-            vp_manager.driver.extract_embedding,
-            audio_data,
-            sr
-        )
+        embedding = await loop.run_in_executor(None, vp_manager.driver.extract_embedding, audio_data, sr)
         
-        if embedding is None or embedding.size == 0:
-            raise HTTPException(status_code=500, detail="Failed to extract embedding from audio")
+        if embedding is None or embedding.size == 0: raise HTTPException(500, "Failed to extract embedding")
         
         import numpy as np
-        embedding_bytes = embedding.astype(np.float32).tobytes()
-        embedding_b64 = base64.b64encode(embedding_bytes).decode('utf-8')
-        
+        embedding_b64 = base64.b64encode(embedding.astype(np.float32).tobytes()).decode('utf-8')
         return {"embedding": embedding_b64, "dims": len(embedding)}
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Embedding generation failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        if tmp_path and os.path.exists(tmp_path): os.remove(tmp_path)

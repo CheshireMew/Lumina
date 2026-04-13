@@ -1,3 +1,0 @@
-"""
-Lumina Plugin Isolation Core
-"""

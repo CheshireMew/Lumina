@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { events } from '../core/events';
+import { getSttWebSocketUrl } from '../platform/electron';
 
 interface VoiceInputProps {
     onSend: (message: string) => void;
@@ -34,7 +35,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onSend, disabled, onSpeechStart
         
         const connectWS = async () => {
             try {
-                const wsUrl = await window.stt.getWSUrl();
+                const wsUrl = await getSttWebSocketUrl();
                 ws = new WebSocket(wsUrl);
                 wsRef.current = ws;
 

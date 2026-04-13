@@ -64,7 +64,8 @@ class PollinationsDriver(BaseLLMDriver):
                 if isinstance(data, str): return data
                 if 'choices' in data: return data['choices'][0]['message']['content']
                 return str(data)
-            except:
+            except Exception as parse_e:
+                logger.warning(f"Pollinations non-stream parse failed: {parse_e}")
                 return resp.text
         except Exception as e:
             logger.error(f"Pollinations Req Failed: {e}")
@@ -114,19 +115,24 @@ class PollinationsDriver(BaseLLMDriver):
 
             try:
                 data = resp.json()
-            except ValueError:
-                text = resp.text
-                json_match = re.search(r'(\{.*"choices".*\})$', text, re.DOTALL)
-                if json_match:
-                    try:
-                        data = json.loads(json_match.group(1))
-                    except:
+            except Exception as parse_e:
+                # Try to extract JSON from text if parsing failed
+                try:
+                    text = resp.text
+                    json_match = re.search(r'(\{.*"choices".*\})$', text, re.DOTALL)
+                    if json_match:
+                        try:
+                            data = json.loads(json_match.group(1))
+                        except Exception:
+                            data = None
+                    else:
                         data = None
-                else:
-                    data = None
-                    
-                if data is None:
-                    content = text
+                        
+                    if data is None:
+                        content = text
+                except Exception as fallback_e:
+                    logger.warning(f"Failed to recover JSON from text: {fallback_e}")
+                    content = resp.text
             
             # Process Data if we have it (Direct or Recovered)
             if data and isinstance(data, dict):
@@ -143,6 +149,7 @@ class PollinationsDriver(BaseLLMDriver):
                         content = data["content"]
                     elif not content: 
                          content = resp.text
+
                     # reasoning remains "" 
 
             # Fallback: If content is still empty, dump the data so we see what happened

@@ -1,0 +1,18 @@
+
+DevTools listening on ws://127.0.0.1:9336/devtools/browser/42619a2e-ad66-484e-a20f-be01b829e118
+[30360:0412/214308.301:INFO:CONSOLE(9)] "🔌 [App] Syncing runtime ports: [object Object]", source: file:///E:/Work/Code/Lumina/dist/assets/index-CehJJ3AN.js (9)
+[30360:0412/214308.305:INFO:CONSOLE(2)] "[Config] API Configuration Updated: [object Object]", source: file:///E:/Work/Code/Lumina/dist/assets/index-CehJJ3AN.js (2)
+[30360:0412/214308.309:INFO:CONSOLE(7)] "[MemoryService] Base URL updated to: http://127.0.0.1:8010", source: file:///E:/Work/Code/Lumina/dist/assets/index-CehJJ3AN.js (7)
+[30360:0412/214308.313:INFO:CONSOLE(7)] "[useSettings] Loaded", source: file:///E:/Work/Code/Lumina/dist/assets/index-CehJJ3AN.js (7)
+[30360:0412/214308.827:INFO:CONSOLE(26)] "
+ %c %c %c PixiJS 6.5.10 - ✰ WebGL 2 ✰  %c  %c  http://www.pixijs.com/  %c %c ♥%c♥%c♥ 
+
+ background: #ff66a5; padding:5px 0; background: #ff66a5; padding:5px 0; color: #ff66a5; background: #030307; padding:5px 0; background: #ff66a5; padding:5px 0; background: #ffc3dc; padding:5px 0; background: #ff66a5; padding:5px 0; color: #ff2424; background: #fff; padding:5px 0; color: #ff2424; background: #fff; padding:5px 0; color: #ff2424; background: #fff; padding:5px 0;", source: file:///E:/Work/Code/Lumina/dist/assets/live2d-vendor-CswbC77Q.js (26)
+[30360:0412/214308.831:INFO:CONSOLE(2)] "[Live2DPlugin] Loading model from: file:///E:/Work/Code/Lumina/dist/live2d/Hiyori/Hiyori.model3.json", source: file:///E:/Work/Code/Lumina/dist/assets/Live2DPlugin-C31TdICs.js (2)
+[30360:0412/214308.841:INFO:CONSOLE(587)] "[CSM][I]Live2D Cubism Core version: 05.00.0000 (83886080)
+", source: file:///E:/Work/Code/Lumina/dist/assets/live2d-vendor-CswbC77Q.js (587)
+[30360:0412/214308.842:INFO:CONSOLE(587)] "[CSM][I]CubismFramework.startUp() is complete.
+", source: file:///E:/Work/Code/Lumina/dist/assets/live2d-vendor-CswbC77Q.js (587)
+[30360:0412/214308.842:INFO:CONSOLE(587)] "[CSM][I]CubismFramework.initialize() is complete.
+", source: file:///E:/Work/Code/Lumina/dist/assets/live2d-vendor-CswbC77Q.js (587)
+[30360:0412/214308.878:INFO:CONSOLE(9)] "Live2D Cubism SDK Core Version 5.0.0", source: file:///E:/Work/Code/Lumina/dist/libs/live2dcubismcore.min.js (9)

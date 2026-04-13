@@ -1,0 +1,122 @@
+DEBUG_TRACE: Loading backend_launcher.py from E:\Work\Code\Lumina\python_backend\backend_launcher.py
+2026-04-10 23:57:03,624 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\memory_server.log
+2026-04-10 23:57:03,714 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+2026-04-10 23:57:03,807 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[Launcher] Starting Core System (Soul/Gateway) on port 8010...
+2026-04-10 23:57:03,843 [INFO] [-] [-] uvicorn.error: Started server process [30324]
+2026-04-10 23:57:03,847 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+2026-04-10 23:57:03,852 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+2026-04-10 23:57:03,853 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+2026-04-10 23:57:03,853 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Configuration (0.00s)
+2026-04-10 23:57:03,872 [INFO] [-] [-] SDK.PluginLoader: 📂 Scanning driver directory: E:\Work\Code\Lumina\python_backend\plugins\extensions\memory_postgres\drivers\memory
+2026-04-10 23:57:03,957 [INFO] [-] [-] memory.factory: [MemoryFactory] Selected Driver: PostgreSQL Driver (driver.memory.postgres)
+2026-04-10 23:57:04,089 [INFO] [-] [-] PostgresDriver: ✅ Connected to PostgreSQL at localhost:5433
+2026-04-10 23:57:04,095 [INFO] [-] [-] PostgresDriver: ✨ PostgreSQL Schema Initialized.
+2026-04-10 23:57:04,096 [INFO] [-] [-] ConsolidationBatch: [BatchManager] Initialized
+2026-04-10 23:57:04,096 [INFO] [-] [-] Bootstrap.Infra: ✅ Memory System Connected
+2026-04-10 23:57:04,096 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Memory Backend (0.24s)
+2026-04-10 23:57:04,101 [INFO] [-] [-] Bootstrap.Infra: ✅ EventBus Initialized
+2026-04-10 23:57:04,101 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: EventBus (0.00s)
+2026-04-10 23:57:04,102 [INFO] [-] [-] EventBus: ⚡ Bulk Registered 6 Event Schemas
+2026-04-10 23:57:04,102 [INFO] [-] [-] Bootstrap.Infra: ✅ Protocol Schema Validation Active (6 events)
+2026-04-10 23:57:04,102 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Event Protocol (Schemas) (0.00s)
+2026-04-10 23:57:04,102 [INFO] [-] [-] Bootstrap.Integration: ✅ RouterManager Bootstrapped & Subscribed
+2026-04-10 23:57:04,102 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: RouterManager (0.00s)
+2026-04-10 23:57:04,654 [INFO] [-] [-] LLMManager: Scanning Built-in LLM Drivers: E:\Work\Code\Lumina\python_backend\llm\..\plugins\drivers\llm
+2026-04-10 23:57:04,654 [INFO] [-] [-] SDK.PluginLoader: 📂 Scanning driver directory: E:\Work\Code\Lumina\python_backend\llm\..\plugins\drivers\llm
+2026-04-10 23:57:04,659 [INFO] [-] [-] LLMManager: Discovered LLM Driver Type: openai
+2026-04-10 23:57:04,659 [INFO] [-] [-] LLMManager: Discovered LLM Driver Type: deepseek
+2026-04-10 23:57:04,659 [INFO] [-] [-] LLMManager: Discovered LLM Driver Type: openai
+2026-04-10 23:57:04,660 [INFO] [-] [-] LLMManager: Discovered LLM Driver Type: gemini
+2026-04-10 23:57:04,660 [INFO] [-] [-] LLMManager: Discovered LLM Driver Type: openai
+2026-04-10 23:57:04,660 [INFO] [-] [-] LLMManager: Discovered LLM Driver Type: pollinations
+2026-04-10 23:57:04,660 [INFO] [-] [-] LLMManager: Loaded Driver: free_tier [Type: pollinations]
+2026-04-10 23:57:04,661 [INFO] [-] [-] LLMManager: Loaded Driver: custom_provider [Type: openai]
+2026-04-10 23:57:04,672 [INFO] [-] [-] GlobalTicker: 鈴憋笍 Global Ticker Started
+2026-04-10 23:57:04,672 [INFO] [-] [-] Bootstrap.Services: ✅ Core Services (LLM, Soul, Session, Ticker) Initialized
+2026-04-10 23:57:04,672 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Core Services (0.57s)
+2026-04-10 23:57:04,673 [INFO] [-] [-] Bootstrap.Services: ✅ Plugin Registry Service Initialized
+2026-04-10 23:57:04,673 [INFO] [-] [-] Bootstrap.Services: ✅ Worker-backed media services delegated to STT/TTS workers
+2026-04-10 23:57:04,674 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Plugin Services (Vision/TTS/STT) (0.00s)
+2026-04-10 23:57:04,677 [INFO] [-] [-] Bootstrap.Services: ✅ Middleware Registered
+2026-04-10 23:57:04,677 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Middleware (Context/Tools) (0.00s)
+2026-04-10 23:57:04,680 [INFO] [-] [-] SystemPluginManager: 🚀 SystemPluginManager: Starting up...
+2026-04-10 23:57:04,694 [INFO] [-] [-] SystemPluginManager: 🧩 Discovered 10 plugins
+2026-04-10 23:57:04,694 [INFO] [-] [-] SystemPluginManager: 💤 Plugin system.hello_world is disabled, skipping
+2026-04-10 23:57:04,703 [INFO] [-] [-] SDK.PluginLoader: ✅ Plugin loaded: system.avatar_server
+2026-04-10 23:57:04,703 [INFO] [-] [-] LuminaContext: ✅ LuminaContext: RouterManager Injected for system.avatar_server
+2026-04-10 23:57:04,705 [INFO] [-] [-] AuditLogger: 🛡️ Audit Logger initialized at logs\audit\audit.jsonl
+2026-04-10 23:57:04,705 [INFO] [-] [-] VMCProtocol: VMC OSC Client initialized at 127.0.0.1:39539
+2026-04-10 23:57:04,705 [INFO] [-] [-] AvatarServer: 🎭 Avatar Driver Listening via OSC on 127.0.0.1:39539
+2026-04-10 23:57:04,706 [INFO] [-] [-] SDK.PluginLoader: ✅ Plugin loaded: system.emotion_broker
+2026-04-10 23:57:04,707 [INFO] [-] [-] LuminaContext: ✅ LuminaContext: RouterManager Injected for system.emotion_broker
+2026-04-10 23:57:04,707 [INFO] [-] [-] EmotionBroker: 🎭 Emotion Broker Online - Single Source of Truth for Emotions
+2026-04-10 23:57:04,708 [INFO] [-] [-] SDK.PluginLoader: ✅ Plugin loaded: system.hello_widget
+2026-04-10 23:57:04,708 [INFO] [-] [-] LuminaContext: ✅ LuminaContext: RouterManager Injected for system.hello_widget
+2026-04-10 23:57:04,708 [INFO] [-] [-] HelloWidget: 👋 HelloWidget Initializing...
+DEBUG: HelloWidget.initialize() called!
+2026-04-10 23:57:04,709 [INFO] [-] [-] HelloWidget: 📤 Emitting ui:register_widget: {'id': 'hello_clock', 'plugin_id': 'system.hello_widget', 'src': '/api/plugins/system.hello_widget/assets/index.html', 'location': 'sidebar_right', 'title': 'Stock Clock', 'height': '160px'}
+2026-04-10 23:57:04,710 [INFO] [-] [-] SDK.PluginLoader: ✅ Plugin loaded: system.llm_core
+2026-04-10 23:57:04,710 [INFO] [-] [-] LuminaContext: ✅ LuminaContext: RouterManager Injected for system.llm_core
+2026-04-10 23:57:04,710 [INFO] [-] [-] SystemPluginManager: ⏭️ Plugin driver.stt.sensevoice targets stt_server, skip in main
+2026-04-10 23:57:04,711 [INFO] [-] [-] SystemPluginManager: ⏭️ Plugin driver.tts.edge targets tts_server, skip in main
+2026-04-10 23:57:04,711 [INFO] [-] [-] SystemPluginManager: ⏭️ Plugin system.voiceprint targets stt_server, skip in main
+2026-04-10 23:57:04,711 [INFO] [-] [-] SystemPluginManager: ✨ SystemPluginManager: 4 plugins loaded
+2026-04-10 23:57:04,711 [INFO] [-] [-] Bootstrap.Services: ✅ System Plugin Manager Initialized
+2026-04-10 23:57:04,712 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: System Plugins (0.03s)
+2026-04-10 23:57:04,723 [INFO] [-] [-] Bootstrap.SDK: ✅ Lumina SDK Initialized
+2026-04-10 23:57:04,723 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Lumina SDK (0.01s)
+2026-04-10 23:57:04,725 [INFO] [-] [-] ChatBridge: ✅ Basic Chat Bridge Started (Listening to input_text)
+2026-04-10 23:57:04,725 [INFO] [-] [-] Bootstrap.Integration: ✅ ChatBridge Initialized
+2026-04-10 23:57:04,725 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ChatBridge (0.00s)
+2026-04-10 23:57:04,727 [INFO] [-] [-] Bootstrap.Integration: 🔌 MCP Host Initialized (Start Disabled)
+2026-04-10 23:57:04,727 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: MCPHost (0.00s)
+2026-04-10 23:57:04,728 [INFO] [-] [-] Bootstrap.Integration: ✅ System Plugin Routers Mounted
+2026-04-10 23:57:04,728 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: SystemPluginRouters (0.00s)
+2026-04-10 23:57:04,728 [INFO] [-] [-] WorkerControlHub: 🎛️ WorkerControlHub initialized
+2026-04-10 23:57:04,729 [INFO] [-] [-] PluginStateAggregator: ✅ PluginStateAggregator initialized
+2026-04-10 23:57:04,730 [INFO] [-] [-] Bootstrap.PostStartup: 🎛️ WorkerControlHub Ready
+2026-04-10 23:57:04,730 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: WorkerControlHub (0.00s)
+2026-04-10 23:57:04,730 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Pre-warming Core Services (TTS/STT)...
+2026-04-10 23:57:04,784 [INFO] [-] [-] ProcessManager: 🕵️ Service tts_server detected via HTTP Probe (8766/health).
+2026-04-10 23:57:04,814 [INFO] [-] [-] ProcessManager: 🕵️ Service stt_server detected via HTTP Probe (8765/health).
+2026-04-10 23:57:04,814 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Prewarm (0.08s)
+2026-04-10 23:57:04,815 [INFO] [-] [-] ReconciliationService: ⚖️ Reconciliation Service Started
+2026-04-10 23:57:04,816 [INFO] [-] [-] Bootstrap.PostStartup: ⚖️ Reconciliation Service Started
+2026-04-10 23:57:04,816 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ReconciliationService (0.00s)
+2026-04-10 23:57:04,817 [INFO] [-] [-] Bootstrap.PostStartup: 👀 ConfigWatcher Started
+2026-04-10 23:57:04,818 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ConfigWatcher (0.00s)
+2026-04-10 23:57:04,818 [INFO] [-] [-] ProcessManager: 🛡️ Supervisor activated.
+2026-04-10 23:57:04,818 [INFO] [-] [-] Bootstrap.PostStartup: 🛡️ Process Supervisor Auto-Healing Enabled
+2026-04-10 23:57:04,818 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ProcessSupervisor (0.00s)
+2026-04-10 23:57:04,826 [INFO] [-] [-] Automation.Service: 🧠 ECA Engine Started
+2026-04-10 23:57:04,827 [INFO] [-] [-] Automation.Service: Registered Rule: Proactive Idle Chat
+2026-04-10 23:57:04,828 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: AutomationService (0.01s)
+2026-04-10 23:57:04,828 [INFO] [-] [-] Bootstrap: ✨ Bootstrap Sequence Complete.
+2026-04-10 23:57:04,828 [INFO] [-] [-] Lifecycle: 🚀 Startup complete
+2026-04-10 23:57:04,828 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\Lumina_Data\config.yaml
+2026-04-10 23:57:04,829 [INFO] [-] [-] uvicorn.error: Application startup complete.
+2026-04-10 23:57:04,829 [ERROR] [-] [-] uvicorn.error: [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8010): [winerror 10048] 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+2026-04-10 23:57:04,829 [INFO] [-] [-] uvicorn.error: Waiting for application shutdown.
+2026-04-10 23:57:04,830 [INFO] [-] [-] ShutdownManager: 🛑 Starting graceful shutdown...
+2026-04-10 23:57:04,830 [INFO] [-] [-] ShutdownManager: Stopping MCP Host...
+2026-04-10 23:57:04,830 [INFO] [-] [-] MCPHost: Stopping all MCP Servers...
+2026-04-10 23:57:04,830 [INFO] [-] [-] ShutdownManager: Stopping ConfigWatcher...
+2026-04-10 23:57:04,831 [INFO] [-] [-] ConfigWatcher: 🛑 ConfigWatcher stopped.
+2026-04-10 23:57:04,831 [INFO] [-] [-] ShutdownManager: Stopping Reconciliation Service...
+2026-04-10 23:57:04,831 [WARNING] [-] [-] ShutdownManager: Reconciliation stop was cancelled (acceptable)
+2026-04-10 23:57:04,832 [INFO] [-] [-] ShutdownManager: Stopping System Plugins...
+2026-04-10 23:57:04,832 [INFO] [-] [-] HelloWidget: 👋 HelloWidget Terminating...
+2026-04-10 23:57:04,832 [INFO] [-] [-] ShutdownManager: Stopping Ticker...
+2026-04-10 23:57:04,833 [INFO] [-] [-] WorkerControlHub: 🛑 WorkerControlHub shutdown complete
+2026-04-10 23:57:04,833 [INFO] [-] [-] ShutdownManager: Stopping Process Manager...
+2026-04-10 23:57:04,833 [INFO] [-] [-] ProcessManager: ProcessManager shutting down all workers...
+2026-04-10 23:57:04,833 [INFO] [-] [-] ProcessManager: Stopping worker tts_server...
+2026-04-10 23:57:04,834 [WARNING] [-] [-] ProcessManager: Worker tts_server is external. Cannot stop it via ProcessManager.
+2026-04-10 23:57:04,834 [INFO] [-] [-] ProcessManager: Worker tts_server stopped.
+2026-04-10 23:57:04,834 [INFO] [-] [-] ProcessManager: Stopping worker stt_server...
+2026-04-10 23:57:04,834 [WARNING] [-] [-] ProcessManager: Worker stt_server is external. Cannot stop it via ProcessManager.
+2026-04-10 23:57:04,835 [INFO] [-] [-] ProcessManager: Worker stt_server stopped.
+2026-04-10 23:57:04,835 [INFO] [-] [-] ShutdownManager: Closing Database connection...
+2026-04-10 23:57:04,839 [INFO] [-] [-] ShutdownManager: ✅ Shutdown complete
+2026-04-10 23:57:04,839 [INFO] [-] [-] uvicorn.error: Application shutdown complete.

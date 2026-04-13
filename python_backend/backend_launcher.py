@@ -1,155 +1,86 @@
-import sys
-print(f"DEBUG_TRACE: Loading backend_launcher.py from {__file__}", flush=True)
 import argparse
 import multiprocessing
 import os
+import sys
 
-# Ensure local imports work
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(_BACKEND_DIR)
+sys.path.append(os.path.join(_BACKEND_DIR, "sdk"))
 
 from app_config import config
+from core.runtime import resolve_runtime_port, runtime_target_for_capability
 
-def start_stt():
-    import generic_worker
-    from argparse import Namespace
-    
-    # Inject Args for Generic Worker
-    generic_worker.args = Namespace(
-        capability="stt",
-        host=config.network.host,
-        port=config.network.stt_port
-    )
-    
+
+def run_core():
+    import main as core_app
     import uvicorn
-    port = config.network.stt_port
-    print(f"[Launcher] Starting STT Service (Generic Helper) on port {port}...")
-    uvicorn.run(generic_worker.app, host=config.network.host, port=port, log_level="info", log_config=None)
 
-def start_tts():
-    import generic_worker
-    from argparse import Namespace
-    
-    # Inject Args for Generic Worker
-    generic_worker.args = Namespace(
-        capability="tts",
-        host=config.network.host,
-        port=config.network.tts_port
-    )
-
-    import uvicorn
-    port = config.network.tts_port
-    print(f"[Launcher] Starting TTS Service (Generic Helper) on port {port}...")
-    uvicorn.run(generic_worker.app, host=config.network.host, port=port, log_level="info", log_config=None)
-
-def start_memory():
-    # [Refactor] Memory is now a Generic Worker Capability
-    # Previously it ran 'main.py' directly.
-    # To support migration, we offer two modes:
-    # 1. Legacy Monolith (runs main.py) - Default if no args?
-    # 2. Worker Mode (generic_worker --capability memory)
-    # The user instruction was to MIGRATE. 
-    # But main.py IS the Gateway/Soul server. It NEEDS to run.
-    # If we run 'memory' as a worker, main.py still needs to run as Gateway/Soul.
-    # So 'start_memory' in launcher usually meant "Start the Main Server".
-    # We should probably Rename `start_memory` to `start_main` or `start_core`.
-    # AND add `start_memory_worker`.
-    # However, existing ecosystem expects `python backend_launcher.py memory` to start the "Main Brain".
-    # So we should KEEP `start_memory` pointing to `main.py` for now, BUT `main.py` should be stripped of Helper Logic if Config says so.
-    
-    # WAIT. User wants "stt_server.py ... abstracted".
-    # If we abstract Memory, we have a Memory Worker.
-    # `main.py` becomes just Soul/Gateway.
-    # So we need a NEW entry in launcher for "Core" (main.py) and change "Memory" to be the Worker?
-    # No, that breaks compatibility violently.
-    # Let's keep `start_memory` launching `main.py` (Monolith) for now, 
-    # and add `start_memory_worker` for the new Isolated Capability?
-    # OR, if the user intends to run Distributed, they run:
-    # 1. launcher memory_worker
-    # 2. launcher core (main.py)
-    
-    # For now, let's inject `start_memory_node` -> Generic Worker.
-    # And keep `start_memory` -> Main.py (renamed to start_core ideally, but keep alias).
-    
-    import main as memory_app 
-    import uvicorn
-    port = config.network.memory_port
-    print(f"[Launcher] Starting Core System (Soul/Gateway) on port {port}...")
     host = "127.0.0.1" if config.network.bind_localhost_only else config.network.host
-    uvicorn.run(memory_app.app, host=host, port=port, log_level="info", log_config=None)
+    port = config.network.memory_port
+    print(f"[Launcher] Starting Core System on {host}:{port}...", flush=True)
+    uvicorn.run(core_app.app, host=host, port=port, log_level="info", log_config=None)
 
-def start_memory_worker():
-    import generic_worker
-    from argparse import Namespace
-    
-    generic_worker.args = Namespace(
-        capability="memory",
-        host=config.network.host,
-        port=8006 # Discrete port for Memory Worker
-    )
-    
+
+def run_worker(capability: str):
     import uvicorn
-    # Config need a memory_worker_port?
-    port = 8006
-    print(f"[Launcher] Starting Memory Worker on port {port}...")
-    uvicorn.run(generic_worker.app, host=config.network.host, port=port, log_level="info", log_config=None)
+    from services.container import services
+    from services.worker_runtime import WorkerRuntimeHost, WorkerRuntimeOptions
 
+    runtime_target = runtime_target_for_capability(capability)
+    port = resolve_runtime_port(config, runtime_target)
+    if not port:
+        raise ValueError(f"No port configured for capability '{capability}'")
 
-
-def start_vision():
-    import generic_worker
-    from argparse import Namespace
-    
-    # Inject Args for Generic Worker
-    # Vision doesn't have a port in config usually, let's pick 8003 or similar, or look it up
-    # For now, let's assume 8005 or define in config.
-    # But ConfigManager might not have vision_port.
-    # Let's just default to 8005 for now.
-    generic_worker.args = Namespace(
-        capability="vision",
+    runtime_options = WorkerRuntimeOptions(
+        capability=capability,
         host=config.network.host,
-        port=8005
+        port=port,
+        runtime_target=runtime_target,
     )
+    runtime_host = WorkerRuntimeHost(runtime_options, services)
+    app = runtime_host.build_app()
 
-    import uvicorn
-    port = 8005
-    print(f"[Launcher] Starting Vision Service (Generic Helper) on port {port}...")
-    uvicorn.run(generic_worker.app, host=config.network.host, port=port, log_level="info", log_config=None)
+    print(f"[Launcher] Starting Worker Host [{capability}] on {config.network.host}:{port}...", flush=True)
+    uvicorn.run(app, host=config.network.host, port=runtime_host.listen_port, log_level="info", log_config=None)
+
+
+def _resolve_legacy_service(name: str) -> tuple[str, str | None]:
+    if name == "core":
+        return ("core", None)
+    if name == "worker":
+        return ("worker", None)
+    raise ValueError(f"Unknown launcher mode: {name}")
+
 
 if __name__ == "__main__":
-    # Crucial for PyInstaller multiprocessing
-    multiprocessing.freeze_support() 
-    
-    parser = argparse.ArgumentParser(description="Lumina Backend Launcher")
-    parser.add_argument("service", choices=["stt", "tts", "memory", "vision", "memory_worker"], help="Service to launch")
-    
-    # Parse args (sys.argv[1:])
+    multiprocessing.freeze_support()
+
+    parser = argparse.ArgumentParser(description="Lumina Runtime Launcher")
+    parser.add_argument("mode", help="core | worker")
+    parser.add_argument("--capability", help="Capability hosted by worker mode")
+    cli_args = parser.parse_args()
+
     try:
-        args = parser.parse_args()
-        service_map = {
-            "stt": start_stt,
-            "tts": start_tts,
-            "memory": start_memory,
-            "vision": start_vision,
-            "memory_worker": start_memory_worker
-        }
-        
-        # Execute
-        service_map[args.service]()
-        
+        mode, inferred_capability = _resolve_legacy_service(cli_args.mode)
+        if mode == "core":
+            run_core()
+        else:
+            capability = cli_args.capability or inferred_capability
+            if not capability:
+                raise ValueError("Worker mode requires --capability")
+            run_worker(capability)
     except KeyboardInterrupt:
-        print("[Launcher] Service stopped by user.")
-    except Exception as e:
-        print(f"[Launcher] Critical Error: {e}")
+        print("[Launcher] Service stopped by user.", flush=True)
+    except Exception as exc:
+        print(f"[Launcher] Critical Error: {exc}", flush=True)
         import traceback
+
         traceback.print_exc()
-        
-        # Log to file for packaged debugging
         try:
             log_path = os.path.join(os.path.expanduser("~"), "lumina_backend_crash.log")
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"\n--- Crash Report [{args.service if 'args' in locals() else 'Unknown'}] ---\n")
-                f.write(traceback.format_exc())
-        except:
+            with open(log_path, "a", encoding="utf-8") as handle:
+                handle.write(f"\n--- Crash Report [{cli_args.mode}] ---\n")
+                handle.write(traceback.format_exc())
+        except Exception:
             pass
-
         sys.exit(1)

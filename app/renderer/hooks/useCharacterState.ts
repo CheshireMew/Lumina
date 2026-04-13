@@ -1,9 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { CharacterProfile } from "@core/llm/types";
 import { API_CONFIG } from "../config";
-import { memoryService } from "@core/memory/memory_service";
+import { electronSettings, loadBootstrapState } from "../platform/electron";
 
-export const useCharacterState = (initialActiveId: string = "") => {
+export const useCharacterState = (
+    backendReady: boolean,
+    initialActiveId: string = "",
+) => {
     const [characters, setCharacters] = useState<CharacterProfile[]>([]);
     const [activeCharacterId, setActiveCharacterId] =
         useState<string>(initialActiveId);
@@ -11,58 +14,36 @@ export const useCharacterState = (initialActiveId: string = "") => {
 
     const activeCharacter = characters.find((c) => c.id === activeCharacterId);
 
+    const persistCharacter = async (character: CharacterProfile) => {
+        return fetch(`${API_CONFIG.BASE_URL}/characters/${character.id}/config`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(character),
+        });
+    };
+
     // Fetch characters from backend
-    const fetchCharacters = async () => {
+    const fetchCharacters = useCallback(async () => {
+        if (!backendReady) {
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
         try {
-            const settings = window.settings;
-            // 1. Try fetching from Backend API (Single Source of Truth)
             const charRes = await fetch(`${API_CONFIG.BASE_URL}/characters`);
-
-            if (charRes.ok) {
-                const data = await charRes.json();
-
-                // MAPPING: Convert Backend (snake_case) to Frontend (camelCase) where needed
-                // Most fields map directly if types match, but we need to ensure compatibility
-                const loadedCharacters: CharacterProfile[] = (
-                    data.characters || []
-                ).map((char: any) => ({
-                    id: char.character_id,
-                    name: char.name,
-                    description: char.description,
-                    systemPrompt: char.system_prompt,
-                    modelPath: char.live2d_model,
-                    voiceConfig: char.voice_config,
-                    // Interaction settings
-                    heartbeatEnabled: char.heartbeat_enabled !== false,
-                    proactiveChatEnabled: char.proactive_chat_enabled !== false,
-                    galgameModeEnabled: char.galgame_mode_enabled !== false,
-                    soulEvolutionEnabled: char.soul_evolution_enabled !== false,
-                    proactiveThresholdMinutes:
-                        char.proactive_threshold_minutes || 15,
-                }));
-
-                setCharacters(loadedCharacters);
-
-                // Update cache
-                await settings.set("characters", loadedCharacters);
-            } else {
-                console.warn(
-                    "[useCharacterState] Failed to fetch characters from backend, falling back to cache"
-                );
-                const cached = await settings.get("characters");
-                if (cached) setCharacters(cached);
+            if (!charRes.ok) {
+                throw new Error(`Failed to fetch characters: ${charRes.status}`);
             }
+
+            const data = await charRes.json();
+            setCharacters(data.characters || []);
         } catch (e) {
             console.error("[useCharacterState] Error fetching characters:", e);
-            // Fallback to cache
-            const settings = window.settings;
-            const cached = await settings.get("characters");
-            if (cached) setCharacters(cached);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [backendReady]);
 
     // Switch Character
     const switchCharacter = async (newInfo: string | CharacterProfile) => {
@@ -104,24 +85,8 @@ export const useCharacterState = (initialActiveId: string = "") => {
             );
         }
 
-        // Configure Memory Service
-        try {
-            const settings = window.settings;
-            const apiKey = await settings.get("apiKey");
-            const baseUrl = await settings.get("apiBaseUrl");
-            const model = await settings.get("modelName");
-
-            await memoryService.configure(apiKey, baseUrl, model, newId);
-        } catch (error) {
-            console.error(
-                "[useCharacterState] Failed to reconfigure memory:",
-                error
-            );
-        }
-
         // Persist
-        const settings = window.settings;
-        await settings.set("activeCharacterId", newId);
+        await electronSettings.set("activeCharacterId", newId);
 
         return true;
     };
@@ -140,14 +105,15 @@ export const useCharacterState = (initialActiveId: string = "") => {
 
         // 2. Persist to Backend
         try {
-            const response = await fetch(
-                `${API_CONFIG.BASE_URL}/characters/${characterId}/config`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ live2d_model: modelPath }),
-                }
-            );
+            const targetCharacter = characters.find((c) => c.id === characterId);
+            if (!targetCharacter) {
+                throw new Error(`Character not found: ${characterId}`);
+            }
+
+            const response = await persistCharacter({
+                ...targetCharacter,
+                modelPath,
+            });
 
             if (!response.ok) {
                 console.error(
@@ -173,30 +139,7 @@ export const useCharacterState = (initialActiveId: string = "") => {
                 allCharacters
             );
 
-            const savePromises = allCharacters.map((char) => {
-                const payload = {
-                    character_id: char.id,
-                    name: char.name,
-                    live2d_model: char.modelPath,
-                    system_prompt: char.systemPrompt,
-                    description: char.description,
-                    voice_config: char.voiceConfig,
-                    heartbeat_enabled: char.heartbeatEnabled,
-                    proactive_chat_enabled: char.proactiveChatEnabled,
-                    galgame_mode_enabled: char.galgameModeEnabled,
-                    soul_evolution_enabled: char.soulEvolutionEnabled,
-                    proactive_threshold_minutes: char.proactiveThresholdMinutes,
-                    bilibili: char.bilibili,
-                };
-                return fetch(
-                    `${API_CONFIG.BASE_URL}/characters/${char.id}/config`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(payload),
-                    }
-                );
-            });
+            const savePromises = allCharacters.map((char) => persistCharacter(char));
 
             const deletePromises = deletedIds.map((id) =>
                 fetch(`${API_CONFIG.BASE_URL}/characters/${id}`, {
@@ -206,19 +149,8 @@ export const useCharacterState = (initialActiveId: string = "") => {
 
             await Promise.all([...savePromises, ...deletePromises]);
 
-            // Reload heartbeat if needed (optional but good practice)
-            try {
-                await fetch(`${API_CONFIG.BASE_URL}/heartbeat/reload`, {
-                    method: "POST",
-                });
-            } catch {}
-
             // Refresh State
             setCharacters(allCharacters);
-
-            // Update cache
-            const settings = window.settings;
-            await settings.set("characters", allCharacters);
 
             return true;
         } catch (e) {
@@ -229,17 +161,19 @@ export const useCharacterState = (initialActiveId: string = "") => {
 
     // Initial Load
     useEffect(() => {
-        fetchCharacters();
-        // Load initial active ID from settings if not provided
         const init = async () => {
-            const settings = window.settings;
-            const savedId = await settings.get("activeCharacterId");
+            const { localSettings } = await loadBootstrapState();
+            const savedId = localSettings.activeCharacterId;
             if (savedId && !initialActiveId) {
                 setActiveCharacterId(savedId);
             }
         };
-        init();
-    }, []);
+        void init();
+    }, [initialActiveId]);
+
+    useEffect(() => {
+        void fetchCharacters();
+    }, [fetchCharacters]);
 
     return {
         characters,

@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Loader2, Mic, Keyboard, Send, X } from 'lucide-react';
 import { events } from '../core/events';
+import { API_CONFIG } from '../config';
+import { getSttWebSocketUrl } from '../platform/electron';
 
 interface InputBoxProps {
     onSend: (message: string) => void;
@@ -51,8 +53,7 @@ const InputBox: React.FC<InputBoxProps> = ({
         let ws: WebSocket | null = null;
         const connectWS = async () => {
             try {
-                // @ts-ignore
-                const wsUrl = await window.stt.getWSUrl();
+                const wsUrl = await getSttWebSocketUrl();
                 ws = new WebSocket(wsUrl);
                 wsRef.current = ws;
 
@@ -133,8 +134,6 @@ const InputBox: React.FC<InputBoxProps> = ({
             const formData = new FormData();
             formData.append('file', file);
             formData.append('prompt', 'Describe this image in detail.');
-            // @ts-ignore
-            const { API_CONFIG } = await import('../config'); 
             const res = await fetch(`${API_CONFIG.BASE_URL}/vision/analyze`, { method: 'POST', body: formData });
             if (res.ok) {
                 const data = await res.json();

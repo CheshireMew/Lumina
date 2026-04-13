@@ -1,409 +1,254 @@
-"""
-Memory Router
-Includes: /add, /search, /consolidate_history, /all, /memory/inspiration
+"""Memory Router."""
 
-Refactored: Removed inject_dependencies pattern
-Now uses container for core services, EventBus for plugin services
-"""
 import logging
-from typing import Optional
-from fastapi import APIRouter, HTTPException
+from typing import Any, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from schemas.requests import AddMemoryRequest, SearchRequest, ConsolidateRequest
-
+from routers.deps import (
+    get_container,
+    get_llm_service,
+    get_memory_service,
+    get_optional_soul_service,
+    get_session_manager,
+)
+from core.services.service_registry import get_service_registry
+from schemas.requests import AddMemoryRequest, SearchRequest
 
 logger = logging.getLogger("MemoryRouter")
 
 router = APIRouter(tags=["Memory"])
 
 
-def _get_surreal():
-    """Get SurrealDB from container (Refactored)"""
-    from services.container import services
-    return services.get_memory()
-
-
-def _get_soul():
-    """Get SoulClient from container"""
-    from services.container import services
-    return services.soul
-
-
 def _get_service(name: str):
-    """Get plugin service from EventBus"""
-    from core.events.bus import get_event_bus
-    bus = get_event_bus()
-    return bus.get_service(name) if bus else None
+    return get_service_registry().resolve(name, container=get_container())
+
+
+def _require_memory(memory_service: Any):
+    if not memory_service:
+        raise HTTPException(status_code=503, detail="Memory service unavailable")
+    if not getattr(memory_service, "available", True):
+        detail = getattr(memory_service, "degraded_reason", None) or "Memory backend unavailable"
+        raise HTTPException(status_code=503, detail=detail)
+    return memory_service
+
+
+def _resolve_character_id(memory_service: Any, character_id: Optional[str]) -> str:
+    if character_id:
+        return character_id
+    if memory_service and hasattr(memory_service, "character_id"):
+        return memory_service.character_id
+    return "default"
+
+
+def _serialize_value(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool, list, dict, type(None))):
+        return value
+    return str(value)
+
+
+def _serialize_memory_rows(rows: list[dict[str, Any]], score_key: str) -> list[dict[str, Any]]:
+    serialized: list[dict[str, Any]] = []
+    for row in rows:
+        serialized.append(
+            {
+                "id": str(row.get("id", "")),
+                "content": row.get("content", row.get("narrative", "")),
+                "score": _serialize_value(row.get(score_key, 0)),
+                "created_at": _serialize_value(row.get("created_at", "")),
+                "importance": _serialize_value(row.get("importance", 1)),
+            }
+        )
+    return serialized
+
+
+def _encode_query(memory_service: Any, query: str) -> list[float]:
+    encoder = getattr(memory_service, "encoder", None)
+    if not encoder:
+        raise HTTPException(status_code=500, detail="Embedding encoder not ready")
+
+    query_vec = encoder(query)
+    if hasattr(query_vec, "tolist"):
+        query_vec = query_vec.tolist()
+    return query_vec
 
 
 @router.post("/add")
-async def add_memory(request: AddMemoryRequest):
-    """Add memory to SurrealDB (Primary Storage)"""
-    surreal_system = _get_surreal()
-    soul_client = _get_soul()
-    # hippocampus_service = _get_service("hippocampus_service") # [Dead Code] Removed
+async def add_memory(
+    request: AddMemoryRequest,
+    memory_service=Depends(get_memory_service),
+    soul_client=Depends(get_optional_soul_service),
+):
+    memory_service = _require_memory(memory_service)
+    character_id = _resolve_character_id(memory_service, request.character_id)
 
-    
-    # [Refactor] Fallback for optional character_id
-    character_id = request.character_id
-    if not character_id:
-        if surreal_system and hasattr(surreal_system, 'character_id'):
-            character_id = surreal_system.character_id
-        else:
-            character_id = "default"
+    user_input = ""
+    ai_response = ""
+    for message in reversed(request.messages):
+        if message.role == "assistant" and not ai_response:
+            ai_response = message.content
+        elif message.role == "user" and not user_input:
+            user_input = message.content
 
-    print(f"[API] Character: {character_id}")
-    
-    # 妫€鏌?SurrealDB 鏄惁鍙敤
-    if not surreal_system:
-        raise HTTPException(
-            status_code=503, 
-            detail="SurrealDB not available. Please ensure SurrealDB is running."
-        )
-    
-    # 鑾峰彇 encoder (Unified Model Management)
-    encoder = surreal_system.encoder if hasattr(surreal_system, 'encoder') else None
-    
-    if not encoder:
-        print("[API] Warning: Encoder not found in SurrealSystem.")
-    
+    if not user_input and not ai_response:
+        return {"status": "skipped", "reason": "Empty interaction"}
+
+    narrative = f"{request.user_name}: {user_input or '(Silence)'}\n{request.character_name}: {ai_response}"
+
     try:
-        user_input = ""
-        ai_response = ""
-        timestamp = "unknown"
-        
-        # Extract last user/ai pair
-        for m in reversed(request.messages):
-            if m.role == "assistant" and not ai_response:
-                ai_response = m.content
-            elif m.role == "user" and not user_input:
-                user_input = m.content
-            
-            if m.timestamp is not None and timestamp == "unknown":
-                timestamp = m.timestamp
-
-        if not user_input and not ai_response:
-            return {"status": "skipped", "reason": "Empty interaction"}
-
-        # Normalize user input for proactive cases
-        if not user_input:
-             user_input = "(Silence)"
-
-        # 鏋勯€犲璇濆唴瀹?
-        content = f"{request.user_name}: {user_input}\n{request.character_name}: {ai_response}"
-
-        # 璁板綍瀵硅瘽鏃ュ織 (SurrealDB)
-        log_id = await surreal_system.log_conversation(
+        log_id = await memory_service.log_conversation(
             character_id=character_id,
-            narrative=content
+            narrative=narrative,
         )
-        
-        # [Soul Update] 
-        # Decoupled: Use Galgame Manager if available
+
         galgame_service = _get_service("galgame_manager")
-        if galgame_service and hasattr(galgame_service, 'update_energy'):
-             # Update Interaction Time & Energy via Plugin
-             # GalgameManager doesn't expose update_last_interaction explicitly? 
-             # It subscribes to ticker usually, but interactive update is good.
-             # Actually GalgameManager handles logic internally.
-             # But wait, checking galgame/manager.py... it doesn't seem to have 'update_last_interaction'.
-             # Let's check.
-             
-             # Fallback: soul_client still holds the STATE (last_interaction).
-             # We should keep update_last_interaction in SoulManager as it's Core State (Metadata).
-             # BUT update_energy is definitely Game Logic.
-             pass
-
         if soul_client:
-             soul_client.update_last_interaction()
-             
+            soul_client.update_last_interaction()
         if galgame_service:
-             # Apply Energy Cost
-             galgame_service.update_energy(-0.1)
-        
-        # [Hippocampus Trigger] - Removed (Ghost Feature)
-        # if hippocampus_service:
-        #     await hippocampus_service.process_memories(batch_size=20)
+            galgame_service.update_energy(-0.1)
 
-
-        print(f"[API] ✅ Conversation logged: {log_id}")
-        return {"status": "success", "id": str(log_id), "storage": "surreal"}
-    except Exception as e:
-        print(f"[API] ADD ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        driver_id = getattr(getattr(memory_service, "driver", None), "id", "memory")
+        return {"status": "success", "id": str(log_id), "storage": driver_id}
+    except Exception as exc:
+        logger.error("Failed to add memory: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/search")
-async def search_memory(request: SearchRequest):
-    """Search memory (SurrealDB Primary)"""
-    surreal_system = _get_surreal()
-    
-    # [Refactor] Fallback for optional character_id
-    character_id = request.character_id
-    if not character_id:
-        if surreal_system and hasattr(surreal_system, 'character_id'):
-            character_id = surreal_system.character_id
-        else:
-            character_id = "default"
-    
-    # 妫€鏌?SurrealDB
-    if not surreal_system:
-        raise HTTPException(status_code=503, detail="SurrealDB not available")
-    
-    import time
-    start_time = time.time()
-
-    # 鑾峰彇 encoder
-    encoder = surreal_system.encoder
-    if not encoder:
-         raise HTTPException(status_code=500, detail="Embedding encoder not ready")
+async def search_memory(
+    request: SearchRequest,
+    memory_service=Depends(get_memory_service),
+    llm_manager=Depends(get_llm_service),
+):
+    memory_service = _require_memory(memory_service)
+    character_id = _resolve_character_id(memory_service, request.character_id)
 
     try:
-        # 鐢熸垚鏌ヨ鍚戦噺
-        query_vec = encoder(request.query)
-        if hasattr(query_vec, 'tolist'):
-            query_vec = query_vec.tolist()
-        
-        # [Free Tier Opt] Dynamic Routing
-        # [Free Tier Opt] Dynamic Routing
-        # from llm.manager import llm_manager
-        from services.container import services
-        llm_manager = services.get_llm_manager()
-        route = llm_manager.get_route("memory")
-        
+        query_vec = _encode_query(memory_service, request.query)
         target_table = "episodic_memory"
         final_limit = request.limit
-        
+
+        route = llm_manager.get_route("memory")
         if route and route.provider_id == "free_tier":
-            print("[API] Free Tier detected: Fallback to Searching Conversation Logs (Limit 3)")
             target_table = "conversation_log"
             final_limit = min(request.limit, 3)
-            
-        # 鎼滅储 SurrealDB
-        results = await surreal_system.search(
-            query_vec, character_id, 
-            limit=final_limit,
-            target_table=target_table
-        )
-        
-        search_time = (time.time() - start_time) * 1000
-        logger.info(f"🔎 SurrealDB Search: '{request.query}' -> {len(results)} hits ({search_time:.1f}ms)")
-        
-        # 杞崲涓哄墠绔湡鏈涚殑鏍煎紡
-        formatted_results = []
-        for r in results:
-            formatted_results.append({
-                "id": str(r.get("id", "")),
-                "content": r.get("content", ""),
-                "score": r.get("score", 0),
-                "created_at": r.get("created_at", ""),
-                "importance": r.get("importance", 1)
-            })
 
-        return formatted_results
-    except Exception as e:
-        print(f"[API] SEARCH ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        results = await memory_service.search(
+            query_vec,
+            character_id,
+            limit=final_limit,
+            target_table=target_table,
+        )
+        logger.info("Memory search '%s' -> %s hits", request.query, len(results))
+        return _serialize_memory_rows(results, "score")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to search memory: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/search/hybrid")
-async def search_memory_hybrid(request: SearchRequest):
-    """Hybrid Search (Vector + Fulltext) SurrealDB"""
-    surreal_system = _get_surreal()
-    
-    # [Refactor] Fallback for optional character_id
-    character_id = request.character_id
-    if not character_id:
-        if surreal_system and hasattr(surreal_system, 'character_id'):
-            character_id = surreal_system.character_id
-        else:
-            character_id = "default"
-            
-    print(f"\n--- [API] /search/hybrid Request Received ---")
-    print(f"[API] Character: {character_id}")
-    print(f"[API] Query: '{request.query}' Limit: {request.limit}")
-    
-    # 妫€鏌?SurrealDB
-    if not surreal_system:
-        raise HTTPException(status_code=503, detail="SurrealDB not available")
-    
-    # 鑾峰彇 encoder
-    encoder = surreal_system.encoder if hasattr(surreal_system, 'encoder') else None
-    
-    if not encoder:
-        raise HTTPException(status_code=500, detail="Embedding encoder not available")
-    
+async def search_memory_hybrid(
+    request: SearchRequest,
+    memory_service=Depends(get_memory_service),
+    llm_manager=Depends(get_llm_service),
+):
+    memory_service = _require_memory(memory_service)
+    character_id = _resolve_character_id(memory_service, request.character_id)
+
     try:
-        # 鐢熸垚鏌ヨ鍚戦噺
-        query_vec = encoder(request.query)
-        if hasattr(query_vec, 'tolist'):
-            query_vec = query_vec.tolist()
-        
-        # [Free Tier Opt] Dynamic Routing
-        # [Free Tier Opt] Dynamic Routing
-        # from llm.manager import llm_manager
-        from services.container import services
-        llm_manager = services.get_llm_manager()
-        route = llm_manager.get_route("memory")
-        
+        query_vec = _encode_query(memory_service, request.query)
         target_table = "episodic_memory"
         final_limit = request.limit
-        
+
+        route = llm_manager.get_route("memory")
         if route and route.provider_id == "free_tier":
-            print("[API] Free Tier detected: Fallback to Hybrid Searching Logs (Limit 3)")
             target_table = "conversation_log"
             final_limit = min(request.limit, 3)
 
-        # SurrealDB 娣峰悎鎼滅储
-        results = await surreal_system.search_hybrid(
+        results = await memory_service.search_hybrid(
             query=request.query,
             query_vector=query_vec,
             character_id=character_id,
             limit=final_limit,
-            target_table=target_table
+            target_table=target_table,
         )
-        
-        print(f"[API] Hybrid Search (SurrealDB) found {len(results)} results")
-        
-        # 杞崲鏍煎紡
-        formatted_results = []
-        for r in results:
-            formatted_results.append({
-                "id": str(r.get("id", "")),
-                "content": r.get("content", ""),
-                "score": r.get("hybrid_score", 0),
-                "created_at": r.get("created_at", ""),
-                "importance": r.get("importance", 1)
-            })
-        
-        return formatted_results
-    except Exception as e:
-        print(f"[API] HYBRID SEARCH ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/consolidate_history")
-async def consolidate_history(request: ConsolidateRequest):
-    """Archive history (Deprecated: SurrealDB handles persistence)"""
-    try:
-        print(f"[API] /consolidate_history called for '{request.character_id}'. Action: Skipped (Legacy).")
-        return {"status": "success", "archived_count": 0, "message": "Legacy consolidation skipped."}
-
-    except Exception as e:
-        print(f"[API] Consolidation Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# [Dead Code] Dream Route Removed
-# @router.post("/dream_on_idle")
-# async def dream_on_idle(request: DreamRequest):
-#     """Trigger idle dreaming / consolidation"""
-#     dreaming_service = _get_service("dreaming_service")
-#     try:
-#         print(f"[API] 🛌 Idle Dream Request for '{request.character_id}'")
-#         
-#         if not dreaming_service:
-#              raise HTTPException(status_code=500, detail="DreamingService not initialized.")
-# 
-#         dreaming_service.wake_up(mode="deep")
-#         
-#         return {"status": "success", "message": "Dreaming cycle started"}
-# 
-#     except Exception as e:
-#         print(f"[API] Dreaming Error: {e}")
-#         raise HTTPException(status_code=500, detail=str(e))
-
+        logger.info("Memory hybrid search '%s' -> %s hits", request.query, len(results))
+        return _serialize_memory_rows(results, "hybrid_score")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to hybrid-search memory: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 class ClearContextRequest(BaseModel):
     user_id: Optional[str] = "default_user"
     character_id: Optional[str] = "default_char"
 
+
 @router.post("/context/clear")
-async def clear_context(request: ClearContextRequest):
-    """Clear Short-Term Context (Session History)"""
-    from services.session_manager import session_manager
+async def clear_context(request: ClearContextRequest, session_manager=Depends(get_session_manager)):
     try:
-        # Using AddMemoryRequest structure for convenience (user_id, character_id)
-        # Or should we define a specific request schema? 
-        # AddMemoryRequest has character_id.
-        cid = request.character_id or "default_char"
-        uid = request.user_id or "default_user"
-        
-        session_manager.clear_history(uid, cid)
-        
-        # Trigger Gateway Session Reset (Signal Frontend)
+        character_id = request.character_id or "default_char"
+        user_id = request.user_id or "default_user"
+
+        await session_manager.clear_history(user_id, character_id)
+
         from routers.gateway import gateway_service
+
         await gateway_service.start_new_session(source="api.clear_context")
-        
-        print(f"[API] Context cleared & Session New for {uid}:{cid}")
         return {"status": "success", "message": "Short-term context cleared"}
-    except Exception as e:
-        logger.error(f"Context Clear Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.error("Failed to clear context: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 @router.get("/all")
-async def get_all_memories(character_id: str = "hiyori"):
-    """Get all memories (SurrealDB)"""
-    print(f"\n--- [API] /all Request Received ---")
-    surreal_system = _get_surreal()
-    
-    if not surreal_system:
-         raise HTTPException(status_code=503, detail="SurrealDB not available")
-    
+async def get_all_memories(
+    character_id: str = "hiyori",
+    memory_service=Depends(get_memory_service),
+):
+    memory_service = _require_memory(memory_service)
+
     try:
-        if hasattr(surreal_system, 'get_all_conversations'):
-             results = await surreal_system.get_all_conversations(character_id=character_id)
-        else:
-             # Fallback query
-             sql = "SELECT * FROM conversation_log WHERE character_id = $cid ORDER BY created_at DESC LIMIT 50"
-             results = await surreal_system.query(sql, {"cid": character_id})
-             # Ensure results is list (Surreal might return result obj)
-             if isinstance(results, dict) and 'result' in results: results = results['result']
-        
-        # 鏍煎紡鍖?
+        results = await memory_service.get_all_conversations(character_id=character_id)
         memories = []
-        for r in results:
-            memories.append({
-                "id": str(r.get("id", "")),
-                "content": r.get("content", ""),
-                "role": r.get("role", "user"),
-                "created_at": r.get("created_at", "")
-            })
-            
-        print(f"[API] Found {len(memories)} memories in SurrealDB")
+        for row in results:
+            memories.append(
+                {
+                    "id": str(row.get("id", "")),
+                    "content": row.get("content", row.get("narrative", "")),
+                    "role": row.get("role", "user"),
+                    "created_at": _serialize_value(row.get("created_at", "")),
+                }
+            )
         return memories
-    except Exception as e:
-        print(f"[API] ALL ERROR: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.error("Failed to fetch memories: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/inspiration")
-async def get_inspiration(character_id: str = "hiyori", limit: int = 3):
-    """Get random memories for inspiration (SurrealDB)"""
-    surreal_system = _get_surreal()
-    if not surreal_system:
-        raise HTTPException(status_code=503, detail="SurrealDB not available")
-        
+async def get_inspiration(
+    character_id: str = "hiyori",
+    limit: int = 3,
+    memory_service=Depends(get_memory_service),
+):
+    memory_service = _require_memory(memory_service)
+
     try:
-        results = await surreal_system.get_inspiration(character_id=character_id, limit=limit)
-        
-        # 鏍煎紡鍖?
-        formatted = []
-        for r in results:
-            formatted.append({
-                "id": str(r.get("id", "")),
-                "content": r.get("content", ""),
-                "created_at": r.get("created_at", "")
-            })
-        return formatted
-    except Exception as e:
-        print(f"[API] Inspiration Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        results = await memory_service.get_inspiration(character_id=character_id, limit=limit)
+        return [
+            {
+                "id": str(row.get("id", "")),
+                "content": row.get("content", row.get("narrative", "")),
+                "created_at": _serialize_value(row.get("created_at", "")),
+            }
+            for row in results
+        ]
+    except Exception as exc:
+        logger.error("Failed to fetch inspiration: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))

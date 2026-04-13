@@ -9,7 +9,6 @@ sounddevice>=0.5.0
 sherpa-onnx>=1.9.0
 soundfile>=0.12.1
 # Core dependencies
-surrealdb>=1.0.0
 asyncpg>=0.29.0
 sqlmodel>=0.0.14
 pgvector>=0.2.4
@@ -27,6 +26,8 @@ einops>=0.7.0
 torch>=2.1.0 --index-url https://download.pytorch.org/whl/pkgs/pypi/cpu
 torchvision>=0.16.0 --index-url https://download.pytorch.org/whl/pkgs/pypi/cpu
 sentence-transformers>=2.2.2
+setuptools>=70.0.0,<81
+dependency-injector>=4.41.0
 
 # MCP
 mcp>=1.0.0

@@ -1,54 +1,130 @@
+param(
+    [switch]$Dev
+)
 
-# Start-Lumina.ps1
-# 启动所有 Lumina 服务 (TTS, STT, Memory, Frontend)
 $OutputEncoding = [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Write-Host "🚀 Starting Lumina System..." -ForegroundColor Cyan
+function Test-TcpPort {
+    param(
+        [string]$Address,
+        [int]$Port
+    )
 
-# Load Config
-$ConfigPath = Join-Path $PSScriptRoot "config\ports.json"
-if (Test-Path $ConfigPath) {
-    $ports = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-    Write-Host "✅ Loaded configuration from ports.json" -ForegroundColor Green
+    try {
+        $client = [System.Net.Sockets.TcpClient]::new()
+        $task = $client.ConnectAsync($Address, $Port)
+        $connected = $task.Wait(500)
+        if ($connected -and $client.Connected) {
+            $client.Dispose()
+            return $true
+        }
+        $client.Dispose()
+    }
+    catch {
+    }
+
+    return $false
+}
+
+function Wait-TcpPort {
+    param(
+        [string]$Address,
+        [int]$Port,
+        [int]$TimeoutSeconds,
+        [string]$Name
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-TcpPort -Address $Address -Port $Port) {
+            Write-Host "✅ $Name is ready on $Address`:$Port" -ForegroundColor Green
+            return
+        }
+        Start-Sleep -Milliseconds 250
+    }
+
+    throw "$Name did not become ready on $Address`:$Port within $TimeoutSeconds seconds."
+}
+
+function Get-LuminaRuntimeConfig {
+    $rootPath = $PSScriptRoot.Replace('\', '\\')
+    $script = @"
+import json
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+root = Path(r"$rootPath")
+config = {
+    "pg_host": "127.0.0.1",
+    "pg_port": 5432,
+    "pg_user": "lumina_user",
+    "pg_password": "lumina_password",
+    "pg_database": "lumina_db",
+}
+
+config_path = root / "Lumina_Data" / "config.yaml"
+if yaml and config_path.exists():
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    pg = ((data.get("memory") or {}).get("postgres") or {})
+    config["pg_host"] = pg.get("host", config["pg_host"])
+    config["pg_port"] = int(pg.get("port", config["pg_port"]))
+    config["pg_user"] = pg.get("user", config["pg_user"])
+    config["pg_password"] = pg.get("password", config["pg_password"])
+    config["pg_database"] = pg.get("database", config["pg_database"])
+
+print(json.dumps(config))
+"@
+
+    return ($script | python - | ConvertFrom-Json)
+}
+
+Set-Location $PSScriptRoot
+$env:LUMINA_DATA_PATH = Join-Path $PSScriptRoot "Lumina_Data"
+
+Write-Host "🚀 Starting Lumina..." -ForegroundColor Cyan
+
+$runtime = Get-LuminaRuntimeConfig
+$env:LUMINA_PG_PORT = "$($runtime.pg_port)"
+$env:LUMINA_PG_USER = "$($runtime.pg_user)"
+$env:LUMINA_PG_PASSWORD = "$($runtime.pg_password)"
+$env:LUMINA_PG_DATABASE = "$($runtime.pg_database)"
+
+if (-not (Test-TcpPort -Address $runtime.pg_host -Port $runtime.pg_port)) {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        throw "PostgreSQL is not running on $($runtime.pg_host):$($runtime.pg_port), and docker is not available to start it automatically."
+    }
+    Write-Host "🗄️ Starting PostgreSQL container..." -ForegroundColor Green
+    docker compose up -d db | Out-Host
+    Wait-TcpPort -Address $runtime.pg_host -Port $runtime.pg_port -TimeoutSeconds 60 -Name "PostgreSQL"
 }
 else {
-    Write-Warning "⚠️ config/ports.json not found, using defaults."
-    $ports = @{
-        memory_port  = 8010
-        stt_port     = 8765
-        tts_port     = 8766
-        surreal_port = 8001
-        host         = "127.0.0.1"
-    }
+    Write-Host "✅ PostgreSQL already running on $($runtime.pg_host):$($runtime.pg_port)" -ForegroundColor Green
 }
 
-# 0. 清理旧进程 (防止端口冲突)
-Write-Host "🧹 Cleaning up old processes..." -ForegroundColor Yellow
-Stop-Process -Name "surreal" -ErrorAction SilentlyContinue
-Stop-Process -Name "uvicorn" -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 1
+function Start-LuminaDesktop {
+    if ($Dev) {
+        Write-Host "🖥️ Starting Electron + Vite (dev mode)..." -ForegroundColor Cyan
+        npm run dev
+        return
+    }
 
+    $distIndex = Join-Path $PSScriptRoot "dist\index.html"
+    $mainBundle = Join-Path $PSScriptRoot "dist-electron\main.js"
+    $electronCmd = Join-Path $PSScriptRoot "node_modules\.bin\electron.cmd"
 
-# 0. 启动 SurrealDB
-Write-Host "🗄️ Starting SurrealDB (Port $($ports.surreal_port))..." -ForegroundColor Green
-Start-Process -FilePath "surreal" -ArgumentList "start --log info --user root --pass root --bind 0.0.0.0:$($ports.surreal_port) --allow-all file:lumina_surreal.db" -WindowStyle Minimized
-Start-Sleep -Seconds 5
+    if ((Test-Path $distIndex) -and (Test-Path $mainBundle) -and (Test-Path $electronCmd)) {
+        Write-Host "🖥️ Starting Electron from built files..." -ForegroundColor Cyan
+        & $electronCmd .
+        return
+    }
 
-# 1. 启动 TTS Server
-Write-Host "🎙️ Starting TTS Server (Port $($ports.tts_port))..." -ForegroundColor Green
-Start-Process -FilePath "python" -ArgumentList "python_backend/tts_server.py" -WindowStyle Minimized
-Start-Sleep -Seconds 2
+    Write-Host "⚠️ Built files not found. Falling back to dev mode." -ForegroundColor Yellow
+    Write-Host "   Run npm run build once to enable faster normal startup." -ForegroundColor Yellow
+    npm run dev
+}
 
-# 2. 启动 STT Server
-Write-Host "👂 Starting STT Server (Port $($ports.stt_port))..." -ForegroundColor Green
-Start-Process -FilePath "python" -ArgumentList "python_backend/stt_server.py" -WindowStyle Minimized
-Start-Sleep -Seconds 2
-
-# 3. 启动 Memory Server
-Write-Host "🧠 Starting Memory Server (Port $($ports.memory_port))..." -ForegroundColor Green
-Start-Process -FilePath "python" -ArgumentList "python_backend/main.py" -WindowStyle Minimized
-Start-Sleep -Seconds 2
-
-# 4. 启动 Frontend (Electron/React)
-Write-Host "🖥️ Starting App..." -ForegroundColor Cyan
-npm run dev
+Start-LuminaDesktop

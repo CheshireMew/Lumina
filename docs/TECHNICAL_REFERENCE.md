@@ -1,6 +1,7 @@
 # Lumina Technical Reference Manual
 
 > **Note**: This document is the "Deep Dive" source of truth for implementation details. It complements the `FEATURE_INVENTORY.md` (Architecture Overview).
+> **Status**: Parts of this document describe historical storage design. For current runtime architecture, use `docs/ARCHITECTURE.md` and the live codebase.
 
 ---
 
@@ -124,26 +125,34 @@ Memory isn't just storage; it's active.
 
 ---
 
-## 3. Plugin Architecture (V2)
+## 3. Plugin Architecture
 
-### 3.1 Isolation Modes
+### 3.1 Unified Contract
 
-Plugins define their isolation execution model in `manifest.yaml`:
+插件协议已经收敛为一套固定模型：
 
-- `isolation_mode: local`: Runs in Main process (Fast, but risky).
-- `isolation_mode: process`: Runs in `multiprocessing.Process` (Safe, IPC overhead).
+- `manifest.yaml` 固定字段: `id`, `api_version`, `kind`, `capability`, `runtime_target`, `permissions`, `config_schema`, `provides`
+- `plugin.py` 固定生命周期: `load(context)`, `enable()`, `disable()`, `unload()`, `health()`, `get_metadata()`
 
-### 3.2 The Proxy Pattern
+### 3.2 Capability Registry
 
-When `SystemPluginManager` loads an isolated plugin:
+系统内核不再按实现类做分发，而是只按 capability 做查找和选择。当前主干 capability 包括：
 
-1.  It creates a `RemotePluginProxy` instance.
-2.  Passes the `manifest` path.
-3.  Spawns a child process invoking `services/plugin_worker.py`.
-4.  Establishes `multiprocessing.Queue` for Command/Event loop.
+- `stt`
+- `tts`
+- `llm`
+- `memory`
+- `avatar`
+- `tool.search`
+- `chat.context`
+- `chat.post_processor`
 
-**Flow**:
-`Main` -> `Proxy.execute()` -> `Queue (CMD)` -> `Worker` -> `ActualPlugin.execute()` -> `Queue (EVENT)` -> `Main`
+### 3.3 Config And Runtime State
+
+- 写入意图只落到 `config.plugins.desired_state` 和 `config.plugins.selected_providers`
+- 运行态只从 `plugin_state_aggregator` 读取
+- 主进程插件由 `SystemPluginManager` 发本地状态
+- Worker 插件由状态上报汇总后进入同一聚合视图
 
 ---
 

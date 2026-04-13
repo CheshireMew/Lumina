@@ -37,7 +37,7 @@ interface SchemaFormProps {
 export const SchemaForm: React.FC<SchemaFormProps> = ({ schema, values, onChange, dataSources }) => {
     
     // Resolve Fields (V2 vs V1)
-    const fields = schema.fields || [{
+    const fields: SchemaField[] = schema.fields || [{
         key: schema.key, // Fallback for single-field schema
         label: schema.label || "Value",
         type: (schema.type as any) || 'text',

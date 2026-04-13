@@ -8,6 +8,7 @@ Migration Path:
 
 This file will be removed in a future version.
 """
+import asyncio
 import warnings
 warnings.warn(
     "memory.core.MemoryService is deprecated. Use memory.factory.MemoryDriverFactory instead.",
@@ -16,11 +17,8 @@ warnings.warn(
 )
 
 import logging
-import asyncio
+from typing import List, Dict, Any, Optional
 from datetime import datetime
-from queue import Queue
-from threading import Thread
-from typing import List, Dict, Optional, Any
 from memory.vector_store import VectorStore
 # from memory.connection import DBConnection # Deprecated
 from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
@@ -28,7 +26,6 @@ from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and sha
 
 
 logger = logging.getLogger("memory.core")
-
 
 
 class MemoryService:
@@ -39,6 +36,8 @@ class MemoryService:
     
     def __init__(self, character_id: str = "default"):
          self.character_id = character_id
+         self.available = True
+         self.degraded_reason: Optional[str] = None
          
          try:
              # Use Factory to get driver
@@ -51,84 +50,55 @@ class MemoryService:
          # Components
          self.vector_store = VectorStore(self.driver)
          
-         # Background Queue
-         self.queue = Queue()
-         self.running = True
-         self._worker_thread = None
-         
          # Injected References
-         self._hippocampus = None
          self.encoder = None
          self.batch_manager = None
-         
-         # Digest State
-         self._last_digest_time = None
-         self._digest_lock = False
-         self._digest_cooldown_seconds = 30
 
-    @property
-    def db(self):
-        # Compatibility property: Return driver's underlying db if needed
-        # But best to discourage direct access
-        return self.driver._db 
+    def set_character_id(self, character_id: str):
+        """Update active character context at runtime."""
+        self.character_id = character_id
+        logger.info(f"[MemoryService] Context switched to: {character_id}")
+
+    def set_encoder(self, encoder_fn):
+        self.encoder = encoder_fn
+
+    def set_batch_manager(self, manager):
+        self.batch_manager = manager
+
+    def set_driver(self, driver):
+        self.driver = driver
+        self.vector_store.driver = driver
+
+    def set_available(self, value: bool, reason: Optional[str] = None):
+        self.available = value
+        self.degraded_reason = reason if not value else None
 
     async def connect(self):
-        """Initialize connection and schema"""
-        if not self.driver:
-            logger.critical("Cannot interact with Database: No Driver Loaded.")
-            return
+        """Connect to underlying driver."""
+        if self.driver:
+            await self.driver.connect()
 
-        await self.driver.connect()
-        # Delegate schema init to driver
-        await self.driver.initialize_schema()
-        self._start_worker()
-        
     async def close(self):
-        self.running = False
+        """Close connection."""
         if self.driver:
             await self.driver.close()
 
-    # async def _initialize_schema(self): 
-    #   [Removed] Moved to SurrealDriver.initialize_schema for abstraction.
+    @property
+    def db(self):
+        """Access underlying DB driver (for legacy compat)."""
+        if not self.driver:
+            return None
+        return getattr(self.driver, "_db", None) or getattr(self.driver, "_pool", None)
 
-    # ================= DEPENDENCY INJECTION =================
-    
-    def set_encoder(self, encoder):
-        self.encoder = encoder
-    
     def set_hippocampus(self, hippocampus):
         self._hippocampus = hippocampus
         
     def set_dreaming(self, dreaming):
         self._dreaming = dreaming
-        
-    def set_batch_manager(self, manager):
-        self.batch_manager = manager
 
-    # ================= WORKER & QUEUE =================
 
-    def _start_worker(self):
-        if self._worker_thread: return
-        
-        def worker_loop():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            while self.running:
-                try:
-                    task = self.queue.get(timeout=1.0)
-                    if task: loop.run_until_complete(self._process_task(task))
-                except Exception:
-                    pass
-            loop.close()
-            
-        self._worker_thread = Thread(target=worker_loop, daemon=True)
-        self._worker_thread.start()
-        logger.info("[MemoryService] Worker started")
 
-    async def _process_task(self, task: Dict):
-        task_type = task.get("type", "add")
-        if task_type == "add":
-            await self._add_memory_from_task(task)
+
 
     # ================= LOGGING & OPERATIONS =================
 
@@ -172,6 +142,9 @@ class MemoryService:
     async def search(self, *args, **kwargs):
         return await self.vector_store.search(*args, **kwargs)
 
+    async def search_fulltext(self, *args, **kwargs):
+        return await self.vector_store.search_fulltext(*args, **kwargs)
+
     async def search_hybrid(self, *args, **kwargs):
         return await self.vector_store.search_hybrid(*args, **kwargs)
 
@@ -180,15 +153,7 @@ class MemoryService:
         """Legacy wrapper: writes to conversation_log"""
         return await self.log_conversation(character_id, content)
 
-    def add_memory_async(self, task: Dict):
-        if "type" not in task: task["type"] = "add"
-        self.queue.put(task)
 
-    async def _add_memory_from_task(self, task: Dict):
-        user = task.get("user_input", "")
-        ai = task.get("ai_response", "")
-        content = f"{task.get('user_name','User')}: {user}\n{task.get('char_name','AI')}: {ai}"
-        await self.log_conversation(self.character_id, content)
 
     # ================= UTILITIES =================
     
@@ -197,8 +162,8 @@ class MemoryService:
         Execute raw SQL query.
         WARNING: Use only for debugging or admin tools.
         """
-        if not self.driver._db:
-             await self.connect()
+        if not self.db:
+            await self.connect()
         return await self.driver.query(sql, params)
 
     async def get_stats(self, character_id: str = None) -> Dict:
@@ -256,13 +221,14 @@ class MemoryService:
             return
             
         try:
-            # [Optimization] Batch UPDATE instead of N+1 loop
-            # Build IN clause with proper parameter binding
-            placeholders = ", ".join([f"${i+1}" for i in range(len(conversation_ids))])
-            sql = f"UPDATE conversation_log SET is_processed = true WHERE id IN ({placeholders});"
-            
-            # Execute single batch query
-            await self.driver.query(sql, {"ids": conversation_ids})
+            await self.driver.query(
+                """
+                UPDATE conversation_log
+                SET is_processed = true
+                WHERE id = ANY($ids::uuid[])
+                """,
+                {"ids": conversation_ids},
+            )
             logger.debug(f"Batch marked {len(conversation_ids)} conversations as processed")
         except Exception as e:
             logger.warning(f"Batch mark_processed failed: {e}, falling back to individual updates")

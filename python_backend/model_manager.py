@@ -2,6 +2,7 @@ import os
 import sys
 import requests
 import logging
+import threading
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import Optional
@@ -23,6 +24,9 @@ class ModelManager:
             os.makedirs(self.base_dir)
             
         self.original_env = {}
+        self._embedding_models = {}
+        self._embedding_encoders = {}
+        self._embedding_lock = threading.Lock()
 
     def display_progress_bar(self, percent, message="", mb_downloaded=None, mb_total=None):
         """Display simple progress bar"""
@@ -145,6 +149,47 @@ class ModelManager:
             return model
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
+
+    def get_embedding_encoder(self, model_name: str):
+        """
+        Return a cached embedding encoder.
+        Loads the model on first use instead of during application startup.
+        """
+        with self._embedding_lock:
+            encoder = self._embedding_encoders.get(model_name)
+            if encoder is not None:
+                return encoder
+
+        model_path = self.ensure_embedding_model(model_name)
+        model = self.load_embedding_model(str(model_path))
+        if model is None:
+            raise RuntimeError(f"Failed to load embedding model: {model_name}")
+
+        encoder = model.encode
+        with self._embedding_lock:
+            self._embedding_models[model_name] = model
+            self._embedding_encoders[model_name] = encoder
+
+        return encoder
+
+    def create_lazy_embedding_encoder(self, model_name: str):
+        """
+        Return a callable that resolves the embedding model lazily on first encode.
+        """
+        state = {"encoder": None}
+        local_lock = threading.Lock()
+
+        def encode(text):
+            encoder = state["encoder"]
+            if encoder is None:
+                with local_lock:
+                    encoder = state["encoder"]
+                    if encoder is None:
+                        encoder = self.get_embedding_encoder(model_name)
+                        state["encoder"] = encoder
+            return encoder(text)
+
+        return encode
     def ensure_embedding_model(self, model_name: str) -> str:
         """
         Ensure the embedding model exists locally.

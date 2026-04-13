@@ -1,0 +1,127 @@
+2026-04-13 12:58:26,741 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\..\logs\lumina_core.log
+2026-04-13 12:58:26,796 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\live2d
+[Launcher] Starting Core System on 127.0.0.1:8920...
+2026-04-13 12:58:26,903 [INFO] [-] [-] uvicorn.error: Started server process [1952]
+2026-04-13 12:58:26,907 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+2026-04-13 12:58:26,914 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+2026-04-13 12:58:26,917 [WARNING] [-] [-] Bootstrap.Infra: Configured character 'hiyori' not found.
+2026-04-13 12:58:26,918 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+2026-04-13 12:58:26,918 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Configuration (0.00s)
+2026-04-13 12:58:27,019 [INFO] [-] [-] SDK.PluginLoader: Scanning driver directory: E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\memory_postgres\drivers\memory
+2026-04-13 12:58:27,070 [WARNING] [-] [-] SDK.PluginLoader: Failed to load driver module postgres_driver.py: No module named 'pgvector'
+2026-04-13 12:58:27,098 [ERROR] [-] [-] memory.factory: No valid memory drivers found in plugins directory.
+2026-04-13 12:58:27,098 [CRITICAL] [-] [-] memory.factory: [MemoryFactory] Driver Creation Failed: No memory drivers available.
+2026-04-13 12:58:27,098 [CRITICAL] [-] [-] memory.core: Failed to load Memory Driver: No memory drivers available.
+2026-04-13 12:58:27,099 [INFO] [-] [-] ConsolidationBatch: [BatchManager] Initialized
+2026-04-13 12:58:27,099 [WARNING] [-] [-] memory.factory: NoOpDriver: connect called (No DB connected)
+2026-04-13 12:58:27,099 [INFO] [-] [-] Bootstrap.Infra: ✅ Memory System Connected
+2026-04-13 12:58:27,100 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Memory Backend (0.18s)
+2026-04-13 12:58:27,104 [INFO] [-] [-] Bootstrap.Infra: ✅ EventBus Initialized
+2026-04-13 12:58:27,105 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: EventBus (0.00s)
+2026-04-13 12:58:27,105 [INFO] [-] [-] EventBus: ⚡ Bulk Registered 6 Event Schemas
+2026-04-13 12:58:27,105 [INFO] [-] [-] Bootstrap.Infra: ✅ Protocol Schema Validation Active (6 events)
+2026-04-13 12:58:27,106 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Event Protocol (Schemas) (0.00s)
+2026-04-13 12:58:27,106 [INFO] [-] [-] Bootstrap.Integration: ✅ RouterManager Bootstrapped & Subscribed
+2026-04-13 12:58:27,106 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: RouterManager (0.00s)
+2026-04-13 12:58:27,546 [INFO] [-] [-] GlobalTicker: 鈴憋笍 Global Ticker Started
+2026-04-13 12:58:27,547 [INFO] [-] [-] Bootstrap.Services: ✅ Core Services (LLM, Soul, Session, Ticker) Initialized
+2026-04-13 12:58:27,547 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Core Services (0.44s)
+2026-04-13 12:58:27,548 [INFO] [-] [-] Bootstrap.Services: ✅ Plugin Registry Service Initialized
+2026-04-13 12:58:27,549 [INFO] [-] [-] Bootstrap.Services: ✅ Worker-backed media services delegated to STT/TTS workers
+2026-04-13 12:58:27,549 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Plugin Services (Vision/TTS/STT) (0.00s)
+2026-04-13 12:58:27,551 [INFO] [-] [-] Bootstrap.Services: ✅ Middleware Registered
+2026-04-13 12:58:27,551 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Middleware (Context/Tools) (0.00s)
+2026-04-13 12:58:27,556 [INFO] [-] [-] SystemPluginManager: Starting unified plugin kernel for runtime main
+2026-04-13 12:58:27,588 [WARNING] [-] [-] PluginPermissionChecker: [system.avatar_server] 🟡 Trusted Permission Requested: network.udp
+2026-04-13 12:58:27,588 [WARNING] [-] [-] PluginPermissionChecker: [system.avatar_server] 🟡 Trusted Permission Requested: filesystem.read
+2026-04-13 12:58:27,606 [ERROR] [-] [-] SystemPluginManager: Failed to load plugin system.avatar_server: No module named 'pythonosc'
+Traceback (most recent call last):
+  File "services\system_plugin_manager.py", line 143, in _instantiate_plugin
+  File "services\plugin_kernel\loader.py", line 30, in instantiate
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\avatar_server\plugin.py", line 11, in <module>
+    from .vmc_protocol import VMCClient
+  File "E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\avatar_server\vmc_protocol.py", line 3, in <module>
+    from pythonosc import udp_client
+ModuleNotFoundError: No module named 'pythonosc'
+2026-04-13 12:58:27,653 [ERROR] [-] [-] SystemPluginManager: Failed to load plugin driver.llm.deepseek: No module named 'services.managers.llm_driver_plugins'
+Traceback (most recent call last):
+  File "services\system_plugin_manager.py", line 143, in _instantiate_plugin
+  File "services\plugin_kernel\loader.py", line 30, in instantiate
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\llm_deepseek\plugin.py", line 2, in <module>
+    from services.managers.llm_driver_plugins import LLMDriverTypePlugin
+ModuleNotFoundError: No module named 'services.managers.llm_driver_plugins'
+2026-04-13 12:58:27,669 [ERROR] [-] [-] SystemPluginManager: Failed to load plugin driver.llm.gemini: No module named 'services.managers.llm_driver_plugins'
+Traceback (most recent call last):
+  File "services\system_plugin_manager.py", line 143, in _instantiate_plugin
+  File "services\plugin_kernel\loader.py", line 30, in instantiate
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\llm_gemini\plugin.py", line 2, in <module>
+    from services.managers.llm_driver_plugins import LLMDriverTypePlugin
+ModuleNotFoundError: No module named 'services.managers.llm_driver_plugins'
+2026-04-13 12:58:27,678 [ERROR] [-] [-] SystemPluginManager: Failed to load plugin driver.llm.openai: No module named 'services.managers.llm_driver_plugins'
+Traceback (most recent call last):
+  File "services\system_plugin_manager.py", line 143, in _instantiate_plugin
+  File "services\plugin_kernel\loader.py", line 30, in instantiate
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\llm_openai\plugin.py", line 2, in <module>
+    from services.managers.llm_driver_plugins import LLMDriverTypePlugin
+ModuleNotFoundError: No module named 'services.managers.llm_driver_plugins'
+2026-04-13 12:58:27,679 [WARNING] [-] [-] PluginPermissionChecker: [driver.llm.pollinations] 🟡 Trusted Permission Requested: network.outbound
+2026-04-13 12:58:27,706 [ERROR] [-] [-] SystemPluginManager: Failed to load plugin driver.llm.pollinations: No module named 'services.managers.llm_driver_plugins'
+Traceback (most recent call last):
+  File "services\system_plugin_manager.py", line 143, in _instantiate_plugin
+  File "services\plugin_kernel\loader.py", line 30, in instantiate
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\plugins\extensions\llm_pollinations\plugin.py", line 2, in <module>
+    from services.managers.llm_driver_plugins import LLMDriverTypePlugin
+ModuleNotFoundError: No module named 'services.managers.llm_driver_plugins'
+2026-04-13 12:58:27,708 [WARNING] [-] [-] PluginPermissionChecker: [driver.memory.postgres] 🟡 Trusted Permission Requested: database.postgres
+2026-04-13 12:58:27,716 [WARNING] [-] [-] PluginPermissionChecker: [driver.tool.search.brave] 🟡 Trusted Permission Requested: network.outbound
+2026-04-13 12:58:27,725 [WARNING] [-] [-] PluginPermissionChecker: [driver.tool.search.duckduckgo] 🟡 Trusted Permission Requested: network.outbound
+2026-04-13 12:58:27,734 [INFO] [-] [-] SystemPluginManager: Unified plugin kernel ready
+2026-04-13 12:58:27,735 [INFO] [-] [-] Bootstrap.Services: ✅ System Plugin Manager Initialized
+2026-04-13 12:58:27,735 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: System Plugins (0.18s)
+2026-04-13 12:58:27,744 [INFO] [-] [-] Bootstrap.SDK: ✅ Lumina SDK Initialized
+2026-04-13 12:58:27,744 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Lumina SDK (0.01s)
+2026-04-13 12:58:27,745 [INFO] [-] [-] ChatBridge: ✅ Basic Chat Bridge Started (Listening to input_text)
+2026-04-13 12:58:27,746 [INFO] [-] [-] Bootstrap.Integration: ✅ ChatBridge Initialized
+2026-04-13 12:58:27,746 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ChatBridge (0.00s)
+2026-04-13 12:58:28,071 [INFO] [-] [-] Bootstrap.Integration: 🔌 MCP Host Initialized (Start Disabled)
+2026-04-13 12:58:28,071 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: MCPHost (0.32s)
+2026-04-13 12:58:28,072 [INFO] [-] [-] Bootstrap.Integration: ✅ System Plugin Routers Mounted
+2026-04-13 12:58:28,072 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: SystemPluginRouters (0.00s)
+2026-04-13 12:58:28,072 [INFO] [-] [-] WorkerControlHub: 🎛️ WorkerControlHub initialized
+2026-04-13 12:58:28,074 [INFO] [-] [-] PluginStateAggregator: ✅ PluginStateAggregator initialized
+2026-04-13 12:58:28,074 [INFO] [-] [-] Bootstrap.PostStartup: 🎛️ WorkerControlHub Ready
+2026-04-13 12:58:28,075 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: WorkerControlHub (0.00s)
+2026-04-13 12:58:28,075 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Scheduling Core Service Prewarm (TTS/STT)...
+2026-04-13 12:58:28,076 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Prewarm (0.00s)
+2026-04-13 12:58:28,076 [INFO] [-] [-] ReconciliationService: ⚖️ Reconciliation Service Started
+2026-04-13 12:58:28,076 [INFO] [-] [-] Bootstrap.PostStartup: ⚖️ Reconciliation Service Started
+2026-04-13 12:58:28,077 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ReconciliationService (0.00s)
+2026-04-13 12:58:28,078 [INFO] [-] [-] Bootstrap.PostStartup: 👀 ConfigWatcher Started
+2026-04-13 12:58:28,079 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ConfigWatcher (0.00s)
+2026-04-13 12:58:28,079 [INFO] [-] [-] WorkerSupervisor: Supervisor activated.
+2026-04-13 12:58:28,079 [INFO] [-] [-] Bootstrap.PostStartup: 🛡️ Process Supervisor Auto-Healing Enabled
+2026-04-13 12:58:28,079 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ProcessSupervisor (0.00s)
+2026-04-13 12:58:28,084 [INFO] [-] [-] Automation.Service: 🧠 ECA Engine Started
+2026-04-13 12:58:28,084 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: AutomationService (0.01s)
+2026-04-13 12:58:28,085 [INFO] [-] [-] Bootstrap: ✨ Bootstrap Sequence Complete.
+2026-04-13 12:58:28,085 [INFO] [-] [-] Lifecycle: 🚀 Startup complete
+2026-04-13 12:58:28,085 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\automation\dist_backend_contract\data\config.yaml
+2026-04-13 12:58:28,086 [INFO] [-] [-] uvicorn.error: Application startup complete.
+2026-04-13 12:58:28,087 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8920 (Press CTRL+C to quit)
+2026-04-13 12:58:28,488 [INFO] [-] [-] uvicorn.access: 127.0.0.1:5994 - "GET /health HTTP/1.1" 200
+2026-04-13 12:58:33,696 [INFO] [-] [-] ProcessManager: Spawning Worker: worker:tts (backend_launcher.py)...
+2026-04-13 12:58:33,697 [INFO] [-] [-] ProcessManager: Spawning Worker: worker:stt (backend_launcher.py)...
+2026-04-13 12:58:33,705 [INFO] [-] [-] ProcessManager: Worker worker:tts started (PID: 28708)
+2026-04-13 12:58:33,705 [INFO] [-] [-] ProcessManager: Worker worker:stt started (PID: 20848)
+2026-04-13 12:58:33,706 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Core worker prewarm dispatched
+[worker:tts] 2026-04-13 12:58:34,849 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\dist_backend\lumina_backend\_internal\..\logs\tts_server.log

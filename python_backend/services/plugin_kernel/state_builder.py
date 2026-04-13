@@ -1,0 +1,157 @@
+from __future__ import annotations
+
+from typing import Any
+
+from core.interfaces.plugin import Plugin
+from core.manifest import PluginManifest, normalize_capability_id
+
+SELECTABLE_PROVIDER_CAPABILITIES = {"stt", "tts", "memory", "tool.search"}
+
+
+def ui_category(capability: str) -> str:
+    root = normalize_capability_id(capability).split(".")[0]
+    if root in {"stt", "tts", "memory"}:
+        return root
+    if root == "tool":
+        return "skill"
+    return "system"
+
+
+def is_selectable_provider(manifest: PluginManifest) -> bool:
+    return manifest.kind == "provider" and manifest.capability in SELECTABLE_PROVIDER_CAPABILITIES
+
+
+def normalize_ui_slot(slot: dict[str, Any], plugin_id: str) -> dict[str, Any] | None:
+    raw_slot = slot.get("slot") or slot.get("location")
+    raw_name = slot.get("name") or slot.get("title") or slot.get("id")
+    raw_src = slot.get("src") or slot.get("url")
+    if not raw_slot or not raw_name or not raw_src:
+        return None
+    return {
+        "plugin_id": plugin_id,
+        "slot": raw_slot,
+        "name": raw_name,
+        "src": raw_src,
+        "width": slot.get("width"),
+        "height": slot.get("height"),
+    }
+
+
+class PluginStateBuilder:
+    def __init__(self, config: Any):
+        self.config = config
+
+    def build_all(
+        self,
+        manifests: dict[str, PluginManifest],
+        plugins: dict[str, Plugin],
+        errors: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        states = [
+            self.build(plugin_id, manifest, plugins.get(plugin_id), errors.get(plugin_id))
+            for plugin_id, manifest in sorted(manifests.items())
+        ]
+        states.extend(
+            self.build_error(plugin_id, error)
+            for plugin_id, error in sorted(errors.items())
+            if plugin_id not in manifests
+        )
+        return states
+
+    def build(
+        self,
+        plugin_id: str,
+        manifest: PluginManifest,
+        plugin: Plugin | None,
+        error: str | None,
+    ) -> dict[str, Any]:
+        metadata = plugin.get_metadata() if plugin else {
+            "id": plugin_id,
+            "name": plugin_id,
+            "description": "",
+            "kind": manifest.kind,
+            "config_schema": manifest.config_schema,
+            "provides": manifest.provides,
+        }
+        desired_enabled = self._desired_enabled(plugin_id)
+        selectable_provider = is_selectable_provider(manifest)
+        selected_provider = self._selected_provider(manifest.capability) if selectable_provider else None
+        status = "error" if error else ("ready" if plugin and plugin.enabled else "stopped")
+        return {
+            "id": plugin_id,
+            "name": metadata.get("name", plugin_id),
+            "description": metadata.get("description", ""),
+            "kind": metadata.get("kind", manifest.kind),
+            "category": ui_category(manifest.capability),
+            "enabled": desired_enabled,
+            "desired_enabled": desired_enabled,
+            "active": bool(plugin and plugin.enabled),
+            "active_in_group": selected_provider == plugin_id if selected_provider else bool(plugin and plugin.enabled),
+            "group_id": manifest.capability if selectable_provider else plugin_id,
+            "group_policy": "exclusive" if selectable_provider else "independent",
+            "group_exclusive": selectable_provider,
+            "capabilities": manifest.all_capabilities(),
+            "runtime_target": manifest.runtime_target,
+            "config_schema": metadata.get("config_schema", manifest.config_schema),
+            "current_config": self._plugin_settings(plugin_id),
+            "ui_slots": metadata.get("ui_slots", []),
+            "permissions": manifest.permissions,
+            "func_tag": metadata.get("func_tag", manifest.kind.title()),
+            "tags": metadata.get("tags", []),
+            "computed_status": "error" if error else ("running" if plugin and plugin.enabled else "stopped"),
+            "active_status": status,
+            "error": error,
+        }
+
+    def build_error(self, plugin_id: str, error: str) -> dict[str, Any]:
+        return {
+            "id": plugin_id,
+            "name": plugin_id,
+            "description": "",
+            "kind": "invalid",
+            "category": "system",
+            "enabled": False,
+            "desired_enabled": False,
+            "active": False,
+            "active_in_group": False,
+            "group_id": plugin_id,
+            "group_policy": "independent",
+            "group_exclusive": False,
+            "capabilities": [],
+            "runtime_target": "main",
+            "config_schema": {},
+            "current_config": self._plugin_settings(plugin_id),
+            "ui_slots": [],
+            "permissions": [],
+            "func_tag": "Error",
+            "tags": [],
+            "computed_status": "error",
+            "active_status": "error",
+            "error": error,
+        }
+
+    def active_ui_slots(self, plugins: dict[str, Plugin]) -> list[dict[str, Any]]:
+        slots: list[dict[str, Any]] = []
+        for plugin_id, plugin in plugins.items():
+            if not plugin.enabled:
+                continue
+            for slot in plugin.get_metadata().get("ui_slots", []) or []:
+                normalized = normalize_ui_slot(slot, plugin_id)
+                if normalized:
+                    slots.append(normalized)
+        return slots
+
+    def _desired_enabled(self, plugin_id: str) -> bool:
+        if self.config and hasattr(self.config, "is_plugin_desired_enabled"):
+            return bool(self.config.is_plugin_desired_enabled(plugin_id))
+        return True
+
+    def _selected_provider(self, capability: str) -> str | None:
+        if self.config and hasattr(self.config, "get_selected_provider"):
+            return self.config.get_selected_provider(capability)
+        return None
+
+    def _plugin_settings(self, plugin_id: str) -> dict[str, Any]:
+        plugins_config = getattr(self.config, "plugins", None)
+        settings = getattr(plugins_config, "settings", {}) or {}
+        return dict(settings.get(plugin_id, {}))

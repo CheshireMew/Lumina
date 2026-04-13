@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { API_CONFIG } from "../config";
+import { subscribeRuntimeEvent } from "../runtime/events";
 
 export interface UiSlot {
     plugin_id: string;
@@ -49,10 +50,7 @@ export const usePluginSlots = () => {
     useEffect(() => {
         fetchSlots();
 
-        const handleWidgetEvent = (e: Event) => {
-            const customEvent = e as CustomEvent;
-            const { type, payload } = customEvent.detail;
-
+        const unsubscribe = subscribeRuntimeEvent("widget", ({ type, payload }) => {
             if (type === "ui:register_widget") {
                 console.log("[usePluginSlots] New Widget:", payload);
                 // [Validation] Ensure payload matches UiSlot schema
@@ -106,16 +104,10 @@ export const usePluginSlots = () => {
                     }),
                 );
             }
-        };
-
-        window.addEventListener("lumina:widget", handleWidgetEvent);
-
-        // Polling fallback (keep it for reliability)
-        const interval = setInterval(fetchSlots, 10000);
+        });
 
         return () => {
-            clearInterval(interval);
-            window.removeEventListener("lumina:widget", handleWidgetEvent);
+            unsubscribe();
         };
     }, [fetchSlots]);
 

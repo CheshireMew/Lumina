@@ -12,6 +12,8 @@ import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
+from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target
+
 logger = logging.getLogger("PluginStateAggregator")
 
 
@@ -50,7 +52,7 @@ class PluginStateAggregator:
         self._lock = asyncio.Lock()
         self._bus = bus
         self._initialized = False
-        self._overrides = {}  # User config overrides (groups, categories)
+        self._overrides = {}
         
     async def initialize(self, bus=None):
         """Initialize aggregator and subscribe to events"""
@@ -82,6 +84,23 @@ class PluginStateAggregator:
             "categories": categories or {},
             "behaviors": behaviors or {}
         }
+
+    @staticmethod
+    def _normalize_incoming_state(state: dict[str, Any], source: str) -> dict[str, Any]:
+        normalized = dict(state)
+
+        if source == "worker":
+            active_status = normalized.get("active_status") or normalized.get("status")
+            if active_status is not None:
+                normalized["active_status"] = active_status
+
+            if normalized.get("active") is None:
+                if normalized.get("active_in_group") is not None:
+                    normalized["active"] = bool(normalized.get("active_in_group"))
+                elif active_status is not None:
+                    normalized["active"] = active_status in {"ready", "idle", "running"}
+
+        return normalized
     
     # --- Event Handlers ---
     
@@ -145,11 +164,12 @@ class PluginStateAggregator:
         Intelligently merge new state into cache.
         
         Priority Rules:
-        - active_status: Worker report > Local inference
-        - desired_enabled: Latest writer wins
-        - Metadata: Merge, don't overwrite existing
+        - active_status: worker report wins over local snapshots
+        - desired_enabled: config intent is the single writable source
+        - metadata: merge, don't guess
         """
         async with self._lock:
+            normalized_state = self._normalize_incoming_state(new_state, source)
             existing = self._cache.get(plugin_id)
             
             if existing:
@@ -157,34 +177,29 @@ class PluginStateAggregator:
             else:
                 merged = {}
             
-            # Merge fields (only update if provided and not None)
-            for key, value in new_state.items():
+            for key, value in normalized_state.items():
                 if value is not None:
-                    # Special handling: worker reports for active_status take precedence
-                    if key == "active_status" and source == "worker":
-                        merged[key] = value
-                    elif key == "active_status" and source == "local" and merged.get("active_status"):
-                        # Don't overwrite worker-reported status with local inference
-                        if merged.get("_status_source") == "worker":
-                            continue
+                    if key == "active_status" and source != "worker" and merged.get("_status_source") == "worker":
+                        continue
                     merged[key] = value
             
-            # Track status source for priority handling
-            if "active_status" in new_state:
+            if "active_status" in normalized_state:
                 merged["_status_source"] = source
-            
-            # Apply user overrides
+            merged["last_updated"] = time.time()
+
             self._apply_overrides_to_plugin(plugin_id, merged)
-            
-            # Compute derived status
             merged["computed_status"] = self._compute_status(merged)
-            
-            # Ensure required fields
             merged.setdefault("id", plugin_id)
-            merged.setdefault("enabled", merged.get("desired_enabled", False))
-            merged.setdefault("active", merged.get("enabled", False))
+            desired_enabled = merged.get("desired_enabled")
+            if desired_enabled is None:
+                desired_enabled = merged.get("enabled")
+            merged["enabled"] = bool(desired_enabled) if desired_enabled is not None else bool(merged.get("active"))
+            if merged.get("active") is None:
+                merged["active"] = merged.get("active_status") in {"ready", "idle", "running"}
+            if merged.get("active_in_group") is None:
+                merged["active_in_group"] = bool(merged.get("active"))
             merged.setdefault("group_policy", "independent")
-            merged.setdefault("runtime_target", "main")
+            merged["runtime_target"] = normalize_runtime_target(merged.get("runtime_target", MAIN_RUNTIME_TARGET))
             merged.setdefault("capabilities", [])
             
             # Update cache entry
@@ -210,17 +225,6 @@ class PluginStateAggregator:
         if gid and gid in self._overrides.get("behaviors", {}):
             state["group_policy"] = self._overrides["behaviors"][gid]
         
-        # Infer capabilities from group/category if missing
-        if not state.get("capabilities"):
-            cat = state.get("category", "")
-            gid = state.get("group_id", "")
-            if gid == "stt" or cat == "stt":
-                state["capabilities"] = ["stt.provider"]
-            elif gid == "tts" or cat == "tts":
-                state["capabilities"] = ["tts.provider"]
-            elif gid == "search_provider" or cat == "search":
-                state["capabilities"] = ["search.provider"]
-    
     def _compute_status(self, state: dict) -> str:
         """
         Unified status computation logic.
@@ -253,7 +257,7 @@ class PluginStateAggregator:
         
         # Compute
         if desired:
-            if actual in ["ready", "idle"]:
+            if actual in ["ready", "idle", "running", "healthy"]:
                 return "running"
             elif actual in ["loading", "transitioning", "starting"]:
                 return "provisioning"

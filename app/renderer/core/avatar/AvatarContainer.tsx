@@ -1,9 +1,13 @@
-import React, { Suspense, forwardRef } from 'react';
+import React, { Component, Suspense, forwardRef } from 'react';
 import { AvatarRendererRef } from './types';
 
 // 1. Lazy Import Plugins
 // The bundle is split here. Heavy engines are only loaded if needed.
-const Live2DPlugin = React.lazy(() => import('../../plugins/avatar/live2d/Live2DPlugin'));
+const Live2DPlugin = React.lazy(async () => {
+    const { ensureCubismCoreLoaded } = await import('../../plugins/avatar/live2d/cubismCore');
+    await ensureCubismCoreLoaded();
+    return import('../../plugins/avatar/live2d/Live2DPlugin');
+});
 const VRMPlugin = React.lazy(() => import('../../plugins/avatar/vrm/VRMPlugin'));
 const SpriteAvatarPlugin = React.lazy(() => import('../../plugins/avatar/sprite/SpriteAvatarPlugin'));
 
@@ -11,6 +15,33 @@ interface AvatarContainerProps {
     type?: 'live2d' | 'vrm' | 'sprite' | 'auto'; // 'auto' = detect from extension
     modelPath: string;   // For live2d/vrm: model file. For sprite: sprites folder path
     highDpi?: boolean;
+}
+
+class AvatarErrorBoundary extends Component<
+    { children: React.ReactNode },
+    { error: Error | null }
+> {
+    state: { error: Error | null } = { error: null };
+
+    static getDerivedStateFromError(error: Error) {
+        return { error };
+    }
+
+    componentDidCatch(error: Error) {
+        console.error('[AvatarContainer] Avatar renderer crashed:', error);
+    }
+
+    render() {
+        if (this.state.error) {
+            return (
+                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#64748b' }}>
+                    Avatar failed to load
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
 }
 
 /**
@@ -45,30 +76,32 @@ const AvatarContainer = forwardRef<AvatarRendererRef, AvatarContainerProps>(({ t
     );
 
     return (
-        <Suspense fallback={LoadingFallback}>
-            {finalType === 'live2d' && (
-                <Live2DPlugin 
-                    ref={ref} 
-                    modelPath={modelPath} 
-                    highDpi={highDpi} 
-                />
-            )}
-             
-            {finalType === 'vrm' && (
-                <VRMPlugin 
-                    ref={ref} 
-                    modelPath={modelPath} 
-                />
-            )}
+        <AvatarErrorBoundary>
+            <Suspense fallback={LoadingFallback}>
+                {finalType === 'live2d' && (
+                    <Live2DPlugin
+                        ref={ref}
+                        modelPath={modelPath}
+                        highDpi={highDpi}
+                    />
+                )}
 
-            {finalType === 'sprite' && (
-                <SpriteAvatarPlugin
-                    ref={ref}
-                    spritesPath={modelPath}
-                    defaultEmotion="neutral"
-                />
-            )}
-        </Suspense>
+                {finalType === 'vrm' && (
+                    <VRMPlugin
+                        ref={ref}
+                        modelPath={modelPath}
+                    />
+                )}
+
+                {finalType === 'sprite' && (
+                    <SpriteAvatarPlugin
+                        ref={ref}
+                        spritesPath={modelPath}
+                        defaultEmotion="neutral"
+                    />
+                )}
+            </Suspense>
+        </AvatarErrorBoundary>
     );
 });
 

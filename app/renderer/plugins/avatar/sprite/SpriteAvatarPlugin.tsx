@@ -1,5 +1,6 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { IAvatarRenderer } from '../../../core/avatar/types';
+import { subscribeRuntimeEvent } from '../../../runtime/events';
 
 interface SpriteAvatarPluginProps {
     /** Base path to sprites folder, e.g. "/sprites/xiaoyue" */
@@ -68,18 +69,14 @@ const SpriteAvatarPlugin = forwardRef<IAvatarRenderer, SpriteAvatarPluginProps>(
 
     // Listen for emotion:changed events from WebSocket
     useEffect(() => {
-        const handleEmotionEvent = (event: CustomEvent) => {
-            const emotion = event.detail?.emotion;
+        const unsubscribe = subscribeRuntimeEvent('emotion', ({ emotion }) => {
             if (emotion) {
                 setCurrentEmotion(emotion.toLowerCase());
             }
-        };
-        
-        // Listen on window for events forwarded from WebSocket handler
-        window.addEventListener('lumina:emotion', handleEmotionEvent as EventListener);
+        });
         
         return () => {
-            window.removeEventListener('lumina:emotion', handleEmotionEvent as EventListener);
+            unsubscribe();
         };
     }, []);
 

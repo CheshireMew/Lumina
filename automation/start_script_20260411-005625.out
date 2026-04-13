@@ -1,0 +1,259 @@
+馃殌 Starting Lumina...
+鉁?PostgreSQL already running on localhost:5433
+馃枼锔?Starting Electron + Vite...
+
+> lumina@0.1.0 dev
+> vite
+
+[36mvite v5.4.21 [32mbuilding for development...[36m[39m
+[36m
+watching for file changes...[39m
+[36mvite v5.4.21 [32mbuilding for development...[36m[39m
+[36m
+watching for file changes...[39m
+[36m
+build started...[39m
+[36m
+build started...[39m
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m1424[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+transforming...
+transforming...
+[32m✓[39m 1 modules transformed.
+rendering chunks...
+[2mdist-electron/[22m[36mpreload.js  [39m[1m[2m2.22 kB[22m[1m[22m
+[36mbuilt in 4533ms.[39m
+[32m✓[39m 5 modules transformed.
+rendering chunks...
+[2mdist-electron/[22m[36mmain.js  [39m[1m[2m29.67 kB[22m[1m[22m
+[36mbuilt in 10924ms.[39m
+
+Starting Python Backend...
+[BackendManager] Starting all services...
+[BackendManager] Loaded ports from: E:\Work\Code\Lumina\config\ports.json
+[BackendManager] Services Configured: [ 'core:8010' ]
+[BackendManager] Launching dev core: python [
+  'E:\\Work\\Code\\Lumina\\python_backend\\backend_launcher.py',
+  'core'
+] CWD: E:\Work\Code\Lumina\python_backend
+[core] 2026-04-11 00:56:48,956 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\memory_server.log
+[core] 2026-04-11 00:56:49,140 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[core] 2026-04-11 00:56:49,432 [INFO] [-] [-] LuminaCore: Mounted Live2D static files from E:\Work\Code\Lumina\python_backend\..\public\live2d
+[Launcher] Starting Core System on 127.0.0.1:8010...
+[core] 2026-04-11 00:56:49,510 [INFO] [-] [-] uvicorn.error: Started server process [7588]
+[core] 2026-04-11 00:56:49,510 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[core] 2026-04-11 00:56:49,527 [INFO] [-] [-] Bootstrap: 🚀 Starting Bootstrap Sequence...
+[core] 2026-04-11 00:56:49,527 [INFO] [-] [-] Bootstrap.Infra: ✅ Config Loaded for: hiyori
+2026-04-11 00:56:49,527 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Configuration (0.00s)
+[core] 2026-04-11 00:56:49,598 [INFO] [-] [-] SDK.PluginLoader: Scanning driver directory: E:\Work\Code\Lumina\python_backend\plugins\extensions\memory_postgres\drivers\memory
+[core] 2026-04-11 00:56:49,860 [INFO] [-] [-] memory.factory: [MemoryFactory] Selected Driver: PostgreSQL Driver (driver.memory.postgres)
+[core] 2026-04-11 00:56:50,219 [INFO] [-] [-] PostgresDriver: ✅ Connected to PostgreSQL at localhost:5433
+[core] 2026-04-11 00:56:50,234 [INFO] [-] [-] PostgresDriver: ✨ PostgreSQL Schema Initialized.
+[core] 2026-04-11 00:56:50,234 [INFO] [-] [-] ConsolidationBatch: [BatchManager] Initialized
+[core] 2026-04-11 00:56:50,234 [INFO] [-] [-] Bootstrap.Infra: ✅ Memory System Connected
+2026-04-11 00:56:50,234 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Memory Backend (0.71s)
+[core] 2026-04-11 00:56:50,246 [INFO] [-] [-] Bootstrap.Infra: ✅ EventBus Initialized
+[core] 2026-04-11 00:56:50,246 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: EventBus (0.01s)
+2026-04-11 00:56:50,246 [INFO] [-] [-] EventBus: ⚡ Bulk Registered 6 Event Schemas
+2026-04-11 00:56:50,246 [INFO] [-] [-] Bootstrap.Infra: ✅ Protocol Schema Validation Active (6 events)
+2026-04-11 00:56:50,247 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Event Protocol (Schemas) (0.00s)
+[core] 2026-04-11 00:56:50,247 [INFO] [-] [-] Bootstrap.Integration: ✅ RouterManager Bootstrapped & Subscribed
+2026-04-11 00:56:50,248 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: RouterManager (0.00s)
+[core] 2026-04-11 00:56:52,408 [INFO] [-] [-] GlobalTicker: 鈴憋笍 Global Ticker Started
+[core] 2026-04-11 00:56:52,408 [INFO] [-] [-] Bootstrap.Services: ✅ Core Services (LLM, Soul, Session, Ticker) Initialized
+2026-04-11 00:56:52,408 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Core Services (2.16s)
+[core] 2026-04-11 00:56:52,416 [INFO] [-] [-] Bootstrap.Services: ✅ Plugin Registry Service Initialized
+[core] 2026-04-11 00:56:52,416 [INFO] [-] [-] Bootstrap.Services: ✅ Worker-backed media services delegated to STT/TTS workers
+2026-04-11 00:56:52,416 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Plugin Services (Vision/TTS/STT) (0.01s)
+[core] 2026-04-11 00:56:52,423 [INFO] [-] [-] Bootstrap.Services: ✅ Middleware Registered
+[core] 2026-04-11 00:56:52,423 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Middleware (Context/Tools) (0.01s)
+[core] 2026-04-11 00:56:52,441 [INFO] [-] [-] SystemPluginManager: Starting unified plugin kernel
+[core] 2026-04-11 00:56:52,520 [INFO] [-] [-] VMCProtocol: VMC OSC Client initialized at 127.0.0.1:39539
+[core] 2026-04-11 00:56:52,532 [INFO] [-] [-] SystemPluginManager: Unified plugin kernel ready
+2026-04-11 00:56:52,532 [INFO] [-] [-] Bootstrap.Services: ✅ System Plugin Manager Initialized
+[core] 2026-04-11 00:56:52,532 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: System Plugins (0.11s)
+[core] 2026-04-11 00:56:52,593 [INFO] [-] [-] Bootstrap.SDK: ✅ Lumina SDK Initialized
+[core] 2026-04-11 00:56:52,594 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Lumina SDK (0.06s)
+[core] 2026-04-11 00:56:52,608 [INFO] [-] [-] ChatBridge: ✅ Basic Chat Bridge Started (Listening to input_text)
+[core] 2026-04-11 00:56:52,608 [INFO] [-] [-] Bootstrap.Integration: ✅ ChatBridge Initialized
+2026-04-11 00:56:52,609 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ChatBridge (0.02s)
+[core] 2026-04-11 00:56:52,615 [INFO] [-] [-] Bootstrap.Integration: 🔌 MCP Host Initialized (Start Disabled)
+[core] 2026-04-11 00:56:52,615 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: MCPHost (0.01s)
+2026-04-11 00:56:52,615 [INFO] [-] [-] Bootstrap.Integration: ✅ System Plugin Routers Mounted
+2026-04-11 00:56:52,616 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: SystemPluginRouters (0.00s)
+2026-04-11 00:56:52,616 [INFO] [-] [-] WorkerControlHub: 🎛️ WorkerControlHub initialized
+[core] 2026-04-11 00:56:52,623 [INFO] [-] [-] PluginStateAggregator: ✅ PluginStateAggregator initialized
+[core] 2026-04-11 00:56:52,625 [INFO] [-] [-] Bootstrap.PostStartup: 🎛️ WorkerControlHub Ready
+[core] 2026-04-11 00:56:52,625 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: WorkerControlHub (0.01s)
+2026-04-11 00:56:52,625 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Scheduling Core Service Prewarm (TTS/STT)...
+2026-04-11 00:56:52,625 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: Prewarm (0.00s)
+[core] 2026-04-11 00:56:52,626 [INFO] [-] [-] ReconciliationService: ⚖️ Reconciliation Service Started
+2026-04-11 00:56:52,626 [INFO] [-] [-] Bootstrap.PostStartup: ⚖️ Reconciliation Service Started
+2026-04-11 00:56:52,626 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ReconciliationService (0.00s)
+[core] 2026-04-11 00:56:52,644 [INFO] [-] [-] Bootstrap.PostStartup: 👀 ConfigWatcher Started
+2026-04-11 00:56:52,644 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ConfigWatcher (0.02s)
+[core] 2026-04-11 00:56:52,644 [INFO] [-] [-] ProcessManager: 🛡️ Supervisor activated.
+2026-04-11 00:56:52,644 [INFO] [-] [-] Bootstrap.PostStartup: 🛡️ Process Supervisor Auto-Healing Enabled
+2026-04-11 00:56:52,645 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: ProcessSupervisor (0.00s)
+[core] 2026-04-11 00:56:52,667 [INFO] [-] [-] Automation.Service: 🧠 ECA Engine Started
+[core] 2026-04-11 00:56:52,668 [INFO] [-] [-] Automation.Service: Registered Rule: Proactive Idle Chat
+2026-04-11 00:56:52,668 [INFO] [-] [-] Bootstrap: ✅ Bootstrap Step: AutomationService (0.02s)
+2026-04-11 00:56:52,668 [INFO] [-] [-] Bootstrap: ✨ Bootstrap Sequence Complete.
+2026-04-11 00:56:52,668 [INFO] [-] [-] Lifecycle: 🚀 Startup complete
+[core] 2026-04-11 00:56:52,669 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\Lumina_Data\config.yaml
+2026-04-11 00:56:52,669 [INFO] [-] [-] uvicorn.error: Application startup complete.
+[core] 2026-04-11 00:56:52,859 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+[core] 2026-04-11 00:56:53,094 [INFO] [-] [-] uvicorn.access: 127.0.0.1:7783 - "GET /health HTTP/1.1" 200
+[core] Health check passed
+[BackendManager] All services started successfully.
+Python Backend started.
+[Main] Initializing LLM Proxy to http://127.0.0.1:8010
+[LLMService] Initialized Proxy to Backend: http://127.0.0.1:8010
+[core] 2026-04-11 00:56:54,371 [INFO] [-] [-] ProcessManager: 🚀 Spawning Worker: worker:tts (None)...
+[core] 2026-04-11 00:56:54,372 [INFO] [-] [-] ProcessManager: 🚀 Spawning Worker: worker:stt (None)...
+[core] 2026-04-11 00:56:54,427 [INFO] [-] [-] ProcessManager: Worker worker:stt started (PID: 32388)
+[core] 2026-04-11 00:56:54,444 [INFO] [-] [-] ProcessManager: Worker worker:tts started (PID: 21368)
+[core] 2026-04-11 00:56:54,446 [INFO] [-] [-] Bootstrap.PostStartup: 🔥 Core worker prewarm dispatched
+[core] [worker:stt] 2026-04-11 00:56:57,228 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\generic_worker_server.log
+[core] [worker:tts] 2026-04-11 00:56:57,305 [INFO] [-] [-] LuminaCore: Logger initialized. Writing to E:\Work\Code\Lumina\python_backend\..\logs\generic_worker_server.log
+[core] [worker:stt] [Launcher] Starting Worker Host [stt] on 127.0.0.1:8765...
+[core] [worker:tts] [Launcher] Starting Worker Host [tts] on 127.0.0.1:8766...
+[core] [worker:stt] 2026-04-11 00:56:57,525 [INFO] [-] [-] uvicorn.error: Started server process [32388]
+[core] [worker:stt] 2026-04-11 00:56:57,526 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[worker:stt] 2026-04-11 00:56:57,526 [INFO] [-] [-] LuminaCore: 🔌 Loading Capability Module: capabilities.stt
+[core] [worker:tts] 2026-04-11 00:56:57,589 [INFO] [-] [-] uvicorn.error: Started server process [21368]
+[worker:tts] 2026-04-11 00:56:57,590 [INFO] [-] [-] uvicorn.error: Waiting for application startup.
+[core] [worker:tts] 2026-04-11 00:56:57,590 [INFO] [-] [-] LuminaCore: 🔌 Loading Capability Module: capabilities.tts
+[core] [worker:tts] 2026-04-11 00:56:58,403 [INFO] [-] [-] LuminaCore: ✨ Loaded Capability: tts
+[core] [worker:tts] 2026-04-11 00:56:58,452 [INFO] [-] [-] LuminaCore: ✅ Lumina SDK Initialized (Worker Mode)
+[core] [worker:tts] 2026-04-11 00:56:58,452 [INFO] [-] [-] ConfigManager: 🛡️ Configuration Mode: read_only
+[core] [worker:stt] C:\Users\Dylan\AppData\Local\Programs\Python\Python312\Lib\site-packages\webrtcvad.py:1: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+[core] [worker:stt] import pkg_resources
+[core] [worker:stt] 2026-04-11 00:56:59,359 [INFO] [-] [-] LuminaCore: ✨ Loaded Capability: stt
+[core] [worker:stt] 2026-04-11 00:56:59,404 [INFO] [-] [-] LuminaCore: ✅ Lumina SDK Initialized (Worker Mode)
+[core] [worker:stt] 2026-04-11 00:56:59,404 [INFO] [-] [-] ConfigManager: 🛡️ Configuration Mode: read_only
+[core] [worker:stt] 2026-04-11 00:56:59,479 [INFO] [-] [-] STTCapability: AudioManager initialized.
+[core] [worker:stt] 2026-04-11 00:56:59,482 [INFO] [-] [-] LuminaCore: Scanning worker plugins for target: worker:stt
+[core] [worker:stt] 2026-04-11 00:56:59,504 [INFO] [-] [-] LuminaCore: Loading worker plugin: driver.stt.sensevoice
+[core] [worker:stt] 2026-04-11 00:56:59,515 [INFO] [-] [-] SDK.PluginLoader: Loaded plugin: driver.stt.sensevoice
+[core] [worker:stt] 2026-04-11 00:56:59,515 [ERROR] [-] [-] SDK.PluginLoader: Plugin driver.stt.sensevoice initialization failed: 'NoneType' object has no attribute 'plugins'
+[core] [worker:stt] Traceback (most recent call last):
+[worker:stt] File "E:\Work\Code\Lumina\python_backend\sdk\lumina\loader.py", line 108, in initialize_plugin
+[worker:stt] await instance.enable()
+[worker:stt] File "E:\Work\Code\Lumina\python_backend\plugins\extensions\stt_sensevoice\plugin.py", line 25, in enable
+[worker:stt] self.driver.load_config(self.config)
+[worker:stt] ^^^^^^^^^^^
+[worker:stt] File "E:\Work\Code\Lumina\python_backend\core\interfaces\plugin.py", line 51, in config
+[core] [worker:stt] return self.context.get_config()
+[worker:stt] ^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:stt] File "E:\Work\Code\Lumina\python_backend\core\api\context.py", line 44, in get_config
+[worker:stt] plugin_settings = getattr(self._container.config.plugins, "settings", {})
+[worker:stt] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:stt] AttributeError: 'NoneType' object has no attribute 'plugins'
+[worker:stt] 2026-04-11 00:56:59,520 [INFO] [-] [-] LuminaCore: Loading worker plugin: system.voiceprint
+[core] [worker:tts] 2026-04-11 00:56:59,825 [CRITICAL] [-] [-] TTSManager: No TTS Drivers available! Service running in degraded mode.
+[core] [worker:tts] 2026-04-11 00:56:59,825 [INFO] [-] [-] TTSCapability: TTS Service Ready. Active Driver: none
+[core] [worker:tts] 2026-04-11 00:56:59,827 [INFO] [-] [-] LuminaCore: Scanning worker plugins for target: worker:tts
+[core] [worker:tts] 2026-04-11 00:56:59,849 [INFO] [-] [-] LuminaCore: Loading worker plugin: driver.tts.edge
+[core] [worker:tts] 2026-04-11 00:57:00,273 [INFO] [-] [-] SDK.PluginLoader: Loaded plugin: driver.tts.edge
+[core] [worker:tts] 2026-04-11 00:57:00,273 [ERROR] [-] [-] SDK.PluginLoader: Plugin driver.tts.edge initialization failed: 'NoneType' object has no attribute 'plugins'
+[worker:tts] Traceback (most recent call last):
+[worker:tts] File "E:\Work\Code\Lumina\python_backend\sdk\lumina\loader.py", line 108, in initialize_plugin
+[worker:tts] await instance.enable()
+[worker:tts] File "E:\Work\Code\Lumina\python_backend\plugins\extensions\tts_edge\plugin.py", line 25, in enable
+[core] [worker:tts] self.driver.load_config(self.config)
+[worker:tts] ^^^^^^^^^^^
+[worker:tts] File "E:\Work\Code\Lumina\python_backend\core\interfaces\plugin.py", line 51, in config
+[worker:tts] return self.context.get_config()
+[worker:tts] ^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:tts] File "E:\Work\Code\Lumina\python_backend\core\api\context.py", line 44, in get_config
+[worker:tts] plugin_settings = getattr(self._container.config.plugins, "settings", {})
+[worker:tts] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:tts] AttributeError: 'NoneType' object has no attribute 'plugins'
+[core] [worker:tts] 2026-04-11 00:57:00,772 [INFO] [-] [-] PostgresLifecycleBus: 🆕 PostgresLifecycleBus Instance Created
+[worker:tts] 2026-04-11 00:57:00,772 [INFO] [-] [-] WorkerReporter: 📡 Status Reporter (Mesh Mode) started for worker:tts
+[worker:tts] 2026-04-11 00:57:00,772 [INFO] [-] [-] LuminaCore: ✅ Worker Status Reporter activated (at 127.0.0.1:8766)
+[core] [worker:tts] 2026-04-11 00:57:00,775 [INFO] [-] [-] LuminaCore: [Startup] 🔄 Starting Distributed State Sync...
+[core] [worker:tts] 2026-04-11 00:57:00,779 [INFO] [-] [-] LuminaCore: 👀 ConfigWatcher activated (Polling changes to config.yaml)
+[core] [worker:tts] 2026-04-11 00:57:00,899 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[core] [worker:tts] 2026-04-11 00:57:00,901 [INFO] [-] [-] WorkerControlClient: 🚀 WorkerControlClient started for worker:tts
+[core] [worker:tts] 2026-04-11 00:57:00,902 [INFO] [-] [-] LuminaCore: 🔌 WebSocket Control Client activated (Real-time Main<->Worker channel)
+[core] [worker:tts] 2026-04-11 00:57:00,913 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\Lumina_Data\config.yaml
+[worker:tts] 2026-04-11 00:57:00,913 [INFO] [-] [-] WorkerControlClient: 🔗 Connecting to ws://127.0.0.1:8010/ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6dHRzIiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzU4NDAyMTQsImV4cCI6MTc3NTkyNjYxNH0.KijrV5yPeXRMTUYhYp3xiqrqmTthAtzMrbr2y5PYy3w...
+[core] [worker:tts] 2026-04-11 00:57:00,926 [INFO] [-] [-] uvicorn.error: Application startup complete.
+[core] 
+[core] [worker:tts] 2026-04-11 00:57:00,929 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8766 (Press CTRL+C to quit)
+[core] 2026-04-11 00:57:00,931 [INFO] [-] [-] uvicorn.error: 127.0.0.1:7792 - "WebSocket /ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6dHRzIiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzU4NDAyMTQsImV4cCI6MTc3NTkyNjYxNH0.KijrV5yPeXRMTUYhYp3xiqrqmTthAtzMrbr2y5PYy3w" [accepted]
+[core] 2026-04-11 00:57:00,933 [INFO] [-] [-] uvicorn.error: connection open
+[core] 2026-04-11 00:57:00,934 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:tts at http://127.0.0.1:8766 (Caps: ['tts'])
+2026-04-11 00:57:00,936 [INFO] [-] [-] WorkerControlHub: ✅ Worker connected: worker:tts (tts:8766)
+[core] [worker:tts] 2026-04-11 00:57:00,937 [INFO] [-] [-] WorkerControlClient: ✅ Connected to Main, session=worker:tts
+[core] 2026-04-11 00:57:00,982 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:tts at http://127.0.0.1:8766 (Caps: ['tts'])
+[core] [worker:tts] 2026-04-11 00:57:01,757 [INFO] [-] [-] PostgresLifecycleBus: ✅ Connected to PostgreSQL Bus at localhost:5433
+[core] [worker:tts] 2026-04-11 00:57:01,757 [INFO] [-] [-] PluginStateSync: ♻️ Syncing initial plugin state from Bus...
+[core] [worker:tts] 2026-04-11 00:57:01,759 [INFO] [-] [-] PostgresLifecycleBus: 🎧 Listening on channel: lumina_lifecycle_events (Dedicated Conn)
+[core] [worker:tts] 2026-04-11 00:57:01,764 [INFO] [-] [-] PluginStateSync: ⚡ [Bus] Control Signal: driver.tts.edge -> Desired=True
+[core] [worker:tts] 2026-04-11 00:57:01,764 [INFO] [-] [-] PluginStateSync: 🔄 Hot-Loading Plugin driver.tts.edge (Worker Side)...
+[worker:tts] 2026-04-11 00:57:01,764 [CRITICAL] [-] [-] TTSManager: No TTS Drivers available! Service running in degraded mode.
+[worker:tts] 2026-04-11 00:57:01,765 [INFO] [-] [-] PluginStateSync: ⚡ Triggering Immediate Status Report for driver.tts.edge...
+[worker:tts] 2026-04-11 00:57:01,765 [INFO] [-] [-] PluginStateSync: 🎧 Listening for Plugin State updates...
+[worker:tts] 2026-04-11 00:57:01,765 [INFO] [-] [-] WorkerReporter: ⚡ Forced Mesh Registry Push Sent.
+[core] 2026-04-11 00:57:07,677 [INFO] [-] [-] PostgresLifecycleBus: 🆕 PostgresLifecycleBus Instance Created
+[core] 2026-04-11 00:57:07,677 [INFO] [-] [-] ReconciliationService: 🐢 Single Node Detected. Relaxing Reconciliation to 30.0s interval.
+[core] [worker:stt] 2026-04-11 00:57:09,054 [INFO] [-] [-] SDK.PluginLoader: Loaded plugin: system.voiceprint
+[core] [worker:stt] 2026-04-11 00:57:09,097 [INFO] [-] [-] SherpaCAMDriver: Loading Sherpa-ONNX VoiceAuth on cuda...
+[core] [worker:stt] D:\a\sherpa-onnx\sherpa-onnx\sherpa-onnx\csrc\session.cc:GetSessionOptionsImpl:184 Please compile with -DSHERPA_ONNX_ENABLE_GPU=ON. Available providers: AzureExecutionProvider, CPUExecutionProvider, . Fallback to cpu!
+[core] [worker:stt] 2026-04-11 00:57:13,488 [INFO] [-] [-] SherpaCAMDriver: SherpaCAMDriver Loaded Successfully
+[core] [worker:stt] 2026-04-11 00:57:13,488 [INFO] [-] [-] PostgresLifecycleBus: 🆕 PostgresLifecycleBus Instance Created
+[core] [worker:stt] 2026-04-11 00:57:14,353 [INFO] [-] [-] PostgresLifecycleBus: ✅ Connected to PostgreSQL Bus at localhost:5433
+[core] [worker:stt] 2026-04-11 00:57:14,354 [ERROR] [-] [-] VoiceprintPlugin: Failed to refresh voiceprint profiles: 'Pool' object has no attribute 'select'
+[worker:stt] 2026-04-11 00:57:14,354 [INFO] [-] [-] AudioFilterChain: ✅ Registered audio filter: system.voiceprint (priority: 10)
+[core] [worker:stt] 2026-04-11 00:57:14,354 [ERROR] [-] [-] SDK.PluginLoader: Plugin system.voiceprint initialization failed: 'NoneType' object has no attribute 'plugins'
+[worker:stt] Traceback (most recent call last):
+[worker:stt] File "E:\Work\Code\Lumina\python_backend\sdk\lumina\loader.py", line 109, in initialize_plugin
+[worker:stt] self._register_hooks(instance)
+[worker:stt] File "E:\Work\Code\Lumina\python_backend\sdk\lumina\loader.py", line 124, in _register_hooks
+[worker:stt] handler = getattr(instance, attr_name)
+[core] [worker:stt] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:stt] File "E:\Work\Code\Lumina\python_backend\core\interfaces\plugin.py", line 51, in config
+[worker:stt] return self.context.get_config()
+[worker:stt] ^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:stt] File "E:\Work\Code\Lumina\python_backend\core\api\context.py", line 44, in get_config
+[worker:stt] plugin_settings = getattr(self._container.config.plugins, "settings", {})
+[worker:stt] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[worker:stt] AttributeError: 'NoneType' object has no attribute 'plugins'
+[core] [worker:stt] 2026-04-11 00:57:14,359 [INFO] [-] [-] WorkerReporter: 📡 Status Reporter (Mesh Mode) started for worker:stt
+[core] [worker:stt] 2026-04-11 00:57:14,359 [INFO] [-] [-] LuminaCore: ✅ Worker Status Reporter activated (at 127.0.0.1:8765)
+[core] [worker:stt] 2026-04-11 00:57:14,361 [INFO] [-] [-] LuminaCore: [Startup] 🔄 Starting Distributed State Sync...
+[core] [worker:stt] 2026-04-11 00:57:14,366 [INFO] [-] [-] LuminaCore: 👀 ConfigWatcher activated (Polling changes to config.yaml)
+[core] [worker:stt] 2026-04-11 00:57:14,573 [INFO] [-] [-] Observability.Metrics: 📊 Prometheus metrics module initialized
+[core] [worker:stt] 2026-04-11 00:57:14,578 [INFO] [-] [-] WorkerControlClient: 🚀 WorkerControlClient started for worker:stt
+[core] [worker:stt] 2026-04-11 00:57:14,578 [INFO] [-] [-] LuminaCore: 🔌 WebSocket Control Client activated (Real-time Main<->Worker channel)
+[worker:stt] 2026-04-11 00:57:14,580 [INFO] [-] [-] PluginStateSync: ♻️ Syncing initial plugin state from Bus...
+[core] [worker:stt] 2026-04-11 00:57:14,583 [INFO] [-] [-] ConfigWatcher: 👀 ConfigWatcher started. Monitoring: E:\Work\Code\Lumina\Lumina_Data\config.yaml
+[core] [worker:stt] 2026-04-11 00:57:14,584 [INFO] [-] [-] WorkerControlClient: 🔗 Connecting to ws://127.0.0.1:8010/ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6c3R0Iiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzU4NDAyMTQsImV4cCI6MTc3NTkyNjYxNH0.wHksZX8d_NwGvNJ3ge6yvca6JN2KKRmg92qU3Sg_erA...
+[core] [worker:stt] 2026-04-11 00:57:14,603 [INFO] [-] [-] uvicorn.error: Application startup complete.
+[core] 2026-04-11 00:57:14,608 [INFO] [-] [-] uvicorn.error: 127.0.0.1:7826 - "WebSocket /ws/worker-control?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3b3JrZXI6c3R0Iiwic2NvcGUiOiJ3b3JrZXIiLCJwZXJtaXNzaW9ucyI6WyJ3b3JrZXIuY29udHJvbCJdLCJpYXQiOjE3NzU4NDAyMTQsImV4cCI6MTc3NTkyNjYxNH0.wHksZX8d_NwGvNJ3ge6yvca6JN2KKRmg92qU3Sg_erA" [accepted]
+[worker:stt] 2026-04-11 00:57:14,607 [INFO] [-] [-] uvicorn.error: Uvicorn running on http://127.0.0.1:8765 (Press CTRL+C to quit)
+[core] 
+[core] 2026-04-11 00:57:14,609 [INFO] [-] [-] uvicorn.error: connection open
+[worker:stt] 2026-04-11 00:57:14,608 [INFO] [-] [-] PostgresLifecycleBus: 🎧 Listening on channel: lumina_lifecycle_events (Dedicated Conn)
+[core] 2026-04-11 00:57:14,611 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:stt at http://127.0.0.1:8765 (Caps: ['stt'])
+[worker:stt] 2026-04-11 00:57:14,609 [INFO] [-] [-] PluginStateSync: ⚡ [Bus] Control Signal: driver.stt.sensevoice -> Desired=True
+[core] 2026-04-11 00:57:14,612 [INFO] [-] [-] WorkerControlHub: ✅ Worker connected: worker:stt (stt:8765)
+
+[worker:stt] 2026-04-11 00:57:14,612 [INFO] [-] [-] PluginStateSync: 🔄 Hot-Loading Plugin driver.stt.sensevoice (Worker Side)...
+[worker:stt] 2026-04-11 00:57:14,612 [INFO] [-] [-] PluginStateSync: ⚡ Triggering Immediate Status Report for driver.stt.sensevoice...
+[core] [worker:stt] 2026-04-11 00:57:14,612 [INFO] [-] [-] PluginStateSync: 🎧 Listening for Plugin State updates...
+[core] [worker:stt] 2026-04-11 00:57:14,615 [INFO] [-] [-] WorkerReporter: ⚡ Forced Mesh Registry Push Sent.
+[core] [worker:stt] 2026-04-11 00:57:14,616 [INFO] [-] [-] WorkerControlClient: ✅ Connected to Main, session=worker:stt
+[core] 2026-04-11 00:57:14,662 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:stt at http://127.0.0.1:8765 (Caps: ['stt'])
+[core] 2026-04-11 00:57:15,986 [INFO] [-] [-] ServiceDiscovery: 🛰️ Registered worker: worker:tts at http://127.0.0.1:8766 (Caps: ['tts'])
+[core] 2026-04-11 00:57:16,993 [INFO] [-] [-] WorkerControlHub: 📤 Worker disconnected: worker:tts
+[core] 2026-04-11 00:57:16,995 [INFO] [-] [-] uvicorn.error: connection closed
+[core] 2026-04-11 00:57:17,001 [INFO] [-] [-] WorkerControlHub: 📤 Worker disconnected: worker:stt
+[core] 2026-04-11 00:57:17,001 [INFO] [-] [-] uvicorn.error: connection closed

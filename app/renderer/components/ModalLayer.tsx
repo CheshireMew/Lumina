@@ -1,181 +1,168 @@
-import React from 'react';
-import SettingsModal from './SettingsModal';
-import LLMConfigModal from './LLMConfig/LLMConfigModal';
-import PluginStoreModal from './PluginStore/PluginStoreModal';
-import MotionTester from './MotionTester';
-import DataViewer from './DataViewer';
-import { useVoiceManager } from '../hooks/useVoiceManager';
-import AvatarSelectorModal from './AvatarSelectorModal';
-import { CharacterProfile } from '@core/llm/types';
-import { AvatarRendererRef } from '../core/avatar/types';
+import React from "react";
 
-interface ModalLayerProps {
-    // Visibility States
-    isSettingsOpen: boolean;
-    onCloseSettings: () => void;
-    
-    isPluginStoreOpen: boolean;
-    onClosePluginStore: () => void;
-    
-    isMotionTesterOpen: boolean;
-    onCloseMotionTester: () => void;
-    
-    isSurrealViewerOpen: boolean;
-    onCloseSurrealViewer: () => void;
-    
-    isAvatarSelectorOpen: boolean;
-    onCloseAvatarSelector: () => void;
+import { CharacterProfile } from "@core/llm/types";
 
-    isLLMConfigOpen?: boolean;
+import { AvatarRendererRef } from "../core/avatar/types";
+import { useVoiceManager } from "../hooks/useVoiceManager";
+import { GeneralSettingsInput } from "../hooks/useSettings";
+import AvatarSelectorModal from "./AvatarSelectorModal";
+import DataViewer from "./DataViewer";
+import LLMConfigModal from "./LLMConfig/LLMConfigModal";
+import type { ProviderType } from "./LLMConfig/types";
+import MotionTester from "./MotionTester";
+import PluginStoreModal from "./PluginStore/PluginStoreModal";
+import SettingsModal, { SettingsTab } from "./SettingsModal";
 
-    onOpenLLMConfig?: () => void; // New Prop
-    onCloseLLMConfig?: () => void;
-    currentLlmSettings?: {
+interface SettingsLayerConfig {
+    isOpen: boolean;
+    onClose: () => void;
+    initialTab?: SettingsTab;
+    currentSettings: GeneralSettingsInput;
+    onSave: (settings: GeneralSettingsInput) => Promise<void>;
+}
+
+interface PluginStoreLayerConfig {
+    isOpen: boolean;
+    onClose: () => void;
+    onOpenLlmSettings?: () => void;
+}
+
+interface MotionTesterLayerConfig {
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+interface MemoryInspectorLayerConfig {
+    isOpen: boolean;
+    onClose: () => void;
+    activeCharacterId: string;
+}
+
+interface AvatarSelectorLayerConfig {
+    isOpen: boolean;
+    onClose: () => void;
+    activeCharacterId: string;
+    activeCharacter?: CharacterProfile;
+    characters: CharacterProfile[];
+    setCharacters: (chars: CharacterProfile[]) => void;
+    onActivateCharacter: (id: string) => void;
+    onSaveCharacters: (chars: CharacterProfile[], deletedIds: string[]) => Promise<void>;
+}
+
+interface LlmConfigLayerConfig {
+    isOpen: boolean;
+    onClose: () => void;
+    currentSettings: {
+        providerType?: ProviderType;
         apiKey: string;
         apiBaseUrl: string;
         modelName: string;
         temperature: number;
         thinkingEnabled: boolean;
         historyLimit?: number;
-        overflowStrategy?: 'slide' | 'reset';
+        overflowStrategy?: "slide" | "reset";
         topP?: number;
         presencePenalty?: number;
         frequencyPenalty?: number;
     };
-
-    // Handlers
-    onClearHistory: () => void;
-    onContextWindowChange: (n: number) => void;
-    onLLMSettingsChange: (apiKey: string, baseUrl: string, model: string, temperature: number, thinkingEnabled: boolean, historyLimit: number, overflowStrategy: 'slide' | 'reset', topP?: number, presencePenalty?: number, frequencyPenalty?: number) => void;
-    onCharactersUpdated: (chars: CharacterProfile[], activeId: string) => void;
-    onUserNameUpdated: (name: string) => void;
-    onLive2DHighDpiChange: (enabled: boolean) => void;
-    onCharacterSwitch: (id: string) => void;
-    onThinkingModeChange: (enabled: boolean) => void;
-    onBackgroundImageChange?: (url: string) => void;
-    
-    // Data
+    onSettingsChange: (
+        apiKey: string,
+        baseUrl: string,
+        model: string,
+        temperature: number,
+        thinkingEnabled: boolean,
+        historyLimit: number,
+        overflowStrategy: "slide" | "reset",
+        topP?: number,
+        presencePenalty?: number,
+        frequencyPenalty?: number,
+        providerType?: ProviderType,
+    ) => void;
     activeCharacterId: string;
-    galgameEnabled: boolean;
-    activeCharacter?: CharacterProfile;
-    onModelSelect: (path: string) => void;
-    settingsInitialTab?: 'general' | 'voice' | 'characters' | 'interaction';
+}
 
-    // Characters Data (Hoisted)
-    characters: CharacterProfile[];
-    setCharacters: (chars: CharacterProfile[]) => void;
-    onSaveCharacters: (chars: CharacterProfile[], deletedIds: string[]) => Promise<void>;
-    
-    // Refs
+interface ModalLayerProps {
+    settings: SettingsLayerConfig;
+    pluginStore: PluginStoreLayerConfig;
+    motionTester: MotionTesterLayerConfig;
+    memoryInspector: MemoryInspectorLayerConfig;
+    avatarSelector: AvatarSelectorLayerConfig;
+    llmConfig: LlmConfigLayerConfig;
     avatarRef: React.RefObject<AvatarRendererRef>;
 }
 
 export const ModalLayer: React.FC<ModalLayerProps> = ({
-    isSettingsOpen, onCloseSettings,
-    isPluginStoreOpen, onClosePluginStore,
-    isMotionTesterOpen, onCloseMotionTester,
-    isSurrealViewerOpen, onCloseSurrealViewer,
-    isAvatarSelectorOpen, onCloseAvatarSelector,
-
-    isLLMConfigOpen, onOpenLLMConfig, onCloseLLMConfig, currentLlmSettings,
-    
-    onClearHistory,
-    onContextWindowChange,
-    onLLMSettingsChange,
-    onCharactersUpdated,
-    onUserNameUpdated,
-    onLive2DHighDpiChange,
-    onCharacterSwitch,
-    onThinkingModeChange,
-    onBackgroundImageChange,
-    
-    activeCharacterId,
-    galgameEnabled,
-    activeCharacter,
-    onModelSelect,
+    settings,
+    pluginStore,
+    motionTester,
+    memoryInspector,
+    avatarSelector,
+    llmConfig,
     avatarRef,
-    characters,
-    setCharacters,
-    onSaveCharacters
 }) => {
-    // Hoist Voice Manager logic here to share between Settings and AvatarSelector
-    const voiceManagerData = useVoiceManager(isSettingsOpen || isAvatarSelectorOpen);
+    const voiceManagerData = useVoiceManager(
+        settings.isOpen || avatarSelector.isOpen,
+    );
 
-    // Helpers
     const handleDeleteCharacter = (id: string) => {
-        setCharacters(characters.filter(c => c.id !== id));
+        avatarSelector.setCharacters(
+            avatarSelector.characters.filter((character) => character.id !== id),
+        );
     };
 
     return (
         <>
             <SettingsModal
-                isOpen={isSettingsOpen}
-                onClose={onCloseSettings}
-                onClearHistory={onClearHistory}
-                onContextWindowChange={onContextWindowChange}
-                onLLMSettingsChange={onLLMSettingsChange}
-                onCharactersUpdated={onCharactersUpdated}
-                onUserNameUpdated={onUserNameUpdated}
-                onLive2DHighDpiChange={onLive2DHighDpiChange}
-                onCharacterSwitch={onCharacterSwitch}
-                activeCharacterId={activeCharacterId}
-                onThinkingModeChange={onThinkingModeChange}
-                onBackgroundImageChange={onBackgroundImageChange}
-                // Voice Data
+                isOpen={settings.isOpen}
+                onClose={settings.onClose}
+                initialTab={settings.initialTab}
+                currentSettings={settings.currentSettings}
+                onSave={settings.onSave}
                 voiceManagerData={voiceManagerData}
             />
 
-            <PluginStoreModal 
-                isOpen={isPluginStoreOpen} 
-                onClose={onClosePluginStore} 
-                onOpenLLMSettings={onOpenLLMConfig}
+            <PluginStoreModal
+                isOpen={pluginStore.isOpen}
+                onClose={pluginStore.onClose}
+                onOpenLLMSettings={pluginStore.onOpenLlmSettings}
             />
 
             <MotionTester
-                isOpen={isMotionTesterOpen}
-                onClose={onCloseMotionTester}
-                onTriggerMotion={(group, index) => avatarRef.current?.motion?.(group, index)}
+                isOpen={motionTester.isOpen}
+                onClose={motionTester.onClose}
+                onTriggerMotion={(group, index) =>
+                    avatarRef.current?.motion?.(group, index)
+                }
             />
 
-            <DataViewer 
-                isOpen={isSurrealViewerOpen} 
-                onClose={onCloseSurrealViewer} 
-                activeCharacterId={activeCharacterId}
+            <DataViewer
+                isOpen={memoryInspector.isOpen}
+                onClose={memoryInspector.onClose}
+                activeCharacterId={memoryInspector.activeCharacterId}
             />
-            
+
             <AvatarSelectorModal
-                isOpen={isAvatarSelectorOpen}
-                onClose={onCloseAvatarSelector}
-                
-                // Character Data
-                activeCharacterId={activeCharacterId}
-                activeCharacter={activeCharacter}
-                characters={characters}
-                setCharacters={setCharacters}
-                onActivateCharacter={onCharacterSwitch}
+                isOpen={avatarSelector.isOpen}
+                onClose={avatarSelector.onClose}
+                activeCharacterId={avatarSelector.activeCharacterId}
+                activeCharacter={avatarSelector.activeCharacter}
+                characters={avatarSelector.characters}
+                setCharacters={avatarSelector.setCharacters}
+                onActivateCharacter={avatarSelector.onActivateCharacter}
                 onDeleteCharacter={handleDeleteCharacter}
-                onSaveCharacters={onSaveCharacters}
-
-                // Voice & Assets
+                onSaveCharacters={avatarSelector.onSaveCharacters}
                 edgeVoices={voiceManagerData.edgeVoices}
                 gptVoices={voiceManagerData.gptVoices}
                 activeTtsEngines={voiceManagerData.activeTtsEngines}
                 ttsPlugins={voiceManagerData.ttsPlugins}
-                availableModels={[]} // Models are internal to the modal or fetched there? 
-                                     // Actually AvatarSelector used to accept availableModels. 
-                                     // Let's pass empty for now, or hoist fetchCharacters logic? 
-                                     // CharactersTab used APIConfig to fetch models. 
-                                     // AvatarSelectorModal logic doesn't fetch models yet, it expects prop.
-                                     // I should probably duplicate the model fetching or hoist it.
-                                     // For now, let's leave it empty and fix it if it's blank.
             />
 
             <LLMConfigModal
-                isOpen={isLLMConfigOpen!} 
-                onClose={onCloseLLMConfig!} 
-                currentLlmSettings={currentLlmSettings!}
-                onSettingsChange={onLLMSettingsChange}
-                activeCharacterId={activeCharacterId}
+                isOpen={llmConfig.isOpen}
+                onClose={llmConfig.onClose}
+                currentLlmSettings={llmConfig.currentSettings}
+                onSettingsChange={llmConfig.onSettingsChange}
+                activeCharacterId={llmConfig.activeCharacterId}
             />
         </>
     );

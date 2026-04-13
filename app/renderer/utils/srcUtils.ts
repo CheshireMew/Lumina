@@ -1,3 +1,22 @@
+const isDirectUrl = (src: string): boolean =>
+    src.startsWith("http://") ||
+    src.startsWith("https://") ||
+    src.startsWith("data:") ||
+    src.startsWith("blob:") ||
+    src.startsWith("lumina-local://");
+
+export const resolveBundledAssetSrc = (src: string): string => {
+    if (!src) return "";
+    if (isDirectUrl(src)) return src;
+
+    const normalizedSrc = src.replace(/\\/g, "/");
+    if (normalizedSrc.startsWith("/")) {
+        return new URL(normalizedSrc.slice(1), window.location.href).toString();
+    }
+
+    return normalizedSrc;
+};
+
 /**
  * transformImageSrc
  *
@@ -10,13 +29,7 @@
 export const transformImageSrc = (src: string): string => {
     if (!src) return "";
 
-    // Check if it's already a web URL
-    if (
-        src.startsWith("http://") ||
-        src.startsWith("https://") ||
-        src.startsWith("data:") ||
-        src.startsWith("blob:")
-    ) {
+    if (isDirectUrl(src)) {
         return src;
     }
 

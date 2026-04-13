@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { API_CONFIG } from "../config";
+import { subscribeRuntimeEvent } from "../runtime/events";
 
 // ... (Keep Interfaces) ...
 export interface PluginConfigSchema {
@@ -27,9 +28,11 @@ export interface PluginStatus {
     group_id?: string;
     group_policy: "exclusive" | "independent";
     capabilities: string[];
-    runtime_target: "main" | "stt_server" | "tts_server";
+    runtime_target: string;
     config_schema?: any;
     current_config?: any;
+    config?: any;
+    current_value?: any;
     ui_slots?: any[];
     permissions?: string[];
     func_tag?: string;
@@ -42,42 +45,99 @@ export interface PluginStatus {
 export const usePluginManager = () => {
     const [plugins, setPlugins] = useState<PluginStatus[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [transitStates, setTransitStates] = useState<Record<string, string>>(
+        {},
+    );
+    const transitTimeoutsRef = useRef<Record<string, number>>({});
 
-    // [Architecture 6.0] Hybrid Fetch (HTTP + EventBus)
-    // We fetch initial state via HTTP (Postgres SSOT) and listen for updates via WebSocket
-    useEffect(() => {
-        let mounted = true;
-
-        const fetchPlugins = async () => {
+    const refreshPlugins = useCallback(async () => {
+        try {
             setIsLoading(true);
-            try {
-                const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/list`);
-                if (!res.ok) throw new Error("Failed to fetch plugins");
-                const data = await res.json();
-
-                if (mounted) {
-                    setPlugins(data.items || data.value || data); // Handle various envelopes
-                }
-            } catch (e) {
-                console.error("[usePluginManager] Failed to fetch plugins:", e);
-            } finally {
-                if (mounted) setIsLoading(false);
-            }
-        };
-
-        fetchPlugins();
-
-        // Optional: Poll every 5s if WebSocket isn't fully reliable yet for this
-        const interval = setInterval(fetchPlugins, 5000);
-
-        return () => {
-            mounted = false;
-            clearInterval(interval);
-        };
+            const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/list`);
+            if (!res.ok) throw new Error("Failed to fetch plugins");
+            const data = await res.json();
+            setPlugins(data.items || []);
+        } catch (e) {
+            console.error("[usePluginManager] Failed to refresh plugins:", e);
+        } finally {
+            setIsLoading(false);
+        }
     }, []);
 
-    // [Compat] Manual Refresh is No-Op in Live Mode
-    const refreshPlugins = useCallback(async () => {}, []);
+    const clearTransitState = useCallback((pluginId: string) => {
+        const timeoutId = transitTimeoutsRef.current[pluginId];
+        if (timeoutId !== undefined) {
+            window.clearTimeout(timeoutId);
+            delete transitTimeoutsRef.current[pluginId];
+        }
+
+        setTransitStates((previous) => {
+            if (!(pluginId in previous)) {
+                return previous;
+            }
+
+            const next = { ...previous };
+            delete next[pluginId];
+            return next;
+        });
+    }, []);
+
+    const setTransitState = useCallback(
+        (pluginId: string, status: string, autoClearMs?: number) => {
+            const timeoutId = transitTimeoutsRef.current[pluginId];
+            if (timeoutId !== undefined) {
+                window.clearTimeout(timeoutId);
+                delete transitTimeoutsRef.current[pluginId];
+            }
+
+            setTransitStates((previous) => ({
+                ...previous,
+                [pluginId]: status,
+            }));
+
+            if (autoClearMs && autoClearMs > 0) {
+                transitTimeoutsRef.current[pluginId] = window.setTimeout(() => {
+                    clearTransitState(pluginId);
+                }, autoClearMs);
+            }
+        },
+        [clearTransitState],
+    );
+
+    useEffect(() => {
+        void refreshPlugins();
+
+        const unsubscribe = subscribeRuntimeEvent("pluginStatus", ({ plugin_id, status }) => {
+            setTransitStates((previous) => ({
+                ...previous,
+                [plugin_id]: status,
+            }));
+
+            if (status === "enabled" || status === "disabled") {
+                const timeoutId = transitTimeoutsRef.current[plugin_id];
+                if (timeoutId !== undefined) {
+                    window.clearTimeout(timeoutId);
+                }
+
+                transitTimeoutsRef.current[plugin_id] = window.setTimeout(
+                    () => {
+                        clearTransitState(plugin_id);
+                    },
+                    500,
+                );
+            }
+
+            void refreshPlugins();
+        });
+
+        return () => {
+            unsubscribe();
+            Object.values(transitTimeoutsRef.current).forEach((timeoutId) => {
+                window.clearTimeout(timeoutId);
+            });
+            transitTimeoutsRef.current = {};
+        };
+    }, [clearTransitState, refreshPlugins]);
 
     // ... (Keep Toggle/Config Logic via HTTP for now, or move to DB?) ...
     // [Scheme C] Toggles still go via Main Backend (Dispatcher) to orchestrate processes
@@ -86,6 +146,12 @@ export const usePluginManager = () => {
     // [Architecture 5.0] Unified Toggle
     const togglePlugin = async (plugin: PluginStatus, enabled: boolean) => {
         try {
+            setTransitState(
+                plugin.id,
+                enabled ? "enabling" : "disabling",
+                15000,
+            );
+
             const res = await fetch(`${API_CONFIG.BASE_URL}/plugins/toggle`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -94,12 +160,16 @@ export const usePluginManager = () => {
                     enabled: enabled,
                 }),
             });
+            if (!res.ok) {
+                clearTransitState(plugin.id);
+            }
             return res.ok;
         } catch (e) {
             console.error(
                 `[usePluginManager] Failed to toggle ${plugin.id}`,
                 e,
             );
+            clearTransitState(plugin.id);
         }
         return false;
     };
@@ -134,6 +204,7 @@ export const usePluginManager = () => {
     return {
         plugins,
         isLoading,
+        transitStates,
         refreshPlugins,
         togglePlugin,
         updateConfig,

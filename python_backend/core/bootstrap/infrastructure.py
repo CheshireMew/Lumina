@@ -1,6 +1,5 @@
 
 import os
-import sys
 import logging
 from .interface import Bootstrapper
 
@@ -11,12 +10,11 @@ class ConfigBootstrapper(Bootstrapper):
     def name(self) -> str: return "Configuration"
 
     async def bootstrap(self, container):
-        from app_config import ConfigManager, BASE_DIR
-        cm = ConfigManager()
-        container.config = cm
+        from app_config import BASE_DIR, config
+        container.set_config(config)
         
         # Character Resolve Logic
-        character_id = cm.memory.character_id or "hiyori"
+        character_id = config.memory.character_id or "hiyori"
         
         # Verify Character Directory
         base_char_dir = os.path.join(str(BASE_DIR), "characters")
@@ -42,49 +40,41 @@ class ConfigBootstrapper(Bootstrapper):
         # Stash resolved character_id in config for downstream access if needed,
         # or just rely on container injection later.
         # Ideally ConfigManager should handle this, but for now we patch it.
-        cm.memory.character_id = character_id
+        config.memory.character_id = character_id
         logger.info(f"✅ Config Loaded for: {character_id}")
 
 
 class DatabaseBootstrapper(Bootstrapper):
     @property
-    def name(self) -> str: return "SurrealDB"
+    def name(self) -> str: return "Memory Backend"
 
     async def bootstrap(self, container):
         from memory.core import MemoryService
+        from memory.factory import NoOpDriver
         from model_manager import model_manager
         from consolidation_batch import BatchManager
         
         character_id = container.config.memory.character_id
         
-        # Load Embedding
-        model_subpath = "all-MiniLM-L6-v2"
-        embedding_model = None
-        try:
-             path = model_manager.ensure_embedding_model(model_subpath)
-             embedding_model = model_manager.load_embedding_model(str(path))
-        except Exception as e:
-             logger.error(f"Embedding load failed: {e}")
+        memory_svc = MemoryService(character_id=character_id)
+        memory_svc.set_encoder(
+            model_manager.create_lazy_embedding_encoder("all-MiniLM-L6-v2")
+        )
 
-        # Connect
+        batch_mgr = BatchManager()
+        container.batch_manager = batch_mgr
+        memory_svc.set_batch_manager(batch_mgr)
+
         try:
-            memory_svc = MemoryService(character_id=character_id)
-            if embedding_model:
-                memory_svc.set_encoder(embedding_model.encode)
-            
             await memory_svc.connect()
-            
-            # Batch Manager
-            batch_mgr = BatchManager()
-            container.batch_manager = batch_mgr
-            memory_svc.set_batch_manager(batch_mgr)
-            
-            container.set_memory(memory_svc)
+            memory_svc.set_available(True)
             logger.info("✅ Memory System Connected")
-            
         except Exception as e:
-            logger.critical(f"Memory System Failed: {e}")
-            sys.exit(1)
+            logger.error(f"Memory backend unavailable, continuing in degraded mode: {e}")
+            memory_svc.set_driver(NoOpDriver())
+            memory_svc.set_available(False, str(e))
+
+        container.set_memory(memory_svc)
 
 
 class EventBusBootstrapper(Bootstrapper):

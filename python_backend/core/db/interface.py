@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 class VectorDBInterface(ABC):
     """
     Abstract Interface for Vector Database Operations.
-    Decouples business logic (VectorStore) from specific DB implementations (SurrealDB, Postgres, etc).
+    Decouples business logic (VectorStore) from specific database implementations.
     """
 
     @abstractmethod
@@ -79,7 +79,7 @@ class VectorDBInterface(ABC):
                           filter_criteria: Optional[Dict] = None) -> list:
          """
          Hybrid search (Vector + FullText).
-         Drivers can implement native hybrid (like SurrealDB/Elastic) 
+         Drivers can implement native hybrid
          or fall back to RRF fusion if needed.
          """
          pass
