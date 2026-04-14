@@ -1,13 +1,7 @@
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 websockets>=12.0
-faster-whisper>=1.0.0
-webrtcvad>=2.0.10
 numpy>=1.26.0
-edge-tts>=6.1.0
-sounddevice>=0.5.0
-sherpa-onnx>=1.9.0
-soundfile>=0.12.1
 # Core dependencies
 asyncpg>=0.29.0
 sqlmodel>=0.0.14
@@ -20,12 +14,8 @@ psutil>=5.9.0
 aiofiles>=23.2.0
 blivedm @ git+https://github.com/xfgryujk/blivedm.git
 # Vision dependencies
-transformers>=4.36.0
 pillow>=10.0.0
 einops>=0.7.0
-torch>=2.1.0 --index-url https://download.pytorch.org/whl/pkgs/pypi/cpu
-torchvision>=0.16.0 --index-url https://download.pytorch.org/whl/pkgs/pypi/cpu
-sentence-transformers>=2.2.2
 setuptools>=70.0.0,<81
 dependency-injector>=4.41.0
 

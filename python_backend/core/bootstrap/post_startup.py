@@ -26,10 +26,23 @@ class PrewarmBootstrapper(Bootstrapper):
     async def _prewarm_workers(self, process_manager):
         try:
             await asyncio.sleep(4)
-            await asyncio.gather(
-                asyncio.to_thread(process_manager.start_worker, runtime_target_for_capability("tts")),
-                asyncio.to_thread(process_manager.start_worker, runtime_target_for_capability("stt")),
-            )
+            warm_targets = []
+            registry = getattr(process_manager, "capability_package_registry", None)
+            for capability in ("tts", "stt"):
+                if registry and not registry.should_auto_start(capability):
+                    continue
+                warm_targets.append(
+                    asyncio.to_thread(
+                        process_manager.start_worker,
+                        runtime_target_for_capability(capability),
+                    )
+                )
+
+            if not warm_targets:
+                logger.info("Prewarm skipped: no runtime package marked for auto start")
+                return
+
+            await asyncio.gather(*warm_targets)
             logger.info("🔥 Core worker prewarm dispatched")
         except Exception as e:
             logger.warning(f"Pre-warm task failed: {e}")

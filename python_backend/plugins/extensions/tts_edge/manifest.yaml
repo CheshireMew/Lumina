@@ -3,6 +3,7 @@ api_version: "1.0"
 kind: provider
 capability: tts
 runtime_target: worker:tts
+package: tts-runtime
 permissions:
   - network.outbound
 config_schema: {}

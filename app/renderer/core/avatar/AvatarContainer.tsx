@@ -3,11 +3,7 @@ import { AvatarRendererRef } from './types';
 
 // 1. Lazy Import Plugins
 // The bundle is split here. Heavy engines are only loaded if needed.
-const Live2DPlugin = React.lazy(async () => {
-    const { ensureCubismCoreLoaded } = await import('../../plugins/avatar/live2d/cubismCore');
-    await ensureCubismCoreLoaded();
-    return import('../../plugins/avatar/live2d/Live2DPlugin');
-});
+const Live2DPlugin = React.lazy(() => import('../../plugins/avatar/live2d/Live2DPlugin'));
 const VRMPlugin = React.lazy(() => import('../../plugins/avatar/vrm/VRMPlugin'));
 const SpriteAvatarPlugin = React.lazy(() => import('../../plugins/avatar/sprite/SpriteAvatarPlugin'));
 
@@ -15,6 +11,7 @@ interface AvatarContainerProps {
     type?: 'live2d' | 'vrm' | 'sprite' | 'auto'; // 'auto' = detect from extension
     modelPath: string;   // For live2d/vrm: model file. For sprite: sprites folder path
     highDpi?: boolean;
+    cubismCoreSrc?: string;
 }
 
 class AvatarErrorBoundary extends Component<
@@ -53,7 +50,7 @@ class AvatarErrorBoundary extends Component<
  *      - .model3.json -> Live2D
  *      - folder path (no extension) -> Sprite
  */
-const AvatarContainer = forwardRef<AvatarRendererRef, AvatarContainerProps>(({ type = 'auto', modelPath, highDpi }, ref) => {
+const AvatarContainer = forwardRef<AvatarRendererRef, AvatarContainerProps>(({ type = 'auto', modelPath, highDpi, cubismCoreSrc }, ref) => {
     
     // Auto-detect type from file extension if 'auto'
     let finalType: 'live2d' | 'vrm' | 'sprite' = 'live2d';
@@ -83,6 +80,7 @@ const AvatarContainer = forwardRef<AvatarRendererRef, AvatarContainerProps>(({ t
                         ref={ref}
                         modelPath={modelPath}
                         highDpi={highDpi}
+                        cubismCoreSrc={cubismCoreSrc}
                     />
                 )}
 

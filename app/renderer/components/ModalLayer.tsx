@@ -3,6 +3,7 @@ import React from "react";
 import { CharacterProfile } from "@core/llm/types";
 
 import { AvatarRendererRef } from "../core/avatar/types";
+import { CapabilityPackageSnapshot } from "../hooks/useCapabilityPackages";
 import { useVoiceManager } from "../hooks/useVoiceManager";
 import { GeneralSettingsInput } from "../hooks/useSettings";
 import AvatarSelectorModal from "./AvatarSelectorModal";
@@ -43,6 +44,7 @@ interface AvatarSelectorLayerConfig {
     onClose: () => void;
     activeCharacterId: string;
     activeCharacter?: CharacterProfile;
+    live2dPackage?: CapabilityPackageSnapshot;
     characters: CharacterProfile[];
     setCharacters: (chars: CharacterProfile[]) => void;
     onActivateCharacter: (id: string) => void;
@@ -146,6 +148,7 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
                 onClose={avatarSelector.onClose}
                 activeCharacterId={avatarSelector.activeCharacterId}
                 activeCharacter={avatarSelector.activeCharacter}
+                live2dPackage={avatarSelector.live2dPackage}
                 characters={avatarSelector.characters}
                 setCharacters={avatarSelector.setCharacters}
                 onActivateCharacter={avatarSelector.onActivateCharacter}

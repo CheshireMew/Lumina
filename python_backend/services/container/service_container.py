@@ -65,6 +65,9 @@ class ServiceContainer:
     def get_process_manager(self) -> Any:
         return self._value("process_manager")
 
+    def get_capability_package_registry(self) -> Any:
+        return self._value("capability_package_registry")
+
     def get_reconciliation_service(self) -> Any:
         return self._value("reconciliation_service")
 
@@ -106,6 +109,9 @@ class ServiceContainer:
 
     def set_process_manager(self, instance: Any):
         self._override("process_manager", instance)
+
+    def set_capability_package_registry(self, instance: Any):
+        self._override("capability_package_registry", instance)
 
     def set_config_watcher(self, instance: Any):
         self._override("config_watcher", instance)
@@ -310,6 +316,14 @@ class ServiceContainer:
     @capability_registry.setter
     def capability_registry(self, value):
         self._override("capability_registry", value)
+
+    @property
+    def capability_package_registry(self):
+        return self._value("capability_package_registry")
+
+    @capability_package_registry.setter
+    def capability_package_registry(self, value):
+        self._override("capability_package_registry", value)
 
     @property
     def plugin_state_aggregator(self):

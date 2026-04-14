@@ -18,6 +18,7 @@ import type { ProviderType } from './components/LLMConfig/types';
 // Core Hooks
 import { useCoreSystem } from './hooks/useCoreSystem';
 import { useBackendState } from './hooks/useBackendState';
+import { useCapabilityPackages } from './hooks/useCapabilityPackages';
 import { resolveBundledAssetSrc, transformImageSrc } from './utils/srcUtils';
 
 // Avatar System
@@ -45,6 +46,10 @@ function App() {
     const avatarRef = useRef<AvatarRendererRef>(null);
     const backendState = useBackendState();
     const isBackendReady = backendState.status === 'ready';
+    const runtimeBaseUrl = backendState.ports.memory
+        ? `http://127.0.0.1:${backendState.ports.memory}`
+        : API_CONFIG.BASE_URL;
+    const capabilityPackages = useCapabilityPackages(isBackendReady, runtimeBaseUrl);
     
     // Core System Hook (Unified)
     const {
@@ -163,10 +168,15 @@ function App() {
 
     // ==================== RENDER ====================
     const modelPath = activeCharacter?.modelPath || API_CONFIG.DEFAULT_MODEL_PATH;
-    const resolvedModelPath = modelPath.startsWith('/live2d/')
-        ? resolveBundledAssetSrc(modelPath)
-        : modelPath;
+    const live2dPackage = capabilityPackages['live2d-assets'];
+    const sttPackage = capabilityPackages['stt-runtime'];
+    const visionPackage = capabilityPackages['vision-runtime'];
+    const cubismCoreSrc = live2dPackage?.resourceUrls?.libs
+        ? `${live2dPackage.resourceUrls.libs}/live2dcubismcore.min.js`
+        : undefined;
+    const resolvedModelPath = resolveBundledAssetSrc(modelPath);
     const canLoadAvatar = isSettingsLoaded;
+    const shouldRenderAvatar = canLoadAvatar && Boolean(resolvedModelPath);
     const hasOpenModal = isSettingsOpen
         || isPluginStoreOpen
         || isMotionTesterOpen
@@ -199,12 +209,31 @@ function App() {
             transition: 'background-image 0.5s ease-in-out'
         }}>
             {/* Avatar */}
-            {canLoadAvatar ? (
+            {shouldRenderAvatar ? (
                 <AvatarContainer
                     ref={avatarRef}
                     modelPath={resolvedModelPath}
                     highDpi={settings.live2dHighDpi}
+                    cubismCoreSrc={cubismCoreSrc}
                 />
+            ) : canLoadAvatar ? (
+                <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                }}>
+                    <div style={{
+                        width: '140px',
+                        height: '140px',
+                        borderRadius: '999px',
+                        background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.92), rgba(226,232,240,0.65))',
+                        border: '1px solid rgba(255,255,255,0.72)',
+                        boxShadow: '0 24px 80px rgba(15, 23, 42, 0.12)',
+                    }} />
+                </div>
             ) : (
                 <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#666' }}>
                     Loading Soul...
@@ -273,6 +302,8 @@ function App() {
                             chatMode={chatMode}
                             onToggleChatMode={toggleChatMode}
                             onSpeechStart={handleUserSpeechStart}
+                            voiceCapabilityState={sttPackage?.state || 'unavailable'}
+                            visionCapabilityState={visionPackage?.state || 'unavailable'}
                         />
                     </div>
                 </div>
@@ -325,6 +356,7 @@ function App() {
                             onClose: () => setIsAvatarSelectorOpen(false),
                             activeCharacterId,
                             activeCharacter,
+                            live2dPackage,
                             characters,
                             setCharacters,
                             onActivateCharacter: handleCharacterSwitch,

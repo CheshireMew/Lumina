@@ -17,6 +17,7 @@ class ProcessManager:
         self.registry: Dict[str, dict] = {}
         self._shutdown_event = asyncio.Event()
         self._managed_scripts: Dict[str, Optional[str]] = {}
+        self.capability_package_registry = None
         self.health_probe = HealthProbe()
         self.launcher = WorkerLauncher()
         self.supervisor = WorkerSupervisor(
@@ -34,11 +35,13 @@ class ProcessManager:
         port: int,
         script: str = "backend_launcher.py",
         args: Optional[List[str]] = None,
+        cwd: Optional[str] = None,
     ):
         self.registry[service_id] = {
             "port": port,
             "script": script,
             "args": args or [],
+            "cwd": cwd,
             "health_path": "/health",
         }
 
@@ -49,6 +52,10 @@ class ProcessManager:
     def register_mcp_client(self, client):
         self.workers[client.name] = client
         logger.info(f"Registered MCP Service: {client.name} (PID: {client.pid})")
+
+    def set_capability_package_registry(self, registry):
+        self.capability_package_registry = registry
+        self.launcher.set_capability_package_registry(registry)
 
     def start_worker(
         self,
@@ -61,6 +68,10 @@ class ProcessManager:
             logger.info(f"Skip starting {worker_id}: ProcessManager is shutting down.")
             return False
 
+        if not self._is_worker_package_ready(worker_id):
+            logger.info(f"Skip starting {worker_id}: capability package unavailable.")
+            return False
+
         if self.is_running(worker_id):
             logger.info(f"Worker {worker_id} is already running.")
             return True
@@ -69,6 +80,7 @@ class ProcessManager:
         target_port = service_def["port"] if service_def else None
         target_script = service_def["script"] if service_def else script_name
         target_args = service_def["args"] if service_def else args
+        target_cwd = service_def.get("cwd") if service_def else None
 
         if not target_script:
             logger.error(
@@ -92,6 +104,7 @@ class ProcessManager:
                 worker_id=worker_id,
                 script_name=target_script,
                 args=target_args,
+                cwd=target_cwd,
             )
             if not launch_config:
                 return False
@@ -113,6 +126,21 @@ class ProcessManager:
         except Exception as e:
             logger.error(f"Failed to start worker {worker_id}: {e}")
             return False
+
+    def _is_worker_package_ready(self, worker_id: str) -> bool:
+        if not self.capability_package_registry:
+            return True
+
+        if not worker_id.startswith("worker:"):
+            return True
+
+        capability = worker_id.split(":", 1)[1]
+        definition = self.capability_package_registry.package_for_capability(capability)
+        if not definition:
+            return True
+
+        snapshot = self.capability_package_registry.resolve(definition.id)
+        return bool(snapshot and snapshot.status == "ready" and snapshot.entry_executable is not None)
 
     def _attach_external_if_reachable(
         self,

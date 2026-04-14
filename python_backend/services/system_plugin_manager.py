@@ -106,8 +106,18 @@ class SystemPluginManager:
             if plugin_id in self._plugins
         }
         result = self._manifest_repository.discover(self.runtime_target)
-        self._manifests = result.manifests
+        self._manifests = {}
         self._errors = {**retained_load_errors, **result.errors}
+
+        for plugin_id, manifest in result.manifests.items():
+            package_id = getattr(manifest, "package", None)
+            if not package_id:
+                self._manifests[plugin_id] = manifest
+                continue
+            if self._is_package_ready(str(package_id)):
+                self._manifests[plugin_id] = manifest
+                continue
+            self._errors[plugin_id] = f"package_unavailable:{package_id}"
 
         for plugin_id in previous_manifest_ids - set(self._manifests):
             self._capability_registry.unregister_plugin(plugin_id)
@@ -120,6 +130,13 @@ class SystemPluginManager:
                 kind=manifest.kind,
                 enabled=bool(self._plugins.get(plugin_id) and self._plugins[plugin_id].enabled),
             )
+
+    def _is_package_ready(self, package_id: str) -> bool:
+        package_registry = getattr(self.container, "capability_package_registry", None)
+        if package_registry is None:
+            return False
+        snapshot = package_registry.resolve(package_id)
+        return bool(snapshot and snapshot.status == "ready")
 
     async def _load_and_enable(self, plugin_id: str) -> Plugin | None:
         plugin = self._plugins.get(plugin_id)

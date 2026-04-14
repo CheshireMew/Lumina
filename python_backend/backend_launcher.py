@@ -23,9 +23,11 @@ def run_core():
 
 def run_worker(capability: str):
     import uvicorn
+    from core.capability_packages import CapabilityPackageRegistry
     from services.container import services
     from services.worker_runtime import WorkerRuntimeHost, WorkerRuntimeOptions
 
+    services.set_capability_package_registry(CapabilityPackageRegistry())
     runtime_target = runtime_target_for_capability(capability)
     port = resolve_runtime_port(config, runtime_target)
     if not port:

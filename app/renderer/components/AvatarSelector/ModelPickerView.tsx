@@ -3,6 +3,7 @@ import { Box, Image as ImageIcon, Layers } from "lucide-react";
 
 import { CharacterProfile } from "@core/llm/types";
 
+import { resolveBundledAssetSrc } from "../../utils/srcUtils";
 import { AvatarModel } from "./types";
 
 interface ModelPickerViewProps {
@@ -64,20 +65,26 @@ export const ModelPickerView: React.FC<ModelPickerViewProps> = ({
                 >
                     {models.map((model, index) => {
                         const isSelected = targetCharacter?.modelPath === model.path;
+                        const isInstallable = model.availability === "installable";
                         return (
                             <div
                                 key={`${model.path}-${index}`}
-                                onClick={() => onModelPick(model.path)}
+                                onClick={() => {
+                                    if (!isInstallable && model.path) {
+                                        onModelPick(model.path);
+                                    }
+                                }}
                                 style={{
                                     border: isSelected
                                         ? "2px solid #3b82f6"
                                         : "1px solid #e5e7eb",
                                     borderRadius: 12,
                                     padding: 10,
-                                    cursor: "pointer",
+                                    cursor: isInstallable ? "default" : "pointer",
                                     textAlign: "center",
-                                    backgroundColor: isSelected ? "#eff6ff" : "white",
+                                    backgroundColor: isInstallable ? "#f8fafc" : (isSelected ? "#eff6ff" : "white"),
                                     transition: "all 0.2s",
+                                    opacity: isInstallable ? 0.8 : 1,
                                 }}
                             >
                                 <div
@@ -95,7 +102,7 @@ export const ModelPickerView: React.FC<ModelPickerViewProps> = ({
                                 >
                                     {model.thumbnail ? (
                                         <img
-                                            src={model.thumbnail}
+                                            src={resolveBundledAssetSrc(model.thumbnail)}
                                             alt=""
                                             style={{
                                                 width: "100%",
@@ -121,7 +128,7 @@ export const ModelPickerView: React.FC<ModelPickerViewProps> = ({
                                         marginTop: 4,
                                     }}
                                 >
-                                    {(model.type || "unknown").toUpperCase()}
+                                    {isInstallable ? "可安装" : (model.type || "unknown").toUpperCase()}
                                 </div>
                             </div>
                         );

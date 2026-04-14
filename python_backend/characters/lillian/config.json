@@ -4,7 +4,7 @@
     "display_name": "Lillian",
     "description": "女儿",
     "system_prompt": "你是一个12岁的小女孩,你正在和你的爸爸对话。",
-    "live2d_model": "/live2d/imported/MaoPro/mao_pro.model3.json",
+    "model_path": "/runtime/packages/live2d-assets/resources/live2d/imported/MaoPro/mao_pro.model3.json",
     "voice_config": {
         "service": "edge-tts",
         "voiceId": "zh-CN-XiaoyiNeural",

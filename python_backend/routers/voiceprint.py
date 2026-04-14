@@ -11,7 +11,7 @@ import httpx
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from app_config import config
 from core.runtime import resolve_capability_base_url
-from plugins.extensions.voiceprint.store import (
+from services.voiceprint_store import (
     delete_profile as delete_voiceprint_profile,
     list_profiles as list_voiceprint_profiles,
     set_profile_enabled,
@@ -21,9 +21,32 @@ from plugins.extensions.voiceprint.store import (
 logger = logging.getLogger("VoiceprintRouter")
 router = APIRouter(prefix="/plugins/voiceprint", tags=["Voiceprint"])
 
+
+def _voiceprint_package_status():
+    from services.container.service_definitions import service_container
+
+    registry = service_container.get_capability_package_registry()
+    if registry is None:
+        return None
+    return registry.resolve("voiceprint-runtime")
+
+
+def _ensure_voiceprint_available():
+    snapshot = _voiceprint_package_status()
+    if snapshot is not None and snapshot.status != "ready":
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "state": snapshot.status,
+                "packageId": "voiceprint-runtime",
+                "message": "声纹能力未安装，可在需要时安装",
+            },
+        )
+
 @router.get("/list")
 async def list_profiles():
     """List all voiceprint profiles."""
+    _ensure_voiceprint_available()
     try:
         results = await list_voiceprint_profiles()
         profiles = []
@@ -43,6 +66,7 @@ async def list_profiles():
 @router.post("/toggle/{name}")
 async def toggle_profile(name: str, enabled: bool = Query(...)):
     """Toggle a voiceprint profile's enabled status."""
+    _ensure_voiceprint_available()
     try:
         await set_profile_enabled(name, enabled)
         return {"status": "ok", "name": name, "enabled": enabled}
@@ -54,6 +78,7 @@ async def toggle_profile(name: str, enabled: bool = Query(...)):
 @router.delete("/{name}")
 async def delete_profile(name: str):
     """Delete a voiceprint profile."""
+    _ensure_voiceprint_available()
     try:
         await delete_voiceprint_profile(name)
         return {"status": "ok", "name": name}
@@ -70,6 +95,7 @@ async def upload_voiceprint(name: str, file: UploadFile = File(...)):
     """
     if ".." in name or "/" in name or "\\" in name:
         raise HTTPException(status_code=400, detail="Invalid profile name")
+    _ensure_voiceprint_available()
     
     try:
         # 1. Read audio file

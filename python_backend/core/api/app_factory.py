@@ -1,5 +1,3 @@
-import os
-import sys
 import uuid
 
 from fastapi import FastAPI, WebSocket
@@ -58,7 +56,7 @@ def create_app(logger, request_id_ctx) -> FastAPI:
     _configure_middleware(app, logger, request_id_ctx)
     _configure_exception_handlers(app, logger)
     _configure_routes(app)
-    _mount_live2d(app, logger)
+    _mount_capability_resources(app, logger)
     _configure_root(app)
     return app
 
@@ -189,26 +187,15 @@ def _configure_routes(app: FastAPI) -> None:
         await hub.handle_connection(websocket)
 
 
-def _mount_live2d(app: FastAPI, logger) -> None:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    backend_dir = os.path.normpath(os.path.join(current_dir, "..", ".."))
-    live2d_path = os.path.join(backend_dir, "live2d")
+def _mount_capability_resources(app: FastAPI, logger) -> None:
+    package_registry = getattr(service_instance, "capability_package_registry", None)
+    if not package_registry:
+        return
 
-    if not os.path.exists(live2d_path):
-        candidates = [
-            os.path.join(os.path.dirname(sys.executable), "live2d"),
-            os.path.join(backend_dir, "..", "public", "live2d"),
-        ]
-        for candidate in candidates:
-            if os.path.exists(candidate):
-                live2d_path = candidate
-                break
-
-    if os.path.exists(live2d_path):
-        app.mount("/live2d", StaticFiles(directory=live2d_path), name="live2d")
-        logger.info(f"Mounted Live2D static files from {live2d_path}")
-    else:
-        logger.warning(f"Live2D directory not found. Checked: {live2d_path}")
+    for route, directory in package_registry.static_mounts():
+        route_name = route.strip("/").replace("/", ".")
+        app.mount(route, StaticFiles(directory=str(directory)), name=route_name)
+        logger.info("Mounted capability resource %s from %s", route, directory)
 
 
 def _configure_root(app: FastAPI) -> None:

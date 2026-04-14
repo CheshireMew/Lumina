@@ -7,7 +7,7 @@ export const API_CONFIG = {
     TTS_BASE_URL: "http://127.0.0.1:8010/tts",
     STT_BASE_URL: "http://127.0.0.1:8010/stt",
     TIMEOUT: 15000,
-    DEFAULT_MODEL_PATH: "/live2d/Hiyori/Hiyori.model3.json",
+    DEFAULT_MODEL_PATH: "/runtime/packages/live2d-assets/resources/live2d/Hiyori/Hiyori.model3.json",
 };
 
 /**

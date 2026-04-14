@@ -5,7 +5,6 @@
     "description": "3D VRM 角色示例",
     "system_prompt": "你是小月,一个活泼可爱的虚拟偶像。",
     "model_path": "/vrm/XiaoYue.vrm",
-    "renderer_type": "vrm",
     "voice_config": {
         "service": "edge-tts",
         "voiceId": "zh-CN-XiaoyiNeural"
@@ -18,6 +17,5 @@
     "bilibili": {
         "enabled": false,
         "room_id": 0
-    },
-    "live2d_model": ""
+    }
 }

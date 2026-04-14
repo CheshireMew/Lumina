@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_submodules
 import sys
 import os
 
@@ -33,17 +33,9 @@ hiddenimports = [
 # tmp_ret = collect_all('sherpa_onnx')
 # datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
-# Collect Langchain/Surrealdb/Torch
+# Collect Langchain/Surrealdb
 hiddenimports += collect_submodules('langchain')
 hiddenimports += collect_submodules('surrealdb')
-# Force collect torch to ensure cuda/dlls are present
-tmp_torch = collect_all('torch')
-datas += tmp_torch[0]; binaries += tmp_torch[1]; hiddenimports += tmp_torch[2]
-tmp_audio = collect_all('torchaudio')
-datas += tmp_audio[0]; binaries += tmp_audio[1]; hiddenimports += tmp_audio[2]
-
-# Fix missing unittest dependency for Torch
-hiddenimports += ['unittest', 'unittest.mock']
 
 # Config Files to Bundle
 # (Source, Dest)
@@ -51,6 +43,7 @@ datas += [
     (os.path.join(BACKEND_DIR, 'stt_config.json'), '.'),
     (os.path.join(BACKEND_DIR, 'memory_config.json'), '.'),
     (os.path.join(PROJECT_DIR, 'audio_config.json'), '.'),  # Root level
+    (os.path.join(PROJECT_DIR, 'config', 'capability-packages.json'), 'config'),
     (os.path.join(BACKEND_DIR, 'tts_emotion_styles.json'), '.'),
     # (os.path.join(BACKEND_DIR, 'assets'), 'assets'), # Only if exists
     (os.path.join(BACKEND_DIR, 'schemas'), 'schemas'), # Schemas
@@ -63,9 +56,25 @@ datas += [
 excludes = [
     'tkinter', 'test', 'unittest', 'matplotlib', 
     'scipy', 'pandas',  # If not used
-    'torch.testing', 
-    'torch.cuda', # Try to exclude CUDA? This might break if torch expects it
-    'nvidia', # Exclude nvidia libs if using CPU only torch
+    'faster_whisper',
+    'webrtcvad',
+    'sounddevice',
+    'soundfile',
+    'sherpa_onnx',
+    'edge_tts',
+    'torch',
+    'torchaudio',
+    'torchvision',
+    'sentence_transformers',
+    'transformers',
+    'cv2',
+    'llvmlite',
+    'numba',
+    'modelscope',
+    'plugins.extensions.voiceauth_sherpa',
+    'plugins.extensions.voiceauth_sherpa.drivers',
+    'plugins.extensions.voiceauth_sherpa.drivers.voiceauth',
+    'plugins.extensions.voiceauth_sherpa.drivers.voiceauth.sherpa_cam_driver',
 ]
 
 a = Analysis(

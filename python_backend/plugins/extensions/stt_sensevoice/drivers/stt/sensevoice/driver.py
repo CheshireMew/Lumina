@@ -19,6 +19,7 @@ class Plugin(ASRPlugin):
     def __init__(self):
         self.recognizer = None
         self.model_subdir = "sense-voice"
+        self.models_root = os.environ.get("LUMINA_STT_MODELS_DIR") or model_manager.base_dir
         self._name = "stt:sensevoice"
         self._version = "1.0.0"
 
@@ -40,7 +41,7 @@ class Plugin(ASRPlugin):
 
         try:
             self._ensure_model_exists()
-            model_dir = os.path.join(model_manager.base_dir, self.model_subdir)
+            model_dir = os.path.join(self.models_root, self.model_subdir)
             
             tokens_path = os.path.join(model_dir, "tokens.txt")
             model_path = os.path.join(model_dir, "model.int8.onnx")
@@ -65,12 +66,13 @@ class Plugin(ASRPlugin):
 
     def _ensure_model_exists(self):
         """鍒╃敤 model_manager 涓嬭浇妯″瀷"""
-        model_dir = os.path.join(model_manager.base_dir, self.model_subdir)
+        model_dir = os.path.join(self.models_root, self.model_subdir)
         if os.path.exists(model_dir) and any(f.endswith(".onnx") for f in os.listdir(model_dir)):
             return
 
         logger.info("SenseVoice model not found. Downloading...")
-        target_path = model_manager.setup_model_env(self.model_subdir)
+        target_path = model_dir
+        os.makedirs(target_path, exist_ok=True)
         
         # SenseVoice release (2025-09-09)
         download_url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2"

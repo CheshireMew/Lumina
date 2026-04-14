@@ -2,6 +2,7 @@ import React from "react";
 
 import { CharacterProfile } from "@core/llm/types";
 
+import { CapabilityPackageSnapshot } from "../hooks/useCapabilityPackages";
 import { CharacterListView } from "./AvatarSelector/CharacterListView";
 import { ModelPickerView } from "./AvatarSelector/ModelPickerView";
 import { useAvatarSelectorState } from "./AvatarSelector/useAvatarSelectorState";
@@ -11,6 +12,7 @@ interface AvatarSelectorModalProps {
     onClose: () => void;
     activeCharacterId: string;
     activeCharacter?: CharacterProfile;
+    live2dPackage?: CapabilityPackageSnapshot;
     characters: CharacterProfile[];
     setCharacters: (chars: CharacterProfile[]) => void;
     onActivateCharacter: (id: string) => void;
@@ -26,6 +28,7 @@ const AvatarSelectorModal: React.FC<AvatarSelectorModalProps> = ({
     isOpen,
     onClose,
     activeCharacterId,
+    live2dPackage,
     characters,
     setCharacters,
     onActivateCharacter,
@@ -40,6 +43,7 @@ const AvatarSelectorModal: React.FC<AvatarSelectorModalProps> = ({
         isOpen,
         activeCharacterId,
         characters,
+        live2dPackage,
         setCharacters,
         onDeleteCharacter,
         onSaveCharacters,

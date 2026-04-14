@@ -5,41 +5,46 @@ from core.runtime import resolve_runtime_port, runtime_target_for_capability
 
 logger = logging.getLogger("Bootstrap.Services")
 
+
+def _register_worker_service(pm, config, package_registry, package_id: str, capability: str):
+    snapshot = package_registry.resolve(package_id)
+    if not snapshot or snapshot.status != "ready" or not snapshot.entry_arguments:
+        return
+
+    args = list(snapshot.entry_arguments)
+    script_name = str(snapshot.entry_executable) if snapshot.entry_executable else "backend_launcher.py"
+    pm.register_service_def(
+        runtime_target_for_capability(capability),
+        resolve_runtime_port(config, runtime_target_for_capability(capability)) or getattr(config.network, f"{capability}_port", 0),
+        script_name,
+        args,
+        cwd=str(snapshot.root_dir) if snapshot.root_dir else None,
+    )
+
 class CoreServicesBootstrapper(Bootstrapper):
     @property
     def name(self) -> str: return "Core Services"
 
     async def bootstrap(self, container):
+        from core.capability_packages import CapabilityPackageRegistry
         from services.process_manager import ProcessManager
         from services.capability_registry import CapabilityRegistry
         from services.character_service import CharacterService
         # from app_config import config # Global import removed
         pm = ProcessManager()
+        package_registry = CapabilityPackageRegistry()
+        pm.set_capability_package_registry(package_registry)
         
         # [Architecture 5.0] Register Core Services
         config = container.config
-        pm.register_service_def(
-            runtime_target_for_capability("stt"),
-            config.network.stt_port,
-            "backend_launcher.py",
-            ["worker", "--capability", "stt"],
-        )
-        pm.register_service_def(
-            runtime_target_for_capability("tts"),
-            config.network.tts_port,
-            "backend_launcher.py",
-            ["worker", "--capability", "tts"],
-        )
-        pm.register_service_def(
-            runtime_target_for_capability("vision"),
-            resolve_runtime_port(config, runtime_target_for_capability("vision")) or 8005,
-            "backend_launcher.py",
-            ["worker", "--capability", "vision"],
-        )
+        _register_worker_service(pm, config, package_registry, "stt-runtime", "stt")
+        _register_worker_service(pm, config, package_registry, "tts-runtime", "tts")
+        _register_worker_service(pm, config, package_registry, "vision-runtime", "vision")
         
         container.set_process_manager(pm)
+        container.set_capability_package_registry(package_registry)
         container.capability_registry = CapabilityRegistry()
-        container.character_service = CharacterService()
+        container.character_service = CharacterService(package_registry=package_registry)
 
         # 1. LLM
         from llm.manager import LLMManager
