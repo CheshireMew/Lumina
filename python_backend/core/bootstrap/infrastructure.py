@@ -57,9 +57,14 @@ class DatabaseBootstrapper(Bootstrapper):
         character_id = container.config.memory.character_id
         
         memory_svc = MemoryService(character_id=character_id)
-        memory_svc.set_encoder(
-            model_manager.create_lazy_embedding_encoder("all-MiniLM-L6-v2")
-        )
+        package_registry = getattr(container, "capability_package_registry", None)
+        vision_snapshot = package_registry.resolve("vision-runtime") if package_registry else None
+        if vision_snapshot and vision_snapshot.status == "ready":
+            memory_svc.set_encoder(
+                model_manager.create_lazy_embedding_encoder("all-MiniLM-L6-v2")
+            )
+        else:
+            logger.info("Vision runtime unavailable. Memory retrieval will use full-text fallback.")
 
         batch_mgr = BatchManager()
         container.batch_manager = batch_mgr

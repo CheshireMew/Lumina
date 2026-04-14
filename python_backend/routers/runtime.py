@@ -34,3 +34,18 @@ async def get_runtime_capability(capability: str, request: Request, runtime=Depe
         raise HTTPException(status_code=404, detail=f"Unknown capability: {capability}")
     base_url = str(request.base_url).rstrip("/")
     return runtime.get_capability_runtime(capability, base_url)
+
+
+@router.get("/packages")
+async def list_runtime_packages(request: Request, runtime=Depends(get_runtime_service_dep)):
+    base_url = str(request.base_url).rstrip("/")
+    return {"packages": runtime.list_packages(base_url)}
+
+
+@router.get("/packages/{package_id}")
+async def get_runtime_package(package_id: str, request: Request, runtime=Depends(get_runtime_service_dep)):
+    base_url = str(request.base_url).rstrip("/")
+    payload = runtime.get_package(package_id, base_url)
+    if not payload:
+        raise HTTPException(status_code=404, detail=f"Unknown package: {package_id}")
+    return payload

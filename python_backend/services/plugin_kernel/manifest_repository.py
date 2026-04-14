@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -26,32 +27,51 @@ class ManifestRepository:
         result = ManifestDiscoveryResult()
         normalized_target = normalize_runtime_target(runtime_target)
 
+        seen_paths: set[Path] = set()
+        plugin_roots = [self.plugin_root, *self._extra_plugin_roots()]
         for root_name in ("system", "extensions"):
-            root_dir = self.plugin_root / root_name
-            if not root_dir.exists():
-                continue
-
-            for plugin_dir in root_dir.iterdir():
-                if not self._is_plugin_dir(plugin_dir):
+            for plugin_root in plugin_roots:
+                root_dir = plugin_root / root_name
+                if not root_dir.exists():
                     continue
 
-                manifest_path = plugin_dir / "manifest.yaml"
-                if not manifest_path.exists():
-                    continue
+                for plugin_dir in root_dir.iterdir():
+                    if not self._is_plugin_dir(plugin_dir):
+                        continue
+                    resolved_plugin_dir = plugin_dir.resolve()
+                    if resolved_plugin_dir in seen_paths:
+                        continue
+                    seen_paths.add(resolved_plugin_dir)
 
-                try:
-                    manifest = self._read_manifest(manifest_path, plugin_dir)
-                except Exception as exc:
-                    result.errors[plugin_dir.name] = f"manifest invalid: {exc}"
-                    logger.error("Failed to parse manifest %s: %s", manifest_path, exc)
-                    continue
+                    manifest_path = plugin_dir / "manifest.yaml"
+                    if not manifest_path.exists():
+                        continue
 
-                if normalize_runtime_target(manifest.runtime_target) != normalized_target:
-                    continue
+                    try:
+                        manifest = self._read_manifest(manifest_path, plugin_dir)
+                    except Exception as exc:
+                        result.errors[plugin_dir.name] = f"manifest invalid: {exc}"
+                        logger.error("Failed to parse manifest %s: %s", manifest_path, exc)
+                        continue
 
-                result.manifests[manifest.id] = manifest
+                    if normalize_runtime_target(manifest.runtime_target) != normalized_target:
+                        continue
+
+                    result.manifests[manifest.id] = manifest
 
         return result
+
+    @staticmethod
+    def _extra_plugin_roots() -> list[Path]:
+        raw_roots = os.environ.get("LUMINA_PLUGIN_ROOTS", "")
+        roots: list[Path] = []
+        for raw_root in raw_roots.split(os.pathsep):
+            if not raw_root.strip():
+                continue
+            root = Path(raw_root).resolve()
+            if root.exists():
+                roots.append(root)
+        return roots
 
     @staticmethod
     def _is_plugin_dir(plugin_dir: Path) -> bool:

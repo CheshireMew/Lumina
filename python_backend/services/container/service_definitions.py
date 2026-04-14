@@ -14,6 +14,7 @@ class LuminaContainer(containers.DeclarativeContainer):
     process_manager = providers.Object(None)
     reconciliation_service = providers.Object(None)
     capability_registry = providers.Object(None)
+    capability_package_registry = providers.Object(None)
     plugin_state_aggregator = providers.Object(None)
     automation_service = providers.Object(None)
 

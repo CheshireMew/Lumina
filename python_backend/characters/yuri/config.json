@@ -4,7 +4,7 @@
     "display_name": "Yuri",
     "description": "A new digital soul.",
     "system_prompt": "You are a helpful AI assistant.",
-    "live2d_model": "/live2d/imported/PinkFox/PinkFox.model3.json",
+    "model_path": "/runtime/packages/live2d-assets/resources/live2d/imported/PinkFox/PinkFox.model3.json",
     "voice_config": {
         "service": "edge-tts",
         "voiceId": "zh-CN-liaoning-XiaobeiNeural",

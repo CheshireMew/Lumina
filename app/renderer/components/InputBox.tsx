@@ -11,6 +11,8 @@ interface InputBoxProps {
     chatMode: 'text' | 'voice';
     onToggleChatMode: () => void;
     onSpeechStart?: () => void;
+    voiceCapabilityState?: string;
+    visionCapabilityState?: string;
 }
 
 const InputBox: React.FC<InputBoxProps> = ({ 
@@ -19,7 +21,9 @@ const InputBox: React.FC<InputBoxProps> = ({
     embedded = false, 
     chatMode,
     onToggleChatMode,
-    onSpeechStart 
+    onSpeechStart,
+    voiceCapabilityState = 'ready',
+    visionCapabilityState = 'ready',
 }) => {
     // --- Text State ---
     const [value, setValue] = useState('');
@@ -47,6 +51,12 @@ const InputBox: React.FC<InputBoxProps> = ({
                 wsRef.current.close();
                 wsRef.current = null;
             }
+            return;
+        }
+
+        if (voiceCapabilityState !== 'ready') {
+            setVoiceError('语音能力未安装');
+            setVadStatus('idle');
             return;
         }
 
@@ -108,7 +118,7 @@ const InputBox: React.FC<InputBoxProps> = ({
 
         connectWS();
         return () => { if (ws) ws.close(); };
-    }, [chatMode]);
+    }, [chatMode, voiceCapabilityState]);
 
     // --- Handlers ---
     const handleSend = () => {
@@ -129,6 +139,11 @@ const InputBox: React.FC<InputBoxProps> = ({
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        if (visionCapabilityState !== 'ready') {
+            alert('视觉能力未安装');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
         setIsAnalyzing(true);
         try {
             const formData = new FormData();
@@ -228,8 +243,13 @@ const InputBox: React.FC<InputBoxProps> = ({
                 
                 {/* Toggle Mode */}
                 <button
-                    onClick={onToggleChatMode}
-                    title={chatMode === 'text' ? 'Switch to Voice' : 'Switch to Text'}
+                    onClick={() => {
+                        if (chatMode === 'text' && voiceCapabilityState !== 'ready') {
+                            setVoiceError('语音能力未安装');
+                        }
+                        onToggleChatMode();
+                    }}
+                    title={chatMode === 'text' ? '切换到语音' : '切换到文字'}
                     style={{
                         background: 'transparent',
                         border: 'none',
@@ -252,8 +272,8 @@ const InputBox: React.FC<InputBoxProps> = ({
                 <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleImageUpload} />
                 <button 
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isAnalyzing || disabled}
-                    title="Upload Image"
+                    disabled={isAnalyzing || disabled || visionCapabilityState !== 'ready'}
+                    title={visionCapabilityState === 'ready' ? '上传图片' : '视觉能力未安装'}
                     style={{
                         background: 'transparent',
                         border: 'none',

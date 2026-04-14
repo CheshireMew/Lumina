@@ -9,7 +9,7 @@ import numpy as np
 from core.interfaces.audio_filter import IAudioFilter
 from core.interfaces.plugin import Plugin as BasePlugin
 from services.audio_filter_chain import AudioFilterChain
-from .store import VoiceprintStoreUnavailable, list_profiles
+from services.voiceprint_store import VoiceprintStoreUnavailable, list_profiles
 
 logger = logging.getLogger("VoiceprintPlugin")
 

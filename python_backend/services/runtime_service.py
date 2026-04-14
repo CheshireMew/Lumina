@@ -15,6 +15,7 @@ from services.infra.service_discovery import discovery
 class RuntimeService:
     def __init__(self, container):
         self.container = container
+        self.package_registry = getattr(container, "capability_package_registry", None)
 
     def _get_provider_state(self, capability: str, selected_provider: str | None) -> dict[str, Any]:
         aggregator = getattr(self.container, "plugin_state_aggregator", None)
@@ -40,6 +41,12 @@ class RuntimeService:
     def get_capability_runtime(self, capability: str, base_url: str) -> dict[str, Any]:
         contract = get_capability_contract(capability)
         config = self.container.config
+        package_definition = self.package_registry.package_for_capability(capability) if self.package_registry else None
+        package_snapshot = (
+            self.package_registry.get_snapshot(package_definition.id, base_url)
+            if self.package_registry and package_definition
+            else None
+        )
         selected_provider = config.get_selected_provider(capability)
         provider_state = self._get_provider_state(capability, selected_provider)
         current_provider = provider_state.get("id") or selected_provider
@@ -95,7 +102,18 @@ class RuntimeService:
             "load_time_ms": provider_state.get("load_time_ms"),
             "status": provider_state.get("computed_status") or provider_state.get("active_status") or "unknown",
             "provider_state": provider_state,
+            "package": package_snapshot,
         }
+
+    def list_packages(self, base_url: str) -> list[dict[str, Any]]:
+        if not self.package_registry:
+            return []
+        return self.package_registry.list_snapshots(base_url)
+
+    def get_package(self, package_id: str, base_url: str) -> dict[str, Any] | None:
+        if not self.package_registry:
+            return None
+        return self.package_registry.get_snapshot(package_id, base_url)
 
 
 def get_runtime_service(container) -> RuntimeService:

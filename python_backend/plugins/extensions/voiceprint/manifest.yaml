@@ -3,6 +3,7 @@ api_version: "1.0"
 kind: processor
 capability: stt
 runtime_target: worker:stt
+package: voiceprint-runtime
 permissions:
   - filesystem.read
 config_schema:

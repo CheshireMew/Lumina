@@ -51,16 +51,13 @@ class CharacterConfig(BaseModel):
     def from_storage(cls, character_id: str, payload: dict[str, Any] | None) -> "CharacterConfig":
         raw = dict(payload or {})
         voice_config = raw.get("voice_config") if isinstance(raw.get("voice_config"), dict) else {}
-        model_path = raw.get("model_path")
-        if not model_path:
-            model_path = raw.get("live2d_model", "")
         return cls(
             id=raw.get("character_id") or raw.get("id") or character_id,
             name=raw.get("name") or character_id,
             displayName=raw.get("display_name") or raw.get("displayName") or raw.get("name") or character_id,
             description=raw.get("description", ""),
             systemPrompt=raw.get("system_prompt") or raw.get("systemPrompt", ""),
-            modelPath=model_path or "",
+            modelPath=raw.get("model_path") or "",
             voiceConfig=CharacterVoiceConfig(
                 service=voice_config.get("service", "edge-tts"),
                 voiceId=voice_config.get("voiceId") or voice_config.get("voice_id", ""),

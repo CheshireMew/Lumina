@@ -29,7 +29,8 @@ class SenseVoiceEngine:
         self.recognizer = None
         # Default SenseVoiceSmall model from Sherpa-ONNX releases
         self.model_subdir = "sense-voice" 
-        self.model_dir = os.path.join(model_manager.base_dir, self.model_subdir)
+        self.models_root = os.environ.get("LUMINA_STT_MODELS_DIR") or model_manager.base_dir
+        self.model_dir = os.path.join(self.models_root, self.model_subdir)
         
     def initialize(self):
         """Initialize the engine, downloading model if necessary"""
@@ -81,7 +82,8 @@ class SenseVoiceEngine:
 
         logger.info("SenseVoice model not found. Downloading...")
         
-        target_path = model_manager.setup_model_env(self.model_subdir)
+        target_path = os.path.join(self.models_root, self.model_subdir)
+        os.makedirs(target_path, exist_ok=True)
         
         # Latest verified SenseVoice release (2025-09-09)
         download_url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2"

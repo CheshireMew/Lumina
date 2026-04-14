@@ -11,9 +11,10 @@ const MOTION_PRELOAD_NONE = 'NONE';
 interface Live2DPluginProps {
     modelPath: string;
     highDpi?: boolean;
+    cubismCoreSrc?: string;
 }
 
-const Live2DPlugin = forwardRef<IAvatarRenderer, Live2DPluginProps>(({ modelPath, highDpi = false }, ref) => {
+const Live2DPlugin = forwardRef<IAvatarRenderer, Live2DPluginProps>(({ modelPath, highDpi = false, cubismCoreSrc }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<PIXI.Application | null>(null);
     const modelRef = useRef<any | null>(null);
@@ -118,7 +119,7 @@ const Live2DPlugin = forwardRef<IAvatarRenderer, Live2DPluginProps>(({ modelPath
                 console.log(`[Live2DPlugin] Loading model from: ${modelPath}`);
                 setIsLoading(true);
                 setError(null);
-                await ensureCubismCoreLoaded();
+                await ensureCubismCoreLoaded(cubismCoreSrc);
 
                 const { Live2DModel } = await import('pixi-live2d-display/cubism4');
                 const model = await Live2DModel.from(modelPath, {

@@ -3,4 +3,5 @@ export interface AvatarModel {
     path: string;
     type?: "live2d" | "vrm" | "sprite";
     thumbnail?: string;
+    availability?: "ready" | "installable";
 }

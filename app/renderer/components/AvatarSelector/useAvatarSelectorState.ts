@@ -3,11 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { CharacterProfile } from "@core/llm/types";
 
 import { API_CONFIG } from "../../config";
+import { CapabilityPackageSnapshot } from "../../hooks/useCapabilityPackages";
 import { AvatarModel } from "./types";
 
 interface UseAvatarSelectorStateOptions {
     isOpen: boolean;
     activeCharacterId: string;
+    live2dPackage?: CapabilityPackageSnapshot;
     characters: CharacterProfile[];
     setCharacters: (chars: CharacterProfile[]) => void;
     onDeleteCharacter: (id: string) => void;
@@ -27,6 +29,7 @@ const sanitizeCharacterId = (name: string) =>
 export const useAvatarSelectorState = ({
     isOpen,
     activeCharacterId,
+    live2dPackage,
     characters,
     setCharacters,
     onDeleteCharacter,
@@ -62,24 +65,39 @@ export const useAvatarSelectorState = ({
         setPickerTargetCharId(null);
         setCustomPath("");
 
-        void fetch(`${API_CONFIG.BASE_URL}/characters/models`)
-            .then((response) => response.json())
-            .then((data) => {
-                if (!data.models) {
-                    return;
-                }
-
-                setModels(
-                    data.models.map((model: any) => ({
+        void (async () => {
+            try {
+                const modelResponse = await fetch(`${API_CONFIG.BASE_URL}/characters/models`);
+                const data = await modelResponse.json();
+                const baseModels = Array.isArray(data.models)
+                    ? data.models.map((model: any) => ({
                         name: model.name,
                         path: model.path,
                         type: model.type,
                         thumbnail: model.thumbnail,
-                    })),
-                );
-            })
-            .catch((error) => console.error("Failed to fetch models", error));
-    }, [isOpen]);
+                        availability: model.availability || "ready",
+                    }))
+                    : [];
+
+                if (live2dPackage?.state === "ready") {
+                    setModels(baseModels);
+                    return;
+                }
+
+                setModels([
+                    ...baseModels,
+                    {
+                        name: "Live2D 资源",
+                        path: "",
+                        type: "live2d",
+                        availability: "installable",
+                    },
+                ]);
+            } catch (error) {
+                console.error("Failed to fetch models", error);
+            }
+        })();
+    }, [isOpen, live2dPackage?.state]);
 
     const handleAddCharacter = () => {
         const timestamp = Date.now();

@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "hostVersion": "0.1.0",
+  "packages": [
+    {
+      "id": "core-runtime",
+      "version": "1.0.0",
+      "minHostVersion": "0.1.0",
+      "minPackageVersion": "1.0.0",
+      "installDir": "${data}/packages/core-runtime",
+      "type": "runtime",
+      "entryExecutable": "runtime/lumina_backend.exe",
+      "entryArguments": [
+        "core"
+      ],
+      "healthEndpoint": "/health",
+      "requiredFiles": [
+        "manifest.json",
+        "version.json",
+        "hashes.json"
+      ],
+      "resourceDirs": {},
+      "platform": [
+        "win32"
+      ],
+      "arch": [
+        "x64"
+      ],
+      "autoStart": true,
+      "optional": false,
+      "displayName": "核心运行时",
+      "failureMode": "block",
+      "capabilities": [
+        "core",
+        "memory",
+        "llm"
+      ],
+      "sources": [
+        {
+          "name": "bundled",
+          "root": "${resources}/bin/lumina_backend",
+          "entryExecutable": "lumina_backend.exe",
+          "entryArguments": [
+            "core"
+          ],
+          "requiredFiles": [
+            "lumina_backend.exe"
+          ]
+        },
+        {
+          "name": "development",
+          "root": "${project}/python_backend",
+          "entryExecutable": "backend_launcher.py",
+          "entryArguments": [
+            "core"
+          ],
+          "requiredFiles": [
+            "backend_launcher.py",
+            "main.py"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "live2d-assets",
+      "version": "1.0.0",
+      "minHostVersion": "0.1.0",
+      "minPackageVersion": "1.0.0",
+      "installDir": "${data}/packages/live2d-assets",
+      "type": "asset",
+      "entryExecutable": null,
+      "healthEndpoint": null,
+      "requiredFiles": [
+        "manifest.json",
+        "version.json",
+        "hashes.json",
+        "live2d",
+        "libs/live2dcubismcore.min.js"
+      ],
+      "resourceDirs": {
+        "live2d": "live2d",
+        "libs": "libs"
+      },
+      "platform": [
+        "win32"
+      ],
+      "arch": [
+        "x64"
+      ],
+      "autoStart": false,
+      "optional": true,
+      "displayName": "Live2D 资源",
+      "failureMode": "unavailable",
+      "capabilities": [
+        "live2d"
+      ],
+      "sources": [
+        {
+          "name": "bundled",
+          "root": "${resources}/packages/live2d-assets",
+          "requiredFiles": [
+            "manifest.json",
+            "version.json",
+            "hashes.json",
+            "live2d",
+            "libs/live2dcubismcore.min.js"
+          ]
+        },
+        {
+          "name": "development",
+          "root": "${project}/public",
+          "requiredFiles": [
+            "live2d",
+            "libs/live2dcubismcore.min.js"
+          ],
+          "resourceDirs": {
+            "live2d": "live2d",
+            "libs": "libs"
+          }
+        }
+      ]
+    },
+    {
+      "id": "stt-runtime",
+      "version": "1.0.0",
+      "minHostVersion": "0.1.0",
+      "minPackageVersion": "1.0.0",
+      "installDir": "${data}/packages/stt-runtime",
+      "type": "runtime",
+      "entryExecutable": "runtime/lumina_backend.exe",
+      "entryArguments": [
+        "worker",
+        "--capability",
+        "stt"
+      ],
+      "healthEndpoint": "/health",
+      "requiredFiles": [
+        "manifest.json",
+        "version.json",
+        "hashes.json",
+        "runtime/lumina_backend.exe"
+      ],
+      "resourceDirs": {},
+      "platform": [
+        "win32"
+      ],
+      "arch": [
+        "x64"
+      ],
+      "autoStart": false,
+      "optional": true,
+      "displayName": "语音识别",
+      "failureMode": "unavailable",
+      "capabilities": [
+        "stt"
+      ],
+      "sources": [
+        {
+          "name": "bundled",
+          "root": "${resources}/packages/stt-runtime",
+          "entryExecutable": "runtime/lumina_backend.exe",
+          "entryArguments": [
+            "worker",
+            "--capability",
+            "stt"
+          ],
+          "requiredFiles": [
+            "manifest.json",
+            "version.json",
+            "hashes.json",
+            "runtime/lumina_backend.exe",
+            "plugins/extensions/stt_sensevoice/manifest.yaml"
+          ]
+        },
+        {
+          "name": "development",
+          "root": "${project}/python_backend",
+          "entryExecutable": "backend_launcher.py",
+          "entryArguments": [
+            "worker",
+            "--capability",
+            "stt"
+          ],
+          "requiredFiles": [
+            "backend_launcher.py"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tts-runtime",
+      "version": "1.0.0",
+      "minHostVersion": "0.1.0",
+      "minPackageVersion": "1.0.0",
+      "installDir": "${data}/packages/tts-runtime",
+      "type": "runtime",
+      "entryExecutable": "runtime/lumina_backend.exe",
+      "entryArguments": [
+        "worker",
+        "--capability",
+        "tts"
+      ],
+      "healthEndpoint": "/health",
+      "requiredFiles": [
+        "manifest.json",
+        "version.json",
+        "hashes.json",
+        "runtime/lumina_backend.exe"
+      ],
+      "resourceDirs": {},
+      "platform": [
+        "win32"
+      ],
+      "arch": [
+        "x64"
+      ],
+      "autoStart": false,
+      "optional": true,
+      "displayName": "语音合成",
+      "failureMode": "unavailable",
+      "capabilities": [
+        "tts"
+      ],
+      "sources": [
+        {
+          "name": "bundled",
+          "root": "${resources}/packages/tts-runtime",
+          "entryExecutable": "runtime/lumina_backend.exe",
+          "entryArguments": [
+            "worker",
+            "--capability",
+            "tts"
+          ],
+          "requiredFiles": [
+            "manifest.json",
+            "version.json",
+            "hashes.json",
+            "runtime/lumina_backend.exe",
+            "plugins/extensions/tts_edge/manifest.yaml"
+          ]
+        },
+        {
+          "name": "development",
+          "root": "${project}/python_backend",
+          "entryExecutable": "backend_launcher.py",
+          "entryArguments": [
+            "worker",
+            "--capability",
+            "tts"
+          ],
+          "requiredFiles": [
+            "backend_launcher.py"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "voiceprint-runtime",
+      "version": "1.0.0",
+      "minHostVersion": "0.1.0",
+      "minPackageVersion": "1.0.0",
+      "installDir": "${data}/packages/voiceprint-runtime",
+      "type": "runtime",
+      "entryExecutable": null,
+      "entryArguments": [],
+      "healthEndpoint": "/health",
+      "requiredFiles": [
+        "manifest.json",
+        "version.json",
+        "hashes.json",
+        "plugins/extensions/voiceprint/manifest.yaml",
+        "plugins/extensions/voiceauth_sherpa/drivers/voiceauth/sherpa_cam_driver.py"
+      ],
+      "resourceDirs": {},
+      "platform": [
+        "win32"
+      ],
+      "arch": [
+        "x64"
+      ],
+      "autoStart": false,
+      "optional": true,
+      "displayName": "声纹识别",
+      "failureMode": "unavailable",
+      "capabilities": [
+        "voiceprint"
+      ],
+      "sources": [
+        {
+          "name": "bundled",
+          "root": "${resources}/packages/voiceprint-runtime",
+          "requiredFiles": [
+            "manifest.json",
+            "version.json",
+            "hashes.json",
+            "plugins/extensions/voiceprint/manifest.yaml",
+            "plugins/extensions/voiceauth_sherpa/drivers/voiceauth/sherpa_cam_driver.py"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vision-runtime",
+      "version": "1.0.0",
+      "minHostVersion": "0.1.0",
+      "minPackageVersion": "1.0.0",
+      "installDir": "${data}/packages/vision-runtime",
+      "type": "runtime",
+      "entryExecutable": null,
+      "entryArguments": [],
+      "healthEndpoint": "/health",
+      "requiredFiles": [
+        "manifest.json",
+        "version.json",
+        "hashes.json",
+        "requirements-vision.txt"
+      ],
+      "resourceDirs": {},
+      "platform": [
+        "win32"
+      ],
+      "arch": [
+        "x64"
+      ],
+      "autoStart": false,
+      "optional": true,
+      "displayName": "视觉与推理",
+      "failureMode": "degraded",
+      "capabilities": [
+        "vision",
+        "memory-embeddings"
+      ],
+      "sources": [
+        {
+          "name": "bundled",
+          "root": "${resources}/packages/vision-runtime",
+          "requiredFiles": [
+            "manifest.json",
+            "version.json",
+            "hashes.json",
+            "requirements-vision.txt"
+          ]
+        }
+      ]
+    }
+  ]
+}

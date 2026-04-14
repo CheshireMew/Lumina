@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
+import os
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
@@ -10,6 +11,25 @@ sys.path.insert(0, str(backend_root / 'sdk'))
 
 datas = []
 binaries = []
+build_target = os.environ.get('LUMINA_BUILD_TARGET', 'core-runtime')
+main_extension_plugins = [
+    'avatar_server',
+    'emotion_broker',
+    'hello_widget',
+    'llm_core',
+    'llm_deepseek',
+    'llm_gemini',
+    'llm_openai',
+    'llm_pollinations',
+    'memory_postgres',
+    'search_brave',
+    'search_duckduckgo',
+]
+target_extension_plugins = {
+    'core-runtime': main_extension_plugins,
+    'stt-runtime': ['stt_sensevoice'],
+    'tts-runtime': ['tts_edge'],
+}.get(build_target, main_extension_plugins)
 cuda_binary_prefixes = (
     'cublas',
     'cudart',
@@ -53,13 +73,10 @@ hiddenimports = [
     'uvicorn.protocols.websockets.auto',
     'uvicorn.lifespan',
     'uvicorn.lifespan.on',
-    'engineio.async_drivers.asgi',
-    'socketio.async_drivers.asgi',
     'routers',
     'services',
     'core',
     'plugins',
-    'capabilities',
     'app_config',
     'logger_setup',
     'main',
@@ -68,22 +85,23 @@ hiddenimports = [
     'pgvector.asyncpg',
     'pythonosc.udp_client',
     'services.managers.llm_driver_plugins',
-    'edge_tts',
     'lumina',
 ]
 
 hiddenimports += collect_submodules('services.managers')
+hiddenimports += [
+    'plugins.drivers.llm.deepseek_driver',
+    'plugins.drivers.llm.gemini_driver',
+    'plugins.drivers.llm.openai_driver',
+    'plugins.drivers.llm.pollinations_driver',
+]
 
 # Collect all submodules for our packages
 for pkg in [
     'routers',
     'services',
-    'capabilities',
-    'plugins',
     'dependency_injector',
-    'pgvector',
     'pythonosc',
-    'edge_tts',
     'lumina',
 ]:
     tmp_ret = collect_all(pkg)
@@ -91,21 +109,119 @@ for pkg in [
     binaries += tmp_ret[1]
     hiddenimports += tmp_ret[2]
 
+target_capability_packages = {
+    'stt-runtime': ['capabilities.stt'],
+    'tts-runtime': ['capabilities.tts'],
+}.get(build_target, [])
+for pkg in target_capability_packages:
+    tmp_ret = collect_all(pkg)
+    datas += tmp_ret[0]
+    binaries += tmp_ret[1]
+    hiddenimports += tmp_ret[2]
+
+target_packages = {
+    'stt-runtime': ['faster_whisper', 'webrtcvad', 'sounddevice', 'soundfile', 'sherpa_onnx'],
+    'tts-runtime': ['edge_tts'],
+}.get(build_target, [])
+for pkg in target_packages:
+    tmp_ret = collect_all(pkg)
+    datas += tmp_ret[0]
+    binaries += tmp_ret[1]
+    hiddenimports += tmp_ret[2]
+
+target_excludes = {
+    'core-runtime': [
+        'faster_whisper',
+        'webrtcvad',
+        'sounddevice',
+        'soundfile',
+        'sherpa_onnx',
+        'edge_tts',
+        'plugins.extensions.stt_sensevoice',
+        'plugins.extensions.tts_edge',
+        'plugins.extensions.voiceprint',
+        'capabilities.stt',
+        'capabilities.tts',
+        'capabilities.vision',
+        'services.managers.stt',
+        'services.managers.tts',
+        'services.managers.audio',
+        'services.managers.audio_devices',
+        'services.managers.vad_processor',
+    ],
+    'stt-runtime': [
+        'edge_tts',
+        'plugins.extensions.tts_edge',
+        'plugins.extensions.voiceprint',
+    ],
+    'tts-runtime': [
+        'faster_whisper',
+        'webrtcvad',
+        'sounddevice',
+        'soundfile',
+        'sherpa_onnx',
+        'plugins.extensions.stt_sensevoice',
+        'plugins.extensions.voiceprint',
+    ],
+}.get(build_target, [])
+
 binaries = _drop_cuda_runtime(binaries)
+
+if build_target == 'core-runtime':
+    core_forbidden_fragments = [
+        'capabilities/stt',
+        'capabilities\\stt',
+        'capabilities/tts',
+        'capabilities\\tts',
+        'capabilities/vision',
+        'capabilities\\vision',
+        'services/managers/stt.py',
+        'services\\managers\\stt.py',
+        'services/managers/tts.py',
+        'services\\managers\\tts.py',
+        'services/managers/audio.py',
+        'services\\managers\\audio.py',
+        'services/managers/audio_devices.py',
+        'services\\managers\\audio_devices.py',
+        'services/managers/vad_processor.py',
+        'services\\managers\\vad_processor.py',
+    ]
+
+    def _is_core_forbidden(entry):
+        combined = ' '.join(str(part).lower() for part in entry)
+        return any(fragment in combined for fragment in core_forbidden_fragments)
+
+    datas = [entry for entry in datas if not _is_core_forbidden(entry)]
+    binaries = [entry for entry in binaries if not _is_core_forbidden(entry)]
+    hiddenimports = [
+        item for item in hiddenimports
+        if item not in {
+            'capabilities.stt',
+            'capabilities.tts',
+            'capabilities.vision',
+            'services.managers.stt',
+            'services.managers.tts',
+            'services.managers.audio',
+            'services.managers.audio_devices',
+            'services.managers.vad_processor',
+        }
+    ]
 
 # Add config files and prompts
 datas += [
     ('../config', 'config'),
-    ('../plugins', 'plugins'),
+    ('../../config/capability-packages.json', 'config'),
+    ('../plugins/drivers', 'plugins/drivers'),
     ('../prompts', 'prompts'),
     ('../sdk', 'sdk'),
-    ('../../public/live2d', 'live2d'),
     ('../tts_emotion_styles.json', '.'),
     ('../user_settings.json', '.'),
     ('../audio_config.json', '.'),
     ('../memory_config.json', '.'),
     ('../core_profile.json', '.'),
 ]
+for plugin_name in target_extension_plugins:
+    datas.append((f'../plugins/extensions/{plugin_name}', f'plugins/extensions/{plugin_name}'))
 
 block_cipher = None
 
@@ -118,7 +234,30 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'unittest'],
+    excludes=[
+        'tkinter',
+        'unittest',
+        'test',
+        'pytest',
+        'matplotlib',
+        'pandas',
+        'pyarrow',
+        'scipy',
+        *target_excludes,
+        'torch',
+        'torchaudio',
+        'torchvision',
+        'sentence_transformers',
+        'transformers',
+        'cv2',
+        'llvmlite',
+        'numba',
+        'modelscope',
+        'plugins.extensions.voiceauth_sherpa',
+        'plugins.extensions.voiceauth_sherpa.drivers',
+        'plugins.extensions.voiceauth_sherpa.drivers.voiceauth',
+        'plugins.extensions.voiceauth_sherpa.drivers.voiceauth.sherpa_cam_driver',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
