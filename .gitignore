@@ -88,6 +88,9 @@ release/
 
 # Test and reference directories
 Repositories/
+!python_backend/services/repositories/
+!python_backend/services/repositories/__init__.py
+!python_backend/services/repositories/*.py
 example/
 test/
 # Memory System

@@ -57,13 +57,15 @@ export const loadGraphData = async (
     activeCharacterId: string | null | undefined,
     signal?: AbortSignal,
 ) => {
+    const characterParam = activeCharacterId
+        ? `?character_id=${encodeURIComponent(activeCharacterId)}`
+        : "";
+
     const data = await requestJson<{
         status?: string;
         graph?: { nodes: any[]; edges: any[] };
     }>(
-        `${API_CONFIG.BASE_URL}/debug/brain_dump?character_id=${
-            activeCharacterId || "hiyori"
-        }`,
+        `${API_CONFIG.BASE_URL}/debug/brain_dump${characterParam}`,
         { signal },
     );
 

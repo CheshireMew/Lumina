@@ -14,7 +14,7 @@ SERVICES = {
 }
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_streaming_client_disconnect():
     """验证客户端在流式响应中途断开连接后，后端是否能正确处理"""
     url = f"{SERVICES['memory']}/v1/chat/completions"
@@ -63,7 +63,7 @@ async def test_streaming_client_disconnect():
             raise
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_streaming_timeout_recovery():
     """验证流式响应超时后的恢复能力"""
     url = f"{SERVICES['memory']}/v1/chat/completions"

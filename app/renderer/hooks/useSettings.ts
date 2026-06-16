@@ -3,7 +3,6 @@ import {
     fetchRuntimeLlmSettings,
     updateRuntimeLlmSettings,
 } from "../api/settingsApi";
-import { syncFrontendRuntime } from "../runtime/appRuntime";
 import { electronSettings, loadBootstrapState } from "../platform/electron";
 
 export interface LLMSettings {
@@ -115,15 +114,6 @@ export function useSettings(backendReady: boolean) {
                 prevLLMRef.current = loaded.llm;
                 setSettings(loaded);
 
-                void syncFrontendRuntime({
-                    llm: {
-                        apiKey: loaded.llm.apiKey,
-                        baseUrl: loaded.llm.baseUrl,
-                        model: loaded.llm.model,
-                        providerType: loaded.llm.providerType,
-                    },
-                });
-
                 console.log("[useSettings] Loaded");
             } catch (error) {
                 console.error("[useSettings] Load failed:", error);
@@ -161,15 +151,6 @@ export function useSettings(backendReady: boolean) {
                 };
 
                 prevLLMRef.current = nextLlm;
-
-                void syncFrontendRuntime({
-                    llm: {
-                        apiKey: nextLlm.apiKey,
-                        baseUrl: nextLlm.baseUrl,
-                        model: nextLlm.model,
-                        providerType: nextLlm.providerType,
-                    },
-                });
 
                 return {
                     ...prev,
@@ -279,15 +260,6 @@ export function useSettings(backendReady: boolean) {
         // Update local state
         setSettings((prev) => ({ ...prev, llm: next }));
         prevLLMRef.current = next;
-
-        void syncFrontendRuntime({
-            llm: {
-                apiKey: next.apiKey,
-                baseUrl: next.baseUrl,
-                model: next.model,
-                providerType: next.providerType,
-            },
-        });
 
         console.log("[useSettings] LLM settings updated");
     }, []);

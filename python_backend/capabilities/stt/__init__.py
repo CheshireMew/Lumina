@@ -34,10 +34,10 @@ class Capability(IWorkerCapability):
         await manager.register_drivers()
         
         # 2. Register to Container
-        container.register_stt(manager)
+        container.set_stt(manager)
         stt_globals.stt_manager = manager
         
-        # 3. Initialize Filter Chain (Plugin Hook System)
+        # 3. Initialize audio filter chain
         filter_chain = AudioFilterChain.instance()
         stt_globals.filter_chain = filter_chain
         

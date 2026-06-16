@@ -1,9 +1,10 @@
 import re
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from core.api_version import check_manifest_compatibility
+from core.api_version import is_supported_manifest_api_version
 from core.runtime import normalize_runtime_target
 
 
@@ -110,6 +111,66 @@ def normalize_config_schema(value: Any) -> dict[str, Any]:
     }
 
 
+def _parse_manifest_scalar(value: str) -> Any:
+    value = value.strip()
+    if value in {"", "null", "None", "~"}:
+        return None
+    if value == "{}":
+        return {}
+    if value == "[]":
+        return []
+    if value.lower() == "true":
+        return True
+    if value.lower() == "false":
+        return False
+    if (
+        len(value) >= 2
+        and value[0] == value[-1]
+        and value[0] in {"'", '"'}
+    ):
+        return value[1:-1]
+    return value
+
+
+def _read_simple_yaml(path: Path) -> dict[str, Any]:
+    data: dict[str, Any] = {}
+    current_list_key: str | None = None
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+
+        stripped = line.strip()
+        if stripped.startswith("- ") and current_list_key:
+            data.setdefault(current_list_key, []).append(_parse_manifest_scalar(stripped[2:]))
+            continue
+
+        current_list_key = None
+        if ":" not in stripped:
+            continue
+
+        key, value = stripped.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if value:
+            data[key] = _parse_manifest_scalar(value)
+        else:
+            data[key] = []
+            current_list_key = key
+
+    return data
+
+
+def read_manifest_file(path: str | Path) -> dict[str, Any]:
+    manifest_path = Path(path)
+    try:
+        import yaml
+
+        return yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    except ModuleNotFoundError:
+        return _read_simple_yaml(manifest_path)
+
+
 class PluginManifest(BaseModel):
     """
     Unified plugin manifest.
@@ -125,9 +186,12 @@ class PluginManifest(BaseModel):
     - provides
     """
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     id: str = Field(..., description="Unique plugin identifier")
+    name: str | None = Field(default=None, description="Human-readable plugin name")
+    description: str | None = Field(default=None, description="Human-readable plugin summary")
+    author: str | None = Field(default=None, description="Plugin author")
     api_version: str = Field(default="1.0", description="Stable plugin API version")
     kind: str = Field(default="extension", description="provider | extension | gateway | processor")
     capability: str = Field(default="system", description="Primary capability id")
@@ -139,44 +203,17 @@ class PluginManifest(BaseModel):
     permissions: list[str] = Field(default_factory=list)
     config_schema: dict[str, Any] = Field(default_factory=dict)
     provides: list[str] = Field(default_factory=list, description="Additional capability ids")
+    dependencies: list[str] = Field(default_factory=list)
+    entry_point: str | None = Field(default=None)
+    min_lumina_version: str | None = Field(default=None)
+    package: str | None = Field(default=None)
+    tags: list[str] = Field(default_factory=list)
     path: str | None = Field(default=None, description="Injected plugin root path")
-
-    @model_validator(mode="before")
-    @classmethod
-    def migrate_legacy_shape(cls, data: Any):
-        if not isinstance(data, dict):
-            return data
-
-        raw = dict(data)
-        raw.setdefault("api_version", raw.pop("version", "1.0"))
-        raw.setdefault("kind", raw.pop("type", raw.pop("category", "extension")))
-        raw.setdefault("config_schema", raw.pop("config", raw.pop("settings_schema", {})) or {})
-
-        if "capability" not in raw:
-            legacy_group = raw.get("group_id")
-            raw["capability"] = legacy_group or raw.get("category") or raw.get("type") or "system"
-
-        raw_provides = raw.get("provides")
-        if raw_provides is None:
-            raw_provides = raw.pop("capabilities", [])
-
-        normalized_provides: list[str] = []
-        for item in raw_provides or []:
-            if isinstance(item, str):
-                normalized_provides.append(item)
-                continue
-            if isinstance(item, dict):
-                cap_id = item.get("type") or item.get("id")
-                if cap_id:
-                    normalized_provides.append(cap_id)
-
-        raw["provides"] = normalized_provides
-        return raw
 
     @model_validator(mode="after")
     def validate_api_version(self):
-        if not check_manifest_compatibility(self.api_version):
-            raise ValueError(f"Plugin api_version {self.api_version} is not compatible with kernel 1.x.")
+        if not is_supported_manifest_api_version(self.api_version):
+            raise ValueError(f"Plugin api_version {self.api_version} is not supported by kernel 1.x.")
         return self
 
     @field_validator("id")
@@ -200,7 +237,7 @@ class PluginManifest(BaseModel):
     @field_validator("permissions", mode="before")
     @classmethod
     def normalize_permissions(cls, values: Any):
-        return [str(item).strip().replace(":", ".") for item in (values or []) if str(item).strip()]
+        return [str(item).strip() for item in (values or []) if str(item).strip()]
 
     @field_validator("runtime_target", mode="before")
     @classmethod

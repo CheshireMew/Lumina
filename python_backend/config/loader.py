@@ -1,12 +1,10 @@
-"""Config file loading, saving, port overrides, and legacy migration."""
+"""Config file loading, saving, and port overrides."""
 
 import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
-
-from services.provider_aliases import normalize_provider_id
+from typing import Any, Dict, Optional
 
 from .models import (
     AudioConfig,
@@ -69,7 +67,6 @@ class ConfigBundle:
 class ConfigLoadResult:
     bundle: ConfigBundle
     source_path: Optional[Path]
-    migrated_legacy_paths: tuple[Path, ...] = ()
     should_save: bool = False
 
 
@@ -81,13 +78,11 @@ def load_config(config_root: Path, base_dir: Path, logger: logging.Logger) -> Co
         logger.info(f"Loaded unified config from {yaml_path}")
         return ConfigLoadResult(bundle=bundle, source_path=yaml_path)
 
-    logger.info("config.yaml not found. Attempting migration from legacy JSONs...")
-    data, legacy_paths = _load_legacy_jsons(config_root, base_dir, logger)
-    bundle = hydrate_config(data, logger)
+    logger.info("config.yaml not found. Using default configuration.")
+    bundle = ConfigBundle()
     return ConfigLoadResult(
         bundle=bundle,
         source_path=None,
-        migrated_legacy_paths=tuple(legacy_paths),
         should_save=True,
     )
 
@@ -124,22 +119,6 @@ def apply_ports_override(
             logger.error(f"Failed to load ports.json override from {path}: {exc}")
 
     return None
-def archive_legacy_jsons(paths: Iterable[Path], logger: logging.Logger) -> None:
-    for path in paths:
-        if not path.exists():
-            continue
-
-        archived_path = path.with_suffix(path.suffix + ".migrated")
-        index = 1
-        while archived_path.exists():
-            archived_path = path.with_suffix(path.suffix + f".migrated.{index}")
-            index += 1
-
-        try:
-            path.rename(archived_path)
-            logger.info(f"Archived legacy config {path} -> {archived_path}")
-        except Exception as exc:
-            logger.warning(f"Failed to archive legacy config {path}: {exc}")
 
 
 def hydrate_config(data: Dict[str, Any], logger: logging.Logger) -> ConfigBundle:
@@ -172,31 +151,15 @@ def hydrate_config(data: Dict[str, Any], logger: logging.Logger) -> ConfigBundle
 def normalize_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     normalized = dict(data or {})
 
-    plugins_data = dict(normalized.get("plugins", {}) or {})
-    plugin_settings = dict(plugins_data.get("settings", {}) or {})
-    desired_state = dict(plugins_data.get("desired_state", {}) or {})
-    selected_providers = dict(plugins_data.get("selected_providers", {}) or {})
-
-    if "selected_providers" not in plugins_data:
-        legacy_provider_map = {
-            "stt": (normalized.get("stt") or {}).get("provider"),
-            "tts": (normalized.get("tts") or {}).get("provider"),
-            "tool.search": (normalized.get("search") or {}).get("provider"),
-            "memory": (normalized.get("memory") or {}).get("provider"),
-        }
-        for capability, provider_id in legacy_provider_map.items():
-            if provider_id:
-                normalized_provider_id = normalize_provider_id(capability, provider_id)
-                selected_providers.setdefault(capability, normalized_provider_id)
-                desired_state.setdefault(normalized_provider_id, True)
-
-    if "brave" in normalized:
-        plugin_settings.setdefault("brave", normalized["brave"])
-
-    plugins_data["settings"] = plugin_settings
-    plugins_data["desired_state"] = desired_state
-    plugins_data["selected_providers"] = selected_providers
-    normalized["plugins"] = plugins_data
+    if "plugins" in normalized:
+        plugins_data = dict(normalized.get("plugins") or {})
+        if "settings" in plugins_data:
+            plugins_data["settings"] = dict(plugins_data.get("settings") or {})
+        if "desired_state" in plugins_data:
+            plugins_data["desired_state"] = dict(plugins_data.get("desired_state") or {})
+        if "selected_providers" in plugins_data:
+            plugins_data["selected_providers"] = dict(plugins_data.get("selected_providers") or {})
+        normalized["plugins"] = plugins_data
 
     return normalized
 
@@ -226,91 +189,3 @@ def _ports_override_paths(base_dir: Path, config_root: Path) -> tuple[Path, ...]
         config_root / "config" / "ports.json",
         config_root / "ports.json",
     )
-
-
-def _load_legacy_jsons(
-    config_root: Path,
-    base_dir: Path,
-    logger: logging.Logger,
-) -> tuple[Dict[str, Any], list[Path]]:
-    merged: Dict[str, Any] = {}
-    loaded_paths: list[Path] = []
-
-    candidates = (
-        ("memory_config.json", _merge_legacy_memory_config),
-        ("audio_config.json", _merge_legacy_audio_config),
-    )
-
-    for filename, merge_func in candidates:
-        for root in _legacy_roots(config_root, base_dir):
-            path = root / filename
-            if not path.exists():
-                continue
-
-            try:
-                merge_func(merged, _read_json(path))
-                if _is_relative_to(path, config_root):
-                    loaded_paths.append(path)
-                logger.info(f"Loaded legacy config from {path}")
-                break
-            except Exception as exc:
-                logger.error(f"Failed to load legacy config {path}: {exc}")
-
-    return merged, loaded_paths
-
-
-def _legacy_roots(config_root: Path, base_dir: Path) -> tuple[Path, ...]:
-    return (config_root, base_dir, base_dir.parent)
-
-
-def _is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-        return True
-    except ValueError:
-        return False
-
-
-def _merge_legacy_memory_config(target: Dict[str, Any], data: Dict[str, Any]) -> None:
-    llm_data = {
-        key: data[key]
-        for key in ("api_key", "base_url", "model")
-        if key in data and data[key] is not None
-    }
-    if llm_data:
-        target.setdefault("llm", {}).update(llm_data)
-
-    memory_keys = (
-        "provider",
-        "namespace",
-        "database",
-        "character_id",
-        "history_limit",
-        "overflow_strategy",
-    )
-    memory_data = {
-        key: data[key]
-        for key in memory_keys
-        if key in data and data[key] is not None
-    }
-    if memory_data:
-        target.setdefault("memory", {}).update(memory_data)
-
-    if data.get("embedder"):
-        target.setdefault("models", {})["embedding_model_name"] = data["embedder"]
-
-
-def _merge_legacy_audio_config(target: Dict[str, Any], data: Dict[str, Any]) -> None:
-    audio_keys = (
-        "device_name",
-        "enable_voiceprint_filter",
-        "voiceprint_threshold",
-        "voiceprint_profile",
-    )
-    audio_data = {
-        key: data[key]
-        for key in audio_keys
-        if key in data and data[key] is not None
-    }
-    if audio_data:
-        target.setdefault("audio", {}).update(audio_data)

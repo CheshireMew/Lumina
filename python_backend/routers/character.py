@@ -16,8 +16,8 @@ async def get_character_config(character_service=Depends(get_character_service))
     """Get the single active character config."""
     try:
         return character_service.load_config()
-    except FileNotFoundError:
-        return CharacterConfig(id="hiyori", name="Hiyori", displayName="Hiyori")
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"[API] Error getting character config: {e}")
         raise HTTPException(status_code=500, detail=str(e))

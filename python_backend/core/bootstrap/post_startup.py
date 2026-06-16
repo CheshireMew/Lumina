@@ -61,9 +61,9 @@ class PrewarmBootstrapper(Bootstrapper):
                 return
             
             logger.info("🔥 Scheduling Core Service Prewarm (TTS/STT)...")
-            container.prewarm_task = asyncio.create_task(
+            container.set_prewarm_task(asyncio.create_task(
                 self._prewarm_workers(pm)
-            )
+            ))
             
         except Exception as e:
             logger.warning(f"Pre-warm failed: {e}")
@@ -84,7 +84,7 @@ class ReconciliationBootstrapper(Bootstrapper):
             from services.utilities.reconciliation import ReconciliationService
             
             reconciler = ReconciliationService(container)
-            container.register_reconciliation_service(reconciler)
+            container.set_reconciliation_service(reconciler)
             reconciler.start()
             logger.info("⚖️ Reconciliation Service Started")
             
@@ -150,11 +150,11 @@ class WorkerControlHubBootstrapper(Bootstrapper):
 
             # Initialize PluginStateAggregator (unified state view for frontend)
             from services.plugin_state_aggregator import init_plugin_state_aggregator
-            aggregator = await init_plugin_state_aggregator(container.event_bus)
-            container.plugin_state_aggregator = aggregator
+            aggregator = await init_plugin_state_aggregator(container.get_event_bus())
+            container.set_plugin_state_aggregator(aggregator)
 
             # Seed with existing local plugin states (SystemPlugins loaded at Level 3)
-            spm = getattr(container, 'system_plugin_manager', None)
+            spm = container.get_system_plugin_manager()
             if spm:
                 await aggregator.bulk_update(spm.list_plugins(), source="local")
 

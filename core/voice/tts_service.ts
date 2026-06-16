@@ -16,7 +16,7 @@ export class TTSService implements ITTSProvider {
   ) {
     this.baseUrl = baseUrl;
     this.defaultVoice = defaultVoice;
-    this.defaultEngine = "edge-tts";
+    this.defaultEngine = "driver.tts.edge";
   }
 
   private activeControllers = new Set<AbortController>();
@@ -90,7 +90,7 @@ export class TTSService implements ITTSProvider {
     }
   }
 
-  async listVoices(engine: string = "edge-tts"): Promise<VoiceInfo[]> {
+  async listVoices(engine: string = "driver.tts.edge"): Promise<VoiceInfo[]> {
     try {
       const query = engine ? `?engine=${encodeURIComponent(engine)}` : "";
       const response = await fetch(`${this.baseUrl}/voices${query}`);

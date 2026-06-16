@@ -32,7 +32,7 @@ class WebSearchTool(ToolProvider):
             return "Error: No query provided"
 
         from app_config import config as app_config
-        spm = self.services.system_plugin_manager
+        spm = self.services.get_system_plugin_manager()
 
         provider_id = app_config.get_selected_provider("tool.search")
         if spm and not provider_id:

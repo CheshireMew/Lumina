@@ -1,8 +1,8 @@
 """
-Audio Filter Chain - Plugin Hook System.
+Audio Filter Chain.
 
 Manages a chain of audio filters that run before STT processing.
-Core code provides this infrastructure, plugins register their filters.
+Core code provides this infrastructure, built-in providers register filters.
 
 Design:
 - Singleton pattern for global access
@@ -25,7 +25,7 @@ class AudioFilterChain:
     """
     Manages audio filters in priority order.
     
-    This is the hook system that plugins use to intercept audio.
+    This is the internal filter chain used to gate audio before STT.
     When no filters are registered, audio passes through directly.
     """
     
@@ -51,11 +51,11 @@ class AudioFilterChain:
         """
         Register a new audio filter.
         
-        Called by plugins during enable().
+        Called by built-in providers during enable().
         Filters are automatically sorted by priority.
         
         Args:
-            filter: Plugin implementing IAudioFilter
+            filter: Provider implementing IAudioFilter
         """
         async with self._lock:
             # Check for duplicate
@@ -71,7 +71,7 @@ class AudioFilterChain:
         """
         Unregister a filter.
         
-        Called by plugins during disable().
+        Called by built-in providers during disable().
         
         Args:
             filter_id: The filter's unique ID
@@ -112,27 +112,6 @@ class AudioFilterChain:
             return True, None
         
         metadata = metadata or {}
-        
-        # [SDK Integration] Trigger 'audio.before_transcribe' hook
-        try:
-            from sdk.lumina.hook import HookManager
-            hm = HookManager.instance()
-            if hm:
-                current_data, should_continue = await hm.execute(
-                    "audio.before_transcribe",
-                    audio_data,
-                    metadata=metadata,
-                )
-                if not should_continue:
-                    return False, "Rejected by hook"
-
-                if current_data is not None:
-                    audio_data = current_data
-
-        except ImportError:
-            pass # SDK not available in this context
-        except Exception as e:
-            logger.error(f"SDK Hook Error: {e}")
         
         for filter in self._filters:
             try:

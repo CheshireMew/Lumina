@@ -1,7 +1,6 @@
 import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-from pathlib import Path
 from core.interfaces.repository import ISessionRepository
 from services.repositories.file_session_repository import FileSessionRepository
 
@@ -14,18 +13,15 @@ class SessionState(BaseModel):
 logger = logging.getLogger("SessionManager")
 
 class SessionManager:
-    def __init__(self, repo: ISessionRepository = None, config=None, data_dir: str = "data/sessions"):
-        # Compatibility: Allow data_dir arg but use it to init default repo if needed
-        if repo:
-            self.repo = repo
-        else:
-            # Default to File Repo
+    def __init__(self, repo: Optional[ISessionRepository] = None, config=None):
+        if repo is None:
             from app_config import BASE_DIR
-            root = Path(data_dir) if data_dir else BASE_DIR / "data" / "sessions"
-            self.repo = FileSessionRepository(root)
+
+            repo = FileSessionRepository(BASE_DIR / "data" / "sessions")
+        self.repo = repo
             
         self.config = config
-        self._cache = {} # keeping memory cache for now, though Repo could handle it.
+        self._cache = {}
 
     async def load_session(self, user_id: str, char_id: str) -> SessionState:
         """
@@ -36,12 +32,7 @@ class SessionManager:
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        # Repo Access
-        # Note: We rely on FileSessionRepository's get_by_composite_id extension for now
-        # Ideally we should strictly use `get(id)` if we standardized IDs.
-        data = None
-        if hasattr(self.repo, "get_by_composite_id"):
-             data = await self.repo.get_by_composite_id(user_id, char_id)
+        data = await self.repo.get_session(user_id, char_id)
         
         if data:
             try:
@@ -68,10 +59,10 @@ class SessionManager:
         
         try:
             data = state.model_dump()
-            if hasattr(self.repo, "save_by_composite_id"):
-                await self.repo.save_by_composite_id(user_id, char_id, data)
+            await self.repo.save_session(user_id, char_id, data)
         except Exception as e:
             logger.error(f"Failed to save session: {e}")
+            raise
 
     async def clear_history(self, user_id: str, char_id: str):
         state = await self.load_session(user_id, char_id) 
@@ -86,18 +77,7 @@ class SessionManager:
         if cache_key in self._cache:
             del self._cache[cache_key]
             
-        # Repository Delete
-        # We need to derive ID or use composite method
-        # FileRepo uses {c}_{u} pattern
-        # This is leaky abstraction but acceptable for Phase 1.
-        import re
-        u_id = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(user_id)) or "default_user"
-        c_id = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(char_id)) or "hiyori"
-        composite_id = f"{c_id}_{u_id}"
-        
-        await self.repo.delete(composite_id)
-
-    # --- Async Compatibility Methods ---
+        await self.repo.delete_session(user_id, char_id)
     
     async def add_turn(self, user_id: str, char_id: str, user_msg: str, ai_msg: str):
         state = await self.load_session(user_id, char_id)
@@ -114,7 +94,7 @@ class SessionManager:
         
         if len(state.short_term_history) > limit:
             if strategy == "reset":
-                 keep_count = max(4, limit // 2)
+                 keep_count = limit
                  state.short_term_history = state.short_term_history[-keep_count:] 
                  logger.info(f"🔄 Context Overflow ({strategy}): Pruned history to last {keep_count} turns.")
             else:

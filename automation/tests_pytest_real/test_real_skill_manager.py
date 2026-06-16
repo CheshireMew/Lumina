@@ -13,7 +13,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from services.skill_manager import SkillManager
+from services.managers.skills import SkillManager
 from core.interfaces.tool import ToolProvider
 
 class MockToolProvider(ToolProvider):
@@ -24,7 +24,7 @@ class MockToolProvider(ToolProvider):
     def get_definition(self) -> dict:
         return {"name": "test_tool", "description": "test"}
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_skill_manager_registration_and_execution():
     sm = SkillManager()
     provider = MockToolProvider()
@@ -37,13 +37,13 @@ async def test_skill_manager_registration_and_execution():
     result = await sm.execute_tool("test_tool", {"val": "hello"})
     assert result == "result_hello"
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_skill_manager_tool_not_found():
     sm = SkillManager()
     result = await sm.execute_tool("non_existent", {})
     assert "not found" in result.lower()
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_skill_manager_execution_failure():
     sm = SkillManager()
     mock_tool = MagicMock(spec=ToolProvider)

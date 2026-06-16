@@ -11,12 +11,6 @@ import tempfile
 import shutil
 import os
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.append(str(PROJECT_ROOT / "python_backend"))
@@ -59,7 +53,7 @@ description: A test plugin
 author: Test Author
 permissions:
   - event.subscribe
-  - ui.register_widget
+  - event.emit
 """
         temp_dir = tempfile.mkdtemp()
         manifest_path = os.path.join(temp_dir, "manifest.yaml")
@@ -68,10 +62,9 @@ permissions:
             with open(manifest_path, 'w') as f:
                 f.write(manifest_content)
 
-            # Parse the manifest
-            import yaml
-            with open(manifest_path, 'r') as f:
-                manifest = yaml.safe_load(f)
+            from core.manifest import read_manifest_file
+
+            manifest = read_manifest_file(manifest_path)
 
             self.assertEqual(manifest['id'], 'test.plugin')
             self.assertEqual(manifest['version'], '1.0.0')
@@ -177,20 +170,20 @@ permissions:
         service = MockPluginService()
 
         # Register capabilities for a worker
-        service.register_capability("stt_server", {
+        service.register_capability("worker:stt", {
             "id": "stt.sensevoice",
             "name": "SenseVoice STT",
             "type": "stt"
         })
 
-        service.register_capability("stt_server", {
+        service.register_capability("worker:stt", {
             "id": "stt.whisper",
             "name": "Whisper STT",
             "type": "stt"
         })
 
         # Retrieve capabilities
-        caps = service.get_capabilities("stt_server")
+        caps = service.get_capabilities("worker:stt")
         self.assertEqual(len(caps), 2)
         self.assertEqual(caps[0]["id"], "stt.sensevoice")
         self.assertEqual(caps[1]["id"], "stt.whisper")
@@ -239,11 +232,11 @@ permissions:
             return all(perm in available_tier for perm in requested_perms)
 
         # Test SAFE tier
-        safe_request = ["event.subscribe", "ui.register_widget"]
+        safe_request = ["event.subscribe", "event.emit"]
         self.assertTrue(check_permissions(safe_request, TIER_SAFE))
 
         # Test TRUSTED tier - use actual permissions from TIER_TRUSTED
-        # Based on permissions.py: TIER_TRUSTED = {network.external, filesystem.read_user, filesystem.read, filesystem.write, network.outbound, network.udp}
+        # Based on permissions.py: TIER_TRUSTED = {network.external, database.postgres, filesystem.read_user, network.udp}
         trusted_request = ["network.external", "filesystem.read_user"]
         self.assertTrue(check_permissions(trusted_request, TIER_TRUSTED))
 

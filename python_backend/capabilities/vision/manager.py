@@ -1,32 +1,34 @@
 
-import mss
-import mss.tools
 import base64
 import logging
-from typing import Callable, Optional, Dict
+from typing import Callable, Optional
 from core.interfaces.driver import BaseVisionDriver
+from services.managers.driver_loader import DriverPluginLoader
+from services.managers.provider_host import ProviderHostManager
 import os
 
 logger = logging.getLogger("VisionManager")
 
-class VisionPluginManager:
-    """
-    Central Vision Manager (previously VisionService).
-    Manages Vision Drivers and Screen Capture.
-    """
-    def __init__(self, model_name_resolver: Callable[[str], str] | None = None):
-        self.mss = mss.mss()
-        self.model_name_resolver = model_name_resolver
-        self.drivers: Dict[str, BaseVisionDriver] = {}
-        self.active_driver_id: str = "moondream" # Default, or None
-        self.active_driver: Optional[BaseVisionDriver] = None
-        self.loading_status: str = "idle"
+try:
+    import mss as MSS_MODULE
+    import mss.tools as MSS_TOOLS
+except ModuleNotFoundError:
+    MSS_MODULE = None
+    MSS_TOOLS = None
 
-    async def register_drivers(self, auto_activate: bool = True):
+class VisionPluginManager(ProviderHostManager):
+    """
+    Central manager for vision drivers and screen capture.
+    """
+    def __init__(self, config, model_name_resolver: Callable[[str], str] | None = None):
+        super().__init__(config=config, capability="vision")
+        self.mss = MSS_MODULE.mss() if MSS_MODULE else None
+        self._mss_tools = MSS_TOOLS
+        self.model_name_resolver = model_name_resolver
+
+    async def load_driver_plugins(self):
         """Load vision drivers from plugins directory."""
         try:
-            from sdk.lumina.loader import PluginLoader
-            
             # Resolve root (python_backend)
             current_dir = os.path.dirname(os.path.abspath(__file__))
             backend_root = os.path.dirname(os.path.dirname(current_dir))
@@ -34,9 +36,9 @@ class VisionPluginManager:
             drivers_dir = os.path.join(backend_root, "plugins", "drivers", "vision")
             if os.path.exists(drivers_dir):
                 logger.info(f"Scanning Built-in Vision Drivers: {drivers_dir}")
-                loaded = PluginLoader.load_plugins(drivers_dir, BaseVisionDriver)
+                loaded = DriverPluginLoader.load_plugins(drivers_dir, BaseVisionDriver)
                 for d in loaded:
-                    self.drivers[d.id] = d
+                    self.register_driver(d)
                     logger.info(f"Loaded Vision Driver: {d.id}")
             else:
                 logger.debug(f"Vision drivers directory not found: {drivers_dir}")
@@ -44,36 +46,31 @@ class VisionPluginManager:
         except Exception as e:
             logger.error(f"Failed to load Vision drivers: {e}")
 
-        # Active default if possible
-        if self.drivers and not self.active_driver:
-             # Prefer Moondream if present
-             target = "driver.vision.moondream"
-             if target not in self.drivers:
-                 target = list(self.drivers.keys())[0]
-             
-             if auto_activate:
-                 await self.activate(target)
+    async def activate_startup_driver(self):
+        target_provider = self.resolve_startup_driver_id()
+        if target_provider and self.config.is_plugin_desired_enabled(target_provider):
+            await self.activate(target_provider)
+
+    async def register_drivers(self):
+        await self.load_driver_plugins()
+        await self.activate_startup_driver()
 
     async def activate(self, driver_id: str):
-        if driver_id not in self.drivers:
-            logger.warning(f"Driver {driver_id} not found.")
-            return
-
         logger.info(f"Activating Vision Driver: {driver_id}")
-        self.loading_status = "loading"
+        self.begin_transition(driver_id)
         try:
-            driver = self.drivers[driver_id]
+            driver = self.require_driver(driver_id)
             import inspect
             if inspect.iscoroutinefunction(driver.load):
                 await driver.load()
             else:
                 driver.load()
-            
-            self.active_driver = driver
-            self.active_driver_id = driver_id
+            self.mark_ready(driver, driver_id)
         except Exception as e:
             logger.error(f"Failed to activate vision driver {driver_id}: {e}")
-            self.active_driver = None
+            self.mark_error(str(e))
+            self.active_driver_id = "none"
+            raise
         finally:
             self.loading_status = "idle"
 
@@ -81,8 +78,6 @@ class VisionPluginManager:
         """Get the currently active local vision provider."""
         if not self.active_driver:
              if self.drivers:
-                 # Auto-activate first available synchronously? 
-                 # Better to raise error and expect activate() call
                  raise RuntimeError("No active vision driver. Call activate() first.")
              raise RuntimeError("No vision drivers available.")
         return self.active_driver
@@ -92,12 +87,15 @@ class VisionPluginManager:
         Captures the primary monitor and returns it as a Base64 PNG string.
         """
         try:
+            if not self.mss or not self._mss_tools:
+                raise RuntimeError("mss is not installed")
+
             # Capture the first monitor
             monitor = self.mss.monitors[1] # 0 is all monitors combined, 1 is primary
             sct_img = self.mss.grab(monitor)
             
             # Convert to PNG bytes
-            png_bytes = mss.tools.to_png(sct_img.rgb, sct_img.size)
+            png_bytes = self._mss_tools.to_png(sct_img.rgb, sct_img.size)
             
             # Encode to Base64
             b64_str = base64.b64encode(png_bytes).decode('utf-8')
@@ -132,10 +130,9 @@ class VisionPluginManager:
         ]
         
         try:
-            # [Fix] Dynamic Model Selection
-            model_name = "gpt-4o" # Default fallback
-            if self.model_name_resolver:
-                model_name = self.model_name_resolver("vision")
+            if not self.model_name_resolver:
+                raise RuntimeError("Vision model route resolver is not configured")
+            model_name = self.model_name_resolver("vision")
 
             response = ""
             async for token in llm_driver.chat_completion(messages, model=model_name, stream=True):

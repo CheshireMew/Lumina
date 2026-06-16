@@ -8,16 +8,24 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock, patch
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
+
+
+class BusStub:
+    async def connect(self):
+        pass
+
+    async def get_all_states(self):
+        return {}
+
+    async def subscribe_state(self, _callback):
+        pass
+
+    async def send_heartbeat(self, _worker_id):
+        pass
 
 
 class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
@@ -34,7 +42,7 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         self.assertEqual(sync.plugin_manager, mock_manager)
         self.assertIsNotNone(sync.bus)
@@ -45,7 +53,7 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         # Mock bus methods
         sync.bus.connect = AsyncMock()
@@ -64,13 +72,18 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        mock_manager.is_plugin_desired_enabled.side_effect = lambda plugin_id: {
+            "plugin1": True,
+            "plugin2": False,
+            "plugin3": True,
+        }[plugin_id]
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         # Mock initial states
         initial_states = {
-            "plugin1": {"enabled": True},
-            "plugin2": {"enabled": False},
-            "plugin3": {"enabled": True}
+            "plugin1": {"desired_enabled": True},
+            "plugin2": {"desired_enabled": False},
+            "plugin3": {"desired_enabled": True}
         }
 
         sync.bus.connect = AsyncMock()
@@ -78,8 +91,8 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         sync.bus.subscribe_state = AsyncMock()
 
         # Mock manager methods
-        mock_manager.enable_plugin = MagicMock()
-        mock_manager.disable_plugin = MagicMock()
+        mock_manager.enable_plugin = AsyncMock()
+        mock_manager.disable_plugin = AsyncMock()
 
         await sync.start()
 
@@ -92,8 +105,9 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        mock_manager.enable_plugin = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        mock_manager.is_plugin_desired_enabled.return_value = True
+        mock_manager.enable_plugin = AsyncMock()
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         # Mock bus
         sync.bus.connect = AsyncMock()
@@ -101,7 +115,7 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         sync.bus.subscribe_state = AsyncMock()
 
         # Handle enable event
-        state = {"enabled": True}
+        state = {"desired_enabled": True}
         await sync._handle_state_update("test.plugin", state)
 
         # Should call enable_plugin
@@ -113,11 +127,12 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        mock_manager.disable_plugin = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        mock_manager.is_plugin_desired_enabled.return_value = False
+        mock_manager.disable_plugin = AsyncMock()
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         # Handle disable event
-        state = {"enabled": False}
+        state = {"desired_enabled": False}
         await sync._handle_state_update("test.plugin", state)
 
         # Should call disable_plugin
@@ -129,7 +144,7 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         # State without enabled field
         state = {"status": "running"}
@@ -147,7 +162,7 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         import socket
 
         mock_manager = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         # Mock bus with send_heartbeat
         sync.bus.connect = AsyncMock()
@@ -165,31 +180,30 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         sync.bus.send_heartbeat.assert_called()
         print("✅ PluginStateSync heartbeat loop verified")
 
-    async def test_plugin_state_sync_heartbeat_fallback(self):
-        """Test heartbeat fallback when no send_heartbeat method"""
+    async def test_plugin_state_sync_heartbeat_uses_bus_contract(self):
+        """Test heartbeat uses the lifecycle bus contract."""
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
-        # Mock bus without send_heartbeat
         sync.bus.connect = AsyncMock()
         sync.bus.get_all_states = AsyncMock(return_value={})
         sync.bus.subscribe_state = AsyncMock()
+        sync.bus.send_heartbeat = AsyncMock()
 
-        # Should not crash when send_heartbeat is missing
         await sync.start()
         await asyncio.sleep(0.1)
 
-        # Just verify no crash
-        print("✅ PluginStateSync heartbeat fallback verified")
+        sync.bus.send_heartbeat.assert_called()
+        print("✅ PluginStateSync heartbeat contract verified")
 
     async def test_plugin_state_sync_heartbeat_error_recovery(self):
         """Test heartbeat error recovery"""
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         # Mock bus that fails but continues
         call_count = [0]
@@ -217,11 +231,12 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        mock_manager.enable_plugin = MagicMock(side_effect=Exception("Enable failed"))
-        sync = PluginStateSync(mock_manager)
+        mock_manager.is_plugin_desired_enabled.return_value = True
+        mock_manager.enable_plugin = AsyncMock(side_effect=Exception("Enable failed"))
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         # Handle enable event that fails
-        state = {"enabled": True}
+        state = {"desired_enabled": True}
         await sync._handle_state_update("failing.plugin", state)
 
         # Should call enable_plugin despite potential error
@@ -233,12 +248,13 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         from services.plugin_state_sync import PluginStateSync
 
         mock_manager = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        mock_manager.is_plugin_desired_enabled.side_effect = lambda plugin_id: int(plugin_id.replace("plugin", "")) % 2 == 0
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         # Simulate concurrent updates
         tasks = []
         for i in range(10):
-            state = {"enabled": i % 2 == 0}
+            state = {"desired_enabled": i % 2 == 0}
             task = sync._handle_state_update(f"plugin{i}", state)
             tasks.append(task)
 
@@ -256,7 +272,7 @@ class TestPluginStateSync(unittest.IsolatedAsyncioTestCase):
         import socket
 
         mock_manager = MagicMock()
-        sync = PluginStateSync(mock_manager)
+        sync = PluginStateSync(mock_manager, bus=BusStub())
 
         sync.bus.connect = AsyncMock()
         sync.bus.get_all_states = AsyncMock(return_value={})

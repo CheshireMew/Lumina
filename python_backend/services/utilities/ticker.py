@@ -50,7 +50,7 @@ class TimeTicker:
             try:
                 now = datetime.now()
                 
-                # 1. Second Ticks (Legacy Subscribers)
+                # 1. Second ticks
                 for sub in self._second_subscribers:
                     try:
                         # Fire and forget / or gather? 

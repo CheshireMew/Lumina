@@ -15,7 +15,7 @@ logger = logging.getLogger("ModelManager")
 class ModelManager:
     def __init__(self, base_dir=None):
         if base_dir is None:
-            # Use unified path from app_config (Compatible with packaged/dev modes)
+            # Use unified path from app_config for packaged and dev modes.
             self.base_dir = str(MODELS_DIR)
         else:
             self.base_dir = base_dir

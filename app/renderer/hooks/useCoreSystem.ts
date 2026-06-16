@@ -8,7 +8,6 @@ import { useChatStore } from "../store/useChatStore";
 import { API_CONFIG } from "../config";
 import { Message } from "@core/llm/types";
 import { AvatarRendererRef } from "../core/avatar/types";
-import { syncFrontendRuntime } from "../runtime/appRuntime";
 
 export const useCoreSystem = (
     avatarRef: React.RefObject<AvatarRendererRef>,
@@ -163,7 +162,7 @@ export const useCoreSystem = (
 
             setProcessing(true);
 
-            send("chat", {
+            send("input_text", {
                 text,
                 character_id: activeCharacterId,
                 user_name: settings.userName,
@@ -187,30 +186,6 @@ export const useCoreSystem = (
         setProcessing(false);
         setStreaming(false);
     }, [clearAudio, avatarRef, setProcessing, setStreaming]);
-
-    useEffect(() => {
-        if (!backendReady || !isSettingsLoaded || !activeCharacterId) {
-            return;
-        }
-
-        void syncFrontendRuntime({
-            llm: {
-                apiKey: settings.llm.apiKey,
-                baseUrl: settings.llm.baseUrl,
-                model: settings.llm.model,
-                providerType: settings.llm.providerType,
-                characterId: activeCharacterId,
-            },
-        });
-    }, [
-        activeCharacterId,
-        backendReady,
-        isSettingsLoaded,
-        settings.llm.apiKey,
-        settings.llm.baseUrl,
-        settings.llm.model,
-        settings.llm.providerType,
-    ]);
 
     // Return unified interface
     return {

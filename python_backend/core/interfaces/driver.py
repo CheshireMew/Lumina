@@ -45,6 +45,10 @@ class BaseDriver(Plugin):
         """
         return None
 
+    @property
+    def permissions(self) -> list[str]:
+        return []
+
     @abstractmethod
     async def load(self):
         """Initialize models/resources."""
@@ -59,6 +63,14 @@ class BaseTTSDriver(BaseDriver):
         """Yields audio chunks (mp3/wav bytes)."""
         pass
 
+    async def list_voices(self) -> list[Dict[str, Any]]:
+        """Return voices supported by this TTS provider."""
+        return []
+
+    async def unload(self):
+        """Release provider resources."""
+        return None
+
     @property
     def group_id(self) -> str:
         return "driver.tts"
@@ -67,6 +79,28 @@ class BaseTTSDriver(BaseDriver):
 class BaseSTTDriver(BaseDriver):
     def __init__(self, id: str, name: str, description: str=""):
         super().__init__(id, name, description)
+
+    @property
+    def supported_models(self) -> tuple[str, ...]:
+        """Model aliases this provider can switch internally."""
+        return ()
+
+    def supports_model(self, model_id: str) -> bool:
+        return model_id in self.supported_models
+
+    @property
+    def current_model(self) -> Any:
+        return self.config.get("model_size") or self.config.get("model")
+
+    async def select_model(self, model_id: str):
+        if not self.supports_model(model_id):
+            raise ValueError(f"{self.id} does not support STT model '{model_id}'")
+        self.config["model_size"] = model_id
+        await self.unload()
+
+    async def unload(self):
+        """Release provider resources."""
+        return None
 
     @abstractmethod
     def transcribe(self, audio_data: Any, **kwargs) -> Dict[str, Any]:

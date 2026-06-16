@@ -2,8 +2,7 @@
 Plugin State Aggregator Service
 Event-driven centralized plugin state management.
 
-Replaces the scattered state merging logic in PluginService.list_all_plugins()
-with a unified cache that updates via events.
+Centralizes plugin state merging behind an event-driven cache.
 """
 
 import asyncio
@@ -191,9 +190,7 @@ class PluginStateAggregator:
             merged["computed_status"] = self._compute_status(merged)
             merged.setdefault("id", plugin_id)
             desired_enabled = merged.get("desired_enabled")
-            if desired_enabled is None:
-                desired_enabled = merged.get("enabled")
-            merged["enabled"] = bool(desired_enabled) if desired_enabled is not None else bool(merged.get("active"))
+            merged["enabled"] = bool(desired_enabled) if desired_enabled is not None else False
             if merged.get("active") is None:
                 merged["active"] = merged.get("active_status") in {"ready", "idle", "running"}
             if merged.get("active_in_group") is None:
@@ -233,9 +230,7 @@ class PluginStateAggregator:
         into a user-friendly computed_status.
         """
         # Get intent
-        desired = state.get("desired_enabled")
-        if desired is None:
-            desired = state.get("enabled", False)
+        desired = bool(state.get("desired_enabled", False))
         
         # Get reality
         actual = state.get("active_status", "unknown")

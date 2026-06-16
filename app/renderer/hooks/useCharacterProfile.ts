@@ -2,11 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { CharacterProfile } from "@core/llm/types";
 import { API_CONFIG } from "../config";
 
-export const ACTIVE_CHARACTER_ID = "hiyori";
-
 export const useCharacterProfile = (backendReady: boolean) => {
     const [activeCharacter, setActiveCharacter] = useState<CharacterProfile>();
     const [isLoading, setIsLoading] = useState(true);
+    const activeCharacterId = activeCharacter?.id ?? null;
 
     const fetchCharacter = useCallback(async () => {
         if (!backendReady) {
@@ -32,7 +31,7 @@ export const useCharacterProfile = (backendReady: boolean) => {
         const response = await fetch(`${API_CONFIG.BASE_URL}/character/config`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...character, id: ACTIVE_CHARACTER_ID }),
+            body: JSON.stringify(character),
         });
 
         if (!response.ok) {
@@ -40,7 +39,7 @@ export const useCharacterProfile = (backendReady: boolean) => {
         }
 
         const saved = await response.json();
-        setActiveCharacter(saved.character ?? { ...character, id: ACTIVE_CHARACTER_ID });
+        setActiveCharacter(saved.character ?? character);
         return true;
     }, []);
 
@@ -50,7 +49,7 @@ export const useCharacterProfile = (backendReady: boolean) => {
 
     return {
         activeCharacter,
-        activeCharacterId: ACTIVE_CHARACTER_ID,
+        activeCharacterId,
         isLoading,
         fetchCharacter,
         saveCharacter,

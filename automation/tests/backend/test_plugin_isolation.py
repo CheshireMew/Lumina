@@ -6,11 +6,6 @@ import unittest
 from unittest.mock import MagicMock, AsyncMock, patch
 from pathlib import Path
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]
@@ -25,7 +20,11 @@ class TestPluginIsolation(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.process_manager = ProcessManager()
         self.mock_container = MagicMock()
-        self.mock_container.event_bus = bus
+        self.mock_container.has_service.return_value = True
+        self.mock_container.get_event_bus.return_value = bus
+        self.mock_container.get_capability_registry.return_value = None
+        self.mock_container.get_config.return_value = MagicMock()
+        self.mock_container.get_capability_package_registry.return_value = None
         self.plugin_manager = SystemPluginManager(container=self.mock_container)
         
     async def test_process_spawn_logic(self):
@@ -102,12 +101,13 @@ class TestPluginIsolation(unittest.IsolatedAsyncioTestCase):
         self.process_manager.workers["isolated_plugin"] = WorkerProcess(dead_proc, time.time())
         self.process_manager.workers["isolated_plugin"].is_external = False
 
-        # is_running should detect the dead process and remove it
+        # is_running reports the dead state. Restartable workers stay tracked so
+        # WorkerSupervisor can apply the restart policy.
         is_alive = self.process_manager.is_running("isolated_plugin")
 
         self.assertFalse(is_alive)
-        self.assertNotIn("isolated_plugin", self.process_manager.workers)
-        print("✅ Dead process detection and cleanup verified.")
+        self.assertIn("isolated_plugin", self.process_manager.workers)
+        print("✅ Dead process detection preserves restartable worker record.")
 
 if __name__ == "__main__":
     unittest.main()

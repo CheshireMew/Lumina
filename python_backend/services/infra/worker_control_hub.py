@@ -238,27 +238,9 @@ class WorkerControlHub:
         for handler in handlers:
             try:
                 if asyncio.iscoroutinefunction(handler):
-                    # Check if handler accepts binary_body keyword
-                    # For now, simple dispatch: pass msg. 
-                    # If we need to pass binary, we might need extended signature check or kwargs.
-                    # v1.5: Pass binary_body if present and handler supports it?
-                    # Let's assume standard handlers just take (worker_id, msg).
-                    # Special handlers (like Audio) will check for binary_body in kwargs if we passed it.
-                    # Ideally: handler(worker_id, msg, binary_body=...)
-                    
-                    # Simplified: We attach the body to the message object temporarily? 
-                    # Or just pass it.
-                    # Python's flexible args:
-                    try:
-                        await handler(worker_id, msg, binary_body=binary_body)
-                    except TypeError:
-                        # Fallback for old handlers
-                        await handler(worker_id, msg)
+                    await handler(worker_id, msg, binary_body=binary_body)
                 else:
-                    try:
-                        handler(worker_id, msg, binary_body=binary_body)
-                    except TypeError:
-                        handler(worker_id, msg)
+                    handler(worker_id, msg, binary_body=binary_body)
             except Exception as e:
                 logger.error(f"Handler error for {msg.type}: {e}")
     

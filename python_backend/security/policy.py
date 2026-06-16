@@ -10,17 +10,6 @@ class SecurityPolicy:
     """
     Enforces permission checks for plugins.
     """
-    
-    @staticmethod
-    def normalize_permission(perm: str) -> str:
-        """
-        Convert legacy syntax (colon) to new syntax (dot).
-        e.g. 'os:exec' -> 'os.exec'
-        """
-        if ":" in perm:
-            # Simple heuristic mapping or direct replacement
-            return perm.replace(":", ".")
-        return perm
 
     @staticmethod
     def check_permissions(manifest: PluginManifest) -> Tuple[bool, List[str]]:
@@ -32,9 +21,7 @@ class SecurityPolicy:
         is_risky = False
         invalid_permissions = []
         
-        # Normalize permissions in the manifest dynamically for this check
-        # (We don't modify the manifest object here, just the list we check)
-        requested_perms = [SecurityPolicy.normalize_permission(p) for p in manifest.permissions]
+        requested_perms = list(manifest.permissions)
         invalid_permissions = validate_permissions(requested_perms)
         if invalid_permissions:
             warnings.append(f"❌ Invalid permissions: {', '.join(invalid_permissions)}")
@@ -67,9 +54,3 @@ class SecurityPolicy:
             )
         return (not is_risky and not invalid_permissions), warnings
 
-    @staticmethod
-    def enforce_isolation_policy(manifest: PluginManifest) -> PluginManifest:
-        """
-        Compatibility no-op: isolation mode was removed from the unified contract.
-        """
-        return manifest

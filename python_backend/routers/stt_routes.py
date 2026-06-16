@@ -1,6 +1,6 @@
 
 import logging
-from typing import Any, Dict, Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, WebSocket
 from pydantic import BaseModel
 
@@ -12,7 +12,7 @@ logger = logging.getLogger("STTProxy")
 
 router = APIRouter(prefix="/stt", tags=["STT"])
 
-# --- Data Models (Preserved for API Compatibility) ---
+# --- Data Models ---
 
 class SwitchModelRequest(BaseModel):
     model_name: str
@@ -25,11 +25,6 @@ class UnifiedAudioConfig(BaseModel):
     speech_start_threshold: Optional[float] = None
     speech_end_threshold: Optional[float] = None
     min_speech_frames: Optional[int] = None
-
-class ProviderConfigRequest(BaseModel):
-    id: str
-    key: str
-    value: Any
 
 # --- Endpoints ---
 
@@ -69,28 +64,14 @@ async def update_audio_config(request: UnifiedAudioConfig, container=Depends(get
     response = await proxy_json_request("stt", "POST", "/audio/config", request.dict(exclude_none=True), container=container)
     return response.json()
 
-@router.get("/status/voiceprint")
 @router.get("/voiceprint/status")
 async def get_voiceprint_status(container=Depends(get_container)):
-    response = await proxy_json_request("stt", "GET", "/status/voiceprint", container=container)
+    response = await proxy_json_request("stt", "GET", "/voiceprint/status", container=container)
     return response.json()
 
 @router.get("/audio/status")
 async def get_audio_status(container=Depends(get_container)):
     response = await proxy_json_request("stt", "GET", "/audio/status", container=container)
-    return response.json()
-
-# --- Lifecycle Proxies ---
-
-@router.post("/provider/config")
-async def update_provider_config(req: ProviderConfigRequest, container=Depends(get_container)):
-    """Proxy provider config changes to the STT worker."""
-    payload = {
-        "target_id": req.id,
-        "key": req.key,
-        "value": req.value
-    }
-    response = await proxy_json_request("stt", "POST", "/lipp/v1/config", payload, container=container)
     return response.json()
 
 # --- WebSocket Stub ---

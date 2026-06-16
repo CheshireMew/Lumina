@@ -3,13 +3,14 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy")
 
 sys.path.insert(0, os.path.abspath("python_backend"))
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_voiceprint_chain():
     from capabilities.stt import globals as stt_globals
     from plugins.extensions.voiceprint.plugin import Plugin
@@ -34,7 +35,7 @@ async def test_voiceprint_chain():
             id="system.voiceprint",
             kind="processor",
             capability="stt",
-            runtime_target="stt_server",
+            runtime_target="worker:stt",
             permissions=[],
             config_schema={},
             provides=[],

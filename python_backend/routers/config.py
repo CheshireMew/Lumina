@@ -5,39 +5,12 @@ Includes runtime configuration and health endpoints.
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 
-from schemas.requests import ConfigRequest
 from schemas.runtime_settings import RuntimeLlmSettings
-from routers.deps import get_config_controller, get_optional_soul_service
+from routers.deps import get_config_controller, get_soul_service
 
 logger = logging.getLogger("ConfigRouter")
 
 router = APIRouter(tags=["Config"])
-
-
-@router.post("/configure")
-async def configure_memory(config: ConfigRequest, config_service=Depends(get_config_controller)):
-    """Configure LLM and memory settings without changing the active character."""
-
-    logger.info("=== /configure Request Received ===")
-    logger.info(f"BaseURL: {config.base_url}, Model: {config.model}")
-
-    try:
-        config_service.update_llm_runtime(
-            api_key=config.api_key,
-            base_url=config.base_url,
-            model=config.model,
-            history_limit=config.history_limit,
-            overflow_strategy=config.overflow_strategy,
-            provider_type=config.provider_type,
-        )
-
-        logger.info("✅ Configuration updated without changing character")
-        return {"status": "ok", "message": "Configuration updated"}
-    except Exception as e:
-        logger.error(f"INIT ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/config/llm", response_model=RuntimeLlmSettings)
@@ -70,11 +43,11 @@ async def update_llm_runtime_settings(
 
 
 @router.get("/health")
-async def health_check(soul_service=Depends(get_optional_soul_service)):
+async def health_check(soul_service=Depends(get_soul_service)):
     """Health Check"""
     return {
         "status": "healthy",
-        "soul_client": soul_service is not None
+        "active_character_id": soul_service.get_active_character_id(),
     }
 
 @router.get("/network")

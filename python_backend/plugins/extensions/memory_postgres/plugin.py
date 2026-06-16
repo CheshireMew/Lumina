@@ -1,7 +1,6 @@
 import logging
 from typing import Any
 
-from app_config import config
 from core.interfaces.plugin import Plugin as BasePlugin
 from memory.factory import MemoryDriverFactory
 
@@ -15,42 +14,37 @@ class Plugin(BasePlugin):
         if not memory_service:
             return
 
+        config = self.context.get_service("config")
         selected_provider = config.get_selected_provider("memory")
         if selected_provider != self.id:
             return
 
-        current_driver = getattr(memory_service, "driver", None)
-        if current_driver and getattr(current_driver, "id", None) == self.id:
+        if memory_service.is_driver_active(self.id):
             return
 
         try:
-            next_driver = MemoryDriverFactory.create_driver(config_provider=self.id)
+            next_driver = MemoryDriverFactory.create_driver(
+                self.id,
+                driver_config=config.memory.model_dump(),
+            )
             await next_driver.connect()
         except Exception as exc:
             logger.error("Memory backend %s is unavailable: %s", self.id, exc)
             return
 
-        if current_driver and hasattr(current_driver, "close"):
-            await current_driver.close()
-
-        memory_service.driver = next_driver
-        memory_service.vector_store.driver = next_driver
-        if hasattr(memory_service, "set_available"):
-            memory_service.set_available(True)
+        await memory_service.replace_driver(next_driver)
         logger.info("Memory backend switched to %s", self.id)
 
     async def disable(self):
         memory_service = self.context.get_service("memory")
-        if memory_service:
-            current_driver = getattr(memory_service, "driver", None)
-            if current_driver and getattr(current_driver, "id", None) == self.id:
-                logger.warning("Active memory backend %s was disabled; runtime will keep current connection until another provider is selected.", self.id)
+        if memory_service and memory_service.is_driver_active(self.id):
+            logger.warning("Active memory backend %s was disabled; runtime will keep current connection until another provider is selected.", self.id)
         await super().disable()
 
     async def health(self) -> dict[str, Any]:
         memory_service = self.context.get_service("memory")
-        current_driver = getattr(memory_service, "driver", None) if memory_service else None
-        is_active = bool(current_driver and getattr(current_driver, "id", None) == self.id)
+        is_active = bool(memory_service and memory_service.is_driver_active(self.id))
+        config = self.context.get_service("config")
         selected_provider = config.get_selected_provider("memory")
         if selected_provider == self.id and not is_active:
             status = "error"
@@ -59,7 +53,7 @@ class Plugin(BasePlugin):
         return {
             "status": status,
             "active": is_active,
-            "driver_id": getattr(current_driver, "id", None),
+            "driver_id": memory_service.driver_id if memory_service else None,
         }
 
     def get_metadata(self) -> dict[str, Any]:

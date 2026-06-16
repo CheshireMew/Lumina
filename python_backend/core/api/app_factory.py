@@ -189,7 +189,7 @@ def _configure_root(app: FastAPI) -> None:
             "version": "2.0.0",
             "status": "running",
             "endpoints": {
-                "config": "/configure, /health",
+                "config": "/config/llm, /health",
                 "memory": "/memory/add, /memory/search, /memory/search/hybrid, /memory/all",
                 "character": "/character/*",
                 "soul": "/soul/*",

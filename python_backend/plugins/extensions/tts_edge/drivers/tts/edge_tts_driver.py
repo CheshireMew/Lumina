@@ -17,7 +17,7 @@ class EdgeTTSDriver(BaseTTSDriver):
         # Edge TTS is stateless, nothing to load
         logger.info("EdgeTTS Driver loaded (Stateless)")
 
-    async def get_voices(self):
+    async def list_voices(self):
         try:
             voices = await edge_tts.list_voices()
         except Exception as exc:

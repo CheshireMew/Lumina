@@ -4,11 +4,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]

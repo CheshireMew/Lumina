@@ -16,20 +16,19 @@ class Permission(str, Enum):
     Plugins must declare required permissions in their manifest.yaml:
     
     permissions:
-      - filesystem.read
-      - network.outbound
+      - filesystem.data_read
+      - network.external
     """
     
     # File System Access
-    FILESYSTEM_READ = "filesystem.read"       # Read files from plugin data directory (Legacy)
-    FILESYSTEM_WRITE = "filesystem.write"     # Write files to plugin data directory (Legacy)
+    FILESYSTEM_DATA_READ = "filesystem.data_read"    # Read files from plugin data directory
+    FILESYSTEM_DATA_WRITE = "filesystem.data_write"  # Write files to plugin data directory
     FILESYSTEM_EXTERNAL = "filesystem.external"  # Access files outside plugin directory
     FILESYSTEM_ASSETS = "filesystem.read_assets" # Read own assets [Mapped from filesystem:read_assets]
     FILESYSTEM_USER = "filesystem.read_user"     # Read user documents [Mapped from filesystem:read_user]
     FILESYSTEM_SYSTEM = "filesystem.write_system" # Write to system folders [Mapped from filesystem:write_system]
     
     # Network Access
-    NETWORK_OUTBOUND = "network.outbound"     # Make outbound HTTP/WebSocket requests (Legacy)
     NETWORK_LISTEN = "network.listen"         # Listen on network ports
     NETWORK_INTERNAL = "network.lumina_internal" # Access internal Lumina APIs [Mapped from network:lumina_internal]
     NETWORK_EXTERNAL = "network.external"        # Access public internet [Mapped from network:external]
@@ -57,20 +56,6 @@ class Permission(str, Enum):
     EVENT_SUBSCRIBE = "event.subscribe"       # Subscribe to system events
     EVENT_EMIT = "event.emit"                 # Emit custom events
 
-    # System Interactions
-    SYSTEM_NOTIFICATION = "system.notification" # Send user notifications
-    
-    # UI / Widgets
-    UI_REGISTER = "ui.register_widget"        # Register UI widgets
-    UI_REMOVE = "ui.remove_widget"            # Remove UI widgets
-
-    # A/V Capability
-    AUDIO_CAPTURE = "audio_capture"           # Record Audio (Microphone) [Legacy]
-
-    # Legacy EventBus
-    EVENTBUS_SUBSCRIBE = "eventbus.subscribe" # Legacy alias
-    EVENTBUS_EMIT = "eventbus.emit"           # Legacy alias
-    
     # Network Extras
     NETWORK_UDP = "network.udp"               # UDP Socket access
 
@@ -82,25 +67,19 @@ class Permission(str, Enum):
 
 TIER_SAFE: Set[str] = {
     Permission.NETWORK_INTERNAL.value,
+    Permission.FILESYSTEM_DATA_READ.value,
+    Permission.FILESYSTEM_DATA_WRITE.value,
     Permission.FILESYSTEM_ASSETS.value,
     Permission.EVENT_SUBSCRIBE.value,
     Permission.EVENT_EMIT.value,
     Permission.PLUGIN_DISCOVERY.value,
-    # Legacy/Aliases
-    Permission.EVENTBUS_SUBSCRIBE.value,
-    Permission.EVENTBUS_EMIT.value,
-    Permission.UI_REGISTER.value,
-    Permission.UI_REMOVE.value,
 }
 
 TIER_TRUSTED: Set[str] = {
     Permission.NETWORK_EXTERNAL.value,
     Permission.DATABASE_POSTGRES.value,
     Permission.FILESYSTEM_USER.value,
-    Permission.FILESYSTEM_READ.value,  # Legacy
-    Permission.FILESYSTEM_WRITE.value, # Legacy
-    Permission.NETWORK_OUTBOUND.value, # Legacy
-    Permission.NETWORK_UDP.value,      # Legacy
+    Permission.NETWORK_UDP.value,
 }
 
 TIER_SYSTEM: Set[str] = {
@@ -108,9 +87,8 @@ TIER_SYSTEM: Set[str] = {
     Permission.OS_EXEC.value,
     Permission.FILESYSTEM_SYSTEM.value,
     Permission.INPUT_SIMULATE.value,
-    Permission.FILESYSTEM_EXTERNAL.value, # Legacy
-    Permission.NETWORK_LISTEN.value,      # Legacy
-    Permission.AUDIO_CAPTURE.value,       # Legacy
+    Permission.FILESYSTEM_EXTERNAL.value,
+    Permission.NETWORK_LISTEN.value,
 }
 
 # Default permissions granted to all plugins (Alias to SAFE)

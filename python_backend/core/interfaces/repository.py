@@ -73,7 +73,22 @@ class ISoulRepository(ABC):
         pass
 
 class ISessionRepository(IRepository[Dict]):
-    """Repository for Chat Sessions."""
+    """Repository for chat session state, keyed by user and character."""
+
+    @abstractmethod
+    async def get_session(self, user_id: str, char_id: str) -> Optional[Dict]:
+        """Retrieve a session by user and character."""
+        pass
+
+    @abstractmethod
+    async def save_session(self, user_id: str, char_id: str, data: Dict) -> bool:
+        """Persist a session by user and character."""
+        pass
+
+    @abstractmethod
+    async def delete_session(self, user_id: str, char_id: str) -> bool:
+        """Delete a session by user and character."""
+        pass
     
     @abstractmethod
     async def get_recent(self, limit: int = 10) -> List[Dict]:

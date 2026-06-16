@@ -17,7 +17,7 @@ async def verify_postgres():
     
     # 1. Force reload config to pick up NEW provider
     config.load_configs()
-    logger.info(f"馃搼 Active Provider: {config.memory.provider}")
+    logger.info(f"馃搼 Active Provider: {config.get_selected_provider('memory')}")
     
     # 2. Create Driver via Factory
     try:
@@ -26,16 +26,22 @@ async def verify_postgres():
         # Manual scan to see what's happening
         logger.info(f"Checking for postgres driver in plugins...")
         
-        driver = MemoryDriverFactory.create_driver()
+        driver = MemoryDriverFactory.create_driver(
+            config.get_selected_provider("memory"),
+            driver_config=config.memory.model_dump(),
+        )
         logger.info(f"鉁?Driver Loaded: {driver.name} ({driver.id})")
         
         if driver.id != "driver.memory.postgres":
             logger.error(f"鈿狅笍 Expected 'driver.memory.postgres' but got '{driver.id}'")
             logger.info("Checking config object directly:")
-            logger.info(f"config.memory.provider: {config.memory.provider}")
+            logger.info(f"selected memory provider: {config.get_selected_provider('memory')}")
             # Try to force it
             logger.info("Attempting to force postgres driver...")
-            driver = MemoryDriverFactory.create_driver("driver.memory.postgres")
+            driver = MemoryDriverFactory.create_driver(
+                "driver.memory.postgres",
+                driver_config=config.memory.model_dump(),
+            )
             logger.info(f"鉁?Forced Driver Loaded: {driver.name} ({driver.id})")
         
         # 3. Connect (Initializes Schema)

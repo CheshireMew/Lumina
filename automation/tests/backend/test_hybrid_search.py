@@ -4,11 +4,6 @@ import json
 import time
 import logging
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Setup Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -81,18 +76,8 @@ def main():
     #     add_memory(f"Filler memory {i}: The weather is nice today.")
     #     time.sleep(0.1)
     
-    # Wait for processing? 
     # The /memory/add endpoint writes to conversation_log immediately.
-    # But Hybrid Search usually targets 'episodic_memory' or 'conversation_log'?
-    # Let's check the API: /search/hybrid targets episodic_memory by default, 
-    # but falls back to conversation_log if Free Tier.
-    # Assuming standard setup: we might need to wait for consolidation if targeting episodic.
-    # BUT, the generic search usually searches logs or immediate memories?
-    # Let's check routers/memory.py:
-    # It tries `target_table = "episodic_memory"`
-    # But if Free Tier, `target_table = "conversation_log"`.
-    # AND, `conversation_log` has embeddings generated synchronously in `log_conversation`.
-    # So we should be able to search `conversation_log` if we force it or if the system uses it.
+    # Hybrid search targets episodic_memory, so force digest/consolidation before searching.
     
     # Force Digest to ensure episodic memory is populated
     try:

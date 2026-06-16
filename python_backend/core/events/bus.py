@@ -142,7 +142,7 @@ class EventBus:
                     # Treat None as empty dict for validation validation
                     schema.payload_model(**{})
                 elif isinstance(payload, BaseModel):
-                    # If it's already a model, ensure compatibility or re-validate
+                    # If it's already a model, re-validate it against the event schema.
                     if not isinstance(payload, schema.payload_model):
                         schema.payload_model(**payload.dict())
                 else: 

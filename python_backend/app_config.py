@@ -3,7 +3,7 @@
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from config.env_overrides import apply_env_overrides, load_environment
 
@@ -13,7 +13,6 @@ load_environment(logger)
 from config.loader import (  # noqa: E402
     ConfigBundle,
     apply_ports_override,
-    archive_legacy_jsons,
     load_config,
     save_config,
 )
@@ -28,13 +27,6 @@ from config.paths import (  # noqa: E402
     get_paths_config,
 )
 from config.secrets_bridge import apply_secret_bridge  # noqa: E402
-from services.provider_aliases import normalize_provider_id  # noqa: E402
-
-try:
-    from core.interfaces.config import IConfigProvider
-except ImportError:
-    class IConfigProvider:
-        pass
 
 
 class ConfigMode(Enum):
@@ -43,7 +35,7 @@ class ConfigMode(Enum):
     READ_ONLY = "read_only"
 
 
-class ConfigManager(IConfigProvider):
+class ConfigManager:
     _instance = None
     _mode: ConfigMode = ConfigMode.MUTABLE
     _is_initialized: bool = False
@@ -64,12 +56,6 @@ class ConfigManager(IConfigProvider):
     @property
     def is_dev(self) -> bool:
         return IS_DEV
-
-    def get(self, section: str, key: str, default: Any = None) -> Any:
-        config_obj = self._bundle.section_map().get(section)
-        if not config_obj:
-            return default
-        return getattr(config_obj, key, default)
 
     def freeze(self):
         self._mode = ConfigMode.FROZEN
@@ -112,7 +98,6 @@ class ConfigManager(IConfigProvider):
 
         if result.should_save:
             save_config(bundle, CONFIG_ROOT, logger)
-            archive_legacy_jsons(result.migrated_legacy_paths, logger)
 
         apply_secret_bridge(bundle, logger)
         apply_env_overrides(bundle)
@@ -149,14 +134,17 @@ class ConfigManager(IConfigProvider):
     def set_plugin_desired_state(self, plugin_id: str, enabled: bool):
         self._plugins_config.desired_state[plugin_id] = enabled
 
-    def get_selected_provider(self, capability: str, default: Optional[str] = None) -> Optional[str]:
-        value = self._plugins_config.selected_providers.get(capability, default)
-        return normalize_provider_id(capability, value)
+    def get_plugin_settings(self, plugin_id: str) -> dict[str, Any]:
+        return dict(self._plugins_config.settings.get(plugin_id, {}))
+
+    def get_selected_provider(self, capability: str) -> str | None:
+        return self._plugins_config.selected_providers.get(capability)
 
     def set_selected_provider(self, capability: str, plugin_id: str):
-        normalized_plugin_id = normalize_provider_id(capability, plugin_id)
-        self._plugins_config.selected_providers[capability] = normalized_plugin_id
-        self._plugins_config.desired_state.setdefault(normalized_plugin_id, True)
+        if not plugin_id:
+            raise ValueError("Selected provider id is required")
+        self._plugins_config.selected_providers[capability] = plugin_id
+        self._plugins_config.desired_state.setdefault(plugin_id, True)
 
     @property
     def memory(self):

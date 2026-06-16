@@ -35,10 +35,10 @@ def mock_container():
     container = ServiceContainer()
 
     # Add common mocks
-    container._config = MagicMock()
-    container._event_bus = MagicMock()
-    container._llm_manager = MagicMock()
-    container._gateway = MagicMock()
+    container.set_config(MagicMock())
+    container.set_event_bus(MagicMock())
+    container.set_llm_manager(MagicMock())
+    container.set_gateway(MagicMock())
 
     return container
 
@@ -200,7 +200,7 @@ description: A test plugin for testing
 author: Test Author
 permissions:
   - event.subscribe
-  - ui.register_widget
+  - event.emit
 entry_point: plugin.py
 """
 
@@ -230,6 +230,11 @@ def event_loop_policy():
     if sys.platform == "win32":
         import asyncio
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
 
 
 # ============================================================================

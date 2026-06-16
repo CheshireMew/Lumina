@@ -14,7 +14,7 @@ SERVICES = {
 }
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_multi_turn_tool_loop_failure():
     """
     验证系统是否存在‘单轮工具限制’。
@@ -57,7 +57,7 @@ async def test_multi_turn_tool_loop_failure():
             print(f"[Test] Failed: {e}")
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_tool_output_injection_consistency():
     """验证工具返回的结果是否被正确注入到上下文中"""
     url = f"{SERVICES['memory']}/v1/chat/completions"

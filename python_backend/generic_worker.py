@@ -14,9 +14,6 @@ import uvicorn
 from services.container import services
 from services.worker_runtime import WorkerRuntimeHost, WorkerRuntimeOptions
 
-
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "sdk"))
-
 if os.name == "nt":
     try:
         os.add_dll_directory(os.path.dirname(os.path.abspath(__file__)))

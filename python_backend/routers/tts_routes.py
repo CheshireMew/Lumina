@@ -18,7 +18,7 @@ class TTSRequest(BaseModel):
     text: str
     voice: str = "zh-CN-XiaoxiaoNeural"
     emotion: Optional[str] = None
-    engine: str = "edge-tts"
+    engine: str = "driver.tts.edge"
     rate: str = "+0%"
     pitch: str = "+0Hz"
 

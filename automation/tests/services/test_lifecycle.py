@@ -3,16 +3,9 @@ Unit tests for Lifecycle Manager
 Tests application startup, shutdown sequence, and error handling
 """
 import sys
-import asyncio
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch, mock_open
-
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+from unittest.mock import MagicMock, AsyncMock, patch
 
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]
@@ -67,11 +60,12 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
             try:
                 await manager.start(services)
                 # Config should be initialized
-                self.assertIsNotNone(services.config)
+                self.assertIsNotNone(services.get_config())
                 print("✅ ConfigBootstrapper verified")
             except Exception as e:
                 # May fail if config file doesn't exist, that's ok for this test
-                self.assertIn("Config", str(type(services.config).__name__) if services.config else "")
+                config = services.get_config() if services.has_service("config") else None
+                self.assertIn("Config", str(type(config).__name__) if config else "")
                 print("✅ ConfigBootstrapper initialization attempted")
 
     async def test_event_bus_bootstrapper(self):
@@ -85,8 +79,11 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
 
         await manager.start(services)
 
-        # EventBus should be initialized
-        self.assertIsNotNone(services.event_bus)
+        # EventBus should be initialized with lifecycle request schemas.
+        event_bus = services.get_event_bus()
+        self.assertIsNotNone(event_bus)
+        self.assertIn("plugin.lifecycle.request_enable", event_bus._schemas)
+        self.assertIn("plugin.lifecycle.request_disable", event_bus._schemas)
         print("✅ EventBusBootstrapper verified")
 
     async def test_shutdown_sequence_mcp_host(self):
@@ -98,11 +95,11 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         mock_mcp = MagicMock()
         mock_mcp.stop = AsyncMock()
 
-        container.mcp_host = mock_mcp
+        container.set_mcp_host(mock_mcp)
 
         # Simulate MCP Host shutdown (the actual shutdown logic from lifespan)
-        if container.mcp_host:
-            await container.mcp_host.stop()
+        if container.get_mcp_host():
+            await container.get_mcp_host().stop()
 
         # Verify MCP Host was stopped
         mock_mcp.stop.assert_called_once()
@@ -120,7 +117,7 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         mock_plugin2.terminate = MagicMock()
 
         mock_manager.plugins = {"plugin1": mock_plugin1, "plugin2": mock_plugin2}
-        container.system_plugin_manager = mock_manager
+        container.set_system_plugin_manager(mock_manager)
 
         # Simulate plugin shutdown
         for pid, plugin in mock_manager.plugins.items():
@@ -142,7 +139,7 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         mock_pm = MagicMock()
         mock_pm.shutdown_all = AsyncMock()
 
-        container.process_manager = mock_pm
+        container.set_process_manager(mock_pm)
 
         # Simulate process manager shutdown
         await mock_pm.shutdown_all()
@@ -195,7 +192,7 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         mock_event_bus = MagicMock()
         mock_app = MagicMock()
 
-        container.event_bus = mock_event_bus
+        container.set_event_bus(mock_event_bus)
 
         # Simulate router registration subscription
         def on_router_registered(event):

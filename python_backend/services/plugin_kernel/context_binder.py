@@ -17,7 +17,11 @@ class PluginContextBinder:
             container=self.container,
             plugin_id=manifest.id,
             manifest=manifest,
-            event_bus=getattr(self.container, "event_bus", None),
+            event_bus=(
+                self.container.get_event_bus()
+                if self.container.has_service("event_bus")
+                else None
+            ),
             capability_registry=self.capability_registry,
         )
         await plugin.load(context)

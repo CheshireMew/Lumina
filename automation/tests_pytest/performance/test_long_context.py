@@ -14,7 +14,7 @@ SERVICES = {
 }
 
 @pytest.mark.performance
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_extreme_long_context_performance():
     """验证超长上下文（约 100k tokens）下的性能和处理能力"""
     url = f"{SERVICES['memory']}/v1/chat/completions"
@@ -56,7 +56,7 @@ async def test_extreme_long_context_performance():
             print(f"[Test] Request failed: {type(e).__name__}: {e}")
 
 @pytest.mark.performance
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_context_truncation_boundary():
     """验证上下文超过 128k 时的物理截断或是后端溢出报错"""
     # 这个测试模拟发送一个非常巨大的 payload，检查 FastAPI/Uvicorn 的限制

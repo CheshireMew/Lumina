@@ -340,26 +340,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/configure": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Configure Memory
-         * @description Configure LLM and memory settings without changing the active character.
-         */
-        post: operations["configure_memory_configure_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/config/llm": {
         parameters: {
             query?: never;
@@ -916,23 +896,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/stt/status/voiceprint": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Voiceprint Status */
-        get: operations["get_voiceprint_status_stt_status_voiceprint_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/stt/audio/status": {
         parameters: {
             query?: never;
@@ -944,26 +907,6 @@ export interface paths {
         get: operations["get_audio_status_stt_audio_status_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/stt/provider/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Update Provider Config
-         * @description Proxy provider config changes to the STT worker.
-         */
-        post: operations["update_provider_config_stt_provider_config_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1291,61 +1234,6 @@ export interface components {
              * @default hiyori
              */
             character_id: string | null;
-        };
-        /**
-         * ConfigRequest
-         * @description Memory Service Config Request
-         */
-        ConfigRequest: {
-            /** Base Url */
-            base_url: string;
-            /**
-             * Api Key
-             * @default sk-dummy-key
-             */
-            api_key: string | null;
-            /**
-             * Model
-             * @default deepseek-chat
-             */
-            model: string | null;
-            /**
-             * Embedder
-             * @default paraphrase-multilingual-MiniLM-L12-v2
-             */
-            embedder: string | null;
-            /**
-             * Character Id
-             * @default hiyori
-             */
-            character_id: string;
-            /** Heartbeat Enabled */
-            heartbeat_enabled?: boolean | null;
-            /** Proactive Threshold Minutes */
-            proactive_threshold_minutes?: number | null;
-            /** Proactive Chat Enabled */
-            proactive_chat_enabled?: boolean | null;
-            /** Soul Evolution Enabled */
-            soul_evolution_enabled?: boolean | null;
-            /**
-             * History Limit
-             * @default 20
-             */
-            history_limit: number | null;
-            /**
-             * Overflow Strategy
-             * @default slide
-             */
-            overflow_strategy: string | null;
-        };
-        /** ProviderConfigRequest */
-        ProviderConfigRequest: {
-            /** Id */
-            id: string;
-            /** Key */
-            key: string;
-            /** Value */
-            value: unknown;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2195,39 +2083,6 @@ export interface operations {
             };
         };
     };
-    configure_memory_configure_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_llm_runtime_settings_config_llm_get: {
         parameters: {
             query?: never;
@@ -3049,26 +2904,6 @@ export interface operations {
             };
         };
     };
-    get_voiceprint_status_stt_status_voiceprint_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     get_audio_status_stt_audio_status_get: {
         parameters: {
             query?: never;
@@ -3085,39 +2920,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    update_provider_config_stt_provider_config_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderConfigRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -35,7 +35,7 @@ def build_runtime_state_provider(
             if plugin_id:
                 merged[plugin_id] = dict(item)
 
-        plugin_manager = getattr(container, "system_plugin_manager", None)
+        plugin_manager = container.get_system_plugin_manager()
         if plugin_manager:
             for item in plugin_manager.list_plugins():
                 plugin_id = item.get("id")

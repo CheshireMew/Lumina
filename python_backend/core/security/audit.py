@@ -32,36 +32,37 @@ class AuditLogger:
             bus = get_lifecycle_bus()
             
             # Ensure bus is connected
-            if not getattr(bus, "_is_connected", False):
+            if not bus.is_connected:
                 await bus.connect()
             
-            pool = getattr(bus, "db", None)
-            if pool:
-                data = {
-                    "timestamp": datetime.now(),
-                    "actor_id": actor_id,
-                    "action": action,
-                    "target": target,
-                    "status": status,
-                    "metadata": json.dumps(metadata or {}),
-                }
+            pool = await bus.get_pool()
+            if not pool:
+                logger.warning(f"⚠️ [Audit] Lifecycle store not available. Event: {actor_id} {action}")
+                return
 
-                await pool.execute(
-                    """
-                    INSERT INTO security_audit (timestamp, actor_id, action, target, status, metadata)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    """,
-                    data["timestamp"],
-                    data["actor_id"],
-                    data["action"],
-                    data["target"],
-                    data["status"],
-                    data["metadata"],
-                )
+            data = {
+                "timestamp": datetime.now(),
+                "actor_id": actor_id,
+                "action": action,
+                "target": target,
+                "status": status,
+                "metadata": json.dumps(metadata or {}),
+            }
 
-                logger.info(f"🛡️ [Audit] {status.upper()}: {actor_id} -> {action} on {target}")
-            else:
-                logger.warning(f"⚠️ [Audit] Bus/DB not available. Event: {actor_id} {action}")
+            await pool.execute(
+                """
+                INSERT INTO security_audit (timestamp, actor_id, action, target, status, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                """,
+                data["timestamp"],
+                data["actor_id"],
+                data["action"],
+                data["target"],
+                data["status"],
+                data["metadata"],
+            )
+
+            logger.info(f"🛡️ [Audit] {status.upper()}: {actor_id} -> {action} on {target}")
                 
         except Exception as e:
             logger.error(f"❌ Failed to write audit log: {e}")

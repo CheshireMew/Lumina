@@ -2,8 +2,8 @@
 Pydantic Request/Response Models
 Extracted from memory_server.py for shared use
 """
-from pydantic import BaseModel, Field, field_validator
-from typing import List, Literal, Optional
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 
 
@@ -13,36 +13,6 @@ class MessageModel(BaseModel):
     content: str
     timestamp: Optional[float] = None
     name: Optional[str] = None
-
-
-class ConfigRequest(BaseModel):
-    """Memory Service Config Request"""
-    base_url: str
-    api_key: Optional[str] = "sk-dummy-key"
-    model: Optional[str] = "deepseek-chat"
-    provider_type: Optional[Literal["free", "custom"]] = None
-    embedder: Optional[str] = "paraphrase-multilingual-MiniLM-L12-v2"
-    character_id: str = "hiyori"
-    # Heartbeat Settings
-    heartbeat_enabled: Optional[bool] = None
-    proactive_threshold_minutes: Optional[float] = None
-    proactive_chat_enabled: Optional[bool] = None # Added for completeness/future explicit explicit use
-    soul_evolution_enabled: Optional[bool] = None # ⚙️ New toggle
-    history_limit: Optional[int] = Field(default=20, ge=0, le=50) # 📜 New: Max context turns
-    overflow_strategy: Optional[str] = Field(default="slide", pattern="^(slide|reset)$") # 🌊 slide=FIFO, reset=ClearAll
-    
-    @field_validator('base_url')
-    @classmethod
-    def validate_base_url(cls, v):
-        """Validate base_url format"""
-        if not v:
-            # Allow empty base_url if we want? No, let's keep it required for now, or relax if needed.
-            # But the error was API Key.
-            # If user selects Custom but leaves URL empty?
-            pass 
-        return v
-        
-    # Removed validate_api_key to allow free/local usage
 
 
 class AddMemoryRequest(BaseModel):

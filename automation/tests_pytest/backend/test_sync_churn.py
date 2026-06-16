@@ -9,7 +9,7 @@ SERVICES = {
 }
 
 @pytest.mark.backend
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_distributed_sync_churn():
     """
     模拟多节点/多插件环境下高频状态变动 (Churn Test)。
@@ -58,7 +58,7 @@ async def test_distributed_sync_churn():
     print("[Test] Distributed sync consistency verified.")
 
 @pytest.mark.backend
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_rapid_toggle_consistency():
     """高频开关同一个插件，验证 desired_enabled 最终状态是否与最后一次请求一致"""
     plugin_id = "system.llm_core"

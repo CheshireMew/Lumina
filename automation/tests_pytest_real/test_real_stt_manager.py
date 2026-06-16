@@ -23,23 +23,23 @@ class ConfigStub:
     def is_plugin_desired_enabled(self, _plugin_id):
         return True
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_stt_manager_driver_discovery():
     sm = STTPluginManager(ConfigStub())
     
-    # Mock PluginLoader to simulate driver loading
-    with patch("sdk.lumina.loader.PluginLoader.load_plugins") as mock_load:
+    # Mock driver plugin discovery
+    with patch("services.managers.driver_loader.DriverPluginLoader.load_plugins") as mock_load:
         mock_driver = MagicMock()
         mock_driver.id = "test.stt.driver"
         mock_driver.name = "Test STT"
         mock_load.return_value = [mock_driver]
         
-        await sm.register_drivers(auto_activate=False)
+        await sm.load_driver_plugins()
         
         assert "test.stt.driver" in sm.drivers
         assert sm.active_driver is None
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_stt_manager_activation():
     sm = STTPluginManager(ConfigStub())
     
@@ -48,7 +48,7 @@ async def test_stt_manager_activation():
     mock_driver.load = AsyncMock() if asyncio.iscoroutinefunction(MagicMock) else MagicMock()
     # Handle sync/async load detection in activate()
     
-    sm.drivers["test.stt.driver"] = mock_driver
+    sm.register_driver(mock_driver)
     
     await sm.activate("test.stt.driver")
     

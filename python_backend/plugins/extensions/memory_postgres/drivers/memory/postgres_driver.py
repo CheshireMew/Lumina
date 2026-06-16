@@ -4,7 +4,6 @@ from typing import Any, AsyncGenerator, Dict, Optional
 import asyncpg
 from pgvector.asyncpg import register_vector
 
-from app_config import config
 from core.db.query_builder import QueryBuilder
 from core.interfaces.driver import BaseMemoryDriver
 
@@ -35,9 +34,14 @@ class PostgresDriver(BaseMemoryDriver):
     ):
         super().__init__(id, name, description)
         self._pool: Optional[asyncpg.Pool] = None
-        self._config = config.memory
         self._initialized = False
         self._qb = PostgresQueryBuilder()
+
+    def _postgres_config(self) -> dict[str, Any]:
+        postgres_config = self.config.get("postgres")
+        if not isinstance(postgres_config, dict):
+            raise ValueError("PostgreSQL memory configuration is required.")
+        return postgres_config
 
     def _require_pool(self) -> asyncpg.Pool:
         if not self._pool:
@@ -54,21 +58,21 @@ class PostgresDriver(BaseMemoryDriver):
         if self._pool:
             return
 
-        pg_config = self._config.postgres
+        pg_config = self._postgres_config()
         try:
             self._pool = await asyncpg.create_pool(
-                user=pg_config.user,
-                password=pg_config.password,
-                database=pg_config.database,
-                host=pg_config.host,
-                port=pg_config.port,
+                user=pg_config["user"],
+                password=pg_config["password"],
+                database=pg_config["database"],
+                host=pg_config["host"],
+                port=pg_config["port"],
                 min_size=1,
                 max_size=10,
                 init=self._init_connection,
             )
             await initialize_postgres_schema(self._pool)
             self._initialized = True
-            logger.info("Connected to PostgreSQL at %s:%s", pg_config.host, pg_config.port)
+            logger.info("Connected to PostgreSQL at %s:%s", pg_config["host"], pg_config["port"])
         except Exception as exc:
             logger.error("PostgreSQL connection failed: %s", exc)
             raise

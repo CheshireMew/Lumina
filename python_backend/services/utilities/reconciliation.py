@@ -67,10 +67,6 @@ class ReconciliationService:
                 await asyncio.sleep(target_interval)
                 
                 # 1. Fetch Full State Snapshot
-                # We need raw DB records to check timestamps
-                if not bus.db: continue
-                
-                # Query for Anomalies
                 # Note: Time math in python for now to be DB-agnostic friendly
                 states = await bus.get_all_states()
                 now = asyncio.get_event_loop().time()

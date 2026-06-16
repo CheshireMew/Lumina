@@ -83,14 +83,12 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContractDefinition] = {
         version="1.0",
         worker_runtime_target="main",
         worker_routes={
-            "config": "/configure",
             "search": "/memory/search",
             "write": "/memory/add",
             "cleanup": "/memory/context/clear",
             "health": "/health",
         },
         supported_operations=(
-            "config.update",
             "memory.search",
             "memory.write",
             "memory.cleanup",
@@ -180,21 +178,11 @@ def list_capability_contracts() -> list[dict[str, Any]]:
 
 
 def resolve_runtime_host(config: Any, runtime_target: str) -> str | None:
-    network = getattr(config, "network", config)
-    normalized = normalize_runtime_target(runtime_target)
-    workers = getattr(network, "workers", {})
-    worker = workers.get(normalized) if isinstance(workers, dict) else None
-    if worker and getattr(worker, "host", None):
-        return worker.host
-    return getattr(network, "host", None)
+    return config.network.runtime_host(runtime_target)
 
 
 def resolve_runtime_base_url(config: Any, runtime_target: str) -> str | None:
-    port = resolve_runtime_port(config, runtime_target)
-    host = resolve_runtime_host(config, runtime_target)
-    if not port or not host:
-        return None
-    return f"http://{host}:{port}"
+    return config.network.runtime_base_url(runtime_target)
 
 
 def resolve_capability_base_url(config: Any, capability: str) -> str | None:
@@ -217,18 +205,4 @@ def resolve_contract_url(config: Any, capability: str, operation: str) -> str | 
 
 
 def resolve_runtime_port(config: Any, runtime_target: str) -> int | None:
-    network = getattr(config, "network", config)
-    normalized = normalize_runtime_target(runtime_target)
-    if normalized == MAIN_RUNTIME_TARGET:
-        return getattr(network, "memory_port", None)
-
-    capability = runtime_target_to_capability(normalized)
-    if capability == "stt":
-        return getattr(network, "stt_port", None)
-    if capability == "tts":
-        return getattr(network, "tts_port", None)
-    if capability == "vision":
-        worker = getattr(network, "workers", {}).get(normalized)
-        return getattr(worker, "port", None) if worker else 8005
-    worker = getattr(network, "workers", {}).get(normalized)
-    return getattr(worker, "port", None) if worker else None
+    return config.network.runtime_port(runtime_target)

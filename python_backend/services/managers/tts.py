@@ -1,33 +1,32 @@
 
 import logging
-from typing import Dict, Optional
+import inspect
+import gc
 from pathlib import Path
 from core.interfaces.driver import BaseTTSDriver
 from core.runtime import runtime_target_for_capability
-# from app_config import config as app_settings  # Removed global import
 
-from .driver_loader import allow_extension_driver
+from .driver_loader import DriverPluginLoader, allow_extension_driver
 from .provider_host import ProviderHostManager
 
 logger = logging.getLogger("TTSManager")
 
 class TTSPluginManager(ProviderHostManager):
     def __init__(self, config):
-        super().__init__(config=config, capability="tts", default_driver_id="driver.tts.edge")
+        super().__init__(config=config, capability="tts")
 
-    async def register_drivers(self, auto_activate: bool = True):
+    async def load_driver_plugins(self):
         # Dynamic Loading via ProviderLoader
         try:
-            from sdk.lumina.loader import PluginLoader
-            
             base_dir = Path(__file__).resolve().parents[2]
             
             # 1. Built-in provider drivers
             drivers_dir = base_dir / "plugins" / "drivers" / "tts"
             if drivers_dir.exists():
                 logger.info(f"Scanning Built-in TTS Drivers: {drivers_dir}")
-                loaded = PluginLoader.load_plugins(str(drivers_dir), BaseTTSDriver)
-                for d in loaded: self.drivers[d.id] = d
+                loaded = DriverPluginLoader.load_plugins(str(drivers_dir), BaseTTSDriver)
+                for d in loaded:
+                    self.register_driver(d)
             
             # 2. Internal extension provider drivers
             extensions_root = base_dir / "plugins" / "extensions"
@@ -46,26 +45,25 @@ class TTSPluginManager(ProviderHostManager):
                              if not allowed:
                                  continue
                              logger.info(f"Scanning Extension Drivers: {ext_drivers_dir}")
-                             ext_loaded = PluginLoader.load_plugins(str(ext_drivers_dir), BaseTTSDriver)
+                             ext_loaded = DriverPluginLoader.load_plugins(str(ext_drivers_dir), BaseTTSDriver)
                              for d in ext_loaded:
                                  logger.info(f"📦 Loaded Extension Driver from {ext_path.name}: {d.id} ({d.name})")
-                                 self.drivers[d.id] = d
+                                 self.register_driver(d)
             
         except Exception as e:
             logger.error(f"Failed to load dynamic TTS drivers: {e}")
 
-        # Load Config
-        saved_provider = self.config.get_selected_provider("tts")
-        if not saved_provider or saved_provider not in self.drivers:
-             # Fallback logic
-             if "driver.tts.edge" in self.drivers: saved_provider = "driver.tts.edge"
-             elif self.drivers: saved_provider = list(self.drivers.keys())[0]
-        
-        if saved_provider and auto_activate:
-             if not self.config.is_plugin_desired_enabled(saved_provider):
-                 logger.info(f"🚫 Driver {saved_provider} is disabled in config. Skipping auto-activation.")
-             else:
-                 await self.activate(saved_provider)
+    async def activate_startup_driver(self):
+        target_provider = self.resolve_startup_driver_id()
+        if target_provider:
+            if not self.config.is_plugin_desired_enabled(target_provider):
+                logger.info(f"🚫 Driver {target_provider} is disabled in config. Skipping auto-activation.")
+            else:
+                await self.activate(target_provider)
+
+    async def register_drivers(self):
+        await self.load_driver_plugins()
+        await self.activate_startup_driver()
 
     async def activate(self, driver_id: str):
         if not self.drivers:
@@ -75,17 +73,14 @@ class TTSPluginManager(ProviderHostManager):
             return
 
         if driver_id not in self.drivers:
-            # Fallback to the first available driver
-            fallback = list(self.drivers.keys())[0]
-            logger.warning(f"Driver {driver_id} not found, falling back to {fallback}")
-            driver_id = fallback
+            self.mark_error(f"Unknown TTS provider: {driver_id}")
+            raise ValueError(f"Unknown TTS provider: {driver_id}")
             
         logger.info(f"Activating TTS Driver: {driver_id}")
         self.begin_transition(driver_id)
         
         try:
             driver = self.drivers[driver_id]
-            import inspect
             if inspect.iscoroutinefunction(driver.load):
                 await driver.load()
             else:
@@ -107,14 +102,10 @@ class TTSPluginManager(ProviderHostManager):
         self.mark_unloaded()
         
         logger.info(f"🛑 Unloading TTS Driver: {driver_id}")
-        if hasattr(driver, "unload"):
-            import inspect
-            if inspect.iscoroutinefunction(driver.unload):
-                await driver.unload()
-            else:
-                driver.unload()
+        unloaded = driver.unload()
+        if inspect.isawaitable(unloaded):
+            await unloaded
         
-        import gc
         gc.collect()
 
     # [Architecture 5.6] Bus Sync Interfaces
@@ -124,3 +115,11 @@ class TTSPluginManager(ProviderHostManager):
     async def disable_plugin(self, plugin_id: str):
         if self.active_driver_id == plugin_id:
             await self.unload_active_driver()
+
+    def resolve_driver(self, engine: str):
+        if self.has_driver(engine):
+            return self.require_driver(engine)
+        prefixed = f"driver.tts.{engine}"
+        if self.has_driver(prefixed):
+            return self.require_driver(prefixed)
+        raise ValueError(f"Unknown TTS provider: {engine}")

@@ -27,6 +27,10 @@ class PostgresLifecycleBus(AbstractLifecycleBus):
         self.channel = "lumina_lifecycle_events"
         logger.info("🆕 PostgresLifecycleBus Instance Created")
 
+    @property
+    def is_connected(self) -> bool:
+        return self._is_connected
+
     async def connect(self):
         if self._is_connected and self._pool:
             return
@@ -120,9 +124,9 @@ class PostgresLifecycleBus(AbstractLifecycleBus):
             self._pool = None
             self._is_connected = False
 
-    @property
-    def db(self):
-        """Mock property for legacy reconciliation code that expects direct access"""
+    async def get_pool(self):
+        if not self._is_connected:
+            await self.connect()
         return self._pool
 
     async def update_plugin_state(self, state: PluginState):
@@ -227,33 +231,6 @@ class PostgresLifecycleBus(AbstractLifecycleBus):
             except Exception as e:
                 logger.error(f"Failed to get active workers: {e}")
                 return []
-
-    async def subscribe_lifecycle_shouts(self):
-        """
-        Generator-style subscription for compatibility with PluginService.
-        Yields plugin state updates.
-        """
-        # We use a queue to bridge the async listener to the generator
-        queue = asyncio.Queue()
-        
-        async def callback(pid, state):
-            await queue.put({"plugin_id": pid, "state": state})
-            
-        self.subscribers.append(callback)
-        if not self._is_connected:
-            await self.connect()
-            
-        while True:
-            msg = await queue.get()
-            # Wrap in the expected Shout format
-            state = msg["state"]
-            yield {
-                "worker_id": state.get("worker_id", "unknown"),
-                "plugins": [state],
-                "host": state.get("host"),
-                "port": state.get("port"),
-                "capabilities": state.get("capabilities", [])
-            }
 
     async def _listen_loop(self):
         """Persistent connection for LISTEN"""

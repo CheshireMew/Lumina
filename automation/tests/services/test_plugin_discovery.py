@@ -1,19 +1,12 @@
 """
 Unit tests for Plugin Discovery
-Tests plugin registry, metadata extraction, and version compatibility
+Tests plugin registry, metadata extraction, and API version enforcement
 """
 import sys
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import tempfile
-import yaml
-
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]
@@ -37,24 +30,14 @@ class TestPluginDiscovery(unittest.TestCase):
         plugin_dir = Path(temp_dir) / "plugins"
         plugin_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create mock manifest files
-        manifest1 = {
-            "id": "plugin1",
-            "name": "Plugin 1",
-            "version": "1.0.0"
-        }
-
-        manifest2 = {
-            "id": "plugin2",
-            "name": "Plugin 2",
-            "version": "2.0.0"
-        }
-
-        with open(plugin_dir / "manifest1.yaml", 'w', encoding='utf-8') as f:
-            yaml.dump(manifest1, f)
-
-        with open(plugin_dir / "manifest2.yaml", 'w', encoding='utf-8') as f:
-            yaml.dump(manifest2, f)
+        (plugin_dir / "manifest1.yaml").write_text(
+            "id: plugin1\nname: Plugin 1\napi_version: '1.0'\n",
+            encoding="utf-8",
+        )
+        (plugin_dir / "manifest2.yaml").write_text(
+            "id: plugin2\nname: Plugin 2\napi_version: '1.0'\n",
+            encoding="utf-8",
+        )
 
         # Scan for manifests
         manifest_files = list(plugin_dir.glob("*.yaml"))
@@ -69,10 +52,10 @@ class TestPluginDiscovery(unittest.TestCase):
         manifest_data = {
             "id": "test.plugin",
             "name": "Test Plugin",
-            "version": "1.0.0",
+            "api_version": "1.0",
             "description": "A test plugin",
             "author": "Test Author",
-            "entrypoint": "plugin:TestPlugin",
+            "entry_point": "plugin:TestPlugin",
             "permissions": ["network.read"]
         }
 
@@ -80,7 +63,7 @@ class TestPluginDiscovery(unittest.TestCase):
 
         self.assertEqual(manifest.id, "test.plugin")
         self.assertEqual(manifest.name, "Test Plugin")
-        self.assertEqual(manifest.version, "1.0.0")
+        self.assertEqual(manifest.api_version, "1.0")
         self.assertEqual(manifest.permissions, ["network.read"])
         print("✅ Plugin discovery parse manifest verified")
 
@@ -91,11 +74,12 @@ class TestPluginDiscovery(unittest.TestCase):
         manifest_data = {
             "id": "meta.plugin",
             "name": "Metadata Plugin",
-            "version": "1.5.0",
+            "api_version": "1.0",
             "description": "Tests metadata extraction",
             "author": "Developer",
             "tags": ["test", "metadata"],
-            "category": "system"
+            "kind": "system",
+            "capability": "system"
         }
 
         manifest = PluginManifest(**manifest_data)
@@ -103,33 +87,23 @@ class TestPluginDiscovery(unittest.TestCase):
         self.assertEqual(manifest.id, "meta.plugin")
         self.assertEqual(manifest.author, "Developer")
         self.assertEqual(manifest.tags, ["test", "metadata"])
-        self.assertEqual(manifest.category, "system")
+        self.assertEqual(manifest.kind, "system")
+        self.assertEqual(manifest.capability, "system")
         print("✅ Plugin discovery extract metadata verified")
 
-    def test_plugin_discovery_version_compatibility(self):
-        """Test version compatibility checking"""
-        def check_compatibility(plugin_version, min_version):
-            """Simple semantic version comparison"""
-            def parse_version(v):
-                return tuple(map(int, v.split('.')[:3]))
+    def test_plugin_discovery_api_version_enforcement(self):
+        """Test manifest API major version enforcement."""
+        from pydantic import ValidationError
+        from core.manifest import PluginManifest
 
-            pv = parse_version(plugin_version)
-            mv = parse_version(min_version)
-            return pv >= mv
+        manifest = PluginManifest(id="supported.plugin", api_version="1.5.0")
+        self.assertEqual(manifest.api_version, "1.5.0")
 
-        # Test compatible version
-        self.assertTrue(check_compatibility("1.5.0", "1.0.0"))
+        with self.assertRaises(ValidationError):
+            PluginManifest(id="future.plugin", api_version="2.0.0")
 
-        # Test incompatible version
-        self.assertFalse(check_compatibility("0.9.0", "1.0.0"))
-
-        # Test equal version
-        self.assertTrue(check_compatibility("1.0.0", "1.0.0"))
-
-        # Test patch version
-        self.assertTrue(check_compatibility("1.0.5", "1.0.0"))
-
-        print("✅ Plugin discovery version compatibility verified")
+        with self.assertRaises(ValidationError):
+            PluginManifest(id="invalid.plugin", api_version="invalid")
 
     def test_plugin_discovery_dependencies(self):
         """Test dependency parsing"""
@@ -138,7 +112,7 @@ class TestPluginDiscovery(unittest.TestCase):
         manifest_data = {
             "id": "dependent.plugin",
             "name": "Dependent Plugin",
-            "version": "1.0.0",
+            "api_version": "1.0",
             "dependencies": [
                 "dep1",
                 "dep2"
@@ -159,7 +133,7 @@ class TestPluginDiscovery(unittest.TestCase):
         manifest_data = {
             "id": "perms.plugin",
             "name": "Permissions Plugin",
-            "version": "1.0.0",
+            "api_version": "1.0",
             "permissions": [
                 "network.read",
                 "network.write",
@@ -176,30 +150,19 @@ class TestPluginDiscovery(unittest.TestCase):
         print("✅ Plugin discovery permissions verified")
 
     def test_plugin_discovery_isolation_mode(self):
-        """Test isolation mode parsing"""
+        """Unknown isolation_mode is not part of the manifest contract."""
         from core.manifest import PluginManifest
+        from pydantic import ValidationError
 
-        # Local isolation
-        local_manifest = PluginManifest(
-            id="local.plugin",
-            name="Local Plugin",
-            version="1.0.0",
-            isolation_mode="local"
-        )
+        with self.assertRaises(ValidationError):
+            PluginManifest(
+                id="local.plugin",
+                name="Local Plugin",
+                api_version="1.0",
+                isolation_mode="local"
+            )
 
-        self.assertEqual(local_manifest.isolation_mode, "local")
-
-        # Process isolation
-        process_manifest = PluginManifest(
-            id="process.plugin",
-            name="Process Plugin",
-            version="1.0.0",
-            isolation_mode="process"
-        )
-
-        self.assertEqual(process_manifest.isolation_mode, "process")
-
-        print("✅ Plugin discovery isolation mode verified")
+        print("✅ Plugin discovery rejects isolation mode")
 
     def test_plugin_discovery_entrypoint_resolution(self):
         """Test entrypoint resolution"""
@@ -232,18 +195,13 @@ class TestPluginDiscovery(unittest.TestCase):
         from core.manifest import PluginManifest
         from pydantic import ValidationError
 
-        # Missing required fields
+        # Invalid required field
         invalid_data = {
-            "id": "invalid.plugin"
-            # Missing required fields like name, version
+            "id": "../invalid.plugin"
         }
 
-        try:
-            manifest = PluginManifest(**invalid_data)
-            # If we get here, validation passed (which might be OK if defaults exist)
-        except (ValidationError, TypeError) as e:
-            # Expected validation error
-            pass
+        with self.assertRaises(ValidationError):
+            PluginManifest(**invalid_data)
 
         print("✅ Plugin discovery invalid manifest handling verified")
 
@@ -301,42 +259,43 @@ class TestPluginDiscovery(unittest.TestCase):
         main_manifest = PluginManifest(
             id="main.plugin",
             name="Main Plugin",
-            version="1.0.0",
+            api_version="1.0",
             runtime_target="main"
         )
 
         self.assertEqual(main_manifest.runtime_target, "main")
 
-        # STT server target
+        # STT worker target
         stt_manifest = PluginManifest(
             id="stt.plugin",
             name="STT Plugin",
-            version="1.0.0",
-            runtime_target="stt_server"
+            api_version="1.0",
+            runtime_target="worker:stt"
         )
 
-        self.assertEqual(stt_manifest.runtime_target, "stt_server")
+        self.assertEqual(stt_manifest.runtime_target, "worker:stt")
 
-        # TTS server target
+        # TTS worker target
         tts_manifest = PluginManifest(
             id="tts.plugin",
             name="TTS Plugin",
-            version="1.0.0",
-            runtime_target="tts_server"
+            api_version="1.0",
+            runtime_target="worker:tts"
         )
 
-        self.assertEqual(tts_manifest.runtime_target, "tts_server")
+        self.assertEqual(tts_manifest.runtime_target, "worker:tts")
 
         print("✅ Plugin discovery runtime target verified")
 
-    def test_plugin_discovery_ui_slots(self):
-        """Test UI slots parsing"""
+    def test_plugin_discovery_rejects_ui_slots(self):
+        """UI slots are not part of the plugin manifest contract."""
         from core.manifest import PluginManifest
+        from pydantic import ValidationError
 
         manifest_data = {
             "id": "ui.plugin",
             "name": "UI Plugin",
-            "version": "1.0.0",
+            "api_version": "1.0",
             "ui_slots": [
                 {
                     "name": "TestWidget",
@@ -347,13 +306,9 @@ class TestPluginDiscovery(unittest.TestCase):
             ]
         }
 
-        manifest = PluginManifest(**manifest_data)
-
-        self.assertEqual(len(manifest.ui_slots), 1)
-        self.assertEqual(manifest.ui_slots[0].name, "TestWidget")
-        self.assertEqual(manifest.ui_slots[0].slot, "sidebar")
-        self.assertEqual(manifest.ui_slots[0].src, "./widget.tsx")
-        print("✅ Plugin discovery UI slots verified")
+        with self.assertRaises(ValidationError):
+            PluginManifest(**manifest_data)
+        print("✅ Plugin discovery UI slots are rejected")
 
 
 if __name__ == "__main__":

@@ -1,14 +1,11 @@
 import sys
 import unittest
-import numpy as np
 import time
 from pathlib import Path
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+import pytest
+
+np = pytest.importorskip("numpy")
 
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]

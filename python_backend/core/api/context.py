@@ -35,33 +35,34 @@ class LuminaContext:
         self._capability_registry = capability_registry
         self._service_registry = service_registry or get_service_registry()
         self.events = event_bus or get_event_bus()
-        self.config = FrozenProxy(container.config) if getattr(container, "config", None) else None
+        self.config = FrozenProxy(container.get_config()) if container and container.has_service("config") else None
 
     def get_logger(self, name: str):
         return logging.getLogger(name)
 
     def get_config(self) -> dict[str, Any]:
-        plugin_settings = getattr(self._container.config.plugins, "settings", {})
+        plugin_settings = getattr(self._container.get_config().plugins, "settings", {})
         return dict(plugin_settings.get(self.plugin_id, {}))
 
     def update_config(self, key: str, value: Any):
-        settings = self._container.config.plugins.settings.setdefault(self.plugin_id, {})
+        config = self._container.get_config()
+        settings = config.plugins.settings.setdefault(self.plugin_id, {})
         settings[key] = value
-        self._container.config.save()
+        config.save()
 
     def load_data(self) -> dict[str, Any]:
-        soul = getattr(self._container, "soul", None)
+        soul = self._container.get_soul()
         if soul:
             return soul.load_module_data(self.plugin_id)
         return {}
 
     def save_data(self, data: dict[str, Any]):
-        soul = getattr(self._container, "soul", None)
+        soul = self._container.get_soul()
         if soul:
             soul.save_module_data(self.plugin_id, data)
 
     def get_data_dir(self) -> Path | None:
-        soul = getattr(self._container, "soul", None)
+        soul = self._container.get_soul()
         if soul:
             return soul.get_module_data_dir(self.plugin_id)
         return None

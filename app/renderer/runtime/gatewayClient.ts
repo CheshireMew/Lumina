@@ -27,10 +27,6 @@ const EVENT_TYPE = {
     SYSTEM_STATUS: "system_status",
     CONTROL_SESSION: "control_session",
     EMOTION_CHANGED: "emotion:changed",
-    UI_REGISTER_WIDGET: "ui:register_widget",
-    UI_REMOVE_WIDGET: "ui:remove_widget",
-    UI_UNREGISTER_WIDGET: "ui:unregister_widget",
-    PLUGIN_STATUS: "plugin_status",
 } as const;
 
 class GatewayClient {
@@ -254,17 +250,6 @@ class GatewayClient {
                         );
                         emitRuntimeEvent("emotion", { emotion });
                     }
-                    break;
-                case EVENT_TYPE.UI_REGISTER_WIDGET:
-                case EVENT_TYPE.UI_REMOVE_WIDGET:
-                case EVENT_TYPE.UI_UNREGISTER_WIDGET:
-                    emitRuntimeEvent("widget", {
-                        type: packet.type,
-                        payload: packet.payload,
-                    });
-                    break;
-                case EVENT_TYPE.PLUGIN_STATUS:
-                    emitRuntimeEvent("pluginStatus", packet.payload);
                     break;
             }
         } catch (error) {

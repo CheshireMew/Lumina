@@ -150,7 +150,7 @@ async def async_resource():
     await asyncio.sleep(0.01)  # Simulate async cleanup
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_with_async_fixture(async_resource):
     """Async test using async fixture"""
     assert async_resource["async_data"] == "test"
@@ -160,7 +160,7 @@ async def test_with_async_fixture(async_resource):
 # Using Mock Servers
 # ============================================================================
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_with_mock_llm_server(mock_llm_server):
     """Test with a real (but mock) HTTP server"""
     import httpx

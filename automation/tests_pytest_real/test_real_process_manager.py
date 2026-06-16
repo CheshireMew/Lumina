@@ -1,459 +1,155 @@
-"""
-REAL pytest tests for ProcessManager - Testing actual process management
-
-This tests REAL worker process lifecycle, health checks, and cleanup.
-"""
-import sys
-from pathlib import Path
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-import asyncio
 import time
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-# Add python_backend to path
-PROJECT_ROOT = Path(__file__).parents[2]
-sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
+import pytest
 
-# Import REAL Lumina code
 from services.process_manager import ProcessManager
+from services.worker_supervisor import RestartPolicy, WorkerProcess
 
 
-# ============================================================================
-# Test 1: ProcessManager Initialization (REAL TEST)
-# ============================================================================
+class FakeProcess:
+    def __init__(self, pid: int = 12345, returncode=None):
+        self.pid = pid
+        self.returncode = returncode
+        self.terminated = False
+        self.killed = False
 
-def test_process_manager_initialization():
-    """
-    Test that ProcessManager initializes correctly.
+    def poll(self):
+        return self.returncode
 
-    Catches REAL bugs in manager setup.
-    """
+    def terminate(self):
+        self.terminated = True
+
+    def wait(self, timeout=None):
+        return self.returncode or 0
+
+    def kill(self):
+        self.killed = True
+
+
+def test_process_manager_initializes_current_components():
     manager = ProcessManager()
 
-    assert manager is not None
-    assert hasattr(manager, 'workers') or hasattr(manager, 'spawn')
+    assert manager.workers == {}
+    assert manager.registry == {}
+    assert manager.health_probe is not None
+    assert manager.launcher is not None
+    assert manager.supervisor is not None
 
 
-# ============================================================================
-# Test 2: Worker Spawning (REAL TEST)
-# ============================================================================
-
-class MockWorkerProcess:
-    def __init__(self):
-        self.is_external = False
-        self.process = MagicMock()
-        self.process.returncode = None
-        self.process.pid = 12345
-
-def test_worker_spawning():
-    """
-    Test that worker processes can be spawned.
-
-    Catches REAL bugs in worker creation.
-    """
+def test_register_service_def_and_health_path():
     manager = ProcessManager()
 
-    # Mock worker process
-    mock_worker = MockWorkerProcess()
+    manager.register_service_def("worker:stt", port=8765, script="backend_launcher.py", args=["--capability", "stt"])
+    manager.set_health_path("worker:stt", "/ready")
 
-    # Spawn worker
-    if hasattr(manager, 'spawn_worker'):
-        result = manager.spawn_worker("test_worker", "python", ["-m", "module"])
-        # Verify worker was created
-        assert result is not None or "test_worker" in manager.workers
+    assert manager.registry["worker:stt"] == {
+        "port": 8765,
+        "script": "backend_launcher.py",
+        "args": ["--capability", "stt"],
+        "cwd": None,
+        "health_path": "/ready",
+    }
 
 
-# ============================================================================
-# Test 3: Worker Health Check (REAL TEST)
-# ============================================================================
-
-def test_worker_health_check():
-    """
-    Test that worker health is checked correctly.
-
-    Catches REAL bugs in health monitoring.
-    """
+def test_start_worker_uses_launcher_and_records_worker_process():
     manager = ProcessManager()
+    process = FakeProcess()
+    manager.health_probe.is_service_reachable = MagicMock(return_value=(False, "none"))
+    manager.launcher.build_launch_config = MagicMock(
+        return_value={"cmd": ["python", "backend_launcher.py"], "env": {}, "display_name": "test"}
+    )
+    manager.launcher.launch = MagicMock(return_value=process)
 
-    # Mock healthy worker
-    healthy_worker = MockWorkerProcess()
-    healthy_worker.process.poll.return_value = None  # Running
+    started = manager.start_worker("worker:test", script_name="backend_launcher.py", args=["--capability", "test"])
 
-    if hasattr(manager, 'workers'):
-        manager.workers["healthy"] = healthy_worker
-
-    # Check health
-    if hasattr(manager, 'is_running'):
-        is_healthy = manager.is_running("healthy")
-        assert is_healthy is True
+    assert started is True
+    assert isinstance(manager.workers["worker:test"], WorkerProcess)
+    assert manager.workers["worker:test"].process is process
+    manager.launcher.launch.assert_called_once()
 
 
-# ============================================================================
-# Test 4: Worker Death Detection (REAL TEST)
-# ============================================================================
-
-def test_worker_death_detection():
-    """
-    Test that dead workers are detected.
-
-    Catches REAL bugs in death detection logic.
-    """
+def test_start_worker_attaches_reachable_external_service():
     manager = ProcessManager()
+    manager.register_service_def("worker:stt", port=8765)
+    manager.health_probe.is_service_reachable = MagicMock(return_value=(True, "http"))
 
-    # Mock dead worker
-    dead_worker = MockWorkerProcess()
-    dead_worker.process.returncode = 1
-    dead_worker.process.poll.return_value = 1  # Exit code 1 = dead
+    started = manager.start_worker("worker:stt")
 
-    if hasattr(manager, 'workers'):
-        manager.workers["dead"] = dead_worker
-
-    # Check if running
-    if hasattr(manager, 'is_running'):
-        is_running = manager.is_running("dead")
-        assert is_running is False
+    assert started is True
+    assert manager.workers["worker:stt"].is_external is True
+    assert manager.workers["worker:stt"].process is None
 
 
-# ============================================================================
-# Test 5: Worker Cleanup (REAL TEST)
-# ============================================================================
-
-def test_worker_cleanup():
-    """
-    Test that workers are cleaned up properly.
-
-    Catches REAL bugs in resource cleanup.
-    """
+def test_start_worker_respects_capability_package_readiness():
     manager = ProcessManager()
+    registry = MagicMock()
+    registry.package_for_capability.return_value = SimpleNamespace(id="stt-runtime")
+    registry.resolve.return_value = SimpleNamespace(status="missing", entry_executable=None)
+    manager.set_capability_package_registry(registry)
 
-    # Mock worker
-    worker = MockWorkerProcess()
-    worker.process.kill.return_value = None
-    worker.process.wait.return_value = 0
-
-    if hasattr(manager, 'workers'):
-        manager.workers["test"] = worker
-
-    # Stop worker
-    if hasattr(manager, 'stop_worker'):
-        manager.stop_worker("test")
-    
-        # Assert termination was attempted
-        worker.process.terminate.assert_called()
-
-    # Verify worker was removed
-    assert "test" not in manager.workers
+    assert manager.start_worker("worker:stt", script_name="backend_launcher.py") is False
 
 
-# ============================================================================
-# Test 6: Multiple Workers (REAL TEST)
-# ============================================================================
-
-def test_multiple_workers():
-    """
-    Test that multiple workers can be managed.
-
-    Catches REAL bugs in multi-worker management.
-    """
+def test_is_running_detects_live_and_dead_processes():
     manager = ProcessManager()
+    manager.workers["live"] = WorkerProcess(FakeProcess(returncode=None), time.time())
+    manager.workers["dead"] = WorkerProcess(
+        FakeProcess(returncode=1),
+        time.time(),
+        policy=RestartPolicy.NEVER,
+    )
 
-    # Mock workers
-    workers = {}
-    for i in range(3):
-        worker = MockWorkerProcess()
-        worker.process.poll.return_value = None
-        worker.process.pid = 1000 + i
-        workers[f"worker_{i}"] = worker
-    
-    # [WORKAROUND] Prevent dictionary size change during iteration bug in ProcessManager.py
-    manager.is_running = MagicMock(return_value=True)
-
-    if hasattr(manager, 'workers'):
-        manager.workers.update(workers)
-
-    # Get all workers
-    if hasattr(manager, 'get_active_workers'):
-        active = manager.get_active_workers()
-        assert len(active) == 3
+    assert manager.is_running("live") is True
+    assert manager.is_running("dead") is False
+    assert "dead" not in manager.workers
 
 
-# ============================================================================
-# Test 7: Worker Restart (REAL TEST)
-# ============================================================================
-
-def test_worker_restart():
-    """
-    Test that failed workers can be restarted.
-
-    Catches REAL bugs in worker restart logic.
-    """
+def test_stop_worker_terminates_managed_process_and_removes_record():
     manager = ProcessManager()
+    process = FakeProcess()
+    manager.workers["worker:test"] = WorkerProcess(process, time.time())
 
-    # Mock worker that died
-    worker = MagicMock()
-    worker.process = MagicMock()
-    worker.process.poll.return_value = 1  # Dead
-    worker.process.pid = 9999
+    manager.stop_worker("worker:test")
 
-    if hasattr(manager, 'workers'):
-        manager.workers["restartable"] = worker
-
-    # Restart worker
-    if hasattr(manager, 'restart_worker'):
-        new_worker = manager.restart_worker("restartable")
-        assert new_worker is not None
+    assert process.terminated is True
+    assert "worker:test" not in manager.workers
 
 
-# ============================================================================
-# Test 8: External Service Health Check (REAL TEST)
-# ============================================================================
-
-def test_external_service_health():
-    """
-    Test health check for external services (STT, TTS, Memory).
-
-    Catches REAL bugs in external service monitoring.
-    """
+def test_get_active_workers_filters_dead_workers():
     manager = ProcessManager()
+    manager.workers["live"] = WorkerProcess(FakeProcess(returncode=None), time.time())
+    manager.workers["dead"] = WorkerProcess(
+        FakeProcess(returncode=1),
+        time.time(),
+        policy=RestartPolicy.NEVER,
+    )
 
-    # Mock external service worker
-    from services.process_manager import WorkerProcess
-    external_worker = WorkerProcess(None, time.time())
-    external_worker.is_external = True
-    manager.register_service_def("memory", port=8010)
-
-    if hasattr(manager, 'workers'):
-        manager.workers["memory"] = external_worker
-
-    # Mock HTTP health check
-    with patch(
-        'services.health_probe.HealthProbe.is_service_reachable',
-        return_value=(True, "http"),
-    ):
-
-        # Check health
-        if hasattr(manager, 'is_running'):
-            is_up = manager.is_running("memory")
-            assert is_up is True
+    assert manager.get_active_workers() == ["live"]
+    assert "dead" not in manager.workers
 
 
-# ============================================================================
-# Test 9: Concurrent Worker Operations (REAL TEST)
-# ============================================================================
-
-def test_concurrent_worker_operations():
-    """
-    Test that concurrent worker operations are safe.
-
-    Catches REAL thread safety bugs.
-    """
-    import threading
-
+@pytest.mark.anyio
+async def test_shutdown_all_stops_every_worker():
     manager = ProcessManager()
+    process_a = FakeProcess(pid=1)
+    process_b = FakeProcess(pid=2)
+    manager.workers["a"] = WorkerProcess(process_a, time.time())
+    manager.workers["b"] = WorkerProcess(process_b, time.time())
 
-    # Mock worker
-    worker = MagicMock()
-    worker.process = MagicMock()
-    worker.process.poll.return_value = None
+    await manager.shutdown_all()
 
-    if hasattr(manager, 'workers'):
-        manager.workers["test"] = worker
-
-    errors = []
-    results = []
-
-    def check_worker():
-        try:
-            for _ in range(100):
-                if hasattr(manager, 'is_running'):
-                    running = manager.is_running("test")
-                    results.append(running)
-        except Exception as e:
-            errors.append(e)
-
-    # Create threads
-    threads = [threading.Thread(target=check_worker) for _ in range(5)]
-
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    # No errors
-    assert len(errors) == 0
+    assert process_a.terminated is True
+    assert process_b.terminated is True
+    assert manager.workers == {}
 
 
-# ============================================================================
-# Test 10: Graceful Shutdown (REAL TEST)
-# ============================================================================
-
-@pytest.mark.asyncio
-async def test_graceful_shutdown():
-    """
-    Test that all workers shutdown gracefully.
-
-    Catches REAL bugs in shutdown sequence.
-    """
+def test_register_mcp_client_keeps_external_client_record():
     manager = ProcessManager()
+    client = SimpleNamespace(name="mcp:test", pid=9001)
 
-    # Mock workers
-    workers = {}
-    for i in range(3):
-        worker = MockWorkerProcess()
-        worker.process.kill.return_value = None
-        worker.process.wait.return_value = 0
-        workers[f"worker_{i}"] = worker
+    manager.register_mcp_client(client)
 
-    if hasattr(manager, 'workers'):
-        manager.workers.update(workers)
-
-    # Shutdown all
-    if hasattr(manager, 'shutdown_all'):
-        await manager.shutdown_all()
-
-        # Verify all workers were stopped
-        for worker_id in workers:
-            workers[worker_id].process.terminate.assert_called()
-
-
-# ============================================================================
-# Test 11: Worker State Tracking (REAL TEST)
-# ============================================================================
-
-def test_worker_state_tracking():
-    """
-    Test that worker state is tracked correctly.
-
-    Catches REAL bugs in state management.
-    """
-    manager = ProcessManager()
-
-    # Mock worker
-    worker = MagicMock()
-    worker.state = "running"
-
-    if hasattr(manager, 'workers'):
-        manager.workers["test"] = worker
-
-    # Get state
-    if hasattr(manager, 'get_state'):
-        state = manager.get_state("test")
-        assert state == "running"
-
-
-# ============================================================================
-# Test 12: Worker Timeout Handling (REAL TEST)
-# ============================================================================
-
-def test_worker_timeout():
-    """
-    Test that worker timeouts are handled.
-
-    Catches REAL bugs in timeout detection.
-    """
-    manager = ProcessManager()
-
-    # Mock worker that times out
-    worker = MagicMock()
-    worker.last_seen = time.time() - 3600  # 1 hour ago
-
-    if hasattr(manager, 'workers'):
-        manager.workers["timeout_test"] = worker
-
-    # Check if timed out
-    if hasattr(manager, 'is_timed_out'):
-        is_timeout = manager.is_timed_out("timeout_test", timeout_seconds=1800)
-        assert is_timeout is True
-
-
-# ============================================================================
-# Test 13: Worker Priority (REAL TEST)
-# ============================================================================
-
-def test_worker_priority():
-    """
-    Test that worker priority is respected.
-
-    Catches REAL bugs in priority scheduling.
-    """
-    manager = ProcessManager()
-
-    # Mock workers with different priorities
-    critical_worker = MagicMock()
-    critical_worker.priority = 1
-    critical_worker.pid = 1001
-
-    normal_worker = MagicMock()
-    normal_worker.priority = 5
-    normal_worker.pid = 1002
-
-    if hasattr(manager, 'workers'):
-        manager.workers["critical"] = critical_worker
-        manager.workers["normal"] = normal_worker
-
-    # Get workers by priority
-    if hasattr(manager, 'get_workers_by_priority'):
-        ordered = manager.get_workers_by_priority()
-        assert ordered[0][0] == "critical"  # Critical first
-
-
-# ============================================================================
-# Test 14: Process Monitoring (REAL TEST)
-# ============================================================================
-
-def test_process_monitoring():
-    """
-    Test that process metrics are monitored.
-
-    Catches REAL bugs in metrics collection.
-    """
-    manager = ProcessManager()
-
-    # Mock worker
-    worker = MagicMock()
-    worker.process = MagicMock()
-    worker.process.pid = 9999
-    worker.process.memory_info.return_value = rss=1024000  # 1MB
-
-    if hasattr(manager, 'workers'):
-        manager.workers["test"] = worker
-
-    # Get metrics
-    if hasattr(manager, 'get_metrics'):
-        metrics = manager.get_metrics("test")
-        assert metrics is not None
-        assert "pid" in metrics or "memory" in metrics
-
-
-# ============================================================================
-# SUMMARY
-# ============================================================================
-
-"""
-REAL PROCESS MANAGER TESTS COVERAGE:
-
-1. ✅ Manager initialization
-2. ✅ Worker spawning
-3. ✅ Health checks
-4. ✅ Death detection
-5. ✅ Worker cleanup
-6. ✅ Multiple workers
-7. ✅ Worker restart
-8. ✅ External service monitoring
-9. ✅ Concurrent operations
-10. ✅ Graceful shutdown
-11. ✅ State tracking
-12. ✅ Timeout handling
-13. ✅ Priority scheduling
-14. ✅ Process metrics
-
-These tests catch REAL bugs in:
-- Worker lifecycle management
-- Health monitoring
-- Concurrent operation safety
-- Resource cleanup
-- External service integration
-
-RUN:
-    pytest tests_pytest_real/test_real_process_manager.py -v
-"""
+    assert manager.workers["mcp:test"] is client
+    assert manager.is_running("mcp:test") is True

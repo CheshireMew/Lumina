@@ -2,16 +2,16 @@
 import logging
 import asyncio
 import queue
-from typing import Any, Dict, Optional, List
+from typing import Any, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, BackgroundTasks, Request, File, UploadFile
 from pydantic import BaseModel
 from starlette.websockets import WebSocketDisconnect
 
 from routers.deps import get_stt_service
+from . import globals as stt_globals
 from .globals import audio_manager, active_websockets, message_queue
 from app_config import config as app_settings
 from core.protocols.lipp import LippProtocol, LippLifecycleRequest, LippConfigRequest
-from services.config_service import ConfigService
 
 logger = logging.getLogger("STTRouter")
 
@@ -31,16 +31,6 @@ class UnifiedAudioConfig(BaseModel):
     speech_end_threshold: Optional[float] = None
     min_speech_frames: Optional[int] = None
 
-class LifecyclePayload(BaseModel):
-    type: str # 'enabled' | 'disabled'
-    plugin_id: str
-    config: Optional[Dict] = None
-
-class ProviderConfigRequest(BaseModel):
-    id: str
-    key: str
-    value: Any
-
 # --- LIPP Handlers ---
 
 async def stt_lifecycle_handler(payload: LippLifecycleRequest):
@@ -51,7 +41,7 @@ async def stt_lifecycle_handler(payload: LippLifecycleRequest):
     logger.info(f"📢 [LIPP] Lifecycle: {payload.action} -> {payload.target_id}")
     
     if payload.action == "disable":
-        if stt_manager.active_driver_id == payload.target_id:
+        if stt_manager.is_driver_active(payload.target_id):
              logger.info(f"🛑 Unloading disabled driver {payload.target_id}")
              await stt_manager.unload_active_driver()
              
@@ -67,17 +57,13 @@ async def stt_config_handler(payload: LippConfigRequest):
     
     logger.info(f"⚙️ [LIPP] Config: {payload.target_id} -> {payload.key}={payload.value}")
     
-    if payload.target_id in stt_manager.drivers:
-        driver = stt_manager.drivers[payload.target_id]
-        driver.config[payload.key] = payload.value
-        
-        # Hot Reload
-        if payload.key in ["model_size", "fw_model_size"]:
-            await stt_manager.switch_model_background(payload.value)
-            
-        return {"config": driver.config}
-        
-    raise ValueError(f"Driver {payload.target_id} not found")
+    config = stt_manager.update_driver_config(payload.target_id, payload.key, payload.value)
+
+    # Hot Reload
+    if payload.key in ["model_size", "fw_model_size"]:
+        await stt_manager.switch_model_background(payload.value)
+
+    return {"config": config}
 
 async def stt_health_check():
     from core.protocols.lipp import LippHealthResponse
@@ -124,14 +110,14 @@ async def get_models(stt_manager: Any = Depends(get_stt_service)):
     })
     
     # 3. Dynamic Drivers
-    for pid, drv in stt_manager.drivers.items():
+    for pid, drv in stt_manager.iter_drivers():
          if pid in ["driver.stt.sensevoice", "driver.stt.whisper"]: continue
          models.append({
              "id": pid,
              "name": drv.name,
              "type": "plugin",
              "description": drv.description,
-             "active": (stt_manager.active_driver_id == pid)
+             "active": stt_manager.is_driver_active(pid)
          })
 
     return {
@@ -155,7 +141,7 @@ async def switch_model(
     logger.info(f"Recursive Switch Request: {payload.model_name}")
     valid = False
     target = payload.model_name
-    if target in stt_manager.drivers: valid = True
+    if stt_manager.has_driver(target): valid = True
     elif target in ["faster-whisper", "sense-voice"]: valid = True
         
     if not valid: raise HTTPException(status_code=400, detail=f"Unknown model/driver: {target}")
@@ -165,7 +151,7 @@ async def switch_model(
         
     await stt_manager.switch_model_background(target)
     # [Config] Local Update for runtime consistency
-    ConfigService(stt_manager).set_selected_provider("stt", stt_manager.active_driver_id, persist=False)
+    app_settings.set_selected_provider("stt", stt_manager.active_driver_id)
 
     if audio_manager:
         background_tasks.add_task(audio_manager.start)
@@ -235,7 +221,6 @@ async def update_audio_config(request: UnifiedAudioConfig):
         "config": request.dict(exclude_none=True),
     }
 
-@router.get("/status/voiceprint")
 @router.get("/voiceprint/status")
 async def get_voiceprint_status():
     from . import globals as stt_globals
@@ -330,10 +315,6 @@ async def websocket_endpoint(websocket: WebSocket):
         if connection_id in active_websockets: del active_websockets[connection_id]
         if len(active_websockets) == 0 and audio_manager and audio_manager.is_running:
              audio_manager.stop()
-
-# [Legacy Adapters REMOVED - 2026-01-24]
-# /provider/config and /system/lifecycle endpoints were removed.
-# All clients should use LIPP endpoints (/lipp/v1/*) or Main Process proxy.
 
 # ========== [Scheme C] Internal Endpoints for Main Process Proxy ==========
 

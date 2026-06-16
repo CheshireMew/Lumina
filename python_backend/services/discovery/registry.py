@@ -167,7 +167,7 @@ class ServiceRegistry:
             hub = get_worker_control_hub()
             
             # Register for worker status updates
-            def on_status(worker_id: str, msg):
+            def on_status(worker_id: str, msg, binary_body: bytes = None):
                 payload = msg.payload
                 self.update_status(
                     worker_id=worker_id,

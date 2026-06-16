@@ -1,5 +1,6 @@
 
 import logging
+import re
 from typing import Dict, Any, Optional
 from pathlib import Path
 from core.interfaces.soul import BaseSoulDriver
@@ -7,6 +8,55 @@ from core.interfaces.repository import ISoulRepository
 from services.repositories.file_soul_repository import FileSoulRepository
 
 logger = logging.getLogger("SoulService")
+SOUL_DRIVER_CONFIG_KEY = "soul_driver_id"
+
+
+def _read_prompt_sections(path: Path) -> Dict[str, str]:
+    sections: Dict[str, str] = {}
+    current_key: Optional[str] = None
+    current_lines: list[str] = []
+
+    def flush_current():
+        if current_key is not None:
+            sections[current_key] = "\n".join(current_lines).strip()
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            if current_key is not None:
+                current_lines.append("")
+            continue
+
+        if not raw_line.startswith((" ", "\t")) and ":" in raw_line:
+            flush_current()
+            key, value = raw_line.split(":", 1)
+            current_key = key.strip()
+            current_lines = []
+            value = value.strip()
+            if value and value != "|":
+                current_lines.append(value)
+            continue
+
+        if current_key is not None:
+            current_lines.append(raw_line[2:] if raw_line.startswith("  ") else raw_line.strip())
+
+    flush_current()
+    return sections
+
+
+def _render_template(text: str, values: Dict[str, Any]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        expression = match.group(1).strip()
+        if "|" in expression:
+            name, filter_expr = [part.strip() for part in expression.split("|", 1)]
+            value = str(values.get(name, ""))
+            if filter_expr.startswith("indent(") and filter_expr.endswith(")"):
+                width = int(filter_expr[7:-1] or "0")
+                prefix = " " * width
+                return "\n".join(f"{prefix}{line}" if line else line for line in value.splitlines())
+            return value
+        return str(values.get(expression, ""))
+
+    return re.sub(r"\{\{\s*(.*?)\s*\}\}", replace, text)
 
 class SoulService:
     """
@@ -15,7 +65,7 @@ class SoulService:
     Responsibilities:
     1. Hold the active Soul Driver.
     2. Delegate Prompt Rendering to the Driver.
-    3. Delegate Interaction Hooks to the Driver.
+    3. Delegate interaction behavior to the Driver.
     4. Manage Persistence via Repository.
     """
     
@@ -30,36 +80,41 @@ class SoulService:
         self._drivers: Dict[str, BaseSoulDriver] = {}
         self._active_driver: Optional[BaseSoulDriver] = None
         
-        # [Refactor] Use Repository
-        self.repo = repo or FileSoulRepository()
-        
-        # Sync Repo with Config if possible
-        if system_config and hasattr(system_config, 'memory'):
-             self.repo.set_character_id(system_config.memory.character_id)
+        if repo is None:
+            if system_config is None:
+                raise ValueError("SoulService requires system_config or repo")
+            repo = FileSoulRepository(character_id=system_config.memory.character_id)
+        elif system_config is not None:
+            repo.set_character_id(system_config.memory.character_id)
+
+        self.repo = repo
 
     def get_active_character_id(self) -> str:
         """Return the current character from the repository boundary."""
-        if hasattr(self.repo, "get_character_id"):
-            return self.repo.get_character_id()
-        if self.system_config and hasattr(self.system_config, "memory"):
-            return self.system_config.memory.character_id
-        return "hiyori"
+        return self.repo.get_character_id()
+
+    def _selected_driver_id(self) -> Optional[str]:
+        value = self.load_character_config().get(SOUL_DRIVER_CONFIG_KEY)
+        return value if isinstance(value, str) and value.strip() else None
         
     def register_driver(self, driver: BaseSoulDriver):
-        """Plugin registers itself as a potential Soul."""
+        """Register a Soul driver without changing the selected runtime driver."""
         self._drivers[driver.id] = driver
         logger.info(f"Registered Soul Driver: {driver.id} ({driver.metadata.get('name')})")
-        
-        # Auto-activate if it's the first one (Simple logic for now)
-        if self._active_driver is None:
-            self.set_active_driver(driver.id)
+
+        if self._selected_driver_id() == driver.id:
+            self._active_driver = driver
+            logger.info(f"Active Soul restored from character config: {driver.id}")
 
     def set_active_driver(self, driver_id: str):
-        if driver_id in self._drivers:
-            self._active_driver = self._drivers[driver_id]
-            logger.info(f"👍 Active Soul Switched to: {driver_id}")
-        else:
-            logger.error(f"Cannot switch to unknown driver: {driver_id}")
+        if driver_id not in self._drivers:
+            raise ValueError(f"Unknown Soul driver: {driver_id}")
+
+        self._active_driver = self._drivers[driver_id]
+        config = self.load_character_config()
+        config[SOUL_DRIVER_CONFIG_KEY] = driver_id
+        self.save_character_config(config)
+        logger.info(f"Active Soul switched to: {driver_id}")
 
     async def get_system_prompt(self, context: Dict[str, Any] = None) -> str:
         """
@@ -75,8 +130,6 @@ class SoulService:
 
         # 2. Standard Logic: Load Template & Render
         try:
-            import yaml
-            from jinja2 import Template
             from app_config import BASE_DIR
             
             # Load Template
@@ -85,8 +138,7 @@ class SoulService:
                 logger.warning(f"System template not found at {template_path}")
                 return "You are a helpful AI assistant."
 
-            with open(template_path, 'r', encoding='utf-8') as f:
-                raw_yaml = yaml.safe_load(f)
+            prompt_sections = _read_prompt_sections(template_path)
             
             # Load Character Config via Repository
             char_config = self.load_character_config()
@@ -101,10 +153,9 @@ class SoulService:
             
             # Render Sections
             parts = []
-            for key, value in raw_yaml.items():
+            for key, value in prompt_sections.items():
                 if isinstance(value, str):
-                    t = Template(value)
-                    parts.append(t.render(**render_vars))
+                    parts.append(_render_template(value, render_vars))
             
             return "\n\n".join(parts)
             

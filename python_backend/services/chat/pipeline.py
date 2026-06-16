@@ -5,9 +5,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, AsyncGenerator
 
-from sdk.lumina.hook import HookManager
-from services.chat.contracts import CHAT_HOOKS
-
 logger = logging.getLogger("ChatPipeline")
 
 # ==================== CONTEXT ====================
@@ -35,7 +32,6 @@ class PipelineContext:
     llm_driver: Any = None
     target_model: str = ""
     tool_calls_buffer: List[Dict] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
 # ==================== STEP INTERFACE ====================
 
@@ -68,10 +64,11 @@ class ContextBuilderStep(PipelineStep):
         # Assemble System Prompt
         base_system = "You are a helpful AI assistant."
         
-        if self.services.soul:
+        soul = self.services.get_soul()
+        if soul:
              try:
                  # Use unified prompt system
-                 base_system = await self.services.soul.get_system_prompt({"pipeline": "context_builder"})
+                 base_system = await soul.get_system_prompt({"pipeline": "context_builder"})
              except Exception as e:
                  logger.warning(f"Failed to load system prompt from Soul: {e}")
              
@@ -258,14 +255,6 @@ class ChatPipeline:
         self.context_step = ContextBuilderStep(services_container)
         self.tool_step = ToolPreparationStep(services_container)
         self.exec_step = LLMExecutionStep(services_container)
-        self._hook_manager = HookManager.instance()
-
-    async def _run_hook(self, slot: str, data: Any, metadata: Optional[Dict[str, Any]] = None) -> tuple[Any, bool]:
-        hook_name = CHAT_HOOKS[slot]
-        hook_manager = self._hook_manager or HookManager.instance()
-        if not hook_manager:
-            return data, True
-        return await hook_manager.execute(hook_name, data, metadata=metadata or {})
 
     async def run(self, messages: List[Dict], **kwargs) -> AsyncGenerator[str, None]:
         # 1. Init Context
@@ -279,54 +268,11 @@ class ChatPipeline:
             temperature=kwargs.get("temperature", 0.7),
             stream=kwargs.get("stream", True)
         )
-        ctx.metadata = {
-            "user_id": ctx.user_id,
-            "character_id": ctx.character_id,
-            "enable_rag": ctx.enable_rag,
-            "enable_tools": ctx.enable_tools,
-            "model_override": ctx.model_override,
-        }
-
-        preprocessed, should_continue = await self._run_hook(
-            "input_preprocess",
-            {
-                "messages": ctx.original_messages,
-                "options": {
-                    "user_id": ctx.user_id,
-                    "character_id": ctx.character_id,
-                    "enable_rag": ctx.enable_rag,
-                    "enable_tools": ctx.enable_tools,
-                    "model": ctx.model_override,
-                    "temperature": ctx.temperature,
-                    "stream": ctx.stream,
-                },
-            },
-            metadata=ctx.metadata,
-        )
-        if not should_continue:
-            return
-        if isinstance(preprocessed, dict):
-            ctx.original_messages = list(preprocessed.get("messages", ctx.original_messages))
-            options = preprocessed.get("options", {})
-            ctx.enable_rag = options.get("enable_rag", ctx.enable_rag)
-            ctx.enable_tools = options.get("enable_tools", ctx.enable_tools)
-            ctx.model_override = options.get("model", ctx.model_override)
-            ctx.temperature = options.get("temperature", ctx.temperature)
-            ctx.stream = options.get("stream", ctx.stream)
         
         # 2. Run Preparation Steps
         # Run Tool Step first to resolve LLM Driver & Target Model (needed for RAG Tier logic)
         await self.tool_step.execute(ctx)
-        _, should_continue = await self._run_hook("tool_resolve", ctx, metadata=ctx.metadata)
-        if not should_continue:
-            return
         await self.context_step.execute(ctx)
-        _, should_continue = await self._run_hook("context_build", ctx, metadata=ctx.metadata)
-        if not should_continue:
-            return
-        _, should_continue = await self._run_hook("generate", ctx, metadata=ctx.metadata)
-        if not should_continue:
-            return
         
         # 3. Yield Execution & Persist History
         full_response = ""
@@ -334,36 +280,14 @@ class ChatPipeline:
         save_history = kwargs.get("save_history", True)
 
         async for token in self.exec_step.run_stream(ctx):
-            filtered_token, should_continue = await self._run_hook(
-                "output_filter",
-                token,
-                metadata={**ctx.metadata, "mode": "stream"},
-            )
-            if not should_continue:
-                break
-            if isinstance(filtered_token, str):
-                token = filtered_token
             full_response += token
             yield token
 
         # 4. Auto-Save to SessionManager
         if save_history and user_msg and full_response:
             try:
-                sm = getattr(self.services, "session_manager", None)
+                sm = self.services.get_session_manager()
                 if sm:
                     await sm.add_turn(ctx.user_id, ctx.character_id, user_msg, full_response)
             except Exception as e:
                 logger.error(f"Failed to auto-save session history: {e}")
-
-        await self._run_hook(
-            "post_turn",
-            {
-                "user_id": ctx.user_id,
-                "character_id": ctx.character_id,
-                "user_message": user_msg,
-                "assistant_message": full_response,
-                "messages": ctx.final_messages,
-                "tool_calls": list(ctx.tool_calls_buffer),
-            },
-            metadata=ctx.metadata,
-        )

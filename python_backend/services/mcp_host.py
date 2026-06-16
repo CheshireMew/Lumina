@@ -14,8 +14,10 @@ class MCPHost:
     Orchestrator for multiple MCP Satellite Services.
     Uses MCPClient for protocol handling.
     """
-    def __init__(self, soul_client, process_manager=None):
-        self.soul_client = soul_client
+    def __init__(self, soul_service, process_manager=None):
+        if soul_service is None:
+            raise ValueError("SoulService is required for MCPHost")
+        self.soul_service = soul_service
         self.process_manager = process_manager # [Architecture 5.0] Governance
         self.clients: Dict[str, MCPClient] = {} 
         self.running = False
@@ -77,7 +79,7 @@ class MCPHost:
             if self.process_manager:
                 self.process_manager.register_mcp_client(client)
             
-            # Auto-Connect Hooks (Generic)
+            # Auto-connect rules
             auto_connect = server_config.get("auto_connect")
             if auto_connect:
                 asyncio.create_task(self._delayed_connect(name, auto_connect))
@@ -97,15 +99,15 @@ class MCPHost:
              module_id = rule["args_from_module_data"].get("module_id")
              key_map = rule["args_from_module_data"].get("keys", {})
              
-             if module_id and self.soul_client:
-                 data = self.soul_client.load_module_data(module_id)
+             if module_id:
+                 data = self.soul_service.load_module_data(module_id)
                  for arg_name, data_key in key_map.items():
                      if data_key in data:
                          args[arg_name] = data[data_key]
                      else:
                          logger.warning(f"[{name}] Key {data_key} not found in module {module_id}")
 
-        # Resolve dynamic args from app_settings (Legacy/Global)
+        # Resolve dynamic args from app_settings
         if "args_from_config" in rule:
             for arg_name, config_path in rule["args_from_config"].items():
                 parts = config_path.split(".")

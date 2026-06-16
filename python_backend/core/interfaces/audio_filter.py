@@ -1,14 +1,13 @@
 """
-Audio Filter Interface for Plugin Integration.
-Allows plugins to intercept and filter audio before STT processing.
+Audio Filter Interface.
+Allows built-in providers to filter audio before STT processing.
 
-This is a hook mechanism that enables plugins (like Voiceprint) to
-gate audio processing without any core code modification.
+This is an internal extension point for capabilities like voiceprint gating.
 
 Usage:
-    1. Plugin implements IAudioFilter
-    2. Plugin registers with AudioFilterChain on enable()
-    3. Plugin unregisters on disable()
+    1. Provider implements IAudioFilter
+    2. Provider registers with AudioFilterChain on enable()
+    3. Provider unregisters on disable()
 """
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional
@@ -17,9 +16,9 @@ import numpy as np
 
 class IAudioFilter(ABC):
     """
-    Audio filter plugin interface.
+    Audio filter provider interface.
     
-    Plugins implement this to intercept audio before STT.
+    Providers implement this to inspect audio before STT.
     Multiple filters can be chained, processed in priority order.
     """
     

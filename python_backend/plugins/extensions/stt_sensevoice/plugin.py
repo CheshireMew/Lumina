@@ -1,7 +1,6 @@
 import logging
 from typing import Any
 
-from app_config import config
 from core.interfaces.plugin import Plugin as BasePlugin
 
 from .drivers.stt.sense_voice_driver import SenseVoiceDriver
@@ -24,21 +23,22 @@ class Plugin(BasePlugin):
         self.driver.load_config(self.config)
         manager.register_driver(self.driver)
 
+        config = self.context.get_service("config")
         selected_provider = config.get_selected_provider("stt")
-        if selected_provider == self.id or not getattr(manager, "active_driver", None):
+        if selected_provider == self.id:
             await manager.activate(self.id)
 
     async def disable(self):
         manager = self.context.get_service("stt")
         if manager:
-            if getattr(manager, "active_driver_id", None) == self.id:
+            if manager.active_driver_id == self.id:
                 await manager.disable_plugin(self.id)
-            manager.drivers.pop(self.id, None)
+            manager.unregister_driver(self.id)
         await super().disable()
 
     async def health(self) -> dict[str, Any]:
         manager = self.context.get_service("stt")
-        is_active = bool(manager and getattr(manager, "active_driver_id", None) == self.id)
+        is_active = bool(manager and manager.active_driver_id == self.id)
         return {
             "status": "ready" if is_active else ("disabled" if not self.enabled else "idle"),
             "active": is_active,

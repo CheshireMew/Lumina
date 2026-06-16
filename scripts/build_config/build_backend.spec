@@ -23,8 +23,6 @@ hiddenimports = [
     'uvicorn.lifespan.on',
     'app_config',
     'main',
-    'stt_server',
-    'tts_server',
     'engineio.async_drivers.aiohttp', # for socketio/engineio
 ]
 
@@ -39,8 +37,6 @@ hiddenimports += collect_submodules('langchain')
 # (Source, Dest)
 datas += [
     (os.path.join(BACKEND_DIR, 'stt_config.json'), '.'),
-    (os.path.join(BACKEND_DIR, 'memory_config.json'), '.'),
-    (os.path.join(PROJECT_DIR, 'audio_config.json'), '.'),  # Root level
     (os.path.join(PROJECT_DIR, 'config', 'capability-packages.json'), 'config'),
     (os.path.join(BACKEND_DIR, 'tts_emotion_styles.json'), '.'),
     # (os.path.join(BACKEND_DIR, 'assets'), 'assets'), # Only if exists

@@ -7,7 +7,6 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 backend_root = Path(SPECPATH).resolve().parent
 sys.path.insert(0, str(backend_root))
-sys.path.insert(0, str(backend_root / 'sdk'))
 
 datas = []
 binaries = []
@@ -15,7 +14,6 @@ build_target = os.environ.get('LUMINA_BUILD_TARGET', 'core-runtime')
 main_extension_plugins = [
     'avatar_server',
     'emotion_broker',
-    'hello_widget',
     'llm_core',
     'llm_deepseek',
     'llm_gemini',
@@ -85,7 +83,6 @@ hiddenimports = [
     'pgvector.asyncpg',
     'pythonosc.udp_client',
     'services.managers.llm_driver_plugins',
-    'lumina',
 ]
 
 hiddenimports += collect_submodules('services.managers')
@@ -100,9 +97,7 @@ hiddenimports += [
 for pkg in [
     'routers',
     'services',
-    'dependency_injector',
     'pythonosc',
-    'lumina',
 ]:
     tmp_ret = collect_all(pkg)
     datas += tmp_ret[0]
@@ -213,11 +208,8 @@ datas += [
     ('../../config/capability-packages.json', 'config'),
     ('../plugins/drivers', 'plugins/drivers'),
     ('../prompts', 'prompts'),
-    ('../sdk', 'sdk'),
     ('../tts_emotion_styles.json', '.'),
     ('../user_settings.json', '.'),
-    ('../audio_config.json', '.'),
-    ('../memory_config.json', '.'),
 ]
 for plugin_name in target_extension_plugins:
     datas.append((f'../plugins/extensions/{plugin_name}', f'plugins/extensions/{plugin_name}'))

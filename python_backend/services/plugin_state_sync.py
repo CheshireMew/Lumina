@@ -15,20 +15,17 @@ class PluginStateSync:
     [Architecture 6.0] Workers ONLY process plugins matching their runtime_target.
     """
     
-    def __init__(self, plugin_manager, worker_id: str = None, expected_target: str = None, reporter=None):
+    def __init__(self, plugin_manager, worker_id: str = None, expected_target: str = None, reporter=None, bus=None):
         self.plugin_manager = plugin_manager
-        self.bus = get_lifecycle_bus()
+        self.bus = bus or get_lifecycle_bus()
         import socket
         self.worker_id = worker_id or f"worker:{socket.gethostname()}"
-        self.expected_target = normalize_runtime_target(expected_target)
+        self.expected_target = normalize_runtime_target(expected_target) if expected_target else None
         self.reporter = reporter # [Fix] Direct reference to Status Reporter
         self._desired_state_cache: Dict[str, bool] = {}
 
     def _get_local_desired_state(self, plugin_id: str) -> bool | None:
-        config = getattr(self.plugin_manager, "config", None)
-        if config and hasattr(config, "is_plugin_desired_enabled"):
-            return bool(config.is_plugin_desired_enabled(plugin_id))
-        return None
+        return bool(self.plugin_manager.is_plugin_desired_enabled(plugin_id))
 
     async def start(self):
         """Start listening for state changes."""
@@ -59,13 +56,7 @@ class PluginStateSync:
                 # Or better: Add a specific method to LifecycleBus?
                 # Let's use a "system.worker.X" pseudo-state for now.
                 
-                # Check if bus has a custom heartbeat method
-                if hasattr(self.bus, "send_heartbeat"):
-                    await self.bus.send_heartbeat(worker_id)
-                else:
-                    # Fallback: Log pulse (mock implementation until Bus upgrade)
-                    # logger.debug(f"💓 Heartbeat: {worker_id}")
-                    pass
+                await self.bus.send_heartbeat(worker_id)
                     
                 await asyncio.sleep(5)
             except Exception as e:
@@ -120,18 +111,12 @@ class PluginStateSync:
                 # For MVP, we just log. The Manager needs to support hot-loading.
                 logger.info(f"🔄 Hot-Loading Plugin {plugin_id} (Worker Side)...")
                 
-                # If the manager has a 'load_plugin' or similar, call it.
-                # Assuming standard SystemPluginManager interface or equivalent.
-                # If the manager has a 'load_plugin' or similar, call it.
-                # Assuming standard SystemPluginManager interface or equivalent.
-                if hasattr(self.plugin_manager, "enable_plugin"):
-                    await self.plugin_manager.enable_plugin(plugin_id)
+                await self.plugin_manager.enable_plugin(plugin_id)
                 
             else:
                 # Disable Logic
                 logger.info(f"🛑 Unloading Plugin {plugin_id} (Worker Side)...")
-                if hasattr(self.plugin_manager, "disable_plugin"):
-                    await self.plugin_manager.disable_plugin(plugin_id)
+                await self.plugin_manager.disable_plugin(plugin_id)
             
             # [Fix] Force immediate status report
             if self.reporter:

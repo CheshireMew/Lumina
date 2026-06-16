@@ -11,7 +11,7 @@ logger = logging.getLogger("FreeLLMRouter")
 
 # from llm.manager import llm_manager
 from app_config import config as app_config
-from routers.deps import get_chat_turn_service, get_optional_soul_service
+from routers.deps import get_chat_turn_service, get_soul_service
 
 router = APIRouter(
     tags=["Unified LLM"]
@@ -53,7 +53,7 @@ def mask_log(text: str) -> str:
 async def chat_completions(
     request: ChatCompletionRequest,
     chat_service=Depends(get_chat_turn_service),
-    soul_service=Depends(get_optional_soul_service),
+    soul_service=Depends(get_soul_service),
 ):
     """
     Unified Chat Endpoint (Phase 19).
@@ -73,8 +73,7 @@ async def chat_completions(
         raise HTTPException(status_code=400, detail=f"Content Policy Error: {reason}")
 
     # Update Heartbeat
-    if soul_service:
-        soul_service.update_last_interaction()
+    soul_service.update_last_interaction()
     
     messages = []
     for m in request.messages:
@@ -86,7 +85,7 @@ async def chat_completions(
     
     # Extract user_id and character_id from the active runtime context.
     user_id = "default_user"
-    character_id = chat_service.active_character_id("hiyori")
+    character_id = chat_service.active_character_id()
     
     try:
         if request.stream:

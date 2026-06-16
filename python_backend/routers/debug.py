@@ -1,9 +1,9 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 
-from routers.deps import get_memory_service
+from routers.deps import get_memory_service, get_soul_service
 
 logger = logging.getLogger("DebugRouter")
 router = APIRouter(prefix="/debug", tags=["Debug"])
@@ -31,10 +31,14 @@ async def _query(memory, sql: str, params: dict | None = None) -> List[Dict[str,
 
 
 @router.get("/brain_dump")
-async def brain_dump(character_id: str = "hiyori", memory=Depends(get_memory_service)):
+async def brain_dump(
+    character_id: Optional[str] = None,
+    memory=Depends(get_memory_service),
+    soul_service=Depends(get_soul_service),
+):
     """Return memory data used by local inspection panels."""
     try:
-        cid = character_id.lower()
+        cid = (character_id or soul_service.get_active_character_id()).lower()
         history = await _query(
             memory,
             "SELECT * FROM conversation_log WHERE character_id = $cid ORDER BY created_at DESC LIMIT 100;",
@@ -74,10 +78,14 @@ async def brain_dump(character_id: str = "hiyori", memory=Depends(get_memory_ser
 
 
 @router.get("/processing_status")
-async def processing_status(character_id: str = "hiyori", memory=Depends(get_memory_service)):
+async def processing_status(
+    character_id: Optional[str] = None,
+    memory=Depends(get_memory_service),
+    soul_service=Depends(get_soul_service),
+):
     """Return lightweight memory processing counters for inspection panels."""
     try:
-        cid = character_id.lower()
+        cid = (character_id or soul_service.get_active_character_id()).lower()
         conversations = await _query(
             memory,
             "SELECT count(*) AS count FROM conversation_log WHERE character_id = $cid;",

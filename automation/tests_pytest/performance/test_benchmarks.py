@@ -104,7 +104,7 @@ def test_message_list_operations():
 
 
 @pytest.mark.performance
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_async_mock_performance():
     """Test async mock operation performance"""
     mock_llm = AsyncMock()
@@ -159,7 +159,7 @@ def test_memory_list_growth():
 # ============================================================================
 
 @pytest.mark.performance
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_concurrent_chat_requests():
     """Test handling multiple concurrent chat requests"""
     async def mock_chat_request(request_id):

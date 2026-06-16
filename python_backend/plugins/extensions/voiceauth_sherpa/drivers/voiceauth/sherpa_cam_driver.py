@@ -54,12 +54,6 @@ class SherpaCAMDriver(BaseVoiceAuthDriver):
                 
             except Exception as e:
                 logger.error(f"Failed to download VoiceAuth model: {e}")
-                # Try legacy path as fallback?
-                # legacy_path = Path("voiceprint_profiles/3dspeaker_campplus.onnx")
-                # if legacy_path.exists():
-                #     logger.warning("Using legacy model file as fallback.")
-                #     target_path = legacy_path
-                # else:
                 raise e
 
         # 2. Load Extractor

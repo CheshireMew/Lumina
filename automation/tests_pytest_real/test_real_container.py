@@ -145,14 +145,14 @@ def test_service_container_lifecycle():
 
 
 # ============================================================================
-# Test 5: Property vs Getter Consistency (REAL TEST)
+# Test 5: Explicit Getter Consistency (REAL TEST)
 # ============================================================================
 
-def test_service_container_property_getter_consistency():
+def test_service_container_getter_consistency():
     """
-    Test that property access and getter methods return same instance.
+    Test that explicit setters and getters return same instance.
 
-    This catches REAL bugs where property and getter get out of sync.
+    This catches REAL bugs where service slot replacement gets out of sync.
     """
     container = ServiceContainer()
 
@@ -160,14 +160,11 @@ def test_service_container_property_getter_consistency():
     mock_service = MagicMock(name="test_service")
     container.set_event_bus(mock_service)
 
-    # Access via property
-    via_property = container.event_bus
-
     # Access via getter
     via_getter = container.get_event_bus()
 
     # Must be the same object
-    assert via_property is via_getter is mock_service
+    assert via_getter is mock_service
 
 
 # ============================================================================
@@ -246,8 +243,8 @@ def test_service_container_error_recovery():
     # Access it successfully
     assert container.get_config() is service
 
-    # Simulate error: service becomes None (shouldn't happen but test robustness)
-    container._config = None
+    # Simulate reset through the container API.
+    container.set_config(None)
 
     # Should raise proper error, not crash
     with pytest.raises(ServiceNotInitializedError):
@@ -282,26 +279,23 @@ def test_service_container_none_handling():
 
 
 # ============================================================================
-# Test 10: Backward Compatibility (REAL TEST)
+# Test 10: Explicit Gateway Access (REAL TEST)
 # ============================================================================
 
-def test_service_container_backward_compatibility():
+def test_service_container_explicit_gateway_access():
     """
-    Test backward compatibility with legacy code patterns.
+    Test explicit gateway registration.
 
-    This catches REAL bugs when refactoring breaks legacy code.
+    This catches REAL bugs when gateway registration changes.
     """
     container = ServiceContainer()
 
-    # Legacy pattern: direct attribute assignment
-    legacy_service = MagicMock(name="legacy")
-    container.gateway = legacy_service
+    gateway_service = MagicMock(name="gateway")
+    container.set_gateway(gateway_service)
 
-    # Modern pattern: getter method
     via_getter = container.get_gateway()
 
-    # Should work the same
-    assert via_getter is legacy_service
+    assert via_getter is gateway_service
 
 
 # ============================================================================

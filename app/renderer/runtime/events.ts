@@ -1,13 +1,9 @@
 export type RuntimeEventMap = {
     emotion: { emotion: string };
-    widget: { type: string; payload: any };
-    pluginStatus: { plugin_id: string; status: string; details?: string };
 };
 
 const RUNTIME_EVENT_NAMES: Record<keyof RuntimeEventMap, string> = {
     emotion: "lumina:emotion",
-    widget: "lumina:widget",
-    pluginStatus: "lumina:plugin_status",
 };
 
 export function emitRuntimeEvent<K extends keyof RuntimeEventMap>(

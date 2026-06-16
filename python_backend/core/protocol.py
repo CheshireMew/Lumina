@@ -31,8 +31,7 @@ class EventType:
     SYSTEM_CONFIG_RELOADED = "system.config_reloaded"
     COGNITIVE_STATE = "cognitive_state"     # State Machine (Idle/Thinking/Speaking)
     
-    # Plugin Lifecycle (Source: PluginManager)
-    PLUGIN_STATUS = "plugin_status"         # [Architecture 4.2] Real-time Plugin Lifecycle
+    # Plugin Lifecycle (internal)
     PLUGIN_LOADED = "plugin.loaded"
     PLUGIN_UNLOADED = "plugin.unloaded"
     PLUGIN_STATE_LOCAL = "plugin.state.local"
@@ -41,13 +40,6 @@ class EventType:
     # Emotion/Avatar
     EMOTION_CHANGED = "emotion:changed"
     AVATAR_EMOTION = "avatar.emotion"
-    
-    # UI Events
-    UI_REGISTER_WIDGET = "ui:register_widget"
-    UI_REMOVE_WIDGET = "ui:remove_widget"
-    UI_NOTIFICATION = "ui.notification"
-    UI_TOAST = "ui.toast"
-    UI_DIALOG = "ui.dialog"
     
     # Service Registration
     SERVICE_REGISTERED = "service.registered"
@@ -73,7 +65,7 @@ class EventPacket(BaseModel):
     # 3. Governance Layer
     timestamp: float = Field(default_factory=time.time)
     
-    # 4. Routing Hooks (Optional)
+    # 4. Optional routing metadata
     # ttl: int = 10 
     # parent_id: Optional[str] = None
 # --- 3. Payload Layer (Flexible) ---
@@ -81,7 +73,7 @@ class EventPacket(BaseModel):
 class InputTextPayload(BaseModel):
     text: str
     user_id: Optional[str] = "default_user"
-    character_id: Optional[str] = "hiyori"
+    character_id: Optional[str] = None
     user_name: Optional[str] = "User"
     char_name: Optional[str] = "Assistant"
     model: Optional[str] = None
@@ -101,11 +93,6 @@ class SystemStatusPayload(BaseModel):
     status: str
     details: Optional[str] = ""
 
-class PluginStatusPayload(BaseModel):
-    plugin_id: str
-    status: str
-    details: Optional[str] = ""
-
 # --- Protocol Schema Registry ---
 
 # Map EventType to its expected Payload Model
@@ -115,5 +102,4 @@ CORE_SCHEMAS: Dict[str, Type[BaseModel]] = {
     EventType.BRAIN_THINKING: BrainThinkingPayload,
     EventType.EMOTION_CHANGED: EmotionChangedPayload,
     EventType.SYSTEM_STATUS: SystemStatusPayload,
-    EventType.PLUGIN_STATUS: PluginStatusPayload
 }
