@@ -75,8 +75,6 @@ async def get_tables():
     return {"tables": ALLOWED_TABLES}
 
 
-# from core.db.query_builder import SurrealQueryBuilder # REMOVED: Dynamic Builder
-# qb = SurrealQueryBuilder()
 
 @router.get("/table/{table_name}")
 async def get_table_data(

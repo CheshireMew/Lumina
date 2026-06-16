@@ -108,23 +108,6 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         mock_mcp.stop.assert_called_once()
         print("✅ MCP Host shutdown sequence verified")
 
-    async def test_shutdown_sequence_surrealdb(self):
-        """Test that SurrealDB connection is closed during shutdown"""
-        from services.container import ServiceContainer
-
-        container = ServiceContainer()
-        mock_surreal = MagicMock()
-        mock_surreal.close = AsyncMock()
-
-        container.surreal_system = mock_surreal
-
-        # Simulate shutdown (just the SurrealDB part)
-        await mock_surreal.close()
-
-        # Verify close was called
-        mock_surreal.close.assert_called_once()
-        print("✅ SurrealDB shutdown sequence verified")
-
     async def test_shutdown_sequence_plugins(self):
         """Test that plugins are terminated during shutdown"""
         from services.container import ServiceContainer
@@ -189,14 +172,12 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         mock_config.network.memory_port = 8010
         mock_config.network.stt_port = 8765
         mock_config.network.tts_port = 8766
-        mock_config.network.surreal_port = 8001
 
         # Expected connection info structure
         expected_info = {
             "memory": 8010,
             "stt": 8765,
             "tts": 8766,
-            "surreal": 8001,
             "updated_at": unittest.mock.ANY  # We don't care about exact timestamp
         }
 
@@ -204,7 +185,6 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mock_config.network.memory_port, expected_info["memory"])
         self.assertEqual(mock_config.network.stt_port, expected_info["stt"])
         self.assertEqual(mock_config.network.tts_port, expected_info["tts"])
-        self.assertEqual(mock_config.network.surreal_port, expected_info["surreal"])
         print("✅ Connection info structure verified")
 
     async def test_event_bus_router_subscription(self):

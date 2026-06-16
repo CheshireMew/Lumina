@@ -37,7 +37,6 @@ interface BackendState {
 interface BootstrapState {
     backend: BackendState;
     localSettings: {
-        activeCharacterId: string;
         backgroundImage: string;
         contextWindow: number;
         isTTSEnabled: boolean;
@@ -59,7 +58,6 @@ function getBootstrapState(): BootstrapState {
     return {
         backend: backendState,
         localSettings: {
-            activeCharacterId: store.get("activeCharacterId") || "hiyori",
             backgroundImage: store.get("backgroundImage") || "",
             contextWindow: store.get("contextWindow") || 50,
             isTTSEnabled: store.get("isTTSEnabled") ?? true,

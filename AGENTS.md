@@ -22,4 +22,4 @@
 Git 历史使用 Conventional Commits 风格：`feat`/`fix`/`refactor`/`chore`/`docs`，可带 scope，例如 `feat(stt): ...`。PR 需包含变更说明、测试步骤、关联 Issue；涉及 UI/交互请附截图或录屏。
 
 ## 安全与配置提示
-`.env` 用于本地 API Key，不要提交到仓库。数据库文件如 `lumina_surreal.db` 属于本地状态，变更前请备份。运行脚本需确保已安装 Node.js、Python 与 SurrealDB。
+`.env` 用于本地 API Key，不要提交到仓库。数据库文件属于本地状态，变更前请备份。运行脚本需确保已安装 Node.js、Python 与 PostgreSQL。

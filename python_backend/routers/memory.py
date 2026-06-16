@@ -7,22 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from routers.deps import (
-    get_container,
     get_llm_service,
     get_memory_service,
     get_optional_soul_service,
     get_session_manager,
 )
-from core.services.service_registry import get_service_registry
 from schemas.requests import AddMemoryRequest, SearchRequest
 
 logger = logging.getLogger("MemoryRouter")
 
 router = APIRouter(tags=["Memory"])
-
-
-def _get_service(name: str):
-    return get_service_registry().resolve(name, container=get_container())
 
 
 def _require_memory(memory_service: Any):
@@ -102,11 +96,8 @@ async def add_memory(
             narrative=narrative,
         )
 
-        galgame_service = _get_service("galgame_manager")
         if soul_client:
             soul_client.update_last_interaction()
-        if galgame_service:
-            galgame_service.update_energy(-0.1)
 
         driver_id = getattr(getattr(memory_service, "driver", None), "id", "memory")
         return {"status": "success", "id": str(log_id), "storage": driver_id}
@@ -186,13 +177,13 @@ async def search_memory_hybrid(
 
 class ClearContextRequest(BaseModel):
     user_id: Optional[str] = "default_user"
-    character_id: Optional[str] = "default_char"
+    character_id: Optional[str] = "hiyori"
 
 
 @router.post("/context/clear")
 async def clear_context(request: ClearContextRequest, session_manager=Depends(get_session_manager)):
     try:
-        character_id = request.character_id or "default_char"
+        character_id = request.character_id or "hiyori"
         user_id = request.user_id or "default_user"
 
         await session_manager.clear_history(user_id, character_id)

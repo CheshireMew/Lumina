@@ -119,8 +119,8 @@ def temp_db_path():
 
 
 @pytest.fixture(scope="function")
-def mock_surreal_driver():
-    """Mock SurrealDB driver"""
+def mock_memory_driver():
+    """Mock memory database driver"""
     driver = MagicMock()
     driver._db = MagicMock()
     driver._db.query = MagicMock(return_value=[])
@@ -146,8 +146,7 @@ def service_urls():
     return {
         "memory": "http://127.0.0.1:8010",
         "stt": "http://127.0.0.1:8765",
-        "tts": "http://127.0.0.1:8766",
-        "surreal": "http://127.0.0.1:8001"
+        "tts": "http://127.0.0.1:8766"
     }
 
 

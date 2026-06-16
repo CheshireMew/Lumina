@@ -10,10 +10,7 @@ export interface FaceTrackingData {
   mouthSmile: number;
 }
 
-/**
- * Standard Interface for ALL Avatar Renderers.
- * (Live2D, VRM, Static Image, etc.)
- */
+/** Standard interface for the Live2D avatar renderer. */
 export interface IAvatarRenderer {
   /**
    * Start "Speaking" animation (Lip-sync).

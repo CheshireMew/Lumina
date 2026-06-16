@@ -39,10 +39,8 @@ async def lifespan(app: FastAPI):
     
     # Integration Bootstrappers
     from core.bootstrap.integration import (
-        RouterBootstrapper,
         ChatBridgeBootstrapper,
         MCPHostBootstrapper,
-        SystemPluginRouterBootstrapper
     )
     
     # Post-Startup Bootstrappers
@@ -66,9 +64,6 @@ async def lifespan(app: FastAPI):
     manager.add(EventBusBootstrapper())
     manager.add(ProtocolBootstrapper())
     
-    # Level 1.5: Integration (requires app)
-    manager.add(RouterBootstrapper(app))
-    
     # Level 2: Core Services
     manager.add(CoreServicesBootstrapper())
     
@@ -84,7 +79,6 @@ async def lifespan(app: FastAPI):
     # Level 4: Integration (requires plugins)
     manager.add(ChatBridgeBootstrapper())
     manager.add(MCPHostBootstrapper())
-    manager.add(SystemPluginRouterBootstrapper(app))
     
     # Level 5: Post-Startup
     manager.add(WorkerControlHubBootstrapper())

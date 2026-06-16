@@ -13,33 +13,13 @@ class ConfigBootstrapper(Bootstrapper):
         from app_config import BASE_DIR, config
         container.set_config(config)
         
-        # Character Resolve Logic
-        character_id = config.memory.character_id or "hiyori"
-        
-        # Verify Character Directory
+        character_id = "hiyori"
         base_char_dir = os.path.join(str(BASE_DIR), "characters")
         target_dir = os.path.join(base_char_dir, character_id)
-        
+
         if not os.path.exists(target_dir):
-            logger.warning(f"Configured character '{character_id}' not found.")
-            if os.path.exists(base_char_dir):
-                found = [d for d in os.listdir(base_char_dir) if os.path.isdir(os.path.join(base_char_dir, d))]
-                if found:
-                    character_id = 'lillian' if 'lillian' in found else found[0]
-                    logger.info(f"Fallback to: {character_id}")
-                else:
-                    # [Fix] Verify 'lumina_default' exists before falling back blind
-                    default_path = os.path.join(base_char_dir, "lumina_default")
-                    if os.path.exists(default_path):
-                        character_id = "lumina_default"
-                    else:
-                        logger.critical(f"Panic: No characters found in {base_char_dir}. Please install a character.")
-                        # sys.exit(1) # Optional: hard fail or allow boot empty? Allow boot for setup UI.
-                        character_id = "setup_required"
-        
-        # Stash resolved character_id in config for downstream access if needed,
-        # or just rely on container injection later.
-        # Ideally ConfigManager should handle this, but for now we patch it.
+            logger.critical(f"Required character not found: {target_dir}")
+
         config.memory.character_id = character_id
         logger.info(f"✅ Config Loaded for: {character_id}")
 

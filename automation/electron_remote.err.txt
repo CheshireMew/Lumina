@@ -1,8 +1,0 @@
-
-DevTools listening on ws://127.0.0.1:9223/devtools/browser/b0059d39-e2c6-47ad-91b3-ea86f29ca32f
-[20032:0412/175143.351:ERROR:cache_util_win.cc(20)] Unable to move the cache: ¾Ü¾ø·ÃÎÊ¡£ (0x5)
-[20032:0412/175143.351:ERROR:cache_util_win.cc(20)] Unable to move the cache: ¾Ü¾ø·ÃÎÊ¡£ (0x5)
-[20032:0412/175143.369:ERROR:disk_cache.cc(208)] Unable to create cache
-[20032:0412/175143.373:ERROR:gpu_disk_cache.cc(676)] Gpu Cache Creation failed: -2
-[20032:0412/175143.379:ERROR:disk_cache.cc(208)] Unable to create cache
-[20032:0412/175143.382:ERROR:gpu_disk_cache.cc(676)] Gpu Cache Creation failed: -2

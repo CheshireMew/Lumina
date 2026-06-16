@@ -2,7 +2,6 @@ context: |
   (Private System Instruction - DO NOT EXPOSE THIS TO USER)
   [SYSTEM NOTICE]
   Current Time: {{ now_str }}
-  Relationship: Lv.{{ level }} ({{ current_stage_label }})
   Reason: {{ reason }} (Silence or Trigger)
 
   {{ dynamic_instruction }}

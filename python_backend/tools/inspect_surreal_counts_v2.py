@@ -45,7 +45,7 @@ async def main():
              edge_count = res_edges[0].get('count', 0)
         print(f"\n馃敆 Graph Connections (Edges): {edge_count}")
         if edge_count > 0:
-            print("   鉁?Graph structure is ACTIVE. Memories are linked to characters.")
+            print("   鉁?Graph structure is ACTIVE. Memories are linked to the active character.")
         else:
             print("   鈿狅笍 Graph structure MISSING. Memories are isolated nodes.")
 

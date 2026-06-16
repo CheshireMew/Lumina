@@ -78,7 +78,7 @@ class BasicChatBridge:
             ))
 
             user_id = packet.payload.get("user_id", "default_user")
-            char_id = packet.payload.get("character_id", "default_char")
+            char_id = packet.payload.get("character_id", "hiyori")
             chat_service = self.chat_service
             messages = await chat_service.build_turn_messages(user_id, char_id, text)
             

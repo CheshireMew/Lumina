@@ -92,7 +92,7 @@ class SessionManager:
         # This is leaky abstraction but acceptable for Phase 1.
         import re
         u_id = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(user_id)) or "default_user"
-        c_id = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(char_id)) or "default_char"
+        c_id = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(char_id)) or "hiyori"
         composite_id = f"{c_id}_{u_id}"
         
         await self.repo.delete(composite_id)

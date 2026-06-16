@@ -1,30 +1,25 @@
 import React from 'react';
-import { Mic, Keyboard, Settings as SettingsIcon, Activity, Puzzle, User, Brain } from 'lucide-react';
-import VTuberModeToggle from './VTuberModeToggle';
+import { Settings as SettingsIcon, Activity, Brain, BookOpen } from 'lucide-react';
 
 interface AppToolbarProps {
-    onOpenAvatarSelector: () => void;
     onOpenSettings: () => void;
-    onOpenPlugins: () => void;
     onOpenMotionTester: () => void;
     onOpenLLMSettings: () => void;
+    onOpenMemoryInspector: () => void;
 }
 
 export const AppToolbar: React.FC<AppToolbarProps> = ({
-    onOpenAvatarSelector,
     onOpenSettings,
-    onOpenPlugins,
     onOpenMotionTester,
-    onOpenLLMSettings
+    onOpenLLMSettings,
+    onOpenMemoryInspector
 }) => {
     return (
         <div style={{ position: 'absolute', top: 30, right: 30, display: 'flex', flexDirection: 'column', gap: 15, zIndex: 100 }}>
-            <VTuberModeToggle />
             {/* Voice Toggle moved to InputBox */}
-            <ToolbarButton onClick={onOpenAvatarSelector} color="rgba(255, 193, 7, 0.2)" icon={<User size={24} />} title="Switch Avatar" />
             <ToolbarButton onClick={onOpenLLMSettings} color="rgba(76, 175, 80, 0.2)" icon={<Brain size={24} />} title="LLM Configuration" />
+            <ToolbarButton onClick={onOpenMemoryInspector} color="rgba(0, 255, 157, 0.2)" icon={<BookOpen size={24} />} title="Memory" />
             <ToolbarButton onClick={onOpenSettings} color="rgba(33,150,243,0.2)" icon={<SettingsIcon size={24} />} title="Settings" />
-            <ToolbarButton onClick={onOpenPlugins} color="rgba(156,39,176,0.2)" icon={<Puzzle size={24} />} title="Plugins" />
             <ToolbarButton onClick={onOpenMotionTester} color="rgba(156,39,176,0.2)" icon={<Activity size={24} />} title="Motions" />
         </div>
     );

@@ -13,13 +13,8 @@
     },
     "heartbeat_enabled": true,
     "proactive_chat_enabled": false,
-    "galgame_mode_enabled": true,
     "soul_evolution_enabled": true,
     "proactive_threshold_minutes": 5,
-    "bilibili": {
-        "enabled": false,
-        "room_id": 0
-    },
     "metadata": {
         "last_update_id": 19,
         "timestamp": 1769002500.059077

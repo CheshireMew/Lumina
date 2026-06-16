@@ -14,7 +14,6 @@ export interface IElectronApp {
             errorMessage?: string;
         };
         localSettings: {
-            activeCharacterId: string;
             backgroundImage: string;
             contextWindow: number;
             isTTSEnabled: boolean;

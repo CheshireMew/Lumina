@@ -4,11 +4,7 @@ Write-Host "🚀 Starting Lumina MVP Backend..."
 $ROOT = ".."
 $PYTHON = "python" # Or specific venv python
 
-# 1. Start SurrealDB (Check if port 8001 open?)
-# For now, assume user handles it or we launch it.
-# Write-Host "Checking SurrealDB..."
-
-# 2. Launch Services
+# Launch Services
 $BACKEND_DIR = "$ROOT\python_backend"
 $env:PYTHONPATH = $BACKEND_DIR
 

@@ -8,21 +8,6 @@ Write-Host "🚀 Starting Lumina Lite Build Process..." -ForegroundColor Cyan
 # --- 1. Environment Checks ---
 Write-Host "Checking prerequisites..."
 
-# Check SurrealDB
-if (-not (Test-Path "python_backend/bin/surreal.exe")) {
-    Write-Warning "surreal.exe not found in python_backend/bin/"
-    # Try to find in PATH
-    $sysSurreal = Get-Command surreal -ErrorAction SilentlyContinue
-    if ($sysSurreal) {
-        Write-Host "Found surreal globally at $($sysSurreal.Source). Copying..."
-        Copy-Item $sysSurreal.Source "python_backend/bin/surreal.exe"
-    }
-    else {
-        Write-Error "❌ Missing 'surreal.exe'. Please put it in 'python_backend/bin/'"
-        exit 1
-    }
-}
-
 # Check FFmpeg
 if (-not (Test-Path "GPT-SoVITS/runtime/ffmpeg.exe")) {
     Write-Warning "ffmpeg.exe not found in GPT-SoVITS/runtime/"

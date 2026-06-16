@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, Field
+from typing import Any
 
 
 class CharacterVoiceConfig(BaseModel):
@@ -10,25 +9,6 @@ class CharacterVoiceConfig(BaseModel):
     voiceId: str = ""
     rate: str = "+0%"
     pitch: str = "+0Hz"
-
-
-class CharacterBilibiliConfig(BaseModel):
-    enabled: bool = False
-    roomId: int = 0
-
-    @classmethod
-    def from_storage(cls, payload: Any) -> "CharacterBilibiliConfig":
-        raw = payload if isinstance(payload, dict) else {}
-        return cls(
-            enabled=bool(raw.get("enabled", False)),
-            roomId=int(raw.get("room_id", raw.get("roomId", 0)) or 0),
-        )
-
-    def to_storage(self) -> dict[str, Any]:
-        return {
-            "enabled": self.enabled,
-            "room_id": self.roomId,
-        }
 
 
 class CharacterConfig(BaseModel):
@@ -41,10 +21,8 @@ class CharacterConfig(BaseModel):
     voiceConfig: CharacterVoiceConfig = Field(default_factory=CharacterVoiceConfig)
     heartbeatEnabled: bool = True
     proactiveChatEnabled: bool = True
-    galgameModeEnabled: bool = True
     soulEvolutionEnabled: bool = True
     proactiveThresholdMinutes: int = 15
-    bilibili: CharacterBilibiliConfig = Field(default_factory=CharacterBilibiliConfig)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
@@ -66,10 +44,8 @@ class CharacterConfig(BaseModel):
             ),
             heartbeatEnabled=raw.get("heartbeat_enabled", raw.get("heartbeatEnabled", True)) is not False,
             proactiveChatEnabled=raw.get("proactive_chat_enabled", raw.get("proactiveChatEnabled", True)) is not False,
-            galgameModeEnabled=raw.get("galgame_mode_enabled", raw.get("galgameModeEnabled", True)) is not False,
             soulEvolutionEnabled=raw.get("soul_evolution_enabled", raw.get("soulEvolutionEnabled", True)) is not False,
             proactiveThresholdMinutes=int(raw.get("proactive_threshold_minutes", raw.get("proactiveThresholdMinutes", 15)) or 15),
-            bilibili=CharacterBilibiliConfig.from_storage(raw.get("bilibili")),
             metadata=raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {},
         )
 
@@ -84,13 +60,7 @@ class CharacterConfig(BaseModel):
             "voice_config": self.voiceConfig.model_dump(),
             "heartbeat_enabled": self.heartbeatEnabled,
             "proactive_chat_enabled": self.proactiveChatEnabled,
-            "galgame_mode_enabled": self.galgameModeEnabled,
             "soul_evolution_enabled": self.soulEvolutionEnabled,
             "proactive_threshold_minutes": self.proactiveThresholdMinutes,
-            "bilibili": self.bilibili.to_storage(),
             "metadata": self.metadata,
         }
-
-
-class CharacterListResponse(BaseModel):
-    characters: list[CharacterConfig]

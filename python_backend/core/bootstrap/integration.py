@@ -11,28 +11,6 @@ from .interface import Bootstrapper
 logger = logging.getLogger("Bootstrap.Integration")
 
 
-class RouterBootstrapper(Bootstrapper):
-    """
-    Initialize RouterManager with EventBus subscription.
-    Requires FastAPI app instance for dynamic route mounting.
-    """
-    
-    def __init__(self, app: FastAPI):
-        self._app = app
-    
-    @property
-    def name(self) -> str:
-        return "RouterManager"
-    
-    async def bootstrap(self, container: Any):
-        from services.router_manager import RouterManager
-        
-        # EventBus should be ready by now (Level 1)
-        rm = RouterManager(self._app, bus=container.event_bus)
-        container.router_manager = rm
-        logger.info("✅ RouterManager Bootstrapped & Subscribed")
-
-
 class ChatBridgeBootstrapper(Bootstrapper):
     """
     Initialize Legacy/MVP ChatBridge helper.
@@ -81,29 +59,3 @@ class MCPHostBootstrapper(Bootstrapper):
             logger.info("🔌 MCP Host Initialized (Start Disabled)")
         except Exception as e:
             logger.warning(f"Failed to init MCP Host: {e}")
-
-
-class SystemPluginRouterBootstrapper(Bootstrapper):
-    """
-    Mount routers from System Plugins.
-    Runs after SystemPluginsBootstrapper to ensure plugins are loaded.
-    """
-    
-    def __init__(self, app: FastAPI):
-        self._app = app
-    
-    @property
-    def name(self) -> str:
-        return "SystemPluginRouters"
-    
-    async def bootstrap(self, container: Any):
-        if not container.system_plugin_manager:
-            return
-        
-        for pid, plugin in container.system_plugin_manager.plugins.items():
-            if getattr(plugin, 'router', None) and not getattr(plugin, '_router_registered', False):
-                self._app.include_router(plugin.router)
-                plugin._router_registered = True
-                logger.debug(f"Mounted router for plugin: {pid}")
-        
-        logger.info("✅ System Plugin Routers Mounted")

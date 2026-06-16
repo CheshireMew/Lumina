@@ -1,5 +1,0 @@
-Timeout (0:00:02)!
-Thread 0x000078d8 (most recent call first):
-  File "<frozen importlib._bootstrap_external>", line 762 in get_data
-  File "E:\Work\Code\Lumina\python_backend\sdk\lumina\modules\stt.py", line 21 in <module>
-  File ???

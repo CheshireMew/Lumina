@@ -241,26 +241,6 @@ def test_message_history_scaling():
 
 
 # ============================================================================
-# Database Query Performance
-# ============================================================================
-
-@pytest.mark.performance
-def test_query_builder_performance():
-    """Test that query building is efficient"""
-    from core.db.query_builder import SurrealQueryBuilder
-
-    builder = SurrealQueryBuilder()
-
-    start = time.perf_counter()
-    for i in range(1000):
-        builder.select("memories").where("importance > 0.5").limit(10).build()
-    elapsed = time.perf_counter() - start
-
-    # 1000 query builds should be fast
-    assert elapsed < 0.1, f"Query building too slow: {elapsed:.4f}s"
-
-
-# ============================================================================
 # Serialization Performance
 # ============================================================================
 

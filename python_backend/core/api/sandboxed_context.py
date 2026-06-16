@@ -46,7 +46,6 @@ class SandboxedContext(LuminaContext):
         manifest: Any = None,
         event_bus=None,
         permissions: List[str] = None,
-        router_manager=None,
         service_registry: ServiceRegistry | None = None,
     ):
         super().__init__(
@@ -54,7 +53,6 @@ class SandboxedContext(LuminaContext):
             plugin_id,
             manifest,
             event_bus=event_bus,
-            router_manager=router_manager,
             service_registry=service_registry,
         )
         
@@ -125,11 +123,6 @@ class SandboxedContext(LuminaContext):
         """Discovery API (requires plugin.discovery permission)."""
         self._check_permission(Permission.PLUGIN_DISCOVERY.value, "find capability providers")
         return super().find_capability(cap_type, **attributes)
-
-    async def register_route(self, path: str, method: str, handler: Any):
-        """Register API route (requires network.listen permission)."""
-        self._check_permission(Permission.NETWORK_LISTEN.value, "register API route")
-        return await super().register_route(path, method, handler)
 
     # --- Permission-Gated Methods ---
     

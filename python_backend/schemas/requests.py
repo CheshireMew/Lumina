@@ -27,7 +27,6 @@ class ConfigRequest(BaseModel):
     heartbeat_enabled: Optional[bool] = None
     proactive_threshold_minutes: Optional[float] = None
     proactive_chat_enabled: Optional[bool] = None # Added for completeness/future explicit explicit use
-    galgame_mode_enabled: Optional[bool] = None
     soul_evolution_enabled: Optional[bool] = None # ⚙️ New toggle
     history_limit: Optional[int] = Field(default=20, ge=0, le=50) # 📜 New: Max context turns
     overflow_strategy: Optional[str] = Field(default="slide", pattern="^(slide|reset)$") # 🌊 slide=FIFO, reset=ClearAll

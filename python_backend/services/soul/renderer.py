@@ -23,7 +23,7 @@ class SoulRenderer:
             "description": identity.get("description", ""),
             "custom_prompt": config_prompt,
             **personality, # traits, big_five, etc.
-            **state,       # galgame state, mood, etc.
+            **state,
         }
         
         # 2. Inject extra user context
@@ -67,12 +67,9 @@ class SoulRenderer:
                                personality: Dict[str, Any], 
                                time_str: str) -> str:
         """
-        Renders dynamic runtime context (Time, Mood, Energy, Relationship).
+        Renders dynamic runtime context.
         Refactored from `render_dynamic_instruction`
         """
-        # Note: Logic for generating 'descriptions' from numbers (PAD/Energy) 
-        # should technically belong to a logic layer, but we can accept pre-processed values here.
-        
         context = {
             "time": time_str,
             "mood": state.get("mood_desc", "Neutral"),

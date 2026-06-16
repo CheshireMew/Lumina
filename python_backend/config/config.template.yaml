@@ -55,16 +55,7 @@ search:
 brave:
   api_key: ""
 
-bilibili:
-  enabled: false
-  room_id: 21743919
-
 models:
   embedding_model_name: "text-embedding-3-small"
   stt_model_path: null
   tts_model_path: null
-
-plugin_groups:
-  assignments: {}
-  custom_categories: {}
-  group_behaviors: {}

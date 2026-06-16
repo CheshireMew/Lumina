@@ -9,10 +9,8 @@ const dependencies = Object.keys(require("./package.json").dependencies);
 const electronNodeTarget = "node18";
 const deferredStartupChunkMarkers = [
     "vrm-vendor",
-    "mediapipe-vendor",
     "VRMPlugin-",
     "SpriteAvatarPlugin-",
-    "FaceTracker-",
 ];
 
 function rendererManualChunks(id: string) {
@@ -54,9 +52,6 @@ function rendererManualChunks(id: string) {
         return "ui-vendor";
     }
 
-    if (normalizedId.includes("@mediapipe/")) {
-        return "mediapipe-vendor";
-    }
 }
 
 // https://vitejs.dev/config/
@@ -190,7 +185,6 @@ export default defineConfig({
                 "**/GPT-SoVITS/**",
                 "**/models/**",
                 "**/voiceprint_profiles/**",
-                "**/lumina_surreal.db*",
             ],
         },
     },

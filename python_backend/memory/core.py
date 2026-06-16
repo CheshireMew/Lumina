@@ -31,7 +31,7 @@ logger = logging.getLogger("memory.core")
 class MemoryService:
     """
     Service for Memory System.
-    Delegates to VectorStore and Driver (Postgres, Surreal, etc.).
+    Delegates to VectorStore and the configured Postgres-backed driver.
     """
     
     def __init__(self, character_id: str = "default"):
@@ -261,7 +261,6 @@ class MemoryService:
     async def get_inspiration(self, character_id: str, limit: int = 3) -> List[Dict]:
          try:
              # Random Inspiration
-             # Note: Surreal might not support RAND() efficiently on large sets, but fine for now
              # We just fetch recent or random active memories RAG-style without query?
              # Old code fetched result and shuffled python side.
              

@@ -13,7 +13,7 @@ class BaseSoulDriver(ABC):
     @property
     @abstractmethod
     def id(self) -> str:
-        """Unique identifier for this driver (e.g., 'system.galgame')."""
+        """Unique identifier for this driver."""
         pass
 
     @property
@@ -39,7 +39,7 @@ class BaseSoulDriver(ABC):
     async def on_interaction(self, user_input: str, ai_response: str, context: Dict[str, Any] = None):
         """
         Hook called after a successful interaction.
-        Use this to update mood, intimacy, XP, etc.
+        Use this to update companion state.
         """
         pass
     

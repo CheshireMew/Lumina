@@ -3,7 +3,7 @@ from .hook_binder import HookBinder
 from .loader import PluginLoader
 from .manifest_repository import ManifestDiscoveryResult, ManifestRepository
 from .permission_checker import PermissionChecker, PluginPermissionError
-from .state_builder import PluginStateBuilder, is_selectable_provider, normalize_ui_slot
+from .state_builder import PluginStateBuilder, is_selectable_provider
 
 __all__ = [
     "HookBinder",
@@ -15,5 +15,4 @@ __all__ = [
     "PluginPermissionError",
     "PluginStateBuilder",
     "is_selectable_provider",
-    "normalize_ui_slot",
 ]

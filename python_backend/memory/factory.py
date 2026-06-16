@@ -53,21 +53,18 @@ class MemoryDriverFactory:
                 config_provider or config.get_selected_provider("memory") or config.memory.provider,
             )
             
-            # 2. Locate Drivers Directory
-            # Assuming this file is in python_backend/memory/factory.py
-            # Drivers are in python_backend/plugins/drivers/memory
-            # 2. Locate Drivers Directories (Support Extensions)
+            # 2. Locate provider driver directories.
             current_dir = os.path.dirname(os.path.abspath(__file__))
             base_plugins_dir = os.path.abspath(os.path.join(current_dir, "..", "plugins"))
             
             drivers_dirs = []
             
-            # Legacy Path
+            # Built-in provider path
             legacy_dir = os.path.join(base_plugins_dir, "drivers", "memory")
             if os.path.exists(legacy_dir):
                 drivers_dirs.append(legacy_dir)
                 
-            # Extensions Path
+            # Internal extension provider path
             extensions_dir = os.path.join(base_plugins_dir, "extensions")
             if os.path.exists(extensions_dir):
                 for ext_name in os.listdir(extensions_dir):

@@ -1,7 +1,6 @@
 import Store from 'electron-store';
 
 interface UserSettings {
-    activeCharacterId?: string;
     backgroundImage?: string;
     contextWindow?: number;
     isTTSEnabled?: boolean;
@@ -11,10 +10,6 @@ interface UserSettings {
 }
 
 const schema = {
-    activeCharacterId: {
-        type: 'string',
-        default: 'hiyori',
-    },
     backgroundImage: {
         type: 'string',
         default: '',

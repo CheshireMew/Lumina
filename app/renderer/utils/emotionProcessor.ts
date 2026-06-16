@@ -19,7 +19,6 @@ export interface EmotionProcessorOptions {
 /**
  * Parses text for emotion tags [emotion] or (emotion) and triggers:
  * 1. Live2D Motions
- * 2. Soul Mutations (Intimacy/Energy)
  */
 export const processEmotions = (
     text: string,
@@ -53,17 +52,12 @@ export const processEmotions = (
             emotionContent,
         );
 
-        // ⚡ Check Soul Evolution (Internal State Update) Mode
         let emotionFound = false;
 
-        // ⚡ Logic Separation: Check soulEvolutionEnabled
         if (activeCharacter && activeCharacter.soulEvolutionEnabled === false) {
             console.log(
-                "[EmotionProcessor] 🛑 Soul Evolution DISABLED. Skipping state mutation.",
+                "[EmotionProcessor] Soul evolution disabled. Triggering visual emotion only.",
             );
-            // Still trigger Live2D motions (visuals are fun), just don't mutate stats.
-            // [Legacy] PAD soul mutation removed — emotion_broker plugin handles emotion state now.
-            // Keeping Live2D motion triggers below.
         }
 
         for (const [key, motion] of Object.entries(emotionMap)) {

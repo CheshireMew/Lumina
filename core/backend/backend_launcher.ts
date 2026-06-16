@@ -36,7 +36,6 @@ export class BackendServiceLauncher {
                 LUMINA_MEMORY_PORT: (ports.memory_port || 8010).toString(),
                 LUMINA_STT_PORT: (ports.stt_port || 8765).toString(),
                 LUMINA_TTS_PORT: (ports.tts_port || 8766).toString(),
-                LUMINA_SURREAL_PORT: (ports.surreal_port || 8001).toString(),
             },
         });
 
@@ -52,11 +51,6 @@ export class BackendServiceLauncher {
 
         child.on("error", (err) => {
             console.error(`[${service.name}] Failed to spawn:`, err);
-            if (service.name === "surreal" && !app.isPackaged) {
-                console.error(
-                    "[BackendManager] Please install SurrealDB or ensure it is in PATH, or start it manually.",
-                );
-            }
         });
 
         child.on("exit", onExit);
@@ -79,10 +73,6 @@ export class BackendServiceLauncher {
     private buildLocalBinaryLaunchSpec(
         service: ServiceConfig,
     ): LaunchSpec | null {
-        if (service.type === "binary" && service.name === "surreal") {
-            return null;
-        }
-
         const executable = path.join(
             process.cwd(),
             "dist_backend",
@@ -110,37 +100,6 @@ export class BackendServiceLauncher {
     }
 
     private buildPackagedLaunchSpec(service: ServiceConfig): LaunchSpec {
-        if (service.type === "binary" && service.name === "surreal") {
-            const executable = path.join(
-                process.resourcesPath,
-                "bin",
-                "surreal.exe",
-            );
-            const dbPath = path.join(app.getPath("userData"), "lumina.db");
-            console.log(
-                "[BackendManager] Launching packaged SurrealDB:",
-                executable,
-                "DB:",
-                dbPath,
-            );
-            return {
-                executable,
-                args: [
-                    "start",
-                    "--log",
-                    "info",
-                    "--user",
-                    "root",
-                    "--pass",
-                    "root",
-                    "--bind",
-                    "127.0.0.1:8001",
-                    `file:${dbPath}`,
-                ],
-                cwd: path.dirname(executable),
-            };
-        }
-
         const executable = path.join(
             process.resourcesPath,
             "bin",
@@ -156,32 +115,6 @@ export class BackendServiceLauncher {
     }
 
     private buildDevelopmentLaunchSpec(service: ServiceConfig): LaunchSpec {
-        if (service.type === "binary" && service.name === "surreal") {
-            console.warn(
-                '[BackendManager] SurrealDB is NOT running on port 8001. Please start it manually: "surreal start ..."',
-            );
-            const dbPath = path.join(process.cwd(), "lumina_surreal.db");
-            console.log(
-                "[BackendManager] Attempting to auto-start SurrealDB in Dev...",
-            );
-            return {
-                executable: "surreal",
-                args: [
-                    "start",
-                    "--log",
-                    "info",
-                    "--user",
-                    "root",
-                    "--pass",
-                    "root",
-                    "--bind",
-                    "127.0.0.1:8001",
-                    `file:${dbPath}`,
-                ],
-                cwd: process.cwd(),
-            };
-        }
-
         const projectRoot = process.cwd();
         const launcherScript = path.join(
             projectRoot,

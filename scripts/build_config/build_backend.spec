@@ -25,7 +25,6 @@ hiddenimports = [
     'main',
     'stt_server',
     'tts_server',
-    'surreal_memory',
     'engineio.async_drivers.aiohttp', # for socketio/engineio
 ]
 
@@ -33,9 +32,8 @@ hiddenimports = [
 # tmp_ret = collect_all('sherpa_onnx')
 # datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
-# Collect Langchain/Surrealdb
+# Collect Langchain
 hiddenimports += collect_submodules('langchain')
-hiddenimports += collect_submodules('surrealdb')
 
 # Config Files to Bundle
 # (Source, Dest)

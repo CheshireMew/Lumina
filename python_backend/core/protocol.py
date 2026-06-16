@@ -81,7 +81,7 @@ class EventPacket(BaseModel):
 class InputTextPayload(BaseModel):
     text: str
     user_id: Optional[str] = "default_user"
-    character_id: Optional[str] = "default_char"
+    character_id: Optional[str] = "hiyori"
     user_name: Optional[str] = "User"
     char_name: Optional[str] = "Assistant"
     model: Optional[str] = None

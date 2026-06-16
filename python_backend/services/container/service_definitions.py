@@ -10,7 +10,6 @@ class LuminaContainer(containers.DeclarativeContainer):
     llm_manager = providers.Object(None)
 
     system_plugin_manager = providers.Object(None)
-    router_manager = providers.Object(None)
     process_manager = providers.Object(None)
     reconciliation_service = providers.Object(None)
     capability_registry = providers.Object(None)

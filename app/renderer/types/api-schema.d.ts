@@ -438,26 +438,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/galgame/{character_id}/state": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Galgame State
-         * @description Get character interaction state from the soul data boundary.
-         */
-        get: operations["get_galgame_state_galgame__character_id__state_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/soul": {
         parameters: {
             query?: never;
@@ -492,26 +472,6 @@ export interface paths {
          * @description Centralized Endpoint to signal User Activity.
          */
         post: operations["register_interaction_soul_interact_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/soul/switch_character": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Switch Character
-         * @description Single formal character switching route.
-         */
-        post: operations["switch_character_soul_switch_character_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -689,271 +649,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/assets/{plugin_id}/{file_path}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Plugin Asset
-         * @description Serve static assets for a specific ACTIVE plugin.
-         *     Enforces security:
-         *     1. Plugin must be enabled.
-         *     2. Path must be within plugin's directory.
-         */
-        get: operations["get_plugin_asset_plugins_assets__plugin_id___file_path__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Plugins */
-        get: operations["list_plugins_plugins_list_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/slots": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Plugin Slots */
-        get: operations["list_plugin_slots_plugins_slots_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/capabilities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Capabilities */
-        get: operations["list_capabilities_plugins_capabilities_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/debug/state": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Plugin Debug State */
-        get: operations["plugin_debug_state_plugins_debug_state_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/marketplace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Plugin Marketplace Snapshot */
-        get: operations["plugin_marketplace_snapshot_plugins_marketplace_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/config/group": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Config Plugin Group */
-        post: operations["config_plugin_group_plugins_config_group_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/config/category": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Config Plugin Category */
-        post: operations["config_plugin_category_plugins_config_category_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/config/group_behavior": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Config Group Behavior */
-        post: operations["config_group_behavior_plugins_config_group_behavior_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/config/plugin": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Config Plugin */
-        post: operations["config_plugin_plugins_config_plugin_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/toggle": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Toggle Plugin */
-        post: operations["toggle_plugin_plugins_toggle_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/reload/{plugin_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reload Plugin
-         * @description Hot reload a plugin without restarting the backend.
-         *     Clears Python module cache and re-loads the plugin from disk.
-         */
-        post: operations["reload_plugin_plugins_reload__plugin_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/config/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Set Search Provider */
-        post: operations["set_search_provider_plugins_config_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/config/brave-key": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Set Brave Key */
-        post: operations["set_brave_key_plugins_config_brave_key_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Plugin */
-        post: operations["upload_plugin_plugins_upload_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/vision/analyze": {
         parameters: {
             query?: never;
@@ -1005,7 +700,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/characters": {
+    "/character/config": {
         parameters: {
             query?: never;
             header?: never;
@@ -1013,19 +708,23 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Characters
-         * @description List all available characters
+         * Get Character Config
+         * @description Get the single active character config.
          */
-        get: operations["list_characters_characters_get"];
+        get: operations["get_character_config_character_config_get"];
         put?: never;
-        post?: never;
+        /**
+         * Update Character Config
+         * @description Update the single active character config.
+         */
+        post: operations["update_character_config_character_config_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/characters/models": {
+    "/character/models": {
         parameters: {
             query?: never;
             header?: never;
@@ -1036,54 +735,10 @@ export interface paths {
          * List Models
          * @description List available Live2D models via Avatar Server
          */
-        get: operations["list_models_characters_models_get"];
+        get: operations["list_models_character_models_get"];
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/characters/{character_id}/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Character Config
-         * @description Get character config
-         */
-        get: operations["get_character_config_characters__character_id__config_get"];
-        put?: never;
-        /**
-         * Update Character Config
-         * @description Update character config
-         */
-        post: operations["update_character_config_characters__character_id__config_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/characters/{character_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Character
-         * @description Delete character
-         */
-        delete: operations["delete_character_characters__character_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1295,7 +950,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/stt/plugins/config": {
+    "/stt/provider/config": {
         parameters: {
             query?: never;
             header?: never;
@@ -1305,10 +960,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Update Plugin Config
-         * @description Proxy to Worker LIPP Endpoint
+         * Update Provider Config
+         * @description Proxy provider config changes to the STT worker.
          */
-        post: operations["update_plugin_config_stt_plugins_config_post"];
+        post: operations["update_provider_config_stt_provider_config_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1501,14 +1156,6 @@ export interface components {
              */
             prompt: string;
         };
-        /** Body_upload_plugin_plugins_upload_post */
-        Body_upload_plugin_plugins_upload_post: {
-            /**
-             * File
-             * Format: binary
-             */
-            file: string;
-        };
         /** Body_upload_voiceprint_plugins_voiceprint_upload_post */
         Body_upload_voiceprint_plugins_voiceprint_upload_post: {
             /**
@@ -1516,19 +1163,6 @@ export interface components {
              * Format: binary
              */
             file: string;
-        };
-        /** CharacterBilibiliConfig */
-        CharacterBilibiliConfig: {
-            /**
-             * Enabled
-             * @default false
-             */
-            enabled: boolean;
-            /**
-             * Roomid
-             * @default 0
-             */
-            roomId: number;
         };
         /** CharacterConfig */
         CharacterConfig: {
@@ -1565,11 +1199,6 @@ export interface components {
              */
             proactiveChatEnabled: boolean;
             /**
-             * Galgamemodeenabled
-             * @default true
-             */
-            galgameModeEnabled: boolean;
-            /**
              * Soulevolutionenabled
              * @default true
              */
@@ -1579,16 +1208,10 @@ export interface components {
              * @default 15
              */
             proactiveThresholdMinutes: number;
-            bilibili?: components["schemas"]["CharacterBilibiliConfig"];
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
             };
-        };
-        /** CharacterListResponse */
-        CharacterListResponse: {
-            /** Characters */
-            characters: components["schemas"]["CharacterConfig"][];
         };
         /** CharacterVoiceConfig */
         CharacterVoiceConfig: {
@@ -1665,7 +1288,7 @@ export interface components {
             user_id: string | null;
             /**
              * Character Id
-             * @default default_char
+             * @default hiyori
              */
             character_id: string | null;
         };
@@ -1702,8 +1325,6 @@ export interface components {
             proactive_threshold_minutes?: number | null;
             /** Proactive Chat Enabled */
             proactive_chat_enabled?: boolean | null;
-            /** Galgame Mode Enabled */
-            galgame_mode_enabled?: boolean | null;
             /** Soul Evolution Enabled */
             soul_evolution_enabled?: boolean | null;
             /**
@@ -1717,8 +1338,10 @@ export interface components {
              */
             overflow_strategy: string | null;
         };
-        /** ConfigUpdate */
-        ConfigUpdate: {
+        /** ProviderConfigRequest */
+        ProviderConfigRequest: {
+            /** Id */
+            id: string;
             /** Key */
             key: string;
             /** Value */
@@ -1743,29 +1366,15 @@ export interface components {
             /** Name */
             name?: string | null;
         };
-        /** PluginConfigRequest */
-        PluginConfigRequest: {
-            /** Id */
-            id: string;
-            /** Key */
-            key: string;
-            /** Value */
-            value: unknown;
-        };
-        /** PluginListResponse */
-        PluginListResponse: {
-            /** Items */
-            items: components["schemas"]["PluginState"][];
-        };
         /**
          * PluginState
-         * @description [Architecture 6.1] Shared Plugin State Contract (Scheme C).
-         *     Represents the live status of a plugin stored in the lifecycle state store.
+         * @description [Architecture 6.1] Shared provider state contract.
+         *     Represents the live status of an internal capability provider.
          */
         PluginState: {
             /**
              * Id
-             * @description Unique Plugin ID (e.g. system.voiceprint)
+             * @description Unique provider ID (e.g. system.voiceprint)
              */
             id: string;
             /**
@@ -1781,13 +1390,13 @@ export interface components {
             description: string;
             /**
              * Kind
-             * @description Plugin kind
+             * @description Provider kind
              * @default system
              */
             kind: string;
             /**
              * Category
-             * @description UI Category (stt, tts, system, tool)
+             * @description Capability category (stt, tts, system, tool)
              * @default other
              */
             category: string;
@@ -1805,7 +1414,7 @@ export interface components {
             desired_enabled?: boolean | null;
             /**
              * Enabled
-             * @description Effective Enabled State (UI Legacy compatible)
+             * @description Effective enabled state
              * @default false
              */
             enabled: boolean;
@@ -1823,13 +1432,13 @@ export interface components {
             active_in_group: boolean;
             /**
              * Computed Status
-             * @description UI-friendly aggregated status
+             * @description Aggregated runtime status
              * @default unknown
              */
             computed_status: string;
             /**
              * Worker Id
-             * @description ID of the worker process hosting this plugin
+             * @description ID of the worker process hosting this provider
              * @default main
              */
             worker_id: string;
@@ -1841,7 +1450,7 @@ export interface components {
             runtime_target: string;
             /**
              * Endpoint Url
-             * @description Direct URL to reach this plugin (if applicable)
+             * @description Direct provider URL, when applicable
              */
             endpoint_url?: string | null;
             /**
@@ -1855,26 +1464,12 @@ export interface components {
              */
             permissions?: string[];
             /**
-             * Config Schema
-             * @description Form Schema for UI
-             */
-            config_schema?: {
-                [key: string]: unknown;
-            } | null;
-            /**
              * Current Config
              * @description Current persisted config
              */
             current_config?: {
                 [key: string]: unknown;
             };
-            /**
-             * Ui Slots
-             * @description UI Components
-             */
-            ui_slots?: {
-                [key: string]: unknown;
-            }[];
             /**
              * Group Id
              * @description Exclusive grouping ID
@@ -1888,7 +1483,7 @@ export interface components {
             group_policy: "exclusive" | "independent";
             /**
              * Group Exclusive
-             * @description Legacy exclusive-group flag
+             * @description Exclusive-group flag
              * @default false
              */
             group_exclusive: boolean;
@@ -1913,11 +1508,6 @@ export interface components {
              * Format: date-time
              */
             last_updated?: string;
-        };
-        /** ProviderUpdate */
-        ProviderUpdate: {
-            /** Provider Id */
-            provider_id: string;
         };
         /** RuntimeLlmSettings */
         RuntimeLlmSettings: {
@@ -1993,11 +1583,6 @@ export interface components {
              * @default 0.5
              */
             empower_factor: number | null;
-        };
-        /** SwitchCharacterRequest */
-        SwitchCharacterRequest: {
-            /** Character Id */
-            character_id: string;
         };
         /** SwitchModelRequest */
         SwitchModelRequest: {
@@ -2767,37 +2352,6 @@ export interface operations {
             };
         };
     };
-    get_galgame_state_galgame__character_id__state_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                character_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_soul_soul_get: {
         parameters: {
             query?: never;
@@ -2834,39 +2388,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    switch_character_soul_switch_character_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SwitchCharacterRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3137,433 +2658,6 @@ export interface operations {
             };
         };
     };
-    get_plugin_asset_plugins_assets__plugin_id___file_path__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plugin_id: string;
-                file_path: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_plugins_plugins_list_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PluginListResponse"];
-                };
-            };
-        };
-    };
-    list_plugin_slots_plugins_slots_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    list_capabilities_plugins_capabilities_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    plugin_debug_state_plugins_debug_state_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    plugin_marketplace_snapshot_plugins_marketplace_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    config_plugin_group_plugins_config_group_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    config_plugin_category_plugins_config_category_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    config_group_behavior_plugins_config_group_behavior_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    config_plugin_plugins_config_plugin_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PluginConfigRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    toggle_plugin_plugins_toggle_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ToggleRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reload_plugin_plugins_reload__plugin_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plugin_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_search_provider_plugins_config_search_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_brave_key_plugins_config_brave_key_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_plugin_plugins_upload_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_plugin_plugins_upload_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     analyze_image_vision_analyze_post: {
         parameters: {
             query?: never;
@@ -3637,53 +2731,11 @@ export interface operations {
             };
         };
     };
-    list_characters_characters_get: {
+    get_character_config_character_config_get: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CharacterListResponse"];
-                };
-            };
-        };
-    };
-    list_models_characters_models_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_character_config_characters__character_id__config_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                character_id: string;
-            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3697,24 +2749,13 @@ export interface operations {
                     "application/json": components["schemas"]["CharacterConfig"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    update_character_config_characters__character_id__config_post: {
+    update_character_config_character_config_post: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                character_id: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
@@ -3743,13 +2784,11 @@ export interface operations {
             };
         };
     };
-    delete_character_characters__character_id__delete: {
+    list_models_character_models_get: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                character_id: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -3761,15 +2800,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4059,7 +3089,7 @@ export interface operations {
             };
         };
     };
-    update_plugin_config_stt_plugins_config_post: {
+    update_provider_config_stt_provider_config_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -4068,7 +3098,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PluginConfigRequest"];
+                "application/json": components["schemas"]["ProviderConfigRequest"];
             };
         };
         responses: {

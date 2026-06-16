@@ -8,7 +8,6 @@ export const useTtsVoiceState = (isActive: boolean) => {
     const [edgeVoices, setEdgeVoices] = useState<VoiceOption[]>([]);
     const [gptVoices, setGptVoices] = useState<VoiceOption[]>([]);
     const [activeTtsEngines, setActiveTtsEngines] = useState<string[]>([]);
-    const [ttsPlugins, setTtsPlugins] = useState<any[]>([]);
 
     const hasWarnedTts = useRef(false);
 
@@ -21,15 +20,6 @@ export const useTtsVoiceState = (isActive: boolean) => {
                 hasWarnedTts.current = false;
             }
 
-            try {
-                const pluginResponse = await fetch(`${API_CONFIG.BASE_URL}/plugins/list`);
-                if (pluginResponse.ok) {
-                    const data = await pluginResponse.json();
-                    setTtsPlugins(data.filter((plugin: any) => plugin.category === "tts"));
-                }
-            } catch (error) {
-                console.warn("Failed to fetch TTS plugins", error);
-            }
         } catch (error) {
             if (!hasWarnedTts.current) {
                 console.warn("[VoiceManager] TTS service unavailable", error);
@@ -70,7 +60,6 @@ export const useTtsVoiceState = (isActive: boolean) => {
         edgeVoices,
         gptVoices,
         activeTtsEngines,
-        ttsPlugins,
         refreshStatus,
         refreshVoices,
     };

@@ -83,6 +83,7 @@ Thumbs.db
 # Build output
 dist/
 dist-electron/
+python_backend/packaging/build/
 release/
 
 # Test and reference directories
@@ -111,9 +112,6 @@ models/
 public/live2d/*
 !public/live2d/Hiyori/
 
-# SurrealDB New
-lumina_surreal.db/
-
 # Archived Storage
 python_backend/archive_legacy/lite_memory_db/
 python_backend/archive_legacy/memory_db/
@@ -134,6 +132,19 @@ stt_config.json
 dist_backend/
 build_backend/
 *.spec.bak
+
+# Automation outputs and reports
+automation/*.out
+automation/*.err
+automation/*.txt
+automation/*REPORT*.md
+automation/*GUIDE*.md
+automation/*ANALYSIS*.md
+automation/*BUG*.md
+automation/*SUMMARY*.md
+automation/*COMPLETED*.md
+automation/pytest-results/
+automation/dist_backend_*/
 
 # PyInstaller temp
 *.manifest

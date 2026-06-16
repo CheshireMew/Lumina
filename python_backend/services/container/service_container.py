@@ -206,14 +206,6 @@ class ServiceContainer:
         self._override("system_plugin_manager", value)
 
     @property
-    def router_manager(self):
-        return self._value("router_manager")
-
-    @router_manager.setter
-    def router_manager(self, value):
-        self._override("router_manager", value)
-
-    @property
     def soul(self):
         return self._value("soul")
 

@@ -225,7 +225,7 @@ class BaseMemoryDriver(BaseDriver):
     # --- 馃搼 Realtime / Control Plane Extensions ---
 
     async def publish(self, channel: str, message: Dict[str, Any]):
-        """Broadcast a message (Surreal LiveQuery or Postgres NOTIFY)."""
+        """Broadcast a message through the driver's realtime channel."""
         raise NotImplementedError("Pub/Sub 'publish' not implemented for this driver.")
 
     async def listen(self, channel: str) -> AsyncGenerator[Dict[str, Any], None]:
