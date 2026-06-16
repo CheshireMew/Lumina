@@ -1,39 +1,51 @@
-from dependency_injector import containers, providers
+from typing import Any
 
 
-class LuminaContainer(containers.DeclarativeContainer):
-    config = providers.Object(None)
-    event_bus = providers.Object(None)
-    gateway = providers.Object(None)
+SERVICE_NAMES = (
+    "config",
+    "event_bus",
+    "gateway",
+    "memory_service",
+    "llm_manager",
+    "system_plugin_manager",
+    "process_manager",
+    "reconciliation_service",
+    "capability_registry",
+    "capability_package_registry",
+    "plugin_state_aggregator",
+    "automation_service",
+    "soul",
+    "mcp_host",
+    "batch_manager",
+    "session_manager",
+    "skill_manager",
+    "chat_pipeline",
+    "chat_turn_service",
+    "chat_turn_event_adapter",
+    "tts",
+    "stt",
+    "vision",
+    "ticker",
+    "config_watcher",
+    "prewarm_task",
+    "plugin_service",
+    "plugin_sync",
+    "character_service",
+)
 
-    memory_service = providers.Object(None)
-    llm_manager = providers.Object(None)
 
-    system_plugin_manager = providers.Object(None)
-    process_manager = providers.Object(None)
-    reconciliation_service = providers.Object(None)
-    capability_registry = providers.Object(None)
-    capability_package_registry = providers.Object(None)
-    plugin_state_aggregator = providers.Object(None)
-    automation_service = providers.Object(None)
+class ServiceSlot:
+    def __init__(self, value: Any = None):
+        self._value = value
 
-    soul = providers.Object(None)
-    mcp_host = providers.Object(None)
-    batch_manager = providers.Object(None)
-    session_manager = providers.Object(None)
-    skill_manager = providers.Object(None)
-    chat_pipeline = providers.Object(None)
-    chat_turn_service = providers.Object(None)
-    chat_bridge = providers.Object(None)
+    def __call__(self) -> Any:
+        return self._value
 
-    tts = providers.Object(None)
-    stt = providers.Object(None)
-    vision = providers.Object(None)
+    def override(self, value: Any) -> None:
+        self._value = value
 
-    ticker = providers.Object(None)
-    config_watcher = providers.Object(None)
-    prewarm_task = providers.Object(None)
 
-    plugin_service = providers.Object(None)
-    plugin_sync = providers.Object(None)
-    character_service = providers.Object(None)
+class LuminaContainer:
+    def __init__(self):
+        for name in SERVICE_NAMES:
+            setattr(self, name, ServiceSlot())

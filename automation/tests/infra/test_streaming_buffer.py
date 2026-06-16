@@ -4,21 +4,15 @@ import unittest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
 # Mock Service Imports if possible, or just test the logic logic isolation
-# Since ChatService has heavy dependencies, we might want to extract the buffering logic
+# Since ChatTurnService has pipeline dependencies, we might want to extract the buffering logic
 # or mock the dependencies heavily.
 # Alternatively, we can just test the generator logic if we refactor it into a helper.
 
 # Strategy: Create a standalone generator function that mimics the logic to test it in isolation,
 # OR verifying the logic inline in the test if we implement it as a helper static method.
 # For robustness, let's assume we will refactor the yielding logic into a helper method `_buffered_yield`
-# in ChatService, or just test it via a dummy service subclass.
+# in ChatTurnService, or just test it via a dummy service subclass.
 
 class MockDriver:
     def __init__(self, chunks):

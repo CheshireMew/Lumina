@@ -23,11 +23,9 @@ sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 # ============================================================================
 
 @pytest.mark.chaos
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_llm_service_random_failure():
     """Test system handles LLM service failures gracefully"""
-    from services.chat_service import ChatService
-
     # Simulate random LLM failures
     failure_rate = 0.3  # 30% failure rate
 
@@ -77,7 +75,7 @@ def test_database_connection_timeout():
 # ============================================================================
 
 @pytest.mark.chaos
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_network_delay_handling():
     """Test system handles network delays"""
     import httpx
@@ -222,7 +220,7 @@ def test_concurrent_dictionary_access():
 
 
 @pytest.mark.chaos
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_concurrent_async_operations():
     """Test async race conditions"""
     shared_state = {"counter": 0}

@@ -5,7 +5,6 @@ import sys
 
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(_BACKEND_DIR)
-sys.path.append(os.path.join(_BACKEND_DIR, "sdk"))
 
 from app_config import config
 from core.runtime import resolve_runtime_port, runtime_target_for_capability
@@ -46,7 +45,7 @@ def run_worker(capability: str):
     uvicorn.run(app, host=config.network.host, port=runtime_host.listen_port, log_level="info", log_config=None)
 
 
-def _resolve_legacy_service(name: str) -> tuple[str, str | None]:
+def _resolve_launcher_mode(name: str) -> tuple[str, str | None]:
     if name == "core":
         return ("core", None)
     if name == "worker":
@@ -63,7 +62,7 @@ if __name__ == "__main__":
     cli_args = parser.parse_args()
 
     try:
-        mode, inferred_capability = _resolve_legacy_service(cli_args.mode)
+        mode, inferred_capability = _resolve_launcher_mode(cli_args.mode)
         if mode == "core":
             run_core()
         else:

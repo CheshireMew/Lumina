@@ -8,7 +8,6 @@ from core.security.safe_path import SafePath, SecurityException
 from schemas.character import CharacterConfig
 
 logger = logging.getLogger("CharacterService")
-ACTIVE_CHARACTER_ID = "hiyori"
 
 
 class CharacterService:
@@ -25,9 +24,12 @@ class CharacterService:
         self.system_config = system_config
 
     def _active_character_id(self) -> str:
-        if self.system_config and hasattr(self.system_config, "memory"):
-            return self.system_config.memory.character_id or ACTIVE_CHARACTER_ID
-        return ACTIVE_CHARACTER_ID
+        if self.system_config is None:
+            raise ValueError("CharacterService requires system_config")
+        character_id = str(self.system_config.memory.character_id or "").strip()
+        if not character_id:
+            raise ValueError("memory.character_id must be configured")
+        return character_id
 
     def _character_dir(self) -> Path:
         try:

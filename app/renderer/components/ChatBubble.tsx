@@ -74,7 +74,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isStreaming = false, r
         );
     }
 
-    // Legacy Standalone Mode
     if (!message) return null;
 
     return (

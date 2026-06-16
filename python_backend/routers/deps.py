@@ -48,25 +48,21 @@ def get_plugin_service(c: ServiceContainer = Depends(get_container)) -> Any:
 
 
 def get_system_plugin_manager(c: ServiceContainer = Depends(get_container)) -> Any:
-    manager = c.system_plugin_manager
+    manager = c.get_system_plugin_manager()
     if not manager:
         raise HTTPException(status_code=503, detail="Plugin Manager unavailable")
     return manager
 
 
 def get_optional_system_plugin_manager(c: ServiceContainer = Depends(get_container)) -> Any:
-    return c.system_plugin_manager
+    return c.get_system_plugin_manager()
 
 
 def get_soul_service(c: ServiceContainer = Depends(get_container)) -> Any:
-    soul = c.soul
+    soul = c.get_soul()
     if not soul:
         raise HTTPException(status_code=503, detail="Soul Service not initialized")
     return soul
-
-
-def get_optional_soul_service(c: ServiceContainer = Depends(get_container)) -> Any:
-    return c.soul
 
 
 def get_chat_turn_service(c: ServiceContainer = Depends(get_container)) -> Any:
@@ -74,7 +70,7 @@ def get_chat_turn_service(c: ServiceContainer = Depends(get_container)) -> Any:
 
 
 def get_session_manager(c: ServiceContainer = Depends(get_container)) -> Any:
-    session_manager = c.session_manager
+    session_manager = c.get_session_manager()
     if not session_manager:
         raise HTTPException(status_code=503, detail="Session Manager not initialized")
     return session_manager

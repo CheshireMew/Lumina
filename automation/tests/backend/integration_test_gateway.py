@@ -5,21 +5,13 @@ import json
 import logging
 from datetime import datetime
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+import pytest
 
 # Set up logging to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("GatewayDebugger")
 
-try:
-    import websockets
-except ImportError:
-    logger.error("websockets module not found. Please pip install websockets")
-    exit(1)
+websockets = pytest.importorskip("websockets")
 
 async def test_gateway_handshake():
     uri = "ws://127.0.0.1:8010/lumina/gateway/ws"

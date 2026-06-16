@@ -5,13 +5,7 @@ Tests dependency injection, service registration, and error handling
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+from unittest.mock import MagicMock
 
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]
@@ -69,16 +63,13 @@ class TestServiceContainer(unittest.TestCase):
         self.assertIs(self.container.get_llm_manager(), mock_llm)
         print("✅ Multiple service registration verified")
 
-    def test_legacy_property_access(self):
-        """Test backward compatibility with property-based access"""
+    def test_explicit_gateway_access(self):
+        """Test explicit gateway setter/getter access."""
         mock_gateway = MagicMock(name="Gateway")
-        self.container.gateway = mock_gateway
+        self.container.set_gateway(mock_gateway)
 
-        # Property access should work
-        self.assertIs(self.container.gateway, mock_gateway)
-        # Getter should also return the same instance
         self.assertIs(self.container.get_gateway(), mock_gateway)
-        print("✅ Legacy property access verified")
+        print("✅ Explicit gateway access verified")
 
     def test_context_provider_registry(self):
         """Test context provider registration and retrieval"""
@@ -146,9 +137,9 @@ class TestServiceContainer(unittest.TestCase):
     def test_global_services_singleton(self):
         """Test that the global 'services' instance works correctly"""
         mock_config = MagicMock(name="GlobalConfig")
-        services.config = mock_config
+        services.set_config(mock_config)
 
-        self.assertIs(services.config, mock_config)
+        self.assertIs(services.get_config(), mock_config)
         print("✅ Global services singleton verified")
 
     def test_setter_and_getter_consistency(self):
@@ -165,18 +156,6 @@ class TestServiceContainer(unittest.TestCase):
         self.assertIs(self.container.get_tts(), mock_tts)
         self.assertIs(self.container.get_plugin_service(), mock_plugin)
         print("✅ Setter/getter consistency verified")
-
-    def test_register_aliases(self):
-        """Test registration alias methods (register_tts, register_stt)"""
-        mock_tts = MagicMock(name="TTS")
-        mock_stt = MagicMock(name="STT")
-
-        self.container.register_tts(mock_tts)
-        self.container.register_stt(mock_stt)
-
-        self.assertIs(self.container.get_tts(), mock_tts)
-        self.assertIs(self.container.get_stt(), mock_stt)
-        print("✅ Registration alias methods verified")
 
 
 if __name__ == "__main__":

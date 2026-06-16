@@ -4,7 +4,8 @@ import logging
 import os
 from typing import Any
 
-from services.provider_aliases import normalize_provider_id
+
+BRAVE_SEARCH_PROVIDER_ID = "driver.tool.search.brave"
 
 _DOTENV_LOADED = False
 
@@ -52,7 +53,7 @@ def apply_env_overrides(bundle: Any) -> None:
         llm.model = os.environ["LLM_MODEL"]
 
     if os.environ.get("BRAVE_API_KEY"):
-        plugins.settings.setdefault("brave", {})["api_key"] = os.environ["BRAVE_API_KEY"]
+        plugins.settings.setdefault(BRAVE_SEARCH_PROVIDER_ID, {})["api_key"] = os.environ["BRAVE_API_KEY"]
 
     if os.environ.get("LUMINA_PG_HOST"):
         postgres.host = os.environ["LUMINA_PG_HOST"]
@@ -66,7 +67,4 @@ def apply_env_overrides(bundle: Any) -> None:
         postgres.database = os.environ["LUMINA_PG_DATABASE"]
 
     if os.environ.get("SEARCH_PROVIDER"):
-        plugins.selected_providers["tool.search"] = normalize_provider_id(
-            "tool.search",
-            os.environ["SEARCH_PROVIDER"],
-        )
+        plugins.selected_providers["tool.search"] = os.environ["SEARCH_PROVIDER"]

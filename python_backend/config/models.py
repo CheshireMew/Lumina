@@ -5,6 +5,15 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 
+DEFAULT_SELECTED_PROVIDERS: Dict[str, str] = {
+    "memory": "driver.memory.postgres",
+    "stt": "driver.stt.sensevoice",
+    "tts": "driver.tts.edge",
+    "tool.search": "driver.tool.search.brave",
+    "vision": "driver.vision.moondream",
+}
+
+
 class PostgresConfig(BaseModel):
     host: str = Field(default="localhost")
     port: int = Field(default=5432)
@@ -14,7 +23,6 @@ class PostgresConfig(BaseModel):
 
 
 class MemoryConfig(BaseModel):
-    provider: str = Field(default="driver.memory.postgres")
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
     namespace: str = Field(default="lumina")
     database: str = Field(default="memory")
@@ -30,7 +38,6 @@ class LLMConfig(BaseModel):
 
 
 class STTConfig(BaseModel):
-    provider: str = "sense-voice"
     model: str = "base"
     device: str = "cuda"
     compute_type: str = "float16"
@@ -38,25 +45,26 @@ class STTConfig(BaseModel):
 
 
 class TTSConfig(BaseModel):
-    provider: str = "edge-tts"
     voice: str = "zh-CN-XiaoxiaoNeural"
 
 
 class AudioConfig(BaseModel):
     device_name: Optional[str] = None
+    speech_start_threshold: float = 0.6
+    speech_end_threshold: float = 0.05
+    min_speech_frames: int = 15
     enable_voiceprint_filter: bool = True
     voiceprint_threshold: float = 0.45
     voiceprint_profile: str = "default"
 
 
 class SearchConfig(BaseModel):
-    provider: str = "brave"
     enabled: bool = True
 
 
 class PluginsConfig(BaseModel):
     desired_state: Dict[str, bool] = Field(default_factory=dict)
-    selected_providers: Dict[str, str] = Field(default_factory=dict)
+    selected_providers: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_SELECTED_PROVIDERS))
     prewarm_core: bool = Field(default=True)
     settings: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
@@ -98,10 +106,43 @@ class NetworkConfig(BaseModel):
     def memory_url(self) -> str:
         return f"http://{self.host}:{self.memory_port}"
 
-    def get_worker_url(self, worker_id: str) -> str:
-        from core.runtime import resolve_runtime_base_url
+    def runtime_host(self, runtime_target: str) -> str:
+        from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target
 
-        url = resolve_runtime_base_url(self, worker_id)
+        normalized = normalize_runtime_target(runtime_target)
+        if normalized == MAIN_RUNTIME_TARGET:
+            return self.host
+        worker = self.workers.get(normalized)
+        return worker.host if worker else self.host
+
+    def runtime_port(self, runtime_target: str) -> Optional[int]:
+        from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target, runtime_target_to_capability
+
+        normalized = normalize_runtime_target(runtime_target)
+        if normalized == MAIN_RUNTIME_TARGET:
+            return self.memory_port
+
+        capability = runtime_target_to_capability(normalized)
+        if capability == "stt":
+            return self.stt_port
+        if capability == "tts":
+            return self.tts_port
+
+        worker = self.workers.get(normalized)
+        if worker:
+            return worker.port
+        if capability == "vision":
+            return 8005
+        return None
+
+    def runtime_base_url(self, runtime_target: str) -> Optional[str]:
+        port = self.runtime_port(runtime_target)
+        if not port:
+            return None
+        return f"http://{self.runtime_host(runtime_target)}:{port}"
+
+    def get_worker_url(self, worker_id: str) -> str:
+        url = self.runtime_base_url(worker_id)
         if not url:
             raise ValueError(f"Unknown worker: {worker_id}")
         return url

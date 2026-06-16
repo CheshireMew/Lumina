@@ -18,7 +18,7 @@ active_websockets: Dict[str, Any] = {}
 # Thread-safe queue for communicating between AudioCallback and WebSocket Loop
 message_queue: queue.Queue = queue.Queue(maxsize=500)
 
-# Audio Filter Chain (Plugin Hook System)
-# Plugins register filters here to intercept audio before STT
+# Audio Filter Chain
+# Provider extensions register filters here to intercept audio before STT
 # Initialized in STT Capability on_startup
 filter_chain: Any = None

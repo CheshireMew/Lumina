@@ -7,6 +7,12 @@ class AbstractLifecycleBus(ABC):
     Decouples the business logic (Main/Worker) from the underlying transport layer.
     """
 
+    @property
+    @abstractmethod
+    def is_connected(self) -> bool:
+        """Whether the transport is currently connected."""
+        pass
+
     @abstractmethod
     async def connect(self):
         """Establish connection to the transport layer."""
@@ -58,4 +64,9 @@ class AbstractLifecycleBus(ABC):
         """
         Retrieve list of workers that have pulsed within timeout.
         """
+        pass
+
+    @abstractmethod
+    async def get_pool(self) -> Any:
+        """Return the lifecycle store connection pool."""
         pass

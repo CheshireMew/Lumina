@@ -126,7 +126,7 @@ def test_mock_object_cleanup():
 # ============================================================================
 
 @pytest.mark.memory
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_async_context_manager_cleanup():
     """Test that async resources are properly cleaned up"""
     # Start tracking
@@ -158,7 +158,7 @@ async def test_async_context_manager_cleanup():
 
 
 @pytest.mark.memory
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_event_loop_cleanup():
     """Test that event loop doesn't accumulate memory"""
     # Start tracking

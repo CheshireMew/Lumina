@@ -53,12 +53,13 @@ class SoulContextProvider(ContextProvider):
         self.services = services_container
 
     async def provide(self, ctx: Any) -> Optional[str]:
-        if not self.services.soul:
+        soul = self.services.get_soul()
+        if not soul:
             return None
             
         try:
             # Use unified get_system_prompt which handles fallback to config
-            return await self.services.soul.get_system_prompt({'context': ctx})
+            return await soul.get_system_prompt({'context': ctx})
             
         except Exception as e:
             logger.warning(f"Soul Provider failed: {e}")

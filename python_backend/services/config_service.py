@@ -14,12 +14,17 @@ class ConfigService:
     def config(self):
         return self.container.get_config()
 
+    def _get_llm_manager(self):
+        if not self.container.has_service("llm_manager"):
+            return None
+        return self.container.get_llm_manager()
+
     def get_registered_service(self, name: str) -> Any:
         return get_service_registry().resolve(name, container=self.container)
 
     def get_llm_runtime_settings(self) -> RuntimeLlmSettings:
         config = self.config
-        llm_manager = getattr(self.container, "llm_manager", None)
+        llm_manager = self._get_llm_manager()
         route = llm_manager.get_route("chat") if llm_manager else None
         provider_id = route.provider_id if route else config.get_selected_provider("llm")
         provider_type = "free" if provider_id == "free_tier" else "custom"
@@ -64,7 +69,7 @@ class ConfigService:
                 model=model,
             )
 
-        llm_manager = getattr(self.container, "llm_manager", None)
+        llm_manager = self._get_llm_manager()
         if llm_manager:
             target_provider_id = "free_tier" if provider_type == "free" else "custom_provider"
             if target_provider_id == "custom_provider":

@@ -15,10 +15,10 @@ from services.infra.service_discovery import discovery
 class RuntimeService:
     def __init__(self, container):
         self.container = container
-        self.package_registry = getattr(container, "capability_package_registry", None)
+        self.package_registry = container.get_capability_package_registry()
 
     def _get_provider_state(self, capability: str, selected_provider: str | None) -> dict[str, Any]:
-        aggregator = getattr(self.container, "plugin_state_aggregator", None)
+        aggregator = self.container.get_plugin_state_aggregator()
         if not aggregator:
             return {}
 
@@ -40,7 +40,7 @@ class RuntimeService:
 
     def get_capability_runtime(self, capability: str, base_url: str) -> dict[str, Any]:
         contract = get_capability_contract(capability)
-        config = self.container.config
+        config = self.container.get_config()
         package_definition = self.package_registry.package_for_capability(capability) if self.package_registry else None
         package_snapshot = (
             self.package_registry.get_snapshot(package_definition.id, base_url)
@@ -56,7 +56,7 @@ class RuntimeService:
         )
         worker_id = runtime_target_to_worker_id(runtime_target)
         worker_node = discovery.get_node(worker_id)
-        process_manager = self.container.get_process_manager() if hasattr(self.container, "get_process_manager") else None
+        process_manager = self.container.get_process_manager()
         worker_online = (
             worker_node is not None
             or runtime_target == MAIN_RUNTIME_TARGET

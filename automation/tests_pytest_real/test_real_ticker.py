@@ -14,9 +14,9 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from services.global_ticker import TimeTicker
+from services.utilities.ticker import TimeTicker
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_ticker_second_subscription():
     ticker = TimeTicker()
     mock_callback = AsyncMock()
@@ -29,7 +29,7 @@ async def test_ticker_second_subscription():
     assert mock_callback.called
     assert isinstance(mock_callback.call_args[0][0], datetime)
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_ticker_eventbus_emission():
     mock_bus = AsyncMock()
     ticker = TimeTicker(event_bus=mock_bus)
@@ -42,7 +42,7 @@ async def test_ticker_eventbus_emission():
     from unittest.mock import ANY
     mock_bus.emit.assert_any_call("system.tick", ANY)
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_ticker_minute_transition():
     ticker = TimeTicker()
     mock_minute_callback = AsyncMock()

@@ -44,7 +44,7 @@ const getImportanceColor = (score: number) => {
 
 interface HistoryListProps {
     history?: HistoryEvent[];
-    activeCharacterId: string;
+    activeCharacterId?: string | null;
 }
 
 export const HistoryList: React.FC<HistoryListProps> = ({ history, activeCharacterId }) => {
@@ -65,9 +65,9 @@ export const HistoryList: React.FC<HistoryListProps> = ({ history, activeCharact
                 const parseName = event.name || getName(event.content);
                 
                 const normalizedRole = role?.toLowerCase() || '';
-                const normalizedCharId = activeCharacterId.toLowerCase();
+                const normalizedCharId = activeCharacterId?.toLowerCase() ?? null;
                 
-                const isAI = normalizedRole === normalizedCharId || 
+                const isAI = (normalizedCharId !== null && normalizedRole === normalizedCharId) || 
                              normalizedRole === 'assistant' || 
                              normalizedRole === 'ai' || 
                              normalizedRole === 'system';

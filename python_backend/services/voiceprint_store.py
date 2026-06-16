@@ -15,9 +15,7 @@ class VoiceprintStoreUnavailable(RuntimeError):
 
 async def _get_db():
     bus = get_lifecycle_bus()
-    if not getattr(bus, "_is_connected", False):
-        await bus.connect()
-    db = bus.db
+    db = await bus.get_pool()
     if db is None:
         raise VoiceprintStoreUnavailable("Voiceprint database is unavailable")
     return db

@@ -8,8 +8,5 @@
 #   ├── utilities/      - General utilities (ticker, shutdown)
 #   └── ...
 #
-# Usage:
-#   from services.managers import AudioManager, TTSPluginManager
-#   from services.orchestrators import SessionManager, SoulService
-#   from services.utilities import TimeTicker, ShutdownManager
+# Import concrete services from their owning modules.
 

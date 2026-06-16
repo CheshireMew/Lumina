@@ -5,9 +5,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
-
-from core.manifest import PluginManifest
+from core.manifest import PluginManifest, read_manifest_file
 from core.runtime import normalize_runtime_target
 
 logger = logging.getLogger("PluginManifestRepository")
@@ -79,6 +77,5 @@ class ManifestRepository:
 
     @staticmethod
     def _read_manifest(manifest_path: Path, plugin_dir: Path) -> PluginManifest:
-        with open(manifest_path, "r", encoding="utf-8") as fh:
-            raw = yaml.safe_load(fh) or {}
+        raw = read_manifest_file(manifest_path)
         return PluginManifest(**{**raw, "path": str(plugin_dir)})

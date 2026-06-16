@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any
-from routers.deps import get_llm_service, get_optional_soul_service
+from routers.deps import get_llm_service, get_soul_service
+from services.orchestrators.soul import SoulService
 
 router = APIRouter(
     prefix="/llm-mgmt",
@@ -72,16 +73,15 @@ async def update_route(feature: str, payload: Dict[str, Any], llm_manager=Depend
 async def get_feature_params(
     feature: str,
     llm_manager=Depends(get_llm_service),
-    soul_client=Depends(get_optional_soul_service),
+    soul_service: SoulService = Depends(get_soul_service),
 ):
     """Fetch all generation parameters for a specific feature, with dynamic soul-based adjustments"""
     soul_state = None
     
-    if soul_client and feature in ["chat", "proactive"]:
-        if hasattr(soul_client, "get_llm_adjustment_state"):
-            soul_state = soul_client.get_llm_adjustment_state() or None
-            if soul_state:
-                logger.info(f"[LLM Mgmt] Calculating dynamic params for {feature} using soul state: {soul_state}")
+    if feature in ["chat", "proactive"]:
+        soul_state = soul_service.get_llm_adjustment_state() or None
+        if soul_state:
+            logger.info(f"[LLM Mgmt] Calculating dynamic params for {feature} using soul state: {soul_state}")
             
     params = llm_manager.get_parameters(feature, soul_state=soul_state)
     return params
@@ -96,15 +96,16 @@ models_router = APIRouter(
 async def list_models(llm_manager=Depends(get_llm_service)):
     """List available LLM models for frontend configuration"""
     try:
-        # Try to find Pollinations driver first (as it has the list logic)
         driver = await llm_manager.get_driver("chat") 
         if driver and hasattr(driver, "list_models"):
             return {"models": await driver.list_models()}
-            
-        # Fallback: Return cached or hardcoded list if driver not available
-        return {"models": ["openai", "mistral", "claude-3-haiku", "gemini", "midijourney"]}
-            
+
+        raise HTTPException(
+            status_code=503,
+            detail=f"LLM provider '{driver.id}' does not support model listing",
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error listing models: {e}")
-        # Graceful fallback
-        return {"models": ["openai", "mistral", "claude-3-haiku", "gemini", "midijourney"]}
+        raise HTTPException(status_code=503, detail=str(e))

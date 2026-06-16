@@ -1,28 +1,9 @@
-"""
-[DEPRECATED] This module is scheduled for removal.
-
-Migration Path:
-- Use `memory.factory.MemoryDriverFactory` to get drivers directly
-- Use `services.container.services.get_memory()` for high-level access
-- RAG via `services.chat.pipeline.ChatPipeline`
-
-This file will be removed in a future version.
-"""
 import asyncio
-import warnings
-warnings.warn(
-    "memory.core.MemoryService is deprecated. Use memory.factory.MemoryDriverFactory instead.",
-    DeprecationWarning,
-    stacklevel=2
-)
-
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 from memory.vector_store import VectorStore
-# from memory.connection import DBConnection # Deprecated
-from memory.factory import MemoryDriverFactory, NoOpDriver # Use Factory and shared NoOp
-# Concrete drivers loaded dynamically
+from core.interfaces.driver import BaseMemoryDriver
 
 
 logger = logging.getLogger("memory.core")
@@ -34,23 +15,17 @@ class MemoryService:
     Delegates to VectorStore and the configured Postgres-backed driver.
     """
     
-    def __init__(self, character_id: str = "default"):
+    def __init__(self, driver: BaseMemoryDriver, character_id: str = "default"):
+         if driver is None:
+             raise ValueError("MemoryService requires an explicit memory driver.")
+
          self.character_id = character_id
          self.available = True
          self.degraded_reason: Optional[str] = None
+         self._driver = driver
          
-         try:
-             # Use Factory to get driver
-             self.driver = MemoryDriverFactory.create_driver()
-                     
-         except Exception as e:
-             logger.critical(f"Failed to load Memory Driver: {e}")
-             self.driver = NoOpDriver()
+         self.vector_store = VectorStore(self._driver)
          
-         # Components
-         self.vector_store = VectorStore(self.driver)
-         
-         # Injected References
          self.encoder = None
          self.batch_manager = None
 
@@ -65,9 +40,32 @@ class MemoryService:
     def set_batch_manager(self, manager):
         self.batch_manager = manager
 
-    def set_driver(self, driver):
-        self.driver = driver
-        self.vector_store.driver = driver
+    @property
+    def driver(self):
+        """Current memory driver, exposed read-only for diagnostics and raw queries."""
+        return self._driver
+
+    @property
+    def driver_id(self) -> str:
+        return getattr(self._driver, "id", "memory")
+
+    def is_driver_active(self, driver_id: str) -> bool:
+        return self.driver_id == driver_id
+
+    async def replace_driver(self, driver, *, close_existing: bool = True, mark_available: bool = True):
+        current = self._driver
+        if current is driver:
+            if mark_available:
+                self.set_available(True)
+            return
+
+        if close_existing and current:
+            await current.close()
+
+        self._driver = driver
+        self.vector_store.replace_driver(driver)
+        if mark_available:
+            self.set_available(True)
 
     def set_available(self, value: bool, reason: Optional[str] = None):
         self.available = value
@@ -75,20 +73,20 @@ class MemoryService:
 
     async def connect(self):
         """Connect to underlying driver."""
-        if self.driver:
-            await self.driver.connect()
+        if self._driver:
+            await self._driver.connect()
 
     async def close(self):
         """Close connection."""
-        if self.driver:
-            await self.driver.close()
+        if self._driver:
+            await self._driver.close()
 
     @property
     def db(self):
-        """Access underlying DB driver (for legacy compat)."""
-        if not self.driver:
+        """Expose the underlying connection handle for diagnostics and admin tools."""
+        if not self._driver:
             return None
-        return getattr(self.driver, "_db", None) or getattr(self.driver, "_pool", None)
+        return getattr(self._driver, "_db", None) or getattr(self._driver, "_pool", None)
 
     def set_hippocampus(self, hippocampus):
         self._hippocampus = hippocampus
@@ -103,7 +101,6 @@ class MemoryService:
     # ================= LOGGING & OPERATIONS =================
 
     async def log_conversation(self, character_id: str, narrative: str) -> str:
-        # db = await DBConnection.get_db() # Deprecated
         try:
             data = {
                 "character_id": character_id.lower(),
@@ -147,13 +144,6 @@ class MemoryService:
 
     async def search_hybrid(self, *args, **kwargs):
         return await self.vector_store.search_hybrid(*args, **kwargs)
-
-    # Legacy Compatibility
-    async def add_memory(self, content: str, embedding: List[float], character_id: str, **kwargs) -> str:
-        """Legacy wrapper: writes to conversation_log"""
-        return await self.log_conversation(character_id, content)
-
-
 
     # ================= UTILITIES =================
     

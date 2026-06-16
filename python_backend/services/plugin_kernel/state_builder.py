@@ -110,16 +110,16 @@ class PluginStateBuilder:
         }
 
     def _desired_enabled(self, plugin_id: str) -> bool:
-        if self.config and hasattr(self.config, "is_plugin_desired_enabled"):
+        if self.config:
             return bool(self.config.is_plugin_desired_enabled(plugin_id))
         return True
 
     def _selected_provider(self, capability: str) -> str | None:
-        if self.config and hasattr(self.config, "get_selected_provider"):
+        if self.config:
             return self.config.get_selected_provider(capability)
         return None
 
     def _plugin_settings(self, plugin_id: str) -> dict[str, Any]:
-        plugins_config = getattr(self.config, "plugins", None)
-        settings = getattr(plugins_config, "settings", {}) or {}
-        return dict(settings.get(plugin_id, {}))
+        if not self.config:
+            return {}
+        return self.config.get_plugin_settings(plugin_id)

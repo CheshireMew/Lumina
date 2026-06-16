@@ -7,6 +7,39 @@ from typing import Any, Optional
 logger = logging.getLogger("ServiceRegistry")
 
 
+CONTAINER_SERVICE_GETTERS = {
+    "automation_service": "get_automation_service",
+    "batch_manager": "get_batch_manager",
+    "capability_package_registry": "get_capability_package_registry",
+    "capability_registry": "get_capability_registry",
+    "character_service": "get_character_service",
+    "chat_pipeline": "get_chat_pipeline",
+    "chat_turn_event_adapter": "get_chat_turn_event_adapter",
+    "chat_turn_service": "get_chat_turn_service",
+    "config": "get_config",
+    "config_watcher": "get_config_watcher",
+    "event_bus": "get_event_bus",
+    "gateway": "get_gateway",
+    "llm_manager": "get_llm_manager",
+    "mcp_host": "get_mcp_host",
+    "memory": "get_memory",
+    "plugin_service": "get_plugin_service",
+    "plugin_state_aggregator": "get_plugin_state_aggregator",
+    "plugin_sync": "get_plugin_sync",
+    "prewarm_task": "get_prewarm_task",
+    "process_manager": "get_process_manager",
+    "reconciliation_service": "get_reconciliation_service",
+    "session_manager": "get_session_manager",
+    "skill_manager": "get_skill_manager",
+    "soul": "get_soul",
+    "stt": "get_stt",
+    "system_plugin_manager": "get_system_plugin_manager",
+    "ticker": "get_ticker",
+    "tts": "get_tts",
+    "vision": "get_vision",
+}
+
+
 class ServiceRegistry:
     """
     Local service registry for plugin and route code.
@@ -72,36 +105,27 @@ class ServiceRegistry:
             return None
 
     def _resolve_from_container(self, container: Any, name: str) -> Any:
-        candidates = [f"get_{name}", name]
-        for candidate in candidates:
-            if not hasattr(container, candidate):
-                continue
+        getter_name = CONTAINER_SERVICE_GETTERS.get(name)
+        if not getter_name:
+            return None
 
-            value = getattr(container, candidate)
-            try:
-                resolved = value() if callable(value) else value
-            except Exception as exc:
-                logger.debug("Failed to resolve %s from container via %s: %s", name, candidate, exc)
-                continue
+        getter = getattr(container, getter_name)
+        try:
+            resolved = getter()
+        except Exception as exc:
+            logger.debug("Failed to resolve %s from container via %s: %s", name, getter_name, exc)
+            return None
 
-            if resolved is not None:
-                return resolved
+        if resolved is not None:
+            return resolved
         return None
 
     def _list_container_services(self, container: Any) -> list[str]:
-        names: set[str] = set()
-        for attr in dir(container):
-            if attr.startswith("_"):
-                continue
-            if attr.startswith("get_"):
-                names.add(attr[4:])
-                continue
-
-            value = getattr(container, attr, None)
-            if callable(value):
-                continue
-            names.add(attr)
-        return sorted(names)
+        return sorted(
+            name
+            for name in CONTAINER_SERVICE_GETTERS
+            if self._resolve_from_container(container, name) is not None
+        )
 
 
 def get_service_registry() -> ServiceRegistry:

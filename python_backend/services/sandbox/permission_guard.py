@@ -18,12 +18,12 @@ class Permission(Enum):
     """Standard permission types for plugins."""
     
     # Filesystem
-    FILESYSTEM_READ = "filesystem.read"
-    FILESYSTEM_WRITE = "filesystem.write"
+    FILESYSTEM_DATA_READ = "filesystem.data_read"
+    FILESYSTEM_DATA_WRITE = "filesystem.data_write"
     FILESYSTEM_EXECUTE = "filesystem.execute"
     
     # Network
-    NETWORK_OUTBOUND = "network.outbound"
+    NETWORK_EXTERNAL = "network.external"
     NETWORK_LISTEN = "network.listen"
     NETWORK_LOCAL_ONLY = "network.local_only"
     
@@ -64,9 +64,9 @@ class PluginPermissions:
         Parse permissions from manifest format.
         
         Examples:
-            - "filesystem.read" -> basic permission
-            - "filesystem.write:plugins/{id}/data" -> scoped to path
-            - "network.outbound:api.example.com" -> scoped to host
+            - "filesystem.data_read" -> basic permission
+            - "filesystem.data_write:plugins/{id}/data" -> scoped to path
+            - "network.external:api.example.com" -> scoped to host
             - "resource.memory:512mb" -> resource limit (handled separately)
         """
         result = cls()
@@ -77,9 +77,9 @@ class PluginPermissions:
                 result.allowed.add(base)
                 
                 # Parse scoped permissions
-                if base == "filesystem.write":
+                if base == "filesystem.data_write":
                     result.filesystem_paths.add(scope)
-                elif base == "network.outbound":
+                elif base == "network.external":
                     result.network_hosts.add(scope)
                 elif base == "network.listen":
                     try:
@@ -168,7 +168,7 @@ class PermissionGuard:
         
         if write:
             # Need explicit write permission
-            if not self.permissions.has_permission(Permission.FILESYSTEM_WRITE.value):
+            if not self.permissions.has_permission(Permission.FILESYSTEM_DATA_WRITE.value):
                 return False
             
             # Check scoped paths
@@ -190,7 +190,7 @@ class PermissionGuard:
         
         else:
             # Read access
-            if not self.permissions.has_permission(Permission.FILESYSTEM_READ.value):
+            if not self.permissions.has_permission(Permission.FILESYSTEM_DATA_READ.value):
                 # Check if in safe read paths
                 for safe in self._safe_read_paths:
                     if target == safe or safe in target.parents:
@@ -215,7 +215,7 @@ class PermissionGuard:
             True if access is allowed
         """
         # Check basic permission
-        if not self.permissions.has_permission(Permission.NETWORK_OUTBOUND.value):
+        if not self.permissions.has_permission(Permission.NETWORK_EXTERNAL.value):
             return False
         
         # Always deny blacklisted hosts

@@ -18,6 +18,7 @@ import { useCoreSystem } from './hooks/useCoreSystem';
 import { useBackendState } from './hooks/useBackendState';
 import { useCapabilityPackages } from './hooks/useCapabilityPackages';
 import { resolveBundledAssetSrc, transformImageSrc } from './utils/srcUtils';
+import { syncFrontendServiceUrls } from './runtime/appRuntime';
 
 // Avatar System
 import AvatarContainer from './core/avatar/AvatarContainer';
@@ -117,6 +118,7 @@ function App() {
 
         console.log("🔌 [App] Syncing runtime ports:", backendState.ports);
         updateApiConfig(backendState.ports);
+        syncFrontendServiceUrls();
     }, [backendState.ports]);
 
     useEffect(() => {

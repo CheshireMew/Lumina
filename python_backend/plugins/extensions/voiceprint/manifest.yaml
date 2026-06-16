@@ -5,7 +5,7 @@ capability: stt
 runtime_target: worker:stt
 package: voiceprint-runtime
 permissions:
-  - filesystem.read
+  - filesystem.read_assets
 config_schema:
   voiceprint_threshold: 0.6
 provides:

@@ -3,7 +3,7 @@ from typing import Callable, Dict, List, Optional
 
 import numpy as np
 
-from .audio_config_store import AudioConfigStore
+from app_config import config as app_config
 from .audio_devices import AudioDeviceSelector
 from .vad_processor import VADProcessor
 
@@ -28,7 +28,6 @@ class AudioManager:
         self.on_speech_end = on_speech_end
         self.on_vad_status_change = on_vad_status_change
 
-        self.config_store = AudioConfigStore()
         self.device_selector = AudioDeviceSelector(sample_rate, self.frame_size)
         self.vad_processor = VADProcessor(
             sample_rate=sample_rate,
@@ -76,14 +75,11 @@ class AudioManager:
         self.vad_processor.min_speech_frames = value
 
     def _load_config(self) -> None:
-        config = self.config_store.load()
-        if not config:
-            return
-
-        self.device_name = config.get("device_name")
-        self.speech_start_threshold = config.get("speech_start_threshold", 0.6)
-        self.speech_end_threshold = config.get("speech_end_threshold", 0.05)
-        self.min_speech_frames = config.get("min_speech_frames", 15)
+        audio_config = app_config.audio
+        self.device_name = audio_config.device_name
+        self.speech_start_threshold = audio_config.speech_start_threshold
+        self.speech_end_threshold = audio_config.speech_end_threshold
+        self.min_speech_frames = audio_config.min_speech_frames
         logger.info(
             "Loaded audio config: "
             f"Device={self.device_name}, "
@@ -92,14 +88,12 @@ class AudioManager:
         )
 
     def save_config(self) -> None:
-        self.config_store.save(
-            {
-                "device_name": self.device_name,
-                "speech_start_threshold": self.speech_start_threshold,
-                "speech_end_threshold": self.speech_end_threshold,
-                "min_speech_frames": self.min_speech_frames,
-            }
-        )
+        audio_config = app_config.audio
+        audio_config.device_name = self.device_name
+        audio_config.speech_start_threshold = self.speech_start_threshold
+        audio_config.speech_end_threshold = self.speech_end_threshold
+        audio_config.min_speech_frames = self.min_speech_frames
+        app_config.save()
 
     def update_params(
         self,

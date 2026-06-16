@@ -128,17 +128,17 @@ class SandboxedContext(LuminaContext):
     
     def load_data(self) -> dict[str, Any]:
         """Load the plugin's own persisted data."""
-        self._check_permission(Permission.FILESYSTEM_READ.value, "read plugin data")
+        self._check_permission(Permission.FILESYSTEM_DATA_READ.value, "read plugin data")
         return super().load_data()
 
     def save_data(self, data: dict[str, Any]):
         """Persist the plugin's own data."""
-        self._check_permission(Permission.FILESYSTEM_WRITE.value, "write plugin data")
+        self._check_permission(Permission.FILESYSTEM_DATA_WRITE.value, "write plugin data")
         super().save_data(data)
     
     def get_data_dir(self) -> Path | None:
         """Return the plugin's data directory."""
-        self._check_permission(Permission.FILESYSTEM_READ.value, "access data directory")
+        self._check_permission(Permission.FILESYSTEM_DATA_READ.value, "access data directory")
         return super().get_data_dir()
     
     # --- Non-Gated APIs (available to all plugins) ---

@@ -1,15 +1,14 @@
 import logging
-import inspect
 from pathlib import Path
 from typing import Any
 
 from core.events.bus import bus
+from core.events.definitions import PluginLifecycleRequest
 from core.interfaces.plugin import Plugin
 from core.manifest import PluginManifest, normalize_capability_id
 from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target
 from services.capability_registry import CapabilityRegistry
 from services.plugin_kernel import (
-    HookBinder,
     ManifestRepository,
     PermissionChecker,
     PluginContextBinder,
@@ -25,21 +24,20 @@ logger = logging.getLogger("SystemPluginManager")
 class SystemPluginManager:
     def __init__(self, container=None, runtime_target: str = MAIN_RUNTIME_TARGET, base_dir: Path | None = None):
         self.container = container
-        self.event_bus = getattr(container, "event_bus", None) or bus
+        self.event_bus = container.get_event_bus() if container and container.has_service("event_bus") else bus
         self.runtime_target = normalize_runtime_target(runtime_target)
         self._plugin_root = Path(base_dir) if base_dir else Path(__file__).parent.parent / "plugins"
         self._plugins: dict[str, Plugin] = {}
         self._manifests: dict[str, PluginManifest] = {}
         self._errors: dict[str, str] = {}
-        self._capability_registry = getattr(container, "capability_registry", None) or CapabilityRegistry()
+        self._capability_registry = container.get_capability_registry() if container and container.get_capability_registry() else CapabilityRegistry()
         if container is not None:
-            container.capability_registry = self._capability_registry
+            container.set_capability_registry(self._capability_registry)
         self._manifest_repository = ManifestRepository(self._plugin_root)
         self._loader = PluginLoader()
         self._permission_checker = PermissionChecker()
         self._context_binder = PluginContextBinder(container, self._capability_registry)
-        self._hook_binder = HookBinder()
-        self._state_builder = PluginStateBuilder(getattr(container, "config", None))
+        self._state_builder = PluginStateBuilder(container.get_config() if container and container.has_service("config") else None)
         self._lifecycle_subscriptions: list[int] = []
 
     @property
@@ -58,7 +56,7 @@ class SystemPluginManager:
         self.refresh_manifests()
 
         for plugin_id, manifest in self._manifests.items():
-            if not self.container.config.is_plugin_desired_enabled(plugin_id):
+            if not self.container.get_config().is_plugin_desired_enabled(plugin_id):
                 continue
             await self._load_and_enable(plugin_id)
 
@@ -76,26 +74,19 @@ class SystemPluginManager:
         )
 
     async def _on_enable_request(self, event):
-        plugin_id = self._extract_plugin_id(event)
-        if not plugin_id:
-            return
-        result = self.enable_plugin(plugin_id)
-        if inspect.isawaitable(result):
-            await result
+        request = self._require_lifecycle_request(event)
+        await self.enable_plugin(request.plugin_id)
 
     async def _on_disable_request(self, event):
-        plugin_id = self._extract_plugin_id(event)
-        if not plugin_id:
-            return
-        result = self.disable_plugin(plugin_id)
-        if inspect.isawaitable(result):
-            await result
+        request = self._require_lifecycle_request(event)
+        await self.disable_plugin(request.plugin_id)
 
-    def _extract_plugin_id(self, event) -> str | None:
-        payload = getattr(event, "data", event)
-        if isinstance(payload, dict):
-            return payload.get("plugin_id")
-        return getattr(payload, "plugin_id", None)
+    def _require_lifecycle_request(self, event) -> PluginLifecycleRequest:
+        if not isinstance(event.data, PluginLifecycleRequest):
+            raise TypeError(
+                "plugin.lifecycle.request_* events must carry PluginLifecycleRequest"
+            )
+        return event.data
 
     def refresh_manifests(self):
         previous_manifest_ids = set(self._manifests)
@@ -131,7 +122,7 @@ class SystemPluginManager:
             )
 
     def _is_package_ready(self, package_id: str) -> bool:
-        package_registry = getattr(self.container, "capability_package_registry", None)
+        package_registry = self.container.get_capability_package_registry()
         if package_registry is None:
             return False
         snapshot = package_registry.resolve(package_id)
@@ -144,7 +135,6 @@ class SystemPluginManager:
             if plugin is None:
                 return None
         await plugin.enable()
-        self._hook_binder.register(plugin)
         self._capability_registry.set_enabled(plugin_id, True)
         await self._emit_state(plugin_id)
         return plugin
@@ -179,11 +169,14 @@ class SystemPluginManager:
         plugin = self._plugins.get(plugin_id)
         return bool(plugin and plugin.enabled)
 
+    def is_plugin_desired_enabled(self, plugin_id: str) -> bool:
+        return bool(self.container.get_config().is_plugin_desired_enabled(plugin_id))
+
     def find_provider(self, capability: str, runtime_target: str | None = None, **_: Any) -> str | None:
         normalized = normalize_capability_id(capability)
-        selected = self.container.config.get_selected_provider(normalized)
+        selected = self.container.get_config().get_selected_provider(normalized)
         if selected is None and "." in normalized:
-            selected = self.container.config.get_selected_provider(normalized.split(".")[0])
+            selected = self.container.get_config().get_selected_provider(normalized.split(".")[0])
         return self._capability_registry.find_provider(
             capability=normalized,
             runtime_target=runtime_target,
@@ -202,7 +195,7 @@ class SystemPluginManager:
         manifest = self._manifests.get(plugin_id)
         if manifest is None:
             return False
-        persist = not bool(getattr(self.container.config, "is_read_only", False))
+        persist = not self.container.get_config().is_read_only
         self._config_service.set_plugin_desired_state(plugin_id, True, persist=persist)
         plugin = await self._load_and_enable(plugin_id)
         if plugin and is_selectable_provider(manifest):
@@ -212,14 +205,13 @@ class SystemPluginManager:
     async def disable_plugin(self, plugin_id: str) -> bool:
         plugin = self._plugins.get(plugin_id)
         manifest = self._manifests.get(plugin_id)
-        persist = not bool(getattr(self.container.config, "is_read_only", False))
+        persist = not self.container.get_config().is_read_only
         self._config_service.set_plugin_desired_state(plugin_id, False, persist=persist)
         if manifest and is_selectable_provider(manifest):
-            current_provider = self.container.config.get_selected_provider(manifest.capability)
+            current_provider = self.container.get_config().get_selected_provider(manifest.capability)
             if current_provider == plugin_id:
                 self._config_service.clear_selected_provider(manifest.capability, persist=persist)
         if plugin:
-            self._hook_binder.unregister(plugin_id)
             await plugin.disable()
         self._capability_registry.set_enabled(plugin_id, False)
         await self._emit_state(plugin_id)
@@ -235,7 +227,6 @@ class SystemPluginManager:
         self._lifecycle_subscriptions.clear()
         for plugin_id, plugin in list(self._plugins.items()):
             try:
-                self._hook_binder.unregister(plugin_id)
                 if plugin.enabled:
                     await plugin.disable()
                 await plugin.unload()

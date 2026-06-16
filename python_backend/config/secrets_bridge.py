@@ -4,6 +4,9 @@ import logging
 from typing import Any, Optional
 
 
+BRAVE_SEARCH_PROVIDER_ID = "driver.tool.search.brave"
+
+
 def _secret_manager():
     from security.secrets import SecretKey, SecretManager
 
@@ -28,7 +31,7 @@ def _register_config_fallbacks(bundle: Any) -> None:
     if bundle.llm.api_key:
         secret_manager.set_config_fallback(secret_key.OPENAI_API_KEY, bundle.llm.api_key)
 
-    brave_settings = bundle.plugins.settings.get("brave", {})
+    brave_settings = bundle.plugins.settings.get(BRAVE_SEARCH_PROVIDER_ID, {})
     if brave_settings.get("api_key"):
         secret_manager.set_config_fallback(secret_key.BRAVE_API_KEY, brave_settings["api_key"])
 
@@ -48,7 +51,7 @@ def apply_secret_bridge(bundle: Any, logger: logging.Logger) -> None:
         (secret_key.OPENAI_API_KEY, lambda value: setattr(bundle.llm, "api_key", value)),
         (
             secret_key.BRAVE_API_KEY,
-            lambda value: bundle.plugins.settings.setdefault("brave", {}).__setitem__("api_key", value),
+            lambda value: bundle.plugins.settings.setdefault(BRAVE_SEARCH_PROVIDER_ID, {}).__setitem__("api_key", value),
         ),
         (secret_key.POSTGRES_PASSWORD, lambda value: setattr(bundle.memory.postgres, "password", value)),
     )

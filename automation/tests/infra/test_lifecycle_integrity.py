@@ -1,14 +1,8 @@
 import sys
-import os
 import asyncio
 import logging
+import pytest
 from unittest.mock import MagicMock, AsyncMock
-
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Setup Path
 from pathlib import Path
@@ -23,12 +17,17 @@ from services.system_plugin_manager import SystemPluginManager
 # Mock Logger
 logging.basicConfig(level=logging.INFO)
 
+@pytest.mark.anyio
 async def test_lifecycle_subscription():
     print("[Test] Setting up SystemPluginManager...")
     
     # 1. Mock Container & Dependencies
     mock_container = MagicMock()
-    mock_container.event_bus = bus
+    mock_container.has_service.return_value = True
+    mock_container.get_event_bus.return_value = bus
+    mock_container.get_capability_registry.return_value = None
+    mock_container.get_config.return_value = MagicMock()
+    mock_container.get_capability_package_registry.return_value = None
     
     # Instantiate
     manager = SystemPluginManager(container=mock_container)
@@ -42,7 +41,7 @@ async def test_lifecycle_subscription():
     
     # 3. Mock the Target Action
     # We want to verify _on_enable_request calls enable_plugin
-    manager.enable_plugin = MagicMock(return_value=True)
+    manager.enable_plugin = AsyncMock(return_value=True)
     manager.get_plugin = MagicMock(return_value=None) # Simplify Config Update
     
     # 4. Start Manager (Triggers Subscription)
@@ -61,18 +60,13 @@ async def test_lifecycle_subscription():
     
     if manager.enable_plugin.called:
         args = manager.enable_plugin.call_args
-        if args[0][0] == target_id:
-             print("✅ PASSED: Manager received event and called enable_plugin.")
-        else:
-             print(f"❌ FAILED: enable_plugin called with wrong ID: {args[0][0]}")
-             sys.exit(1)
+        assert args[0][0] == target_id
     else:
-        print("❌ FAILED: enable_plugin was NOT called. Subscription missing or broken.")
-        sys.exit(1)
+        pytest.fail("enable_plugin was not called. Subscription missing or broken.")
 
 if __name__ == "__main__":
     try:
         asyncio.run(test_lifecycle_subscription())
     except Exception as e:
         print(f"❌ Test Error: {e}")
-        sys.exit(1)
+        raise

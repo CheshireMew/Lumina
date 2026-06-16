@@ -5,7 +5,7 @@ import httpx
 from app_config import config
 
 @pytest.mark.backend
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_plugin_state_corruption_recovery():
     """验证手动篡改数据库数据后，后端是否能健壮处理而不崩溃"""
     pg_config = config.memory.postgres
@@ -60,7 +60,7 @@ async def test_plugin_state_corruption_recovery():
         await conn.close()
 
 @pytest.mark.backend
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_null_value_resilience():
     """验证关键字段为 NULL 时的容错性"""
     pg_config = config.memory.postgres

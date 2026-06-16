@@ -3,16 +3,9 @@ Unit tests for Chat Pipeline
 Tests message processing pipeline, step execution, and error recovery
 """
 import sys
-import asyncio
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
-
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+from unittest.mock import MagicMock, AsyncMock
 
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]
@@ -97,7 +90,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         services.register_context_provider(mock_provider)
 
         # Create step and context
-        step = ContextBuilderStep()
+        step = ContextBuilderStep(services)
         ctx = PipelineContext(
             original_messages=[{"role": "user", "content": "Hello"}],
             user_id="user",
@@ -112,7 +105,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         # Mock soul service
         mock_soul = MagicMock()
         mock_soul.get_system_prompt = AsyncMock(return_value="You are a helpful assistant.")
-        services.soul = mock_soul
+        services.set_soul(mock_soul)
 
         # Execute step
         await step.execute(ctx)
@@ -126,7 +119,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         """Test RAG context injection into last user message"""
         from services.container import services
 
-        step = ContextBuilderStep()
+        step = ContextBuilderStep(services)
         ctx = PipelineContext(
             original_messages=[
                 {"role": "user", "content": "First message"},
@@ -146,7 +139,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         # Mock soul service
         mock_soul = MagicMock()
         mock_soul.get_system_prompt = AsyncMock(return_value="System prompt")
-        services.soul = mock_soul
+        services.set_soul(mock_soul)
 
         await step.execute(ctx)
 
@@ -173,7 +166,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         services.register_context_provider(failing_provider)
         services.register_context_provider(working_provider)
 
-        step = ContextBuilderStep()
+        step = ContextBuilderStep(services)
         ctx = PipelineContext(
             original_messages=[{"role": "user", "content": "Hello"}],
             user_id="user",
@@ -188,7 +181,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         # Mock soul service
         mock_soul = MagicMock()
         mock_soul.get_system_prompt = AsyncMock(return_value="System")
-        services.soul = mock_soul
+        services.set_soul(mock_soul)
 
         # Execute should not raise despite failing provider
         await step.execute(ctx)
@@ -201,7 +194,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         """Test that system messages are filtered correctly"""
         from services.container import services
 
-        step = ContextBuilderStep()
+        step = ContextBuilderStep(services)
         ctx = PipelineContext(
             original_messages=[
                 {"role": "system", "content": "Should be filtered"},
@@ -220,7 +213,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         # Mock soul service
         mock_soul = MagicMock()
         mock_soul.get_system_prompt = AsyncMock(return_value="System prompt")
-        services.soul = mock_soul
+        services.set_soul(mock_soul)
 
         await step.execute(ctx)
 

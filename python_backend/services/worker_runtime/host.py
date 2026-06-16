@@ -96,7 +96,6 @@ class WorkerRuntimeHost:
         self.current_capability = load_capability(self.options.capability, self.logger)
         self.logger.info("Loaded capability: %s", self.current_capability.name)
 
-        self._initialize_sdk()
         await self._initialize_capability(app)
         await self._start_worker_plugin_kernel()
 
@@ -119,18 +118,9 @@ class WorkerRuntimeHost:
         if self.current_capability:
             await self.current_capability.on_shutdown()
 
-    def _initialize_sdk(self):
-        try:
-            from lumina import lumina
-
-            lumina._initialize(self.container)
-            self.logger.info("Lumina SDK initialized in worker mode")
-        except Exception as exc:
-            self.logger.warning("SDK initialization skipped: %s", exc)
-
     async def _initialize_capability(self, app: FastAPI):
         app_settings.set_read_only(True)
-        self.container.config = app_settings
+        self.container.set_config(app_settings)
         self.current_capability.register_routes(app)
         app.state.container = self.container
         await self.current_capability.on_startup(app)
@@ -144,7 +134,7 @@ class WorkerRuntimeHost:
                 runtime_target=self.runtime_target,
             )
             await worker_plugin_manager.start()
-            self.container.system_plugin_manager = worker_plugin_manager
+            self.container.set_system_plugin_manager(worker_plugin_manager)
             self.logger.info("Worker plugin kernel initialized")
         except Exception as exc:
             self.logger.warning("Worker plugin kernel init failed: %s", exc)
@@ -161,7 +151,6 @@ class WorkerRuntimeHost:
 
         self.status_reporter = WorkerStatusReporter(
             worker_id=worker_id,
-            main_port=app_settings.network.memory_port,
             state_provider=runtime_state_provider,
             interval=90,
             host=self.options.host,
@@ -184,11 +173,7 @@ class WorkerRuntimeHost:
         try:
             from services.plugin_state_sync import PluginStateSync
 
-            manager = self.container.system_plugin_manager or getattr(
-                self.container,
-                self.current_capability.name,
-                None,
-            )
+            manager = self.container.get_system_plugin_manager()
             if not manager:
                 self.logger.warning(
                     "No plugin controller available for runtime %s; plugin sync skipped",
@@ -202,7 +187,7 @@ class WorkerRuntimeHost:
                 expected_target=self.runtime_target,
                 reporter=self.status_reporter,
             )
-            self.container.plugin_sync = sync_service
+            self.container.set_plugin_sync(sync_service)
             app.state.sync_task = asyncio.create_task(sync_service.start())
             self.logger.info("Distributed plugin state sync started")
         except Exception as exc:
@@ -251,28 +236,28 @@ class WorkerRuntimeHost:
         app_settings.reload()
 
         plugin_id = payload.data.get("plugin_id") if payload.data else None
-        manager = getattr(self.container, self.current_capability.name, None)
+        manager = self.container.get_system_plugin_manager()
         if not plugin_id or not manager:
             return
 
-        drivers = getattr(manager, "drivers", {})
-        driver = drivers.get(plugin_id) if isinstance(drivers, dict) else None
-        if not driver or not hasattr(driver, "config"):
+        plugin = manager.get_plugin(plugin_id)
+        if not plugin:
             return
 
         settings = payload.data.get("settings")
         if isinstance(settings, dict):
-            driver.config.update(settings)
+            for key, value in settings.items():
+                plugin.update_config(key, value)
             return
 
         key = payload.data.get("key")
         if key is not None:
-            driver.config[key] = payload.data.get("value")
+            plugin.update_config(key, payload.data.get("value"))
 
     async def _handle_lifecycle(self, payload):
         self.logger.info("Lifecycle command: %s -> %s", payload.action, payload.target_id)
 
-        plugin_manager = self.container.system_plugin_manager
+        plugin_manager = self.container.get_system_plugin_manager()
         if plugin_manager and plugin_manager.get_manifest(payload.target_id):
             if payload.action == "disable":
                 await plugin_manager.disable_plugin(payload.target_id)
@@ -280,10 +265,10 @@ class WorkerRuntimeHost:
                 await plugin_manager.enable_plugin(payload.target_id)
             return
 
-        manager = getattr(self.container, self.current_capability.name, None)
+        manager = self.container.get_system_plugin_manager()
         if not manager:
             return
-        if payload.action == "disable" and hasattr(manager, "disable_plugin"):
+        if payload.action == "disable":
             await manager.disable_plugin(payload.target_id)
-        elif payload.action == "enable" and hasattr(manager, "enable_plugin"):
+        elif payload.action == "enable":
             await manager.enable_plugin(payload.target_id)

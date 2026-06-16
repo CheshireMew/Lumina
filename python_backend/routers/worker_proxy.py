@@ -11,7 +11,7 @@ logger = logging.getLogger("WorkerProxy")
 
 
 def get_worker_control_url(capability: str, container) -> str:
-    package_registry = getattr(container, "capability_package_registry", None)
+    package_registry = container.get_capability_package_registry()
     if package_registry:
         definition = package_registry.package_for_capability(capability)
         if definition:
@@ -42,7 +42,7 @@ def get_worker_control_url(capability: str, container) -> str:
             )
 
     runtime = RuntimeService(container)
-    snapshot = runtime.get_capability_runtime(capability, container.config.network.memory_url)
+    snapshot = runtime.get_capability_runtime(capability, container.get_config().network.memory_url)
     upstream = snapshot.get("direct_base_url")
     if not upstream:
         raise HTTPException(

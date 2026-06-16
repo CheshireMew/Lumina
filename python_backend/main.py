@@ -9,7 +9,6 @@ import uvicorn
 def _extend_import_path() -> None:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     sys.path.append(current_dir)
-    sys.path.append(os.path.join(current_dir, "sdk"))
 
 
 _extend_import_path()

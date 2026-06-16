@@ -3,16 +3,9 @@ Unit tests for AudioManager
 Tests audio playback, recording, device management, and resource cleanup
 """
 import sys
-import asyncio
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch, mock_open
-
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+from unittest.mock import MagicMock
 
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]

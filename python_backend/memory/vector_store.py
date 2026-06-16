@@ -12,7 +12,14 @@ class VectorStore:
     """
 
     def __init__(self, driver: VectorDBInterface):
-        self.driver = driver
+        self._driver = driver
+
+    @property
+    def driver(self) -> VectorDBInterface:
+        return self._driver
+
+    def replace_driver(self, driver: VectorDBInterface):
+        self._driver = driver
 
     async def add_episodic_memory(self, 
                                   character_id: str, 

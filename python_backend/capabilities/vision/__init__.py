@@ -4,7 +4,6 @@ from typing import Callable, List, Dict, Any
 from fastapi import FastAPI
 from core.interfaces.capability import IWorkerCapability
 from .manager import VisionPluginManager
-from .routes import router as vision_router
 
 logger = logging.getLogger("VisionCapability")
 
@@ -14,6 +13,8 @@ class Capability(IWorkerCapability):
         return "vision"
 
     def register_routes(self, app: FastAPI):
+        from .routes import router as vision_router
+
         # Mount with prefix is done by Generic Worker typically, or we define it here.
         # Original router had prefix="/lumina/vision".
         # Let's keep it under /vision for cleaner API or respect original.
@@ -29,16 +30,16 @@ class Capability(IWorkerCapability):
         container = app.state.container
         # 1. Initialize Manager
         def resolve_model_name(feature: str) -> str:
-            try:
-                return container.get_llm_manager().get_model_name(feature)
-            except Exception:
-                return "gpt-4o"
+            return container.get_llm_manager().get_model_name(feature)
 
-        manager = VisionPluginManager(model_name_resolver=resolve_model_name)
+        manager = VisionPluginManager(
+            config=container.get_config(),
+            model_name_resolver=resolve_model_name,
+        )
         await manager.register_drivers()
         
         # 2. Register to Container
-        container.register_vision(manager)
+        container.set_vision(manager)
         
         logger.info(f"Vision Service Ready. Active Driver: {manager.active_driver_id}")
 

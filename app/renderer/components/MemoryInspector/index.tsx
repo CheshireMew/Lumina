@@ -6,11 +6,15 @@ import MemoryStatus from './MemoryStatus';
 import { HistoryList, FactList } from './MemoryList';
 import MemoryGraph from './MemoryGraph';
 
-const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string }> = ({ onClose, activeCharacterId }) => {
+const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string | null }> = ({ onClose, activeCharacterId }) => {
     const [activeTab, setActiveTab] = useState<'history' | 'facts' | 'status' | 'graph'>('history');
     const [data, setData] = useState<MemoryData | null>(null);
     const [status, setStatus] = useState<ProcessingStatus | null>(null);
     const [loading, setLoading] = useState(false);
+
+    const characterQuery = activeCharacterId
+        ? `?character_id=${encodeURIComponent(activeCharacterId)}`
+        : "";
 
     useEffect(() => {
         fetchData();
@@ -26,7 +30,7 @@ const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/brain_dump?character_id=${activeCharacterId}`);
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/brain_dump${characterQuery}`);
             if (res.ok) {
                 const json = await res.json();
                 if (json.status === 'success') {
@@ -44,7 +48,7 @@ const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string
     
     const fetchStatus = async () => {
         try {
-            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/processing_status?character_id=${activeCharacterId}`);
+            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/processing_status${characterQuery}`);
             if (res.ok) {
                 const json = await res.json();
                 if (json.status === 'success') {

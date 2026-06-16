@@ -14,7 +14,7 @@ SERVICES = {
 }
 
 @pytest.mark.backend
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_character_config_file_race():
     """验证并发更新 Character 配置时是否存在文件损坏或覆盖竞争"""
     char_id = "hiyori"
@@ -46,7 +46,7 @@ async def test_character_config_file_race():
     assert success_count > 0, "No successful updates recorded"
 
 @pytest.mark.backend
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_plugin_state_postgres_race():
     """验证并发切换插件状态时 Postgres 的一致性"""
     # 我们使用一个存在的插件 ID

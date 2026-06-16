@@ -23,23 +23,23 @@ class ConfigStub:
     def is_plugin_desired_enabled(self, _plugin_id):
         return True
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_tts_manager_driver_discovery():
     tm = TTSPluginManager(ConfigStub())
     
-    # Mock PluginLoader
-    with patch("sdk.lumina.loader.PluginLoader.load_plugins") as mock_load:
+    # Mock driver plugin discovery
+    with patch("services.managers.driver_loader.DriverPluginLoader.load_plugins") as mock_load:
         mock_driver = MagicMock()
         mock_driver.id = "test.tts.driver"
         mock_driver.name = "Test TTS"
         mock_load.return_value = [mock_driver]
         
-        await tm.register_drivers(auto_activate=False)
+        await tm.load_driver_plugins()
         
         assert "test.tts.driver" in tm.drivers
         assert tm.active_driver is None
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_tts_manager_activation():
     tm = TTSPluginManager(ConfigStub())
     
@@ -47,7 +47,7 @@ async def test_tts_manager_activation():
     mock_driver.id = "test.tts.driver"
     mock_driver.load = AsyncMock()
     
-    tm.drivers["test.tts.driver"] = mock_driver
+    tm.register_driver(mock_driver)
     
     await tm.activate("test.tts.driver")
     
@@ -55,7 +55,7 @@ async def test_tts_manager_activation():
     assert tm.active_driver == mock_driver
     mock_driver.load.assert_called_once()
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_tts_manager_unload():
     tm = TTSPluginManager(ConfigStub())
     mock_driver = MagicMock()

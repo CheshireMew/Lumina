@@ -25,7 +25,7 @@ interface MotionTesterLayerConfig {
 interface MemoryInspectorLayerConfig {
     isOpen: boolean;
     onClose: () => void;
-    activeCharacterId: string;
+    activeCharacterId: string | null;
 }
 
 interface LlmConfigLayerConfig {
@@ -57,7 +57,7 @@ interface LlmConfigLayerConfig {
         frequencyPenalty?: number,
         providerType?: ProviderType,
     ) => void;
-    activeCharacterId: string;
+    activeCharacterId: string | null;
 }
 
 interface ModalLayerProps {

@@ -16,7 +16,7 @@ interface LLMConfigModalProps {
     onClose: () => void;
     currentLlmSettings: LlmSettings;
     onSettingsChange: LlmSettingsChangeHandler;
-    activeCharacterId?: string;
+    activeCharacterId?: string | null;
 }
 
 const LLMConfigModal: FC<LLMConfigModalProps> = ({
@@ -24,7 +24,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
     onClose,
     currentLlmSettings,
     onSettingsChange,
-    activeCharacterId = "hiyori",
+    activeCharacterId,
 }) => {
     const { form, updateField, selectPlatform, setDeepSeekThinking, save } =
         useLlmConfigForm({

@@ -4,11 +4,6 @@ import httpx
 import sys
 import os
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Configuration
 SERVICES = {
@@ -22,7 +17,7 @@ GREEN = "\033[92m"
 RED = "\033[91m"
 RESET = "\033[0m"
 
-async def test_service_health(client, name, url):
+async def check_service_health(client, name, url):
     try:
         resp = await client.get(f"{url}/health")
         if resp.status_code == 200:
@@ -43,7 +38,7 @@ async def test_service_health(client, name, url):
         print(f"[{RED}FAIL{RESET}] {name} Connection Failed: {e}")
         return False
 
-async def test_memory_chat(client):
+async def check_memory_chat(client):
     """Test the Core Memory/Chat Flow"""
     url = SERVICES["main"]
     print(f"\n--- Testing Main Application Flow ({url}) ---")
@@ -59,17 +54,17 @@ async def main():
     async with httpx.AsyncClient(timeout=5.0) as client:
         # 1. Health Checks
         results = await asyncio.gather(
-            test_service_health(client, "Memory Service", SERVICES["main"]),
-            test_service_health(client, "STT Service", SERVICES["stt"]),
-            test_service_health(client, "TTS Service", SERVICES["tts"])
+            check_service_health(client, "Memory Service", SERVICES["main"]),
+            check_service_health(client, "STT Service", SERVICES["stt"]),
+            check_service_health(client, "TTS Service", SERVICES["tts"])
         )
         
         if not all(results):
             print(f"\n[{RED}CRITICAL{RESET}] Some services are down. Aborting flow tests.")
-            sys.exit(1)
+            raise RuntimeError("Some services are down")
             
         # 2. Functional Tests
-        await test_memory_chat(client)
+        await check_memory_chat(client)
         
     print(f"\n[{GREEN}SUCCESS{RESET}] All basic checks passed.")
 

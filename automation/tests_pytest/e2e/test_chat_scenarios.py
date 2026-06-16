@@ -28,7 +28,7 @@ SERVICES = {
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_basic_chat_flow():
     """Scenario: User sends a message and receives a response"""
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -57,7 +57,7 @@ async def test_basic_chat_flow():
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_multi_turn_conversation():
     """Scenario: User has a back-and-forth conversation"""
     async with httpx.AsyncClient(timeout=60.0) as client:
@@ -89,7 +89,7 @@ async def test_multi_turn_conversation():
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_chat_with_memory_retrieval():
     """Scenario: Bot recalls information from previous conversation"""
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -128,7 +128,7 @@ async def test_chat_with_memory_retrieval():
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_chat_with_invalid_input():
     """Scenario: Bot handles invalid input gracefully"""
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -159,7 +159,7 @@ async def test_chat_with_invalid_input():
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_voice_interaction_flow():
     """Scenario: User speaks, gets transcribed, processed, and spoken back"""
     async with httpx.AsyncClient(timeout=60.0) as client:
@@ -191,7 +191,7 @@ async def test_voice_interaction_flow():
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_plugin_discovery():
     """Scenario: User can discover and view available plugins"""
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -214,7 +214,7 @@ async def test_plugin_discovery():
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_character_switching():
     """Scenario: User switches between different characters"""
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -247,7 +247,7 @@ async def test_character_switching():
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_concurrent_users():
     """Scenario: Multiple users chat simultaneously without interference"""
     async def chat_for_user(user_id: str):
@@ -275,7 +275,7 @@ async def test_concurrent_users():
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.slow
 async def test_long_session():
     """Scenario: Extended conversation session maintains context"""
@@ -317,7 +317,7 @@ async def test_long_session():
 # ============================================================================
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_service_health_endpoints():
     """Scenario: All services report healthy status"""
     async with httpx.AsyncClient(timeout=10.0) as client:

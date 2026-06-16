@@ -12,7 +12,6 @@ class WorkerStatusReporter:
     """
     def __init__(self, 
                  worker_id: str, 
-                 main_port: int, # Deprecated but kept for compat
                  state_provider: Callable[[], List[Dict[str, Any]]],
                  interval: int = 90,
                  host: str = "127.0.0.1",
@@ -54,7 +53,7 @@ class WorkerStatusReporter:
         
         while self._running:
             try:
-                if not self.bus._is_connected:
+                if not self.bus.is_connected:
                     await self.bus.connect()
 
                 # 1. Report Worker State
@@ -112,7 +111,7 @@ class WorkerStatusReporter:
         Manually trigger a report immediately.
         """
         try:
-            if not self.bus._is_connected:
+            if not self.bus.is_connected:
                 await self.bus.connect()
                 
             plugins = []

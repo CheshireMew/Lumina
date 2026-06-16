@@ -4,6 +4,6 @@ kind: driver
 capability: llm
 runtime_target: main
 permissions:
-  - network.outbound
+  - network.external
 config_schema: {}
 provides: []

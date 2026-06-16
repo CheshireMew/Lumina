@@ -4,17 +4,9 @@ import asyncio
 import json
 import logging
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+import pytest
 
-try:
-    import websockets
-except ImportError:
-    print("websockets module not found. Please install it (pip install websockets) or this test will fail.")
-    exit(1)
+websockets = pytest.importorskip("websockets")
 
 async def test_gateway():
     uri = "ws://127.0.0.1:8010/lumina/gateway/ws"

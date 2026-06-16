@@ -2,12 +2,6 @@ import sys
 import unittest
 from pathlib import Path
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
 # Add project root and python_backend to path
 PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.append(str(PROJECT_ROOT / "python_backend"))
@@ -26,9 +20,8 @@ class TestPermissionsAudit(unittest.TestCase):
         unmapped = all_defined_perms - all_mapped_perms
 
         # Note: Some permissions are not yet assigned to tiers (pending security review)
-        # Known unmapped permissions: memory.read, memory.write, llm.invoke, ticker.subscribe, system.notification, soul.modify
+        # Known unmapped permissions: memory.read, memory.write, llm.invoke, ticker.subscribe, soul.modify
         known_unmapped = {
-            'system.notification',
             'llm.invoke',
             'soul.modify',
             'memory.read',
@@ -46,7 +39,7 @@ class TestPermissionsAudit(unittest.TestCase):
         """测试危险权限检测逻辑"""
         print("\n[Test] Testing Dangerous Permission Detection...")
         
-        safe_list = ["event.subscribe", "ui.register_widget"]
+        safe_list = ["event.subscribe", "event.emit"]
         dangerous_list = ["event.subscribe", "os.exec"]
         
         self.assertFalse(has_dangerous_permissions(safe_list))
@@ -61,6 +54,9 @@ class TestPermissionsAudit(unittest.TestCase):
         self.assertIn("filesystem.read_user", TIER_TRUSTED)
         # 读取自身资产应该是 SAFE
         self.assertIn("filesystem.read_assets", TIER_SAFE)
+        # 插件自身状态读写应该是 SAFE
+        self.assertIn("filesystem.data_read", TIER_SAFE)
+        self.assertIn("filesystem.data_write", TIER_SAFE)
         # 写入系统目录必须是 SYSTEM
         self.assertIn("filesystem.write_system", TIER_SYSTEM)
         print("✅ Filesystem permission granularities are correctly tiered.")

@@ -15,7 +15,7 @@ SERVICES = {
 }
 
 @pytest.mark.performance
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_memory_leak_detection():
     """使用 tracemalloc 监控连续请求下的内存增长"""
     # 注意：tracemalloc 主要监控当前进程，但我们要监控的是远程服务。
@@ -61,7 +61,7 @@ async def test_memory_leak_detection():
         print(" [INFO] Performance remains stable.")
 
 @pytest.mark.performance
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_client_side_memory_leak():
     """简单检测 client 进程在大量 async 请求下的内存占用"""
     tracemalloc.start()

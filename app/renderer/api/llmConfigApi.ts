@@ -27,15 +27,17 @@ export const listAvailableLlmModels = async (): Promise<string[]> => {
     return [];
 };
 
-export const clearLlmSessionContext = async (characterId: string) => {
+export const clearLlmSessionContext = async (characterId?: string | null) => {
     const response = await fetch(`${API_CONFIG.BASE_URL}/memory/context/clear`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-            character_id: characterId,
-        }),
+        body: JSON.stringify(
+            characterId
+                ? { character_id: characterId }
+                : {},
+        ),
     });
 
     if (!response.ok) {

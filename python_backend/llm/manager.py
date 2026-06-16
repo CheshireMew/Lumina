@@ -5,7 +5,6 @@ import logging
 import os
 from typing import Any, Callable, Dict, List, Optional
 
-from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from core.interfaces.driver import BaseLLMDriver
@@ -48,8 +47,6 @@ class LLMManager:
         self._driver_descriptors: Dict[str, Dict[str, Any]] = {}
         self._drivers_loaded = False
         self._parameter_calculator = None
-
-        self._ensure_routes_exist()
 
     def _resolve_env_vars(self, config: LLMConfig) -> LLMConfig:
         for provider in config.providers.values():
@@ -111,6 +108,7 @@ class LLMManager:
                 "dreaming": FeatureRoute(feature="dreaming", provider_id="free_tier", model="gpt-4o-mini"),
                 "evolution": FeatureRoute(feature="evolution", provider_id="free_tier", model="gpt-4o-mini"),
                 "proactive": FeatureRoute(feature="proactive", provider_id="free_tier", model="gpt-4o-mini"),
+                "vision": FeatureRoute(feature="vision", provider_id="free_tier", model="gpt-4o"),
             },
         )
         self.save_config(conf)
@@ -147,7 +145,7 @@ class LLMManager:
             return
 
         for provider_id, provider in self.config.providers.items():
-            if not provider.enabled and provider_id != "free_tier":
+            if not provider.enabled:
                 continue
 
             factory = self._driver_factories.get(provider.type)
@@ -177,50 +175,51 @@ class LLMManager:
             return
         self._initialize_drivers()
 
-    def _ensure_routes_exist(self):
-        defaults = ["chat", "memory", "dreaming", "evolution", "proactive"]
-        changed = False
-        fallback = list(self.config.providers.keys())[0] if self.config.providers else "free_tier"
+    def _require_route(self, feature: str) -> FeatureRoute:
+        route = self.config.routes.get(feature)
+        if route is None:
+            raise KeyError(f"Unknown LLM route: {feature}")
+        return route
 
-        for feature in defaults:
-            if feature not in self.config.routes:
-                self.config.routes[feature] = FeatureRoute(
-                    feature=feature,
-                    provider_id=fallback,
-                    model="gpt-4o-mini",
-                )
-                changed = True
+    def _require_provider_config(self, provider_id: str) -> ProviderConfig:
+        provider = self.config.providers.get(provider_id)
+        if provider is None:
+            raise KeyError(f"Unknown LLM provider: {provider_id}")
+        return provider
 
-        if changed:
-            self.save_config()
+    def _require_active_driver(self, feature: str) -> BaseLLMDriver:
+        self._ensure_drivers_initialized()
+        provider_id = self._resolve_provider_id(feature)
+        self._require_provider_config(provider_id)
+
+        driver = self.drivers.get(provider_id)
+        if driver is None:
+            self._initialize_drivers()
+            driver = self.drivers.get(provider_id)
+
+        if driver is None:
+            raise ValueError(f"LLM provider '{provider_id}' is not active for route '{feature}'.")
+
+        return driver
 
     async def get_driver(self, feature: str = "chat") -> BaseLLMDriver:
-        self._ensure_drivers_initialized()
-        provider_id = self._resolve_provider_id(feature)
-
-        if provider_id not in self.drivers:
-            self._initialize_drivers()
-
-        if provider_id not in self.drivers:
-            fallback_id = next(iter(self.drivers), None)
-            if fallback_id:
-                logger.warning("LLM provider %s not active, falling back to %s", provider_id, fallback_id)
-                return self.drivers[fallback_id]
-            raise ValueError("No LLM providers available.")
-
-        return self.drivers[provider_id]
+        return self._require_active_driver(feature)
 
     def get_client(self, feature: str = "chat") -> Any:
-        self._ensure_drivers_initialized()
         provider_id = self._resolve_provider_id(feature)
-        driver = self.drivers.get(provider_id)
-        if not driver and self.drivers:
-            driver = next(iter(self.drivers.values()))
+        driver = self._require_active_driver(feature)
 
         if driver and getattr(driver, "client", None) is not None:
             return driver.client
 
         if driver and driver.config.get("base_url"):
+            try:
+                from openai import AsyncOpenAI
+            except ModuleNotFoundError as exc:
+                raise RuntimeError(
+                    "The openai package is required to create an OpenAI-compatible client."
+                ) from exc
+
             return AsyncOpenAI(
                 base_url=driver.config.get("base_url"),
                 api_key=driver.config.get("api_key"),
@@ -233,21 +232,18 @@ class LLMManager:
                 f"LLM provider '{provider_id}' does not expose an OpenAI-compatible client."
             )
 
-        raise ValueError(f"Could not resolve LLM client for {feature}.")
+        raise ValueError(f"Could not resolve LLM client for route '{feature}'.")
 
     def get_model_name(self, feature: str) -> str:
-        route = self.config.routes.get(feature)
-        if route:
-            return route.model
-        return "gpt-4o-mini"
+        return self._require_route(feature).model
 
     def get_parameters(self, feature: str = "chat", soul_state: Optional[Dict] = None) -> Dict:
-        route = self.config.routes.get(feature)
+        route = self._require_route(feature)
         base_params = {
-            "temperature": route.temperature if route else 0.7,
-            "top_p": route.top_p if route else 1.0,
-            "presence_penalty": route.presence_penalty if route else 0.0,
-            "frequency_penalty": route.frequency_penalty if route else 0.0,
+            "temperature": route.temperature,
+            "top_p": route.top_p,
+            "presence_penalty": route.presence_penalty,
+            "frequency_penalty": route.frequency_penalty,
         }
 
         if self._parameter_calculator and soul_state:
@@ -259,10 +255,7 @@ class LLMManager:
         return base_params
 
     def _resolve_provider_id(self, feature: str) -> str:
-        route = self.config.routes.get(feature)
-        if route:
-            return route.provider_id
-        return next(iter(self.config.providers), "free_tier")
+        return self._require_route(feature).provider_id
 
     def set_parameter_calculator(self, func):
         self._parameter_calculator = func
@@ -293,17 +286,29 @@ class LLMManager:
         if feature not in self.config.routes:
             raise KeyError(feature)
 
+        provider_id = kwargs.get("provider_id")
+        if provider_id is not None:
+            self._require_provider_config(provider_id)
+
         route = self.config.routes[feature]
         payload = route.model_dump()
         payload.update(kwargs)
         self.config.routes[feature] = FeatureRoute(**payload)
         self.save_config()
 
-    def register_route(self, feature: str, default_model: str = "gpt-4o-mini"):
+    def register_route(
+        self,
+        feature: str,
+        default_model: str = "gpt-4o-mini",
+        provider_id: Optional[str] = None,
+    ):
         if feature in self.config.routes:
             return
 
-        provider_id = next(iter(self.config.providers), "free_tier")
+        if not provider_id:
+            raise ValueError("provider_id is required when registering an LLM route.")
+
+        self._require_provider_config(provider_id)
         logger.info("Registering new LLM route: %s", feature)
         self.config.routes[feature] = FeatureRoute(
             feature=feature,

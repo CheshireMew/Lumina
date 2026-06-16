@@ -10,7 +10,6 @@ network:
   bind_localhost_only: true
 
 memory:
-  provider: "driver.memory.postgres"
   namespace: "lumina"
   database: "memory"
   character_id: "hiyori"
@@ -28,32 +27,37 @@ llm:
 
 audio:
   device_name: null
+  speech_start_threshold: 0.6
+  speech_end_threshold: 0.05
+  min_speech_frames: 15
   enable_voiceprint_filter: false
   voiceprint_threshold: 0.45
   voiceprint_profile: "default"
-  fish_audio_api_url: "https://api.fish.audio/v1"
-  fish_audio_api_key: ""
-  # Legacy STT/TTS params often used here
-  api_key: ""
-  max_results: 5
 
 stt:
-  provider: "sense-voice"
   model: "base"
   device: "cuda"
   compute_type: "float16"
   language: "zh"
 
 tts:
-  provider: "edge-tts"
   voice: "zh-CN-XiaoxiaoNeural"
 
 search:
-  provider: "brave"
   enabled: true
 
-brave:
-  api_key: ""
+plugins:
+  selected_providers:
+    memory: "driver.memory.postgres"
+    stt: "driver.stt.sensevoice"
+    tts: "driver.tts.edge"
+    tool.search: "driver.tool.search.brave"
+    vision: "driver.vision.moondream"
+  desired_state: {}
+  prewarm_core: true
+  settings:
+    driver.tool.search.brave:
+      api_key: ""
 
 models:
   embedding_model_name: "text-embedding-3-small"

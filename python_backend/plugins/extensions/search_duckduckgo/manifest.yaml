@@ -4,7 +4,7 @@ kind: provider
 capability: tool.search
 runtime_target: main
 permissions:
-  - network.outbound
+  - network.external
 config_schema:
   count:
     type: number

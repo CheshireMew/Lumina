@@ -5,6 +5,6 @@ capability: tts
 runtime_target: worker:tts
 package: tts-runtime
 permissions:
-  - network.outbound
+  - network.external
 config_schema: {}
 provides: []

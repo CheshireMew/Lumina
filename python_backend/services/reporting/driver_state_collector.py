@@ -60,59 +60,22 @@ class DriverStateCollector:
         if not manager:
             return plugins
         
-        active_driver = getattr(manager, 'active_driver_id', None)
-        active_driver_instance = getattr(manager, "active_driver", None)
-        drivers = getattr(manager, 'drivers', {})
         normalized_target = normalize_runtime_target(runtime_target)
-        config = getattr(manager, "config", None)
 
-        for pid, driver in drivers.items():
-            is_active = (pid == active_driver and active_driver_instance is not None)
-            desired_enabled = (
-                bool(config.is_plugin_desired_enabled(pid))
-                if config and hasattr(config, "is_plugin_desired_enabled")
-                else is_active
-            )
-            
-            # [Architecture 6.0] Active Status Reporting
-            status = "stopped"
-            if is_active:
-                status = getattr(manager, 'loading_status', 'idle')
-                if status == "idle":
-                    status = "ready"
-            active = is_active and status in {"ready", "idle", "running"}
-            
-            # Extract metadata from driver instance
-            driver_name = getattr(driver, 'name', pid)
-            driver_desc = getattr(driver, 'description', '')
-            current_config = {}
-            if config and hasattr(config, "plugins"):
-                current_config = dict(config.plugins.settings.get(pid, {}))
-            
+        for pid, _driver in manager.iter_drivers():
+            state = manager.snapshot_provider_state(pid)
+            desired_enabled = bool(state["desired_enabled"])
+            active_status = state["active_status"]
             plugins.append({
-                "id": pid,
-                "name": driver_name,
-                "description": driver_desc,
+                **state,
                 "kind": "provider",
                 "category": category,
                 "group_id": category,
                 "group_policy": "exclusive",
                 "capabilities": [category],
-                "enabled": desired_enabled,
-                "desired_enabled": desired_enabled,
-                "active": active,
-                "active_status": status,
-                "computed_status": _compute_provider_status(desired_enabled, status),
-                "active_in_group": is_active,
+                "computed_status": _compute_provider_status(desired_enabled, active_status),
                 "runtime_target": normalized_target,
-                "permissions": list(getattr(driver, "permissions", []) or []),
-                "config_schema": getattr(driver, "config_schema", None),
-                "current_config": current_config,
-                "is_driver": True,
                 "service_url": service_url,
-                "driver_id": pid,
-                "error": getattr(manager, "last_error", None) if is_active else None,
-                "load_time_ms": getattr(manager, "last_load_duration_ms", None) if is_active else None,
             })
         
         return plugins

@@ -33,7 +33,7 @@ class Capability(IWorkerCapability):
         await manager.register_drivers()
         
         # 3. Register to Container
-        container.register_tts(manager)
+        container.set_tts(manager)
         tts_globals.tts_manager = manager
         logger.info(f"TTS Service Ready. Active Driver: {manager.active_driver_id}")
 

@@ -1,7 +1,28 @@
 import logging
+from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
+from core.protocol import EventPacket
+
 logger = logging.getLogger("ChatTurnService")
+
+
+@dataclass(frozen=True)
+class TextTurnRequest:
+    session_id: int
+    text: str
+    character_id: str
+    user_id: str = "default_user"
+    user_name: Optional[str] = None
+    model: Optional[str] = None
+    mode: str = "chat"
+    history_limit: int = 10
+
+
+@dataclass(frozen=True)
+class TurnStreamEvent:
+    kind: str
+    payload: Dict[str, Any]
 
 
 class ChatTurnService:
@@ -20,11 +41,59 @@ class ChatTurnService:
         self.session_manager = session_manager
         self.soul_service = soul_service
 
-    def active_character_id(self, fallback: str = "hiyori") -> str:
-        soul = self.soul_service
-        if soul and hasattr(soul, "get_active_character_id"):
-            return soul.get_active_character_id()
-        return fallback
+    def active_character_id(self) -> str:
+        if self.soul_service is None:
+            raise RuntimeError("SoulService is required to resolve the active character")
+        return self.soul_service.get_active_character_id()
+
+    def build_text_turn_request(self, packet: EventPacket) -> TextTurnRequest:
+        payload = packet.payload or {}
+        return TextTurnRequest(
+            session_id=packet.session_id,
+            text=str(payload.get("text") or ""),
+            user_id=str(payload.get("user_id") or "default_user"),
+            character_id=str(payload.get("character_id") or self.active_character_id()),
+            user_name=payload.get("user_name"),
+            model=payload.get("model"),
+        )
+
+    async def stream_text_turn(
+        self,
+        request: TextTurnRequest,
+    ) -> AsyncGenerator[TurnStreamEvent, None]:
+        text = request.text.strip()
+        if not text:
+            return
+
+        yield TurnStreamEvent(
+            kind="started",
+            payload={"mode": request.mode, "text": text},
+        )
+
+        messages = await self.build_turn_messages(
+            request.user_id,
+            request.character_id,
+            text,
+            history_limit=request.history_limit,
+        )
+
+        # Fresh sessions should not retrieve previous conversations as context.
+        enable_rag_for_turn = len(messages) > 1
+
+        async for token in self.stream_response(
+            messages=messages,
+            user_id=request.user_id,
+            character_id=request.character_id,
+            model=request.model,
+            enable_rag=enable_rag_for_turn,
+            user_name=request.user_name,
+        ):
+            yield TurnStreamEvent(
+                kind="delta",
+                payload={"content": token},
+            )
+
+        yield TurnStreamEvent(kind="ended", payload={})
 
     async def build_turn_messages(
         self,
@@ -58,6 +127,7 @@ class ChatTurnService:
         character_id: str,
         model: Optional[str] = None,
         temperature: float = 0.7,
+        stream: bool = True,
         enable_rag: bool = True,
         enable_tools: bool = True,
         save_history: bool = True,
@@ -74,7 +144,7 @@ class ChatTurnService:
             messages,
             user_id=user_id,
             character_id=character_id,
-            stream=True,
+            stream=stream,
             model=model,
             temperature=temperature,
             enable_rag=enable_rag,

@@ -17,7 +17,7 @@ class PluginService:
         if runtime_target:
             return normalize_runtime_target(runtime_target)
 
-        spm = getattr(self.services, "system_plugin_manager", None)
+        spm = self.services.get_system_plugin_manager()
         manifest = spm.get_manifest(plugin_id) if spm else None
         return normalize_runtime_target(getattr(manifest, "runtime_target", MAIN_RUNTIME_TARGET))
 
@@ -41,10 +41,10 @@ class PluginService:
         try:
             from services.config_service import ConfigService
 
-            config = self.services.config
+            config = self.services.get_config()
             ConfigService(self.services).set_plugin_setting(plugin_id, key, value)
 
-            aggregator = getattr(self.services, "plugin_state_aggregator", None)
+            aggregator = self.services.get_plugin_state_aggregator()
             runtime_state = aggregator.get_plugin(plugin_id) if aggregator else None
             runtime_target = self._resolve_runtime_target(plugin_id, runtime_state)
 
@@ -73,4 +73,4 @@ class PluginService:
 
     @property
     def system_plugin_manager(self):
-        return getattr(self.services, 'system_plugin_manager', None)
+        return self.services.get_system_plugin_manager()

@@ -51,23 +51,13 @@ class GatewayService:
             EventType.SYSTEM_STATUS,
             EventType.CONTROL_SESSION,
             EventType.EMOTION_CHANGED,
-            EventType.UI_REGISTER_WIDGET,
-            EventType.UI_REMOVE_WIDGET,
-            EventType.PLUGIN_STATUS
         ]
         
         for evt in outbound_events:
             self.bus.subscribe(evt, self.handle_outbound_event)
 
-    async def emit(self, packet):
-        """Legacy compatibility: Emit to bus, which loopbacks to handle_outbound_event if subscribed."""
-        # Note: If legacy code calls gateway.emit(packet), they expect it to go to WS.
-        # We achieve this by publishing it to the bus.
-        # Our own subscription will pick it up and send to WS.
-        await self.bus.emit(packet.type, packet, source=packet.source)
-
-    async def start_new_session(self, source="system"):
-        """Legacy compatibility: Start new session and notify."""
+    async def publish_session_reset(self, source="system"):
+        """Start a new frontend interaction session after context reset."""
         self._session_id += 1
         pkt = EventPacket(
             session_id=self._session_id,
@@ -75,7 +65,6 @@ class GatewayService:
             source=source,
             payload={"session_id": self._session_id, "action": "start"}
         )
-        # Emit so frontend gets it via handle_outbound_event
         await self.bus.emit(pkt.type, pkt, source=source)
         return self._session_id
 
@@ -174,12 +163,11 @@ class GatewayService:
                     packet = EventPacket(**json_data)
                     
                     # Routing
-                    if packet.type == "session_control" or packet.type == EventType.CONTROL_SESSION:
+                    if packet.type == EventType.CONTROL_SESSION:
                          # Forward to system (e.g. for clearing context)
                          await self.bus.emit(EventType.CONTROL_SESSION, packet, source="frontend") 
-                    elif packet.type == EventType.INPUT_TEXT or packet.type == "chat":
+                    elif packet.type == EventType.INPUT_TEXT:
                         logger.debug("Gateway Emitting INPUT_TEXT")
-                        # Publish to Bus (normalize to INPUT_TEXT)
                         packet.type = EventType.INPUT_TEXT
                         await self.bus.emit(EventType.INPUT_TEXT, packet, source="frontend")
                     elif packet.type == EventType.INPUT_AUDIO:
@@ -222,8 +210,8 @@ async def websocket_endpoint(websocket: WebSocket):
     if token:
         try:
             from security.tokens import TokenManager
-            # Validate token (assuming verify_token exists and returns payload)
-            TokenManager.verify_token(token)
+            if not TokenManager.verify_token(token, expected_scope="plugin"):
+                raise ValueError("invalid plugin token")
         except Exception as e:
             logger.warning(f"🚨 WS Token Validation Failed: {e}")
             await websocket.close(code=1008)

@@ -9,7 +9,7 @@ import sys
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [CHAOS] - %(message)s')
 logger = logging.getLogger("ChaosMonkey")
 
-TARGETS = ["stt_server", "tts_server"]
+TARGETS = ["worker:stt", "worker:tts"]
 
 def kill_random_worker():
     """
@@ -23,7 +23,7 @@ def kill_random_worker():
         try:
             cmdline = proc.info.get('cmdline')
             if cmdline:
-                # Backend Launcher pattern: python backend_launcher.py stt_server ...
+                # Backend Launcher pattern: python backend_launcher.py worker --capability stt
                 cmd_str = " ".join(cmdline)
                 for target in TARGETS:
                     if "backend_launcher.py" in cmd_str and target in cmd_str:

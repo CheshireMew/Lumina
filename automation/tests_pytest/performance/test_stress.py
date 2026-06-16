@@ -10,40 +10,33 @@ PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
 @pytest.mark.performance
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_high_plugin_count_pressure():
     """模拟 100 个插件同时加载和响应的压力"""
-    from services.plugin_service import PluginService
+    from services.plugin_state_aggregator import PluginStateAggregator
     
-    # Mock container and system_plugin_manager
-    mock_container = MagicMock()
-    service = PluginService(mock_container)
-    mock_spm = MagicMock()
-    mock_container.system_plugin_manager = mock_spm
-    
-    # 模拟 100 个插件的状态
-    stress_plugins = []
+    aggregator = PluginStateAggregator()
+
     for i in range(100):
         pid = f"plugin_{i}"
-        stress_plugins.append({
+        await aggregator._merge_state(pid, {
             "id": pid,
             "name": f"Stress Plugin {i}",
-            "enabled": True,
-            "category": "system"
-        })
-    
-    mock_spm.list_plugins.return_value = stress_plugins
+            "desired_enabled": True,
+            "active_status": "ready",
+            "kind": "system",
+        }, source="local")
 
     start = time.perf_counter()
-    # 模拟获取所有插件列表
-    plugins = await service.list_all_plugins()
+    # 模拟获取聚合后的插件状态快照
+    plugins = aggregator.get_snapshot()
     elapsed = time.perf_counter() - start
     
     assert len(plugins) == 100
     assert elapsed < 0.5, f"Listing 100 plugins took too long: {elapsed:.2f}s"
 
 @pytest.mark.performance
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_concurrent_load_stress():
     """模拟高并发请求压力"""
     async def simulated_heavy_task(i):

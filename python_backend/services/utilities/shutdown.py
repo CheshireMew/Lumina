@@ -65,10 +65,11 @@ class ShutdownManager:
         logger.info("✅ Shutdown complete")
     
     async def _stop_mcp_host(self, container: Any):
-        if container.mcp_host:
+        mcp_host = container.get_mcp_host()
+        if mcp_host:
             logger.info("Stopping MCP Host...")
             try:
-                await container.mcp_host.stop()
+                await mcp_host.stop()
             except Exception as e:
                 logger.error(f"Error stopping MCP Host: {e}")
     
@@ -91,22 +92,24 @@ class ShutdownManager:
                 logger.error(f"Error stopping Reconciliation: {e}")
     
     async def _stop_system_plugins(self, container: Any):
-        if container.system_plugin_manager:
+        system_plugin_manager = container.get_system_plugin_manager()
+        if system_plugin_manager:
             logger.info("Stopping System Plugins...")
             try:
-                await container.system_plugin_manager.shutdown()
+                await system_plugin_manager.shutdown()
             except Exception as e:
                 logger.error(f"Error stopping unified plugin kernel: {e}")
     
     def _stop_ticker(self, container: Any):
-        if container.ticker:
+        ticker = container.get_ticker()
+        if ticker:
             logger.info("Stopping Ticker...")
-            container.ticker.stop()
+            ticker.stop()
 
     async def _stop_prewarm_task(self, container: Any):
         import asyncio
 
-        task = getattr(container, "prewarm_task", None)
+        task = container.get_prewarm_task()
         if not task:
             return
         if task.done():

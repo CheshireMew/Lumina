@@ -1,10 +1,7 @@
-# Services Orchestrators Module
-# Business logic orchestrators for soul, session, etc.
+"""Business logic orchestrators.
 
-from .session import SessionManager
-from .soul import SoulService
+Import concrete orchestrators from their modules to avoid package-level
+side effects during unrelated service loading.
+"""
 
-__all__ = [
-    "SessionManager",
-    "SoulService",
-]
+__all__: list[str] = []

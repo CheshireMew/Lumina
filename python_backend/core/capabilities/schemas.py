@@ -12,7 +12,6 @@ class CapabilityType(str, Enum):
     LLM_PROVIDER = "llm.provider"
     TOOL_EXECUTION = "tool.execution" # Skills / MCP
     SYSTEM_EXTENSION = "system.extension"
-    UI_WIDGET = "ui.widget"
     MEMORY_STORE = "memory.store"
 
 

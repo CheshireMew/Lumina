@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
     
     # Integration Bootstrappers
     from core.bootstrap.integration import (
-        ChatBridgeBootstrapper,
+        ChatTurnEventAdapterBootstrapper,
         MCPHostBootstrapper,
     )
     
@@ -72,12 +72,8 @@ async def lifespan(app: FastAPI):
     manager.add(MiddlewareBootstrapper())
     manager.add(SystemPluginsBootstrapper())
     
-    # Level 3.5: SDK Initialization
-    from core.bootstrap.sdk import SDKBootstrapper
-    manager.add(SDKBootstrapper())
-    
     # Level 4: Integration (requires plugins)
-    manager.add(ChatBridgeBootstrapper())
+    manager.add(ChatTurnEventAdapterBootstrapper())
     manager.add(MCPHostBootstrapper())
     
     # Level 5: Post-Startup

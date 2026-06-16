@@ -1,5 +1,6 @@
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, AsyncMock, patch
 
@@ -8,18 +9,22 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../python_backend")))
 
-# Import app - this might trigger startup events so we mock if needed
-# We want to test the ROUTER logic, specifically parameter binding.
-# The app import itself will load modules.
-from stt_server import app
+try:
+    stt_routes = pytest.importorskip("capabilities.stt.routes")
+except RuntimeError as exc:
+    if "python-multipart" in str(exc):
+        pytest.skip("python-multipart is required for STT route integration tests", allow_module_level=True)
+    raise
 from routers.deps import get_stt_service
 
+app = FastAPI()
+app.include_router(stt_routes.router)
 client = TestClient(app)
 
 @pytest.fixture
 def mock_stt_manager():
     manager = MagicMock()
-    manager.drivers = {"mock_driver": MagicMock(name="MockDriver")}
+    manager.has_driver.return_value = True
     manager.active_driver_id = "mock_driver"
     manager.switch_model_background = AsyncMock()
     return manager

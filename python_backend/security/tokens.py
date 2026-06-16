@@ -50,18 +50,15 @@ class TokenManager:
         return token
 
     @classmethod
-    def verify_token(cls, token: str, expected_scope: str = None) -> Optional[Dict[str, Any]]:
+    def verify_token(cls, token: str, expected_scope: str) -> Optional[Dict[str, Any]]:
         """
         Verify and decode a token. Returns payload dict or None.
-        If expected_scope is provided, rejects tokens with a different scope.
+        Rejects tokens with a different scope.
         """
         try:
             payload = jwt.decode(token, cls.get_secret(), algorithms=[cls._algorithm])
             scope = payload.get("scope")
-            if expected_scope and scope != expected_scope:
-                return None
-            # Backward compat: if no expected_scope, accept "plugin" (original behavior)
-            if not expected_scope and scope != "plugin":
+            if scope != expected_scope:
                 return None
             return payload
         except jwt.ExpiredSignatureError:

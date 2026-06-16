@@ -4,11 +4,9 @@ import time
 from typing import Dict, List, Optional
 from pydantic import BaseModel
 
-from app_config import config as app_config
 from core.runtime import (
     MAIN_RUNTIME_TARGET,
     normalize_runtime_target,
-    resolve_runtime_port,
     runtime_target_for_capability,
 )
 
@@ -67,8 +65,8 @@ class ServiceDiscovery:
             return None
         return node
 
-    def get_url(self, worker_id: str, fallback_port: int = None) -> str:
-        """Resolve worker URL with local fallback."""
+    def get_url(self, worker_id: str) -> str:
+        """Resolve a URL for a registered worker node."""
         normalized_target = normalize_runtime_target(worker_id)
         node = self.get_node(worker_id)
         if node:
@@ -77,15 +75,8 @@ class ServiceDiscovery:
         for candidate in self.nodes.values():
             if normalize_runtime_target(candidate.runtime_target) == normalized_target:
                 return candidate.base_url
-        
-        # Fallback to localhost if not registered
-        if fallback_port:
-             return f"http://127.0.0.1:{fallback_port}"
-        configured_port = resolve_runtime_port(app_config, normalized_target)
-        if configured_port:
-            return f"http://127.0.0.1:{configured_port}"
-        
-        raise ValueError(f"Worker {worker_id} not discovered and no fallback provided")
+
+        raise ValueError(f"Worker {worker_id} is not registered in service discovery")
 
     def get_url_for_capability(self, capability: str) -> str:
         runtime_target = runtime_target_for_capability(capability)
