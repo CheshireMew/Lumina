@@ -15,8 +15,6 @@ def stream_worker_output(stream, prefix: str) -> None:
             decoded = line.decode("utf-8", errors="replace").strip()
             if not decoded:
                 continue
-            if "GET /plugins/slots" in decoded and "200 OK" in decoded:
-                continue
             print(f"[{prefix}] {decoded}", flush=True)
     except ValueError:
         pass

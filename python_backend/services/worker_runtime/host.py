@@ -59,8 +59,6 @@ class WorkerRuntimeHost:
         return app
 
     def _configure_middleware(self, app: FastAPI):
-        from services.middleware.resource_cleanup import resource_cleanup_middleware
-
         @app.middleware("http")
         async def request_id_middleware(request: Request, call_next):
             request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
@@ -76,10 +74,6 @@ class WorkerRuntimeHost:
             finally:
                 request_id_ctx.reset(token_rid)
                 session_id_ctx.reset(token_sid)
-
-        @app.middleware("http")
-        async def resource_cleanup_bridge(request: Request, call_next):
-            return await resource_cleanup_middleware(request, call_next)
 
         app.add_middleware(
             CORSMiddleware,

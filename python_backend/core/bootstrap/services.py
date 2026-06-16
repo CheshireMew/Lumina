@@ -44,7 +44,10 @@ class CoreServicesBootstrapper(Bootstrapper):
         container.set_process_manager(pm)
         container.set_capability_package_registry(package_registry)
         container.capability_registry = CapabilityRegistry()
-        container.character_service = CharacterService(package_registry=package_registry)
+        container.character_service = CharacterService(
+            package_registry=package_registry,
+            system_config=container.config,
+        )
 
         # 1. LLM
         from llm.manager import LLMManager
@@ -125,9 +128,8 @@ class SystemPluginsBootstrapper(Bootstrapper):
     
     async def bootstrap(self, container):
         from services.system_plugin_manager import SystemPluginManager
-        
-        rm = getattr(container, 'router_manager', None)
-        spm = SystemPluginManager(container=container, router_manager=rm)
+
+        spm = SystemPluginManager(container=container)
         
         await spm.start() # Async Load & Init
         container.system_plugin_manager = spm

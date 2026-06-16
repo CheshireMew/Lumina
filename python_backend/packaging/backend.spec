@@ -218,7 +218,6 @@ datas += [
     ('../user_settings.json', '.'),
     ('../audio_config.json', '.'),
     ('../memory_config.json', '.'),
-    ('../core_profile.json', '.'),
 ]
 for plugin_name in target_extension_plugins:
     datas.append((f'../plugins/extensions/{plugin_name}', f'plugins/extensions/{plugin_name}'))

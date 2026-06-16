@@ -143,7 +143,7 @@ async def test_chat_stream_with_valid_input():
         mock_services.soul = mock_soul
         mock_services.get_llm_manager.return_value = mock_llm_manager
         mock_services.get_memory.return_value = mock_memory
-        mock_services.surreal_system = None  # No RAG
+        mock_services.memory_service = None  # No RAG
 
         # Call chat_stream
         chunks = []
@@ -198,7 +198,7 @@ async def test_chat_stream_with_rag_context():
         mock_services.soul = mock_soul
         mock_services.get_llm_manager.return_value = mock_llm_manager
         mock_services.get_memory.return_value = mock_memory
-        mock_services.surreal_system = None
+        mock_services.memory_service = None
 
         # Call with long_term_memory (RAG context)
         rag_context = "User's previous conversation about Python"
@@ -261,7 +261,7 @@ async def test_chat_stream_input_handling(user_input):
         mock_services.soul = mock_soul
         mock_services.get_llm_manager.return_value = mock_llm_manager
         mock_services.get_memory.return_value = mock_memory
-        mock_services.surreal_system = None
+        mock_services.memory_service = None
 
         # Should not crash for any input
         chunks = []
@@ -329,7 +329,7 @@ async def test_chat_stream_uses_character_config():
         mock_services.soul = mock_soul
         mock_services.get_llm_manager.return_value = mock_llm_manager
         mock_services.get_memory.return_value = mock_memory
-        mock_services.surreal_system = None
+        mock_services.memory_service = None
 
         # Call chat_stream
         chunks = []
@@ -383,7 +383,7 @@ async def test_chat_stream_concurrent_requests():
         mock_services.soul = mock_soul
         mock_services.get_llm_manager.return_value = mock_llm_manager
         mock_services.get_memory.return_value = mock_memory
-        mock_services.surreal_system = None
+        mock_services.memory_service = None
 
         # Create multiple concurrent requests
         async def make_request(user_input):

@@ -58,7 +58,7 @@ class TestBootstrapFlow(unittest.IsolatedAsyncioTestCase):
         def inject_infra(c):
             c.config = MagicMock(name="ConfigManager")
             c.event_bus = MagicMock(name="EventBus")
-            c.db = MagicMock(name="SurrealDB")
+            c.db = MagicMock(name="Postgres")
             
         inject_infra(container)
         

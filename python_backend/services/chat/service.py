@@ -20,7 +20,7 @@ class ChatTurnService:
         self.session_manager = session_manager
         self.soul_service = soul_service
 
-    def active_character_id(self, fallback: str = "default_char") -> str:
+    def active_character_id(self, fallback: str = "hiyori") -> str:
         soul = self.soul_service
         if soul and hasattr(soul, "get_active_character_id"):
             return soul.get_active_character_id()

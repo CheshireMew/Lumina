@@ -1,5 +1,4 @@
 interface ElectronSettingsStore {
-    activeCharacterId: string;
     backgroundImage: string;
     contextWindow: number;
     isTTSEnabled: boolean;
@@ -30,7 +29,6 @@ export interface BackendState {
 export interface BootstrapState {
     backend: BackendState;
     localSettings: {
-        activeCharacterId: string;
         backgroundImage: string;
         contextWindow: number;
         isTTSEnabled: boolean;
@@ -46,7 +44,6 @@ const DEFAULT_BOOTSTRAP_STATE: BootstrapState = {
         ports: {},
     },
     localSettings: {
-        activeCharacterId: "hiyori",
         backgroundImage: "",
         contextWindow: 50,
         isTTSEnabled: true,

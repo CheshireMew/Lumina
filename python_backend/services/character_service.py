@@ -1,6 +1,5 @@
 import json
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -9,23 +8,35 @@ from core.security.safe_path import SafePath, SecurityException
 from schemas.character import CharacterConfig
 
 logger = logging.getLogger("CharacterService")
+ACTIVE_CHARACTER_ID = "hiyori"
 
 
 class CharacterService:
     """Single filesystem boundary for character configs and assets."""
 
-    def __init__(self, characters_root: Path | None = None, package_registry: Any | None = None):
+    def __init__(
+        self,
+        characters_root: Path | None = None,
+        package_registry: Any | None = None,
+        system_config: Any | None = None,
+    ):
         self.characters_root = characters_root or (BASE_DIR / "characters")
         self.package_registry = package_registry
+        self.system_config = system_config
 
-    def _character_dir(self, character_id: str) -> Path:
+    def _active_character_id(self) -> str:
+        if self.system_config and hasattr(self.system_config, "memory"):
+            return self.system_config.memory.character_id or ACTIVE_CHARACTER_ID
+        return ACTIVE_CHARACTER_ID
+
+    def _character_dir(self) -> Path:
         try:
-            return SafePath.resolve_child(self.characters_root, character_id)
+            return SafePath.resolve_child(self.characters_root, self._active_character_id())
         except SecurityException as exc:
             raise ValueError("Invalid character ID") from exc
 
-    def _config_path(self, character_id: str) -> Path:
-        return self._character_dir(character_id) / "config.json"
+    def _config_path(self) -> Path:
+        return self._character_dir() / "config.json"
 
     def _read_storage_config(self, config_path: Path) -> dict[str, Any]:
         with open(config_path, "r", encoding="utf-8") as handle:
@@ -47,36 +58,21 @@ class CharacterService:
             return None
         return snapshot
 
-    def list_characters(self) -> list[CharacterConfig]:
-        characters: list[CharacterConfig] = []
-        if not self.characters_root.exists():
-            return characters
-
-        for char_dir in self.characters_root.iterdir():
-            if not char_dir.is_dir():
-                continue
-            config_path = char_dir / "config.json"
-            if not config_path.exists():
-                continue
-            try:
-                characters.append(self.load_config(char_dir.name))
-            except Exception as exc:
-                logger.error("Failed to load character config for %s: %s", char_dir.name, exc)
-        return characters
-
-    def load_config(self, character_id: str) -> CharacterConfig:
-        config_path = self._config_path(character_id)
+    def load_config(self) -> CharacterConfig:
+        character_id = self._active_character_id()
+        config_path = self._config_path()
         if not config_path.exists():
             raise FileNotFoundError(f"Config not found for {character_id}")
         storage = self._read_storage_config(config_path)
         return CharacterConfig.from_storage(character_id, storage)
 
-    def save_config(self, character_id: str, config: CharacterConfig) -> CharacterConfig:
-        char_dir = self._character_dir(character_id)
+    def save_config(self, config: CharacterConfig) -> CharacterConfig:
+        character_id = self._active_character_id()
+        char_dir = self._character_dir()
         char_dir.mkdir(parents=True, exist_ok=True)
 
         current_storage: dict[str, Any] = {}
-        config_path = self._config_path(character_id)
+        config_path = self._config_path()
         if config_path.exists():
             current_storage = self._read_storage_config(config_path)
 
@@ -90,24 +86,10 @@ class CharacterService:
         self._write_storage_config(config_path, payload)
         return normalized
 
-    def delete_character(self, character_id: str) -> bool:
-        if character_id == "hiyori":
-            raise ValueError("Cannot delete default character 'hiyori'")
-
-        char_dir = self._character_dir(character_id)
-        if not char_dir.exists():
-            return False
-        if not char_dir.is_dir():
-            raise ValueError("Character path is not a directory")
-        shutil.rmtree(char_dir)
-        return True
-
     def list_live2d_models(self, system_plugin_manager: Any = None) -> list[dict[str, Any]]:
         _ = system_plugin_manager
         models: list[dict[str, Any]] = []
         models.extend(self._scan_live2d_models())
-        models.extend(self._scan_public_models("vrm", ".vrm"))
-        models.extend(self._scan_sprite_models())
         return sorted(models, key=lambda item: item["name"])
 
     def _scan_live2d_models(self) -> list[dict[str, Any]]:
@@ -138,50 +120,6 @@ class CharacterService:
             )
         return models
 
-    def _scan_public_models(self, folder: str, suffix: str) -> list[dict[str, Any]]:
-        public_root = BASE_DIR.parent / "public" / folder
-        if not public_root.exists():
-            return []
-
-        models: list[dict[str, Any]] = []
-        for asset_path in public_root.rglob(f"*{suffix}"):
-            models.append(
-                {
-                    "name": asset_path.stem,
-                    "path": f"/{asset_path.relative_to(BASE_DIR.parent / 'public').as_posix()}",
-                    "type": folder,
-                    "thumbnail": self._resolve_thumbnail(asset_path, public_root, folder),
-                    "availability": "ready",
-                }
-            )
-        return models
-
-    def _scan_sprite_models(self) -> list[dict[str, Any]]:
-        sprites_root = BASE_DIR.parent / "public" / "sprites"
-        if not sprites_root.exists():
-            return []
-
-        models: list[dict[str, Any]] = []
-        for entry in sprites_root.iterdir():
-            if not entry.is_dir():
-                continue
-            for candidate in ("default.png", "normal.png", "stand.png"):
-                sprite_path = entry / candidate
-                if not sprite_path.exists():
-                    continue
-                relative = sprite_path.relative_to(BASE_DIR.parent / "public").as_posix()
-                models.append(
-                    {
-                        "name": entry.name,
-                        "path": f"/{relative}",
-                        "type": "sprite",
-                        "thumbnail": f"/{relative}",
-                        "availability": "ready",
-                    }
-                )
-                break
-        return models
-
     def _resolve_live2d_thumbnail(self, snapshot: Any, asset_path: Path, root: Path) -> str | None:
         for candidate in (
             "thumbnail.png",
@@ -196,19 +134,4 @@ class CharacterService:
             if thumb_path.exists():
                 relative = thumb_path.relative_to(root).as_posix()
                 return snapshot.resource_route("live2d", relative)
-        return None
-
-    def _resolve_thumbnail(self, asset_path: Path, root: Path, kind: str) -> str | None:
-        for candidate in (
-            "thumbnail.png",
-            "thumbnail.jpg",
-            "preview.png",
-            "preview.jpg",
-            f"{asset_path.stem}.png",
-            f"{asset_path.stem}.jpg",
-            "icon.png",
-        ):
-            thumb_path = asset_path.parent / candidate
-            if thumb_path.exists():
-                return f"/{kind}/{thumb_path.relative_to(root).as_posix()}"
         return None

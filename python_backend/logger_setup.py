@@ -157,17 +157,6 @@ def setup_logger(log_filename="server.log"):
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
-    # 2. Filter Specific Paths from Access Log (even if level is INFO/WARNING)
-    class LogFilter(logging.Filter):
-        def filter(self, record):
-            msg = record.getMessage()
-            # Ignore Slot Checks
-            if "/plugins/slots" in msg:
-                return False
-            return True
-
-    logging.getLogger("uvicorn.access").addFilter(LogFilter())
-
     return logger
 
 class SafeFormatter(logging.Formatter):

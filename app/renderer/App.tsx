@@ -7,10 +7,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import ChatBubble from './components/ChatBubble'
 import InputBox from './components/InputBox'
-import GalGameHud from './components/GalGameHud'
 import { events } from './core/events';
 import { API_CONFIG, updateApiConfig } from './config';
-import { CharacterProfile } from '@core/llm/types'
 import { ttsService } from '@core/voice/tts_service'
 import { GeneralSettingsInput } from './hooks/useSettings';
 import type { ProviderType } from './components/LLMConfig/types';
@@ -34,12 +32,6 @@ const LazyModalLayer = React.lazy(() =>
     })),
 );
 
-const LazyWidgetContainer = React.lazy(() =>
-    import('./components/plugins/WidgetContainer').then((module) => ({
-        default: module.WidgetContainer,
-    })),
-);
-
 function App() {
     // ==================== HOOKS ====================
     // Refs
@@ -53,10 +45,10 @@ function App() {
     
     // Core System Hook (Unified)
     const {
-        activeCharacter, activeCharacterId, characters, setCharacters, switchCharacter,
+        activeCharacter, activeCharacterId,
         settings, isSettingsLoaded, updateLLMSettings, saveGeneralSettings,
         isProcessing, isStreaming, displayMessage, reasoningContent,
-        sendMessage, interrupt, saveCharacters
+        sendMessage, interrupt
     } = useCoreSystem(avatarRef, isBackendReady);
     
     // ==================== LOCAL STATE ====================
@@ -64,13 +56,10 @@ function App() {
     
     // Modals State
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [isPluginStoreOpen, setIsPluginStoreOpen] = useState(false);
     const [isMotionTesterOpen, setIsMotionTesterOpen] = useState(false);
     const [isMemoryInspectorOpen, setIsMemoryInspectorOpen] = useState(false);
-    const [isAvatarSelectorOpen, setIsAvatarSelectorOpen] = useState(false);
     const [isLLMConfigOpen, setIsLLMConfigOpen] = useState(false);
-    const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'voice' | 'interaction'>('general');
-    const [showPluginWidgets, setShowPluginWidgets] = useState(false);
+    const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'voice'>('general');
     const [visibleBackgroundImage, setVisibleBackgroundImage] = useState('');
     
     // Other Refs
@@ -84,18 +73,9 @@ function App() {
         interrupt();
     }, [interrupt]);
 
-    const handleCharacterSwitch = useCallback(async (newId: string) => {
-        console.log('[App] Switching character:', newId);
-        await switchCharacter(newId);
-    }, [switchCharacter]);
-
     const handleLLMSettingsChange = useCallback((apiKey: string, baseUrl: string, model: string, temperature: number, thinkingEnabled: boolean, historyLimit: number, overflowStrategy: 'slide' | 'reset', topP?: number, presencePenalty?: number, frequencyPenalty?: number, providerType: ProviderType = 'custom') => {
         updateLLMSettings({ providerType, apiKey, baseUrl, model, temperature, thinkingEnabled, historyLimit, overflowStrategy, topP, presencePenalty, frequencyPenalty });
     }, [updateLLMSettings]);
-
-    const handleSaveCharacters = useCallback(async (chars: CharacterProfile[], deletedIds: string[]) => {
-        await saveCharacters(chars, deletedIds);
-    }, [saveCharacters]);
 
     const handleSaveGeneralSettings = useCallback(async (next: GeneralSettingsInput) => {
         await saveGeneralSettings(next);
@@ -140,19 +120,6 @@ function App() {
     }, [backendState.ports]);
 
     useEffect(() => {
-        if (!isBackendReady) {
-            setShowPluginWidgets(false);
-            return;
-        }
-
-        const timer = window.setTimeout(() => {
-            setShowPluginWidgets(true);
-        }, 1200);
-
-        return () => window.clearTimeout(timer);
-    }, [isBackendReady]);
-
-    useEffect(() => {
         setVisibleBackgroundImage('');
 
         if (!isSettingsLoaded || !settings.backgroundImage) {
@@ -178,10 +145,8 @@ function App() {
     const canLoadAvatar = isSettingsLoaded;
     const shouldRenderAvatar = canLoadAvatar && Boolean(resolvedModelPath);
     const hasOpenModal = isSettingsOpen
-        || isPluginStoreOpen
         || isMotionTesterOpen
         || isMemoryInspectorOpen
-        || isAvatarSelectorOpen
         || isLLMConfigOpen;
     const showStartupStatus = !isSettingsLoaded || backendState.status !== 'ready';
     const startupLabel = backendState.status === 'error'
@@ -238,15 +203,6 @@ function App() {
                 <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#666' }}>
                     Loading Soul...
                 </div>
-            )}
-
-            {/* HUD */}
-            {isSettingsLoaded && isBackendReady && (
-                <GalGameHud
-                    activeCharacterId={activeCharacterId}
-                    onOpenMemoryInspector={() => setIsMemoryInspectorOpen(true)}
-                    galgameEnabled={activeCharacter?.galgameModeEnabled ?? true}
-                />
             )}
 
             {/* ================= Unified Chat Panel ================= */}
@@ -311,16 +267,13 @@ function App() {
 
             {/* UI Layer */}
             <AppToolbar 
-                onOpenAvatarSelector={() => {
-                    setIsAvatarSelectorOpen(true);
-                }}
                 onOpenSettings={() => {
                     setSettingsInitialTab('general');
                     setIsSettingsOpen(true);
                 }}
                 onOpenLLMSettings={() => setIsLLMConfigOpen(true)}
-                onOpenPlugins={() => setIsPluginStoreOpen(true)}
                 onOpenMotionTester={() => setIsMotionTesterOpen(true)}
+                onOpenMemoryInspector={() => setIsMemoryInspectorOpen(true)}
             />
 
             {hasOpenModal && (
@@ -337,11 +290,6 @@ function App() {
                             },
                             onSave: handleSaveGeneralSettings,
                         }}
-                        pluginStore={{
-                            isOpen: isPluginStoreOpen,
-                            onClose: () => setIsPluginStoreOpen(false),
-                            onOpenLlmSettings: () => setIsLLMConfigOpen(true),
-                        }}
                         motionTester={{
                             isOpen: isMotionTesterOpen,
                             onClose: () => setIsMotionTesterOpen(false),
@@ -350,17 +298,6 @@ function App() {
                             isOpen: isMemoryInspectorOpen,
                             onClose: () => setIsMemoryInspectorOpen(false),
                             activeCharacterId,
-                        }}
-                        avatarSelector={{
-                            isOpen: isAvatarSelectorOpen,
-                            onClose: () => setIsAvatarSelectorOpen(false),
-                            activeCharacterId,
-                            activeCharacter,
-                            live2dPackage,
-                            characters,
-                            setCharacters,
-                            onActivateCharacter: handleCharacterSwitch,
-                            onSaveCharacters: handleSaveCharacters,
                         }}
                         llmConfig={{
                             isOpen: isLLMConfigOpen,
@@ -385,15 +322,6 @@ function App() {
                     />
                 </React.Suspense>
             )}
-
-            {/* Plugin Widgets Layer */}
-            <div className="fixed top-24 right-4 z-40 w-80 pointer-events-none flex flex-col gap-4">
-                {isBackendReady && showPluginWidgets && (
-                    <React.Suspense fallback={null}>
-                        <LazyWidgetContainer location="sidebar_right" className="w-full" />
-                    </React.Suspense>
-                )}
-            </div>
 
             {showStartupStatus && (
                 <div style={{

@@ -26,7 +26,7 @@ class UnifiedAudioConfig(BaseModel):
     speech_end_threshold: Optional[float] = None
     min_speech_frames: Optional[int] = None
 
-class PluginConfigRequest(BaseModel):
+class ProviderConfigRequest(BaseModel):
     id: str
     key: str
     value: Any
@@ -82,9 +82,9 @@ async def get_audio_status(container=Depends(get_container)):
 
 # --- Lifecycle Proxies ---
 
-@router.post("/plugins/config")
-async def update_plugin_config(req: PluginConfigRequest, container=Depends(get_container)):
-    """Proxy to Worker LIPP Endpoint"""
+@router.post("/provider/config")
+async def update_provider_config(req: ProviderConfigRequest, container=Depends(get_container)):
+    """Proxy provider config changes to the STT worker."""
     payload = {
         "target_id": req.id,
         "key": req.key,

@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { useCharacterState } from "./useCharacterState";
+import { useCallback, useEffect } from "react";
+import { useCharacterProfile } from "./useCharacterProfile";
 import { useSettings } from "./useSettings";
 import { useAudioPipeline } from "./useAudioPipeline";
 import { useChatStream } from "./useChatStream";
@@ -16,14 +16,10 @@ export const useCoreSystem = (
 ) => {
     // Basic Hooks
     const {
-        characters,
         activeCharacterId,
         activeCharacter,
-        switchCharacter,
-        setCharacters,
-        updateCharacterModel,
-        saveCharacters,
-    } = useCharacterState(backendReady);
+        saveCharacter,
+    } = useCharacterProfile(backendReady);
     const {
         settings,
         isLoaded: isSettingsLoaded,
@@ -216,22 +212,11 @@ export const useCoreSystem = (
         settings.llm.providerType,
     ]);
 
-    // Character Switch Logic wrapping
-    const handleSwitchCharacter = useCallback(
-        async (newId: string) => {
-            await switchCharacter(newId);
-            useChatStore.getState().clearHistory();
-            resetStream();
-        },
-        [switchCharacter, resetStream],
-    );
-
     // Return unified interface
     return {
         // State
         activeCharacter,
         activeCharacterId,
-        characters,
         settings,
         isSettingsLoaded,
         isProcessing,
@@ -245,10 +230,7 @@ export const useCoreSystem = (
         // Actions
         sendMessage,
         interrupt,
-        switchCharacter: handleSwitchCharacter,
-        setCharacters,
-        updateCharacterModel,
-        saveCharacters,
+        saveCharacter,
         updateLLMSettings,
         saveGeneralSettings,
     };

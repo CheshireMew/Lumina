@@ -54,12 +54,6 @@ class SearchConfig(BaseModel):
     enabled: bool = True
 
 
-class PluginGroupsConfig(BaseModel):
-    assignments: Dict[str, str] = Field(default_factory=dict)
-    custom_categories: Dict[str, str] = Field(default_factory=dict)
-    group_behaviors: Dict[str, str] = Field(default_factory=dict)
-
-
 class PluginsConfig(BaseModel):
     desired_state: Dict[str, bool] = Field(default_factory=dict)
     selected_providers: Dict[str, str] = Field(default_factory=dict)
@@ -77,14 +71,6 @@ class PluginsConfig(BaseModel):
 
     def set_disabled(self, plugin_id: str, disabled: bool):
         self.set_enabled(plugin_id, not disabled)
-
-    def get_disabled_plugins(self) -> list[str]:
-        return [
-            plugin_id
-            for plugin_id, enabled in self.desired_state.items()
-            if enabled is False
-        ]
-
 
 class WorkerNodeConfig(BaseModel):
     host: str = "127.0.0.1"

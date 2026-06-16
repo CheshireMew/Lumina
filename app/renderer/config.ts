@@ -21,7 +21,7 @@ export const updateApiConfig = (ports: Record<string, number>) => {
     // Update derived endpoints too
     API_ENDPOINTS.SOUL = `${API_CONFIG.BASE_URL}/soul`;
     API_ENDPOINTS.MEMORY = `${API_CONFIG.BASE_URL}/memory`;
-    API_ENDPOINTS.CHARACTERS = `${API_CONFIG.BASE_URL}/characters`;
+    API_ENDPOINTS.CHARACTER = `${API_CONFIG.BASE_URL}/character`;
     API_ENDPOINTS.DEBUG = `${API_CONFIG.BASE_URL}/debug`;
 
     console.log("[Config] API Configuration Updated:", API_CONFIG);
@@ -30,6 +30,6 @@ export const updateApiConfig = (ports: Record<string, number>) => {
 export const API_ENDPOINTS = {
     SOUL: `${API_CONFIG.BASE_URL}/soul`,
     MEMORY: `${API_CONFIG.BASE_URL}/memory`,
-    CHARACTERS: `${API_CONFIG.BASE_URL}/characters`,
+    CHARACTER: `${API_CONFIG.BASE_URL}/character`,
     DEBUG: `${API_CONFIG.BASE_URL}/debug`,
 };

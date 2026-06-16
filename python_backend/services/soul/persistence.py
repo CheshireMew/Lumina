@@ -22,7 +22,7 @@ class SoulPersistence:
         self.config_path = base_dir / "config.json"
         
     def _resolve_data_root(self) -> Path:
-        """Returns characters/{id}/data/"""
+        """Returns the active character data directory."""
         path = self.base_dir / "data"
         path.mkdir(parents=True, exist_ok=True)
         return path

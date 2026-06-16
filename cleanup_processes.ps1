@@ -17,11 +17,4 @@ if ($node) {
     Stop-Process -Name node -Force -ErrorAction SilentlyContinue
 }
 
-# 3. Kill SurrealDB (Database)
-$surreal = Get-Process surreal -ErrorAction SilentlyContinue
-if ($surreal) {
-    Write-Host "Found SurrealDB. Terminating..." -ForegroundColor Yellow
-    Stop-Process -Name surreal -Force -ErrorAction SilentlyContinue
-}
-
 Write-Host "✅ Cleanup Complete! You can now restart the system cleanly." -ForegroundColor Green

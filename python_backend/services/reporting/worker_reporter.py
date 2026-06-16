@@ -78,7 +78,6 @@ class WorkerStatusReporter:
                     try:
                         # Auto-fill missing schema fields from context
                         p_dict.setdefault("worker_id", self.worker_id)
-                        p_dict.setdefault("endpoint_url", f"http://{self.host}:{self.port}/plugins/{p_dict.get('id')}")
                         
                         # Validate & Construct Schema
                         p_schema = PluginState(**p_dict)
@@ -124,7 +123,6 @@ class WorkerStatusReporter:
             
             for p_dict in plugins:
                     p_dict.setdefault("worker_id", self.worker_id)
-                    p_dict.setdefault("endpoint_url", f"http://{self.host}:{self.port}/plugins/{p_dict.get('id')}")
                     p_schema = PluginState(**p_dict)
                     await self.bus.update_plugin_state(p_schema)
             logger.info("⚡ Forced Mesh Registry Push Sent.")

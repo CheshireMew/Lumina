@@ -21,22 +21,6 @@ def is_selectable_provider(manifest: PluginManifest) -> bool:
     return manifest.kind == "provider" and manifest.capability in SELECTABLE_PROVIDER_CAPABILITIES
 
 
-def normalize_ui_slot(slot: dict[str, Any], plugin_id: str) -> dict[str, Any] | None:
-    raw_slot = slot.get("slot") or slot.get("location")
-    raw_name = slot.get("name") or slot.get("title") or slot.get("id")
-    raw_src = slot.get("src") or slot.get("url")
-    if not raw_slot or not raw_name or not raw_src:
-        return None
-    return {
-        "plugin_id": plugin_id,
-        "slot": raw_slot,
-        "name": raw_name,
-        "src": raw_src,
-        "width": slot.get("width"),
-        "height": slot.get("height"),
-    }
-
-
 class PluginStateBuilder:
     def __init__(self, config: Any):
         self.config = config
@@ -70,7 +54,6 @@ class PluginStateBuilder:
             "name": plugin_id,
             "description": "",
             "kind": manifest.kind,
-            "config_schema": manifest.config_schema,
             "provides": manifest.provides,
         }
         desired_enabled = self._desired_enabled(plugin_id)
@@ -92,9 +75,7 @@ class PluginStateBuilder:
             "group_exclusive": selectable_provider,
             "capabilities": manifest.all_capabilities(),
             "runtime_target": manifest.runtime_target,
-            "config_schema": metadata.get("config_schema", manifest.config_schema),
             "current_config": self._plugin_settings(plugin_id),
-            "ui_slots": metadata.get("ui_slots", []),
             "permissions": manifest.permissions,
             "func_tag": metadata.get("func_tag", manifest.kind.title()),
             "tags": metadata.get("tags", []),
@@ -119,9 +100,7 @@ class PluginStateBuilder:
             "group_exclusive": False,
             "capabilities": [],
             "runtime_target": "main",
-            "config_schema": {},
             "current_config": self._plugin_settings(plugin_id),
-            "ui_slots": [],
             "permissions": [],
             "func_tag": "Error",
             "tags": [],
@@ -129,17 +108,6 @@ class PluginStateBuilder:
             "active_status": "error",
             "error": error,
         }
-
-    def active_ui_slots(self, plugins: dict[str, Plugin]) -> list[dict[str, Any]]:
-        slots: list[dict[str, Any]] = []
-        for plugin_id, plugin in plugins.items():
-            if not plugin.enabled:
-                continue
-            for slot in plugin.get_metadata().get("ui_slots", []) or []:
-                normalized = normalize_ui_slot(slot, plugin_id)
-                if normalized:
-                    slots.append(normalized)
-        return slots
 
     def _desired_enabled(self, plugin_id: str) -> bool:
         if self.config and hasattr(self.config, "is_plugin_desired_enabled"):

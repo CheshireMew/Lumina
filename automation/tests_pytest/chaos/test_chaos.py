@@ -56,8 +56,6 @@ async def test_llm_service_random_failure():
 @pytest.mark.chaos
 def test_database_connection_timeout():
     """Test system handles database timeouts"""
-    from core.db.query_builder import SurrealQueryBuilder
-
     # Simulate slow database
     def slow_query():
         time.sleep(2)  # Simulate timeout

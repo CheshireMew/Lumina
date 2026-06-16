@@ -15,7 +15,6 @@ export interface VoiceManagerData {
     edgeVoices: { name: string; gender: string }[];
     gptVoices: { name: string; gender: string }[];
     activeTtsEngines: string[];
-    ttsPlugins: any[];
     voiceprintEnabled: boolean;
     voiceprintThreshold: number;
     voiceprintProfile: string;
@@ -60,7 +59,6 @@ export const useVoiceManager = (isActive: boolean): VoiceManagerData => {
         edgeVoices: tts.edgeVoices,
         gptVoices: tts.gptVoices,
         activeTtsEngines: tts.activeTtsEngines,
-        ttsPlugins: tts.ttsPlugins,
         voiceprintEnabled: voiceprint.voiceprintEnabled,
         voiceprintThreshold: voiceprint.voiceprintThreshold,
         voiceprintProfile: voiceprint.voiceprintProfile,

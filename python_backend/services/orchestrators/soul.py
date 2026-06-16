@@ -2,7 +2,6 @@
 import logging
 from typing import Dict, Any, Optional
 from pathlib import Path
-from datetime import datetime, timezone
 from core.interfaces.soul import BaseSoulDriver
 from core.interfaces.repository import ISoulRepository
 from services.repositories.file_soul_repository import FileSoulRepository
@@ -14,7 +13,7 @@ class SoulService:
     Core Service for managing the AI's "Soul" (Generic Personality/State Engine).
     
     Responsibilities:
-    1. Hold the active Soul Driver (e.g., Galgame, Jarvis).
+    1. Hold the active Soul Driver.
     2. Delegate Prompt Rendering to the Driver.
     3. Delegate Interaction Hooks to the Driver.
     4. Manage Persistence via Repository.
@@ -38,44 +37,13 @@ class SoulService:
         if system_config and hasattr(system_config, 'memory'):
              self.repo.set_character_id(system_config.memory.character_id)
 
-    def set_active_character(self, character_id: str):
-        """Switch active character and reload persistence."""
-        # 1. Update Repo State
-        # Repository handles directory checking/creation
-        try:
-            self.repo.set_character_id(character_id)
-        except Exception as e:
-            logger.error(f"Failed to switch character in repo: {e}")
-            raise
-        
-        # 2. Update Memory Context
-        try:
-            memory = self.memory_service
-            if memory:
-                memory.set_character_id(character_id)
-        except Exception as e:
-            logger.error(f"Failed to update MemoryService context: {e}")
-
-        # 3. Persist Selection (System Config)
-        try:
-            config = self.system_config
-            if config:
-                if config.memory.character_id != character_id:
-                    config.memory.character_id = character_id
-                    config.save()
-                    logger.info(f"💾 Persistent config updated: {character_id}")
-        except Exception as e:
-            logger.error(f"Failed to save character config: {e}")
-
-        logger.info(f"🎭 Active Character Switched to: {character_id}")
-
     def get_active_character_id(self) -> str:
         """Return the current character from the repository boundary."""
         if hasattr(self.repo, "get_character_id"):
             return self.repo.get_character_id()
         if self.system_config and hasattr(self.system_config, "memory"):
             return self.system_config.memory.character_id
-        return "default_char"
+        return "hiyori"
         
     def register_driver(self, driver: BaseSoulDriver):
         """Plugin registers itself as a potential Soul."""
@@ -153,26 +121,6 @@ class SoulService:
         if self._active_driver:
             await self._active_driver.on_interaction(user_input, ai_response, context)
 
-    def set_pending_interaction(self, content: str, source: str):
-        """
-        Queue an interaction from an external source for the proactive chat loop.
-        """
-        logger.info(f"Pending Interaction from {source}: {content}")
-        state = self.load_module_data("galgame-manager")
-        state["pending_interaction"] = {
-            "reason": source,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "data": content,
-        }
-        self.save_module_data("galgame-manager", state)
-
-    def clear_pending_interaction(self):
-        """Clear the pending proactive interaction after it is consumed."""
-        state = self.load_module_data("galgame-manager")
-        if "pending_interaction" in state:
-            state.pop("pending_interaction", None)
-            self.save_module_data("galgame-manager", state)
-
     # ================= Runtime State =================
     
     @property
@@ -207,8 +155,6 @@ class SoulService:
 
         profile = self.profile
         personality = profile.get("personality", {})
-        state = profile.get("state", {})
-        relationship = profile.get("relationship", {})
         return {
             "pad": personality.get(
                 "pad_model",
@@ -224,49 +170,6 @@ class SoulService:
                     "neuroticism": 0.5,
                 },
             ),
-            "energy": state.get("energy_level", 100),
-            "rel_level": relationship.get("level", 0),
-        }
-
-    def load_character_profile(self, character_id: str) -> Dict[str, Any]:
-        """Read a character profile without switching the active runtime."""
-        repo = FileSoulRepository()
-        repo.set_character_id(character_id)
-        config = repo.load_config()
-        runtime = repo.load_module_data("soul.runtime")
-        return {
-            **runtime,
-            "identity": {"name": config.get("name", character_id)},
-            "personality": runtime.get("personality", {}),
-            "state": runtime.get("state", {}),
-            "relationship": runtime.get("relationship", {}),
-            "system_prompt": config.get("system_prompt", runtime.get("system_prompt", "")),
-            "config": config,
-        }
-
-    def load_galgame_state(self, character_id: str) -> Dict[str, Any]:
-        """Read the galgame state from the character data boundary."""
-        repo = FileSoulRepository()
-        repo.set_character_id(character_id)
-        state = repo.load_module_data("galgame-manager")
-        if not state:
-            state = repo.load_module_data("system.galgame")
-        return {
-            "relationship": state.get(
-                "relationship",
-                {
-                    "level": 0,
-                    "progress": 0,
-                    "current_stage_label": "Stranger",
-                    "user_name": "Master",
-                },
-            ),
-            "energy_level": state.get("energy_level", 100),
-            "last_interaction": state.get("last_interaction") or state.get("last_interaction_at"),
-            "dynamic_instruction": state.get("dynamic_instruction", ""),
-            "system_prompt": state.get("system_prompt", ""),
-            "pending_interaction": state.get("pending_interaction"),
-            "enabled": state.get("enabled", True),
         }
 
     # ================= Persistence Delegates (Repository) =================

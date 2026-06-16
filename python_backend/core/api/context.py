@@ -13,12 +13,11 @@ class LuminaContext:
     """
     Unified plugin context.
 
-    Plugins may interact with:
+    Internal capabilities may interact with:
     - events
     - capability discovery
-    - scoped plugin config
-    - scoped plugin data
-    - route registration
+    - scoped config
+    - scoped data
     """
 
     def __init__(
@@ -27,14 +26,12 @@ class LuminaContext:
         plugin_id: str,
         manifest: Any,
         event_bus: EventBus | None = None,
-        router_manager: Any = None,
         capability_registry: Any = None,
         service_registry: ServiceRegistry | None = None,
     ):
         self.plugin_id = plugin_id
         self.manifest = manifest
         self._container = container
-        self._router_manager = router_manager
         self._capability_registry = capability_registry
         self._service_registry = service_registry or get_service_registry()
         self.events = event_bus or get_event_bus()
@@ -75,24 +72,6 @@ class LuminaContext:
     def subscribe(self, event_type: str, handler: Any):
         self.events.subscribe(event_type, handler)
 
-    async def register_route(self, path: str, method: str, handler: Any):
-        if not self._router_manager:
-            raise RuntimeError(f"Plugin {self.plugin_id} cannot register routes before RouterManager is ready.")
-
-        payload = {
-            "plugin_id": self.plugin_id,
-            "path": path,
-            "method": method.upper(),
-            "handler": handler,
-            "response_model": None,
-        }
-
-        class MockEvent:
-            def __init__(self, data):
-                self.data = data
-
-        self._router_manager._handle_route_def(MockEvent(payload))
-
     def find_capability(self, capability: str, runtime_target: str | None = None) -> str | None:
         if not self._capability_registry:
             return None
@@ -114,5 +93,5 @@ class LuminaContext:
             raise AttributeError(name)
         raise AttributeError(
             f"'{name}' is not a public plugin context API. "
-            "Use events, get_config(), update_config(), load_data(), save_data(), get_data_dir(), register_route(), find_capability(), get_service()."
+            "Use events, get_config(), update_config(), load_data(), save_data(), get_data_dir(), find_capability(), get_service()."
         )

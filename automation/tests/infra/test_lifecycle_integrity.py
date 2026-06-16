@@ -37,7 +37,7 @@ async def test_lifecycle_subscription():
     manager._load_plugins = MagicMock() # Don't scan disk
     manager._distribute_plugins = AsyncMock() # Don't network
     manager._rebuild_index = MagicMock()
-    manager.lifecycle_bus = MagicMock() # Don't talk to Surreal
+    manager.lifecycle_bus = MagicMock()
     manager.audit_logger = MagicMock()
     
     # 3. Mock the Target Action

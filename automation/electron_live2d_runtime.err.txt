@@ -1,4 +1,0 @@
-
-DevTools listening on ws://127.0.0.1:9333/devtools/browser/c4723b82-f251-46b8-8334-edaa8bf20f3a
-[34980:0412/191312.035:INFO:CONSOLE(600)] "Uncaught Error: Could not find Cubism 4 runtime. This plugin requires live2dcubismcore.js to be loaded.", source: file:///E:/Work/Code/Lumina/dist/assets/live2d-vendor-DPJc0HY2.js (600)
-[34980:0412/192003.762:ERROR:network_service_instance_impl.cc(601)] Network service crashed, restarting service.

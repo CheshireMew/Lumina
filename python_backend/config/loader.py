@@ -14,7 +14,6 @@ from .models import (
     MemoryConfig,
     ModelsConfig,
     NetworkConfig,
-    PluginGroupsConfig,
     PluginsConfig,
     SearchConfig,
     STTConfig,
@@ -37,7 +36,6 @@ class ConfigBundle:
     network: NetworkConfig = field(default_factory=NetworkConfig)
     models: ModelsConfig = field(default_factory=ModelsConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
-    plugin_groups: PluginGroupsConfig = field(default_factory=PluginGroupsConfig)
     plugins: PluginsConfig = field(default_factory=PluginsConfig)
 
     def section_map(self) -> Dict[str, Any]:
@@ -50,7 +48,6 @@ class ConfigBundle:
             "network": self.network,
             "search": self.search,
             "plugins": self.plugins,
-            "plugin_groups": self.plugin_groups,
             "models": self.models,
         }
 
@@ -64,7 +61,6 @@ class ConfigBundle:
             "audio": self.audio.model_dump(),
             "search": self.search.model_dump(),
             "models": self.models.model_dump(),
-            "plugin_groups": self.plugin_groups.model_dump(),
             "plugins": self.plugins.model_dump(),
         }
 
@@ -159,7 +155,6 @@ def hydrate_config(data: Dict[str, Any], logger: logging.Logger) -> ConfigBundle
         "audio": AudioConfig,
         "search": SearchConfig,
         "models": ModelsConfig,
-        "plugin_groups": PluginGroupsConfig,
         "plugins": PluginsConfig,
     }
 
@@ -182,9 +177,6 @@ def normalize_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     desired_state = dict(plugins_data.get("desired_state", {}) or {})
     selected_providers = dict(plugins_data.get("selected_providers", {}) or {})
 
-    for plugin_id in plugins_data.get("disabled_plugins", []) or []:
-        desired_state[plugin_id] = False
-
     if "selected_providers" not in plugins_data:
         legacy_provider_map = {
             "stt": (normalized.get("stt") or {}).get("provider"),
@@ -200,8 +192,6 @@ def normalize_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
     if "brave" in normalized:
         plugin_settings.setdefault("brave", normalized["brave"])
-    if "bilibili" in normalized:
-        plugin_settings.setdefault("bilibili", normalized["bilibili"])
 
     plugins_data["settings"] = plugin_settings
     plugins_data["desired_state"] = desired_state
@@ -249,7 +239,6 @@ def _load_legacy_jsons(
     candidates = (
         ("memory_config.json", _merge_legacy_memory_config),
         ("audio_config.json", _merge_legacy_audio_config),
-        ("user_settings.json", _merge_legacy_user_settings),
     )
 
     for filename, merge_func in candidates:
@@ -325,9 +314,3 @@ def _merge_legacy_audio_config(target: Dict[str, Any], data: Dict[str, Any]) -> 
     }
     if audio_data:
         target.setdefault("audio", {}).update(audio_data)
-
-
-def _merge_legacy_user_settings(target: Dict[str, Any], data: Dict[str, Any]) -> None:
-    active_character = data.get("active_character_id")
-    if active_character:
-        target.setdefault("memory", {}).setdefault("character_id", active_character)

@@ -15,8 +15,6 @@ LEGACY_PROVIDER_ALIASES: dict[str, dict[str, str]] = {
     "memory": {
         "postgres": "driver.memory.postgres",
         "postgres-db": "driver.memory.postgres",
-        "surreal": "driver.memory.postgres",
-        "surreal-db": "driver.memory.postgres",
     },
     "tool.search": {
         "brave": "driver.tool.search.brave",

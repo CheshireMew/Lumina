@@ -86,7 +86,7 @@ async def chat_completions(
     
     # Extract user_id and character_id from the active runtime context.
     user_id = "default_user"
-    character_id = chat_service.active_character_id("default_char")
+    character_id = chat_service.active_character_id("hiyori")
     
     try:
         if request.stream:

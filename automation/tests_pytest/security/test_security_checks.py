@@ -67,32 +67,6 @@ def test_malicious_input_detection(malicious_input, attack_type):
     assert threat is not None, f"Failed to detect {attack_type}: {malicious_input}"
 
 
-@pytest.mark.security
-def test_sql_injection_prevention_in_query_builder():
-    """Test that query builder prevents SQL injection"""
-    from core.db.query_builder import SecurityException, SurrealQueryBuilder
-
-    builder = SurrealQueryBuilder()
-
-    # Safe input
-    safe_table = "memories"
-    query, params = builder.select(safe_table, where={"id": "memory:1"})
-    assert "SELECT * FROM memories" in query
-    assert "DROP TABLE" not in query
-    assert params["p_0"] == "memory:1"
-
-    # Unsafe input attempts
-    unsafe_inputs = [
-        "memories; DROP TABLE users; --",
-        "memories' OR '1'='1",
-        "memories' UNION SELECT * FROM users--"
-    ]
-
-    for unsafe_input in unsafe_inputs:
-        with pytest.raises(SecurityException):
-            builder.select(unsafe_input)
-
-
 # ============================================================================
 # Path Traversal Prevention
 # ============================================================================

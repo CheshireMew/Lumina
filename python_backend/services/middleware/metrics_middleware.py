@@ -37,8 +37,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(exc) for exc in self.EXCLUDE_PATHS):
             return await call_next(request)
         
-        # Normalize path to avoid high cardinality
-        # e.g., /plugins/abc123 -> /plugins/{id}
+        # Normalize path to avoid high cardinality.
         normalized_path = self._normalize_path(path)
         method = request.method
         
@@ -98,6 +97,6 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         path = re.sub(r'/\d+(?=/|$)', '/{id}', path)
         
         # Replace common ID patterns (alphanumeric strings after known prefixes)
-        path = re.sub(r'/(plugins|characters|memories|sessions)/[a-zA-Z0-9_-]+', r'/\1/{id}', path)
+        path = re.sub(r'/(memories|sessions)/[a-zA-Z0-9_-]+', r'/\1/{id}', path)
         
         return path

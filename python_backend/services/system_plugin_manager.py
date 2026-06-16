@@ -23,9 +23,8 @@ logger = logging.getLogger("SystemPluginManager")
 
 
 class SystemPluginManager:
-    def __init__(self, container=None, router_manager=None, runtime_target: str = MAIN_RUNTIME_TARGET, base_dir: Path | None = None):
+    def __init__(self, container=None, runtime_target: str = MAIN_RUNTIME_TARGET, base_dir: Path | None = None):
         self.container = container
-        self.router_manager = router_manager
         self.event_bus = getattr(container, "event_bus", None) or bus
         self.runtime_target = normalize_runtime_target(runtime_target)
         self._plugin_root = Path(base_dir) if base_dir else Path(__file__).parent.parent / "plugins"
@@ -38,7 +37,7 @@ class SystemPluginManager:
         self._manifest_repository = ManifestRepository(self._plugin_root)
         self._loader = PluginLoader()
         self._permission_checker = PermissionChecker()
-        self._context_binder = PluginContextBinder(container, router_manager, self._capability_registry)
+        self._context_binder = PluginContextBinder(container, self._capability_registry)
         self._hook_binder = HookBinder()
         self._state_builder = PluginStateBuilder(getattr(container, "config", None))
         self._lifecycle_subscriptions: list[int] = []
@@ -229,9 +228,6 @@ class SystemPluginManager:
     def reload_plugin(self, plugin_id: str) -> bool:
         logger.warning("Hot reload is disabled in the unified kernel: %s", plugin_id)
         return False
-
-    def get_active_ui_slots(self) -> list[dict[str, Any]]:
-        return self._state_builder.active_ui_slots(self._plugins)
 
     async def shutdown(self):
         for sub_id in self._lifecycle_subscriptions:

@@ -62,14 +62,9 @@ class MCPHost:
              
         # Create & Start Client
         try:
-            # Custom Stderr Handler to forward Bilibili Events
             async def stderr_handler(line: str):
                 if line.startswith("EVENT:"):
-                    try:
-                        data = json.loads(line[6:])
-                        await self._handle_event(name, data)
-                    except Exception:
-                        pass  # Ignore malformed events
+                    logger.debug("Ignoring MCP event from %s: %s", name, line[6:80])
             
             client = MCPClient(name=name, stderr_handler=stderr_handler)
             
@@ -165,13 +160,3 @@ class MCPHost:
         except Exception as e:
             logger.error(f"Failed to send tool call to [{server_name}]: {e}")
             return None
-
-    async def _handle_event(self, server_name: str, event: Dict):
-        """Forward Events to SoulManager (Legacy Event Bus)"""
-        user = event.get("user")
-        content = event.get("content")
-        
-        full_msg = f"[{server_name.capitalize()}] {user}: {content}"
-        logger.info(f"Forwarding interaction: {full_msg}")
-        
-        self.soul_client.set_pending_interaction(full_msg, server_name)

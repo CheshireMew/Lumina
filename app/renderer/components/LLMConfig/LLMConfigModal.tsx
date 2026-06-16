@@ -24,7 +24,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
     onClose,
     currentLlmSettings,
     onSettingsChange,
-    activeCharacterId = "default",
+    activeCharacterId = "hiyori",
 }) => {
     const { form, updateField, selectPlatform, setDeepSeekThinking, save } =
         useLlmConfigForm({

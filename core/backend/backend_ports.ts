@@ -39,7 +39,6 @@ export class BackendPortConfigStore {
         this.updatePort(services, "core", ports.memory_port);
         this.updatePort(services, "stt", ports.stt_port);
         this.updatePort(services, "tts", ports.tts_port);
-        this.updatePort(services, "surreal", ports.surreal_port);
 
         console.log(
             "[BackendManager] Services Configured:",

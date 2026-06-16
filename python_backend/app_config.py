@@ -141,7 +141,6 @@ class ConfigManager(IConfigProvider):
         self._network_config = bundle.network
         self._models_config = bundle.models
         self._search_config = bundle.search
-        self._plugin_groups_config = bundle.plugin_groups
         self._plugins_config = bundle.plugins
 
     def is_plugin_desired_enabled(self, plugin_id: str) -> bool:
@@ -182,10 +181,6 @@ class ConfigManager(IConfigProvider):
     @property
     def search(self):
         return self._search_config
-
-    @property
-    def plugin_groups(self):
-        return self._plugin_groups_config
 
     @property
     def plugins(self):

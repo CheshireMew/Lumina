@@ -35,29 +35,21 @@ export interface CharacterProfile {
   modelPath?: string; // Path to Live2D model (relative to public)
   heartbeatEnabled?: boolean; // ⚡ Heartbeat Toggle
   // ⚡ Interaction Settings
-  galgameModeEnabled?: boolean; // ⚡ New Master Switch for Galgame System
   soulEvolutionEnabled?: boolean; // ⚡ New: Decoupled Logic Toggle
   proactiveChatEnabled?: boolean; // ⚡ Master Proactive Switch
   proactiveThresholdMinutes?: number; // ⚡ Silence threshold
-  bilibili?: {
-    // ⚡ Bilibili Live Integration
-    enabled: boolean;
-    roomId: number;
-  };
   metadata?: Record<string, unknown>;
 }
 
-export const DEFAULT_CHARACTERS: CharacterProfile[] = [
-  {
-    id: "lumina_default",
-    name: "Hiyori",
-    description: "一名18岁的活泼可爱的女孩子",
-    systemPrompt: "An 18 years old human girl with a distinct personality.",
-    voiceConfig: {
-      service: "edge-tts",
-      voiceId: "zh-CN-XiaoxiaoNeural",
-      rate: "+0%",
-      pitch: "+0Hz",
-    },
+export const DEFAULT_CHARACTER: CharacterProfile = {
+  id: "hiyori",
+  name: "Hiyori",
+  description: "一名18岁的活泼可爱的女孩子",
+  systemPrompt: "An 18 years old human girl with a distinct personality.",
+  voiceConfig: {
+    service: "edge-tts",
+    voiceId: "zh-CN-XiaoxiaoNeural",
+    rate: "+0%",
+    pitch: "+0Hz",
   },
-];
+};

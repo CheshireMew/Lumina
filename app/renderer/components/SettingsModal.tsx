@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Mic, Puzzle, Save, Settings, X } from "lucide-react";
+import { Mic, Save, Settings, X } from "lucide-react";
 
 import { VoiceManagerData } from "../hooks/useVoiceManager";
 import { GeneralSettingsInput } from "../hooks/useSettings";
 import { GeneralSettingsPanel } from "./Settings/GeneralSettingsPanel";
-import { InteractionSettingsPanel } from "./Settings/InteractionSettingsPanel";
 import { VoiceTab } from "./Settings/VoiceTab";
 import { useSettingsModalState } from "./Settings/useSettingsModalState";
 
-export type SettingsTab = "general" | "voice" | "interaction";
+export type SettingsTab = "general" | "voice";
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -151,12 +150,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         >
                             <Mic size={18} /> <span>Voice</span>
                         </div>
-                        <div
-                            onClick={() => setActiveTab("interaction")}
-                            style={tabStyle(activeTab === "interaction")}
-                        >
-                            <Puzzle size={18} /> <span>Plugins</span>
-                        </div>
                     </div>
 
                     <button
@@ -231,7 +224,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             onBackgroundFileSelect={handleBackgroundFileSelect}
                         />
                     )}
-                    {activeTab === "interaction" && <InteractionSettingsPanel />}
                     {activeTab === "voice" && <VoiceTab {...voiceManagerData} />}
                 </div>
             </div>

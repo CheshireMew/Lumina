@@ -47,26 +47,11 @@ async def test_memory_chat(client):
     """Test the Core Memory/Chat Flow"""
     url = SERVICES["main"]
     print(f"\n--- Testing Main Application Flow ({url}) ---")
-    
-    # 1. Config Check (Debug Table Access) - Security Check
-    try:
-        # P1 Vulnerability Check: Try to access generic table with whitelist enabled
-        print("1. Security Check: White-list enforcement...")
-        resp = await client.get(f"{url}/debug/surreal/table/system_prompt_log?limit=1")
-        if resp.status_code == 200:
-             print(f"[{GREEN}PASS{RESET}] Safe Table Access Allowed")
-        else:
-             print(f"[{RED}FAIL{RESET}] Safe Table Access Blocked? {resp.status_code}")
-             
-        # P1 Vulnerability Check: Try injection or invalid table
-        resp_bad = await client.get(f"{url}/debug/surreal/table/invalid_table_name_123")
-        if resp_bad.status_code == 400:
-             print(f"[{GREEN}PASS{RESET}] Invalid Table Blocked (Expected 400)")
-        else:
-             print(f"[{RED}FAIL{RESET}] Invalid Table allowed or wrong code: {resp_bad.status_code}")
-             
-    except Exception as e:
-        print(f"[{RED}ERROR{RESET}] Security Check Failed: {e}")
+    resp = await client.get(f"{url}/health")
+    if resp.status_code == 200:
+        print(f"[{GREEN}PASS{RESET}] Main health endpoint reachable")
+    else:
+        print(f"[{RED}FAIL{RESET}] Main health endpoint returned {resp.status_code}")
 
 async def main():
     print("Starting Lumina E2E Regression Test...\n")

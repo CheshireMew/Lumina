@@ -81,9 +81,6 @@ class Plugin(ABC):
             "provides": list(getattr(self._manifest, "provides", []) or []),
         }
 
-    async def register_route(self, path: str, method: str, handler: Any):
-        await self.context.register_route(path=path, method=method, handler=handler)
-
     def load_data(self) -> dict[str, Any]:
         return self.context.load_data()
 

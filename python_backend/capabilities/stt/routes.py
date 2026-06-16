@@ -36,7 +36,7 @@ class LifecyclePayload(BaseModel):
     plugin_id: str
     config: Optional[Dict] = None
 
-class PluginConfigRequest(BaseModel):
+class ProviderConfigRequest(BaseModel):
     id: str
     key: str
     value: Any
@@ -332,7 +332,7 @@ async def websocket_endpoint(websocket: WebSocket):
              audio_manager.stop()
 
 # [Legacy Adapters REMOVED - 2026-01-24]
-# /plugins/config and /system/lifecycle endpoints were removed.
+# /provider/config and /system/lifecycle endpoints were removed.
 # All clients should use LIPP endpoints (/lipp/v1/*) or Main Process proxy.
 
 # ========== [Scheme C] Internal Endpoints for Main Process Proxy ==========

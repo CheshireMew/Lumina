@@ -16,20 +16,20 @@ class TTSPluginManager(ProviderHostManager):
         super().__init__(config=config, capability="tts", default_driver_id="driver.tts.edge")
 
     async def register_drivers(self, auto_activate: bool = True):
-        # Dynamic Loading via PluginLoader
+        # Dynamic Loading via ProviderLoader
         try:
             from sdk.lumina.loader import PluginLoader
             
             base_dir = Path(__file__).resolve().parents[2]
             
-            # 1. Built-in Drivers (Legacy: python_backend/plugins/drivers/tts)
+            # 1. Built-in provider drivers
             drivers_dir = base_dir / "plugins" / "drivers" / "tts"
             if drivers_dir.exists():
                 logger.info(f"Scanning Built-in TTS Drivers: {drivers_dir}")
                 loaded = PluginLoader.load_plugins(str(drivers_dir), BaseTTSDriver)
                 for d in loaded: self.drivers[d.id] = d
             
-            # 2. Extension Drivers (python_backend/plugins/extensions/*/drivers/tts)
+            # 2. Internal extension provider drivers
             extensions_root = base_dir / "plugins" / "extensions"
             
             if extensions_root.exists():
