@@ -17,7 +17,7 @@ SERVICES = {
 @pytest.mark.anyio
 async def test_extreme_long_context_performance():
     """验证超长上下文（约 100k tokens）下的性能和处理能力"""
-    url = f"{SERVICES['memory']}/v1/chat/completions"
+    url = f"{SERVICES['memory']}/companion/message"
     
     # 构建约 100k tokens 的内容（粗略估算：1 字符约 0.25-0.5 token）
     # 我们生成一个约 200,000 字符的字符串
@@ -25,11 +25,7 @@ async def test_extreme_long_context_performance():
     
     payload = {
         "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant. I will provide a long text and you should summarize it in one sentence."},
-            {"role": "user", "content": f"Text: {long_text}\n\nSummary:"}
-        ],
-        "stream": False
+        "text": f"Summarize this in one sentence:\n\n{long_text}",
     }
 
     print(f"\n[Test] Sending request with {len(long_text)} characters...")
@@ -46,7 +42,7 @@ async def test_extreme_long_context_performance():
             # 无论成功还是 500，我们记录表现
             if response.status_code == 200:
                 data = response.json()
-                print(f"[Test] Response received: {data['choices'][0]['message']['content'][:100]}...")
+                print(f"[Test] Response received: {data['content'][:100]}...")
             elif response.status_code == 500:
                 print("[Test] Server failed with 500 (Possibly soul_client bug or OOM)")
                 
@@ -60,15 +56,11 @@ async def test_extreme_long_context_performance():
 async def test_context_truncation_boundary():
     """验证上下文超过 128k 时的物理截断或是后端溢出报错"""
     # 这个测试模拟发送一个非常巨大的 payload，检查 FastAPI/Uvicorn 的限制
-    url = f"{SERVICES['memory']}/v1/chat/completions"
+    url = f"{SERVICES['memory']}/companion/message"
     
     huge_text = "Data " * 100000 # 约 500k 字符
     
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": huge_text}],
-        "stream": False
-    }
+    payload = {"model": "gpt-4o-mini", "text": huge_text}
     
     print(f"\n[Test] Sending extreme payload ({len(huge_text)} chars)...")
     async with httpx.AsyncClient(timeout=30.0) as client:

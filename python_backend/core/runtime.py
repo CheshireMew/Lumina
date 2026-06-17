@@ -67,7 +67,7 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContractDefinition] = {
         version="1.0",
         worker_runtime_target="main",
         worker_routes={
-            "chat": "/v1/chat/completions",
+            "chat": "/companion/message",
             "models": "/models/list",
             "health": "/health",
         },

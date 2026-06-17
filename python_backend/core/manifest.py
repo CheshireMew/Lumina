@@ -171,9 +171,9 @@ def read_manifest_file(path: str | Path) -> dict[str, Any]:
         return _read_simple_yaml(manifest_path)
 
 
-class PluginManifest(BaseModel):
+class CapabilityManifest(BaseModel):
     """
-    Unified plugin manifest.
+    Unified capability module manifest.
 
     Stable fields:
     - id
@@ -191,8 +191,8 @@ class PluginManifest(BaseModel):
     id: str = Field(..., description="Unique plugin identifier")
     name: str | None = Field(default=None, description="Human-readable plugin name")
     description: str | None = Field(default=None, description="Human-readable plugin summary")
-    author: str | None = Field(default=None, description="Plugin author")
-    api_version: str = Field(default="1.0", description="Stable plugin API version")
+    author: str | None = Field(default=None, description="Capability module author")
+    api_version: str = Field(default="1.0", description="Stable capability module API version")
     kind: str = Field(default="extension", description="provider | extension | gateway | processor")
     capability: str = Field(default="system", description="Primary capability id")
     runtime_target: str = Field(
@@ -208,19 +208,19 @@ class PluginManifest(BaseModel):
     min_lumina_version: str | None = Field(default=None)
     package: str | None = Field(default=None)
     tags: list[str] = Field(default_factory=list)
-    path: str | None = Field(default=None, description="Injected plugin root path")
+    path: str | None = Field(default=None, description="Injected module root path")
 
     @model_validator(mode="after")
     def validate_api_version(self):
         if not is_supported_manifest_api_version(self.api_version):
-            raise ValueError(f"Plugin api_version {self.api_version} is not supported by kernel 1.x.")
+            raise ValueError(f"Capability api_version {self.api_version} is not supported by kernel 1.x.")
         return self
 
     @field_validator("id")
     @classmethod
     def validate_id(cls, value: str):
         if not re.match(r"^[a-z0-9_.-]+$", value):
-            raise ValueError("Plugin id must use lowercase letters, numbers, dots, underscores or dashes.")
+            raise ValueError("Capability id must use lowercase letters, numbers, dots, underscores or dashes.")
         return value
 
     @field_validator("capability", mode="before")

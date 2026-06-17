@@ -10,7 +10,7 @@ from .mock_servers import *
 __all__ = [
     "ChatMessageFactory",
     "MemoryFactory",
-    "PluginFactory",
+    "CapabilityModuleFactory",
     "generate_test_user_input",
     "generate_test_memory",
     "generate_test_messages",

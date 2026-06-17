@@ -34,10 +34,8 @@ class DatabaseBootstrapper(Bootstrapper):
         from memory.core import MemoryService
         from memory.factory import MemoryDriverFactory
         from model_manager import model_manager
-        from consolidation_batch import BatchManager
         
         config = container.get_config()
-        character_id = config.memory.character_id
         provider_id = config.get_selected_provider("memory")
         if not provider_id:
             raise ValueError("No memory provider selected in configuration.")
@@ -46,9 +44,9 @@ class DatabaseBootstrapper(Bootstrapper):
             provider_id,
             driver_config=config.memory.model_dump(),
         )
-        memory_svc = MemoryService(driver=driver, character_id=character_id)
+        memory_svc = MemoryService(driver=driver)
         package_registry = container.get_capability_package_registry()
-        vision_snapshot = package_registry.resolve("vision-runtime") if package_registry else None
+        vision_snapshot = package_registry.resolve("vision-runtime")
         if vision_snapshot and vision_snapshot.status == "ready":
             memory_svc.set_encoder(
                 model_manager.create_lazy_embedding_encoder("all-MiniLM-L6-v2")
@@ -56,18 +54,8 @@ class DatabaseBootstrapper(Bootstrapper):
         else:
             logger.info("Vision runtime unavailable. Memory retrieval will use full-text fallback.")
 
-        batch_mgr = BatchManager()
-        container.set_batch_manager(batch_mgr)
-        memory_svc.set_batch_manager(batch_mgr)
-
-        try:
-            await memory_svc.connect()
-            memory_svc.set_available(True)
-            logger.info("✅ Memory System Connected")
-        except Exception as e:
-            logger.error(f"Memory backend unavailable, continuing in degraded mode: {e}")
-            memory_svc.set_available(False, str(e))
-
+        await memory_svc.connect()
+        logger.info("✅ Memory System Connected")
         container.set_memory(memory_svc)
 
 
@@ -81,10 +69,10 @@ class EventBusBootstrapper(Bootstrapper):
         from core.events.definitions import (
             SystemReadyPayload,
             SystemShutdownPayload,
-            PluginLifecycleRequest,
-            PluginLoadedPayload,
-            PluginDisabledPayload,
-            PluginErrorPayload,
+            CapabilityLifecycleRequest,
+            CapabilityLoadedPayload,
+            CapabilityDisabledPayload,
+            CapabilityErrorPayload,
         )
         from core.events.bus import EventSchema
         
@@ -102,21 +90,17 @@ class EventBusBootstrapper(Bootstrapper):
         # Schemas
         bus.register_schema("system.ready", EventSchema("1.0", SystemReadyPayload))
         bus.register_schema("system.shutdown", EventSchema("1.0", SystemShutdownPayload))
-        bus.register_schema("plugin.lifecycle.request_enable", EventSchema("1.0", PluginLifecycleRequest))
-        bus.register_schema("plugin.lifecycle.request_disable", EventSchema("1.0", PluginLifecycleRequest))
-        bus.register_schema("plugin.loaded", EventSchema("1.0", PluginLoadedPayload))
-        bus.register_schema("plugin.disabled", EventSchema("1.0", PluginDisabledPayload))
-        bus.register_schema("plugin.error", EventSchema("1.0", PluginErrorPayload))
+        bus.register_schema("capability.lifecycle.request_enable", EventSchema("1.0", CapabilityLifecycleRequest))
+        bus.register_schema("capability.lifecycle.request_disable", EventSchema("1.0", CapabilityLifecycleRequest))
+        bus.register_schema("capability.loaded", EventSchema("1.0", CapabilityLoadedPayload))
+        bus.register_schema("capability.disabled", EventSchema("1.0", CapabilityDisabledPayload))
+        bus.register_schema("capability.error", EventSchema("1.0", CapabilityErrorPayload))
 
 class ProtocolBootstrapper(Bootstrapper):
     @property
     def name(self) -> str: return "Event Protocol (Schemas)"
 
     async def bootstrap(self, container):
-        if not container.has_service("event_bus"):
-            logger.warning("EventBus not found, skipping protocol registration.")
-            return
-            
         from core.protocol import CORE_SCHEMAS
         container.get_event_bus().bulk_register_schemas(CORE_SCHEMAS)
         logger.info(f"✅ Protocol Schema Validation Active ({len(CORE_SCHEMAS)} events)")

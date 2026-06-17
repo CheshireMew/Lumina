@@ -19,10 +19,10 @@ class ConfigStub:
     def get_selected_provider(self, _capability):
         return self.selected_provider
 
-    def is_plugin_desired_enabled(self, _plugin_id):
+    def is_provider_desired_enabled(self, _provider_id):
         return True
 
-    def get_plugin_settings(self, _plugin_id):
+    def get_provider_settings(self, _provider_id):
         return {}
 
 
@@ -101,7 +101,7 @@ async def test_stt_startup_requires_selected_provider():
     driver = FakeSTTDriver("driver.stt.sensevoice")
 
     with patch(
-        "services.managers.driver_loader.DriverPluginLoader.load_plugins",
+        "services.managers.driver_loader.DriverLoader.load_plugins",
         return_value=[driver],
     ):
         await manager.register_drivers()
@@ -117,7 +117,7 @@ async def test_stt_startup_rejects_missing_selected_provider():
     driver = FakeSTTDriver("driver.stt.other")
 
     with patch(
-        "services.managers.driver_loader.DriverPluginLoader.load_plugins",
+        "services.managers.driver_loader.DriverLoader.load_plugins",
         return_value=[driver],
     ):
         await manager.register_drivers()

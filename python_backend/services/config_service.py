@@ -6,6 +6,10 @@ from core.services.service_registry import get_service_registry
 from schemas.runtime_settings import RuntimeLlmSettings
 
 
+CUSTOM_LLM_PROVIDER_ID = "custom_provider"
+FREE_LLM_PROVIDER_ID = "free_tier"
+
+
 class ConfigService:
     def __init__(self, container):
         self.container = container
@@ -15,8 +19,6 @@ class ConfigService:
         return self.container.get_config()
 
     def _get_llm_manager(self):
-        if not self.container.has_service("llm_manager"):
-            return None
         return self.container.get_llm_manager()
 
     def get_registered_service(self, name: str) -> Any:
@@ -25,24 +27,23 @@ class ConfigService:
     def get_llm_runtime_settings(self) -> RuntimeLlmSettings:
         config = self.config
         llm_manager = self._get_llm_manager()
-        route = llm_manager.get_route("chat") if llm_manager else None
-        provider_id = route.provider_id if route else config.get_selected_provider("llm")
-        provider_type = "free" if provider_id == "free_tier" else "custom"
-        provider = (
-            llm_manager.config.providers.get(provider_id)
-            if llm_manager and provider_type == "custom"
-            else None
-        )
+        route = llm_manager.get_route("chat")
+        if route is None:
+            raise KeyError("Unknown LLM route: chat")
+        provider_id = route.provider_id
+        provider = llm_manager.config.providers.get(provider_id)
+        if provider is None:
+            raise KeyError(f"Unknown LLM provider: {provider_id}")
 
         return RuntimeLlmSettings(
-            providerType=provider_type,
-            apiKey=(provider.api_key if provider else config.llm.api_key if provider_type == "custom" else "") or "",
-            baseUrl=(provider.base_url if provider else config.llm.base_url if provider_type == "custom" else "") or "",
-            model=(route.model if route else config.llm.model) or config.llm.model,
-            temperature=route.temperature if route else 0.7,
-            topP=route.top_p if route else 1.0,
-            presencePenalty=route.presence_penalty if route else 0.0,
-            frequencyPenalty=route.frequency_penalty if route else 0.0,
+            providerId=provider_id,
+            apiKey=(provider.api_key if provider_id == CUSTOM_LLM_PROVIDER_ID else "") or "",
+            baseUrl=(provider.base_url if provider_id == CUSTOM_LLM_PROVIDER_ID else "") or "",
+            model=route.model or "",
+            temperature=route.temperature,
+            topP=route.top_p,
+            presencePenalty=route.presence_penalty,
+            frequencyPenalty=route.frequency_penalty,
             historyLimit=config.memory.history_limit,
             overflowStrategy=config.memory.overflow_strategy,
         )
@@ -59,7 +60,7 @@ class ConfigService:
         frequency_penalty: float | None = None,
         history_limit: int | None = None,
         overflow_strategy: str | None = None,
-        provider_type: str | None = None,
+        provider_id: str | None = None,
     ) -> None:
         dreaming_service = self.get_registered_service("dreaming_service")
         if dreaming_service:
@@ -70,41 +71,36 @@ class ConfigService:
             )
 
         llm_manager = self._get_llm_manager()
-        if llm_manager:
-            target_provider_id = "free_tier" if provider_type == "free" else "custom_provider"
-            if target_provider_id == "custom_provider":
-                provider_updates = {
-                    "type": "openai",
-                    "base_url": base_url or "",
-                    "api_key": api_key or "",
-                }
-                if model:
-                    provider_updates["models"] = [model]
-
-                llm_manager.update_provider("custom_provider", provider_updates)
-
-            for route in llm_manager.list_routes():
-                route_updates = {"provider_id": target_provider_id}
-                if model:
-                    route_updates["model"] = model
-                if temperature is not None:
-                    route_updates["temperature"] = temperature
-                if top_p is not None:
-                    route_updates["top_p"] = top_p
-                if presence_penalty is not None:
-                    route_updates["presence_penalty"] = presence_penalty
-                if frequency_penalty is not None:
-                    route_updates["frequency_penalty"] = frequency_penalty
-                llm_manager.update_route(route.feature, **route_updates)
-            self.config.set_selected_provider("llm", target_provider_id)
-
         config = self.config
-        if provider_type != "free" and base_url is not None:
-            config.llm.base_url = base_url
-        if provider_type != "free" and api_key is not None:
-            config.llm.api_key = api_key
-        if model is not None:
-            config.llm.model = model
+        target_provider_id = provider_id or CUSTOM_LLM_PROVIDER_ID
+        if target_provider_id not in llm_manager.config.providers:
+            raise KeyError(f"Unknown LLM provider: {target_provider_id}")
+
+        if target_provider_id == CUSTOM_LLM_PROVIDER_ID:
+            provider_updates = {
+                "type": "openai",
+                "base_url": base_url or "",
+                "api_key": api_key or "",
+            }
+            if model:
+                provider_updates["models"] = [model]
+
+            llm_manager.update_provider("custom_provider", provider_updates)
+
+        for route in llm_manager.list_routes():
+            route_updates = {"provider_id": target_provider_id}
+            if model:
+                route_updates["model"] = model
+            if temperature is not None:
+                route_updates["temperature"] = temperature
+            if top_p is not None:
+                route_updates["top_p"] = top_p
+            if presence_penalty is not None:
+                route_updates["presence_penalty"] = presence_penalty
+            if frequency_penalty is not None:
+                route_updates["frequency_penalty"] = frequency_penalty
+            llm_manager.update_route(route.feature, **route_updates)
+
         if history_limit is not None:
             config.memory.history_limit = history_limit
         if overflow_strategy is not None:
@@ -116,20 +112,20 @@ class ConfigService:
 
     def clear_selected_provider(self, capability: str, *, persist: bool = True):
         config = self.config
-        config.plugins.selected_providers.pop(capability, None)
+        config.capabilities.selected_providers.pop(capability, None)
         if persist:
             config.save()
 
-    def set_plugin_desired_state(self, plugin_id: str, enabled: bool, *, persist: bool = True):
+    def set_provider_desired_state(self, provider_id: str, enabled: bool, *, persist: bool = True):
         config = self.config
-        config.set_plugin_desired_state(plugin_id, enabled)
+        config.set_provider_desired_state(provider_id, enabled)
         if persist:
             config.save()
 
-    def set_plugin_setting(self, plugin_id: str, key: str, value: Any):
+    def set_provider_setting(self, provider_id: str, key: str, value: Any):
         config = self.config
-        config.plugins.settings.setdefault(plugin_id, {})
-        config.plugins.settings[plugin_id][key] = value
+        config.capabilities.settings.setdefault(provider_id, {})
+        config.capabilities.settings[provider_id][key] = value
         config.save()
 
     def _set_selected_provider(self, capability: str, provider_id: str, *, persist: bool):

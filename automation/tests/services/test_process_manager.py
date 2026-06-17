@@ -16,6 +16,20 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
 
 
+class EmptyCapabilityPackageRegistry:
+    def package_for_capability(self, capability: str):
+        return None
+
+    def should_auto_start(self, capability: str) -> bool:
+        return False
+
+
+def build_process_manager():
+    from services.process_manager import ProcessManager
+
+    return ProcessManager(EmptyCapabilityPackageRegistry())
+
+
 class TestProcessManager(unittest.TestCase):
     """Test Process Manager functionality"""
 
@@ -27,9 +41,7 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_initialization(self):
         """Test ProcessManager initialization"""
-        from services.process_manager import ProcessManager
-
-        manager = ProcessManager()
+        manager = build_process_manager()
 
         self.assertIsNotNone(manager.workers)
         self.assertIsNotNone(manager.registry)
@@ -37,11 +49,17 @@ class TestProcessManager(unittest.TestCase):
         self.assertIsInstance(manager.registry, dict)
         print("✅ ProcessManager initialization verified")
 
-    def test_process_manager_register_service_def(self):
-        """Test registering a service definition"""
+    def test_process_manager_requires_package_registry(self):
+        """Test ProcessManager refuses half-initialized runtime dependencies"""
         from services.process_manager import ProcessManager
 
-        manager = ProcessManager()
+        with self.assertRaises(ValueError):
+            ProcessManager(None)
+        print("✅ ProcessManager package registry requirement verified")
+
+    def test_process_manager_register_service_def(self):
+        """Test registering a service definition"""
+        manager = build_process_manager()
         manager.register_service_def("test_service", port=8080, script="test.py", args=["--verbose"])
 
         self.assertIn("test_service", manager.registry)
@@ -52,9 +70,7 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_set_health_path(self):
         """Test setting custom health path"""
-        from services.process_manager import ProcessManager
-
-        manager = ProcessManager()
+        manager = build_process_manager()
         manager.register_service_def("test_service", port=8080)
         manager.set_health_path("test_service", "/custom/health")
 
@@ -63,9 +79,7 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_register_mcp_client(self):
         """Test registering an MCP client"""
-        from services.process_manager import ProcessManager
-
-        manager = ProcessManager()
+        manager = build_process_manager()
 
         # Mock MCP client
         mock_client = MagicMock()
@@ -102,9 +116,7 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_is_running_not_found(self):
         """Test is_running for non-existent worker"""
-        from services.process_manager import ProcessManager
-
-        manager = ProcessManager()
+        manager = build_process_manager()
 
         result = manager.is_running("nonexistent_worker")
 
@@ -129,9 +141,7 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_stop_worker_not_found(self):
         """Test stopping non-existent worker"""
-        from services.process_manager import ProcessManager
-
-        manager = ProcessManager()
+        manager = build_process_manager()
 
         # Should not crash
         manager.stop_worker("nonexistent_worker")
@@ -141,10 +151,9 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_stop_external_worker(self):
         """Test stopping external worker (should only log warning)"""
-        from services.process_manager import ProcessManager
         from services.process_manager import WorkerProcess
 
-        manager = ProcessManager()
+        manager = build_process_manager()
 
         # Create external worker
         external_worker = WorkerProcess(None, time.time())
@@ -159,10 +168,9 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_get_active_workers(self):
         """Test getting active workers list"""
-        from services.process_manager import ProcessManager
         from services.process_manager import WorkerProcess
 
-        manager = ProcessManager()
+        manager = build_process_manager()
 
         # Add some workers
         mock_proc = MagicMock()
@@ -180,10 +188,9 @@ class TestProcessManager(unittest.TestCase):
     def test_process_manager_shutdown_all(self):
         """Test shutting down all workers"""
         async def run_test():
-            from services.process_manager import ProcessManager
             from services.process_manager import WorkerProcess
 
-            manager = ProcessManager()
+            manager = build_process_manager()
 
             # Add some mock workers
             mock_proc1 = MagicMock()
@@ -210,10 +217,9 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_start_worker_already_running(self):
         """Test starting worker that's already running"""
-        from services.process_manager import ProcessManager
         from services.process_manager import WorkerProcess
 
-        manager = ProcessManager()
+        manager = build_process_manager()
 
         # Add existing worker
         mock_proc = MagicMock()
@@ -232,9 +238,7 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_start_worker_no_registry(self):
         """Test starting worker without registry entry"""
-        from services.process_manager import ProcessManager
-
-        manager = ProcessManager()
+        manager = build_process_manager()
 
         # No registry entry and no script provided
         result = manager.start_worker("no_registry_worker")
@@ -244,9 +248,7 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_external_service_detection(self):
         """Test detection of externally running service"""
-        from services.process_manager import ProcessManager
-
-        manager = ProcessManager()
+        manager = build_process_manager()
         manager.register_service_def("external_test", port=59999, script="missing.py")
 
         # Mock health check to return False (service not running)
@@ -262,11 +264,10 @@ class TestProcessManager(unittest.TestCase):
 
     def test_process_manager_terminate_timeout(self):
         """Test process kill after terminate timeout"""
-        from services.process_manager import ProcessManager
         from services.process_manager import WorkerProcess
         import subprocess
 
-        manager = ProcessManager()
+        manager = build_process_manager()
 
         # Mock process that times out on terminate
         mock_proc = MagicMock()

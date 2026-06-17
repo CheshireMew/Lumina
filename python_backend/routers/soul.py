@@ -1,7 +1,7 @@
 """Soul and personality routes."""
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from routers.deps import get_soul_service
+from routers.deps import get_companion_interaction_recorder, get_soul_service
 
 logger = logging.getLogger("SoulRouter")
 
@@ -30,12 +30,14 @@ async def get_soul(soul_service=Depends(get_soul_service)):
 
 
 @router.post("/soul/interact")
-async def register_interaction(soul_service=Depends(get_soul_service)):
+async def register_interaction(
+    interaction_recorder=Depends(get_companion_interaction_recorder),
+):
     """
     Centralized Endpoint to signal User Activity.
     """
     try:
-        soul_service.update_last_interaction()
+        await interaction_recorder.record_activity(strict=True)
         return {
             "status": "ok", 
             "message": "Heartbeat reset"

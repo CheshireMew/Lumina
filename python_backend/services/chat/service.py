@@ -3,16 +3,16 @@ from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from core.protocol import EventPacket
+from services.companion.context import CompanionContext, CompanionContextResolver
+from services.companion.interaction import CompanionInteraction, CompanionInteractionRecorder
 
 logger = logging.getLogger("ChatTurnService")
 
 
 @dataclass(frozen=True)
 class TextTurnRequest:
-    session_id: int
     text: str
-    character_id: str
-    user_id: str = "default_user"
+    companion_context: CompanionContext
     user_name: Optional[str] = None
     model: Optional[str] = None
     mode: str = "chat"
@@ -32,28 +32,31 @@ class ChatTurnService:
         self,
         *,
         pipeline: Any,
-        memory_service: Any = None,
-        session_manager: Any = None,
-        soul_service: Any = None,
+        session_manager: Any,
+        context_resolver: CompanionContextResolver,
+        interaction_recorder: CompanionInteractionRecorder,
     ):
-        self.pipeline = pipeline
-        self.memory_service = memory_service
-        self.session_manager = session_manager
-        self.soul_service = soul_service
+        if pipeline is None:
+            raise ValueError("ChatTurnService requires ChatPipeline")
+        if session_manager is None:
+            raise ValueError("ChatTurnService requires SessionManager")
+        if context_resolver is None:
+            raise ValueError("ChatTurnService requires CompanionContextResolver")
+        if interaction_recorder is None:
+            raise ValueError("ChatTurnService requires CompanionInteractionRecorder")
 
-    def active_character_id(self) -> str:
-        if self.soul_service is None:
-            raise RuntimeError("SoulService is required to resolve the active character")
-        return self.soul_service.get_active_character_id()
+        self.pipeline = pipeline
+        self.session_manager = session_manager
+        self.context_resolver = context_resolver
+        self.interaction_recorder = interaction_recorder
 
     def build_text_turn_request(self, packet: EventPacket) -> TextTurnRequest:
         payload = packet.payload or {}
+        context = self.context_resolver.from_packet(packet)
         return TextTurnRequest(
-            session_id=packet.session_id,
             text=str(payload.get("text") or ""),
-            user_id=str(payload.get("user_id") or "default_user"),
-            character_id=str(payload.get("character_id") or self.active_character_id()),
-            user_name=payload.get("user_name"),
+            companion_context=context,
+            user_name=context.user_name,
             model=payload.get("model"),
         )
 
@@ -71,8 +74,7 @@ class ChatTurnService:
         )
 
         messages = await self.build_turn_messages(
-            request.user_id,
-            request.character_id,
+            request.companion_context,
             text,
             history_limit=request.history_limit,
         )
@@ -82,8 +84,7 @@ class ChatTurnService:
 
         async for token in self.stream_response(
             messages=messages,
-            user_id=request.user_id,
-            character_id=request.character_id,
+            companion_context=request.companion_context,
             model=request.model,
             enable_rag=enable_rag_for_turn,
             user_name=request.user_name,
@@ -97,24 +98,22 @@ class ChatTurnService:
 
     async def build_turn_messages(
         self,
-        user_id: str,
-        character_id: str,
+        companion_context: CompanionContext,
         text: str,
         history_limit: int = 10,
     ) -> List[Dict[str, Any]]:
         messages: List[Dict[str, Any]] = []
         session_manager = self.session_manager
-        if session_manager:
-            try:
-                state = await session_manager.load_session(user_id, character_id)
-                history = getattr(state, "short_term_history", []) or []
-                messages.extend(
-                    {"role": item["role"], "content": item["content"]}
-                    for item in history[-history_limit:]
-                    if item.get("role") and item.get("content")
-                )
-            except Exception as exc:
-                logger.error("Failed to load session for chat turn: %s", exc)
+        try:
+            state = await session_manager.load_session(companion_context)
+            history = getattr(state, "short_term_history", []) or []
+            messages.extend(
+                {"role": item["role"], "content": item["content"]}
+                for item in history[-history_limit:]
+                if item.get("role") and item.get("content")
+            )
+        except Exception as exc:
+            logger.error("Failed to load session for chat turn: %s", exc)
 
         messages.append({"role": "user", "content": text})
         return messages
@@ -123,8 +122,7 @@ class ChatTurnService:
         self,
         *,
         messages: List[Dict[str, Any]],
-        user_id: str,
-        character_id: str,
+        companion_context: CompanionContext,
         model: Optional[str] = None,
         temperature: float = 0.7,
         stream: bool = True,
@@ -142,25 +140,26 @@ class ChatTurnService:
 
         async for token in self.pipeline.run(
             messages,
-            user_id=user_id,
-            character_id=character_id,
+            companion_context=companion_context,
             stream=stream,
             model=model,
             temperature=temperature,
             enable_rag=enable_rag,
             enable_tools=enable_tools,
-            save_history=save_history,
         ):
             final_response += token
             yield token
 
-        if log_memory and user_msg and final_response:
-            await self.log_turn_to_memory(
-                user_id=user_id,
-                character_id=character_id,
-                user_message=user_msg,
-                assistant_message=final_response,
-                user_name=user_name,
+        if user_msg and final_response:
+            await self.interaction_recorder.record(
+                CompanionInteraction(
+                    companion_context=companion_context,
+                    user_message=user_msg,
+                    assistant_message=final_response,
+                    user_name=user_name,
+                    save_history=save_history,
+                    log_memory=log_memory,
+                )
             )
 
     async def collect_response(self, **kwargs) -> str:
@@ -168,24 +167,3 @@ class ChatTurnService:
         async for token in self.stream_response(**kwargs):
             content += token
         return content
-
-    async def log_turn_to_memory(
-        self,
-        *,
-        user_id: str,
-        character_id: str,
-        user_message: str,
-        assistant_message: str,
-        user_name: Optional[str] = None,
-    ) -> None:
-        memory_service = self.memory_service
-        if not memory_service:
-            return
-
-        label = user_name or user_id
-        narrative = f"{label}: {user_message}\n{character_id}: {assistant_message}"
-        try:
-            await memory_service.log_conversation(character_id, narrative)
-            logger.info("Conversation logged to memory")
-        except Exception as exc:
-            logger.error("Failed to log conversation: %s", exc)

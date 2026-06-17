@@ -32,11 +32,6 @@ class ISoulRepository(ABC):
     Repository for Soul (Character) Configuration and State.
     Not strictly a generic repository since 'Soul' is a complex aggregate.
     """
-    
-    @abstractmethod
-    def set_character_id(self, character_id: str):
-        """Switch the context of the repository to a specific character."""
-        pass
 
     @abstractmethod
     def get_character_id(self) -> str:
@@ -67,7 +62,7 @@ class ISoulRepository(ABC):
     def get_data_dir(self, module_id: str = None) -> Any:
         """
         Get the raw path/identifier for a data directory.
-        Used for binary assets or plugins that manage their own files.
+        Used for binary assets or modules that manage their own files.
         Returns Path object for FileRepo, or a connection string/key for DBRepo.
         """
         pass

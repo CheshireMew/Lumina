@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from services.container import services, ServiceContainer
 from typing import Any
 
@@ -43,37 +43,36 @@ def get_runtime_service_dep(c: ServiceContainer = Depends(get_container)) -> Any
     return RuntimeService(c)
 
 
-def get_plugin_service(c: ServiceContainer = Depends(get_container)) -> Any:
-    return c.get_plugin_service()
+def get_provider_config_service(c: ServiceContainer = Depends(get_container)) -> Any:
+    return c.get_provider_config_service()
 
 
-def get_system_plugin_manager(c: ServiceContainer = Depends(get_container)) -> Any:
-    manager = c.get_system_plugin_manager()
-    if not manager:
-        raise HTTPException(status_code=503, detail="Plugin Manager unavailable")
-    return manager
-
-
-def get_optional_system_plugin_manager(c: ServiceContainer = Depends(get_container)) -> Any:
-    return c.get_system_plugin_manager()
+def get_capability_module_manager(c: ServiceContainer = Depends(get_container)) -> Any:
+    return c.get_capability_module_manager()
 
 
 def get_soul_service(c: ServiceContainer = Depends(get_container)) -> Any:
-    soul = c.get_soul()
-    if not soul:
-        raise HTTPException(status_code=503, detail="Soul Service not initialized")
-    return soul
+    return c.get_soul()
+
+
+def get_companion_context_resolver(c: ServiceContainer = Depends(get_container)) -> Any:
+    return c.get_companion_context_resolver()
+
+
+def get_companion_interaction_recorder(c: ServiceContainer = Depends(get_container)) -> Any:
+    return c.get_companion_interaction_recorder()
 
 
 def get_chat_turn_service(c: ServiceContainer = Depends(get_container)) -> Any:
     return c.get_chat_turn_service()
 
 
+def get_companion_runtime(c: ServiceContainer = Depends(get_container)) -> Any:
+    return c.get_companion_runtime()
+
+
 def get_session_manager(c: ServiceContainer = Depends(get_container)) -> Any:
-    session_manager = c.get_session_manager()
-    if not session_manager:
-        raise HTTPException(status_code=503, detail="Session Manager not initialized")
-    return session_manager
+    return c.get_session_manager()
 
 
 def get_character_service() -> Any:

@@ -1,24 +1,28 @@
 import { Cpu, Wand2 } from "lucide-react";
 import type { FC } from "react";
 import { providerToggleStyles } from "./styles";
-import { ProviderType } from "./types";
+import {
+    CUSTOM_LLM_PROVIDER_ID,
+    FREE_LLM_PROVIDER_ID,
+    LlmProviderId,
+} from "./types";
 
 interface ProviderModeToggleProps {
-    providerType: ProviderType;
-    onChange: (providerType: ProviderType) => void;
+    providerId: LlmProviderId;
+    onChange: (providerId: LlmProviderId) => void;
 }
 
 const providerModes: Array<{
-    id: ProviderType;
+    id: LlmProviderId;
     icon: typeof Wand2;
     label: string;
 }> = [
-    { id: "free", icon: Wand2, label: "Free (Magic)" },
-    { id: "custom", icon: Cpu, label: "Custom (Pro)" },
+    { id: FREE_LLM_PROVIDER_ID, icon: Wand2, label: "Free (Magic)" },
+    { id: CUSTOM_LLM_PROVIDER_ID, icon: Cpu, label: "Custom (Pro)" },
 ];
 
 const ProviderModeToggle: FC<ProviderModeToggleProps> = ({
-    providerType,
+    providerId,
     onChange,
 }) => (
     <div style={providerToggleStyles.container}>
@@ -29,7 +33,7 @@ const ProviderModeToggle: FC<ProviderModeToggleProps> = ({
                 <button
                     key={type.id}
                     onClick={() => onChange(type.id)}
-                    style={providerToggleStyles.button(providerType === type.id)}
+                    style={providerToggleStyles.button(providerId === type.id)}
                 >
                     <Icon size={16} strokeWidth={2.5} /> {type.label}
                 </button>

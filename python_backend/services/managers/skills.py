@@ -11,7 +11,7 @@ class SkillManager:
     Phase 16 Framework.
     
     Responsibilities:
-    1. Hold the registry of available Tools (from plugins).
+    1. Hold the registry of available tools.
     2. Provide tool definitions to LLM.
     3. Route tool execution requests to the correct provider.
     """
@@ -41,10 +41,6 @@ class SkillManager:
         """Execute a managed tool."""
         tool = self.get_tool(name)
         if not tool:
-            return f"Error: Tool '{name}' not found."
-            
-        try:
-            return await tool.execute(args)
-        except Exception as e:
-            logger.error(f"Tool execution failed ({name}): {e}")
-            return f"Error executing {name}: {str(e)}"
+            raise ValueError(f"Tool '{name}' is not registered.")
+
+        return await tool.execute(args)

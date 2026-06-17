@@ -1,14 +1,13 @@
 import asyncio
 import logging
 from typing import Callable, List, Dict, Any
-from core.schemas import WorkerState, PluginState
+from core.schemas import WorkerState
 
 logger = logging.getLogger("WorkerReporter")
 
 class WorkerStatusReporter:
     """
-    [Architecture 6.1] Mesh Worker Reporter (Scheme C).
-    Directly writes Worker and Plugin state to PostgreSQL via LifecycleBus.
+    Reports worker health to PostgreSQL via LifecycleBus.
     """
     def __init__(self, 
                  worker_id: str, 
@@ -66,24 +65,6 @@ class WorkerStatusReporter:
                 )
                 await self.bus.update_worker_state(w_state)
 
-                # 2. Gather & Report Plugin States
-                plugins = []
-                if asyncio.iscoroutinefunction(self.state_provider):
-                    plugins = await self.state_provider()
-                else:
-                    plugins = self.state_provider()
-                
-                for p_dict in plugins:
-                    try:
-                        # Auto-fill missing schema fields from context
-                        p_dict.setdefault("worker_id", self.worker_id)
-                        
-                        # Validate & Construct Schema
-                        p_schema = PluginState(**p_dict)
-                        await self.bus.update_plugin_state(p_schema)
-                    except Exception as ve:
-                        logger.warning(f"⚠️ Invalid Plugin Schema for {p_dict.get('id')}: {ve}")
-                        
             except Exception as e:
                 logger.error(f"Reporter Error: {e}")
             
@@ -114,17 +95,16 @@ class WorkerStatusReporter:
             if not self.bus.is_connected:
                 await self.bus.connect()
                 
-            plugins = []
-            if asyncio.iscoroutinefunction(self.state_provider):
-                plugins = await self.state_provider()
-            else:
-                plugins = self.state_provider()
-            
-            for p_dict in plugins:
-                    p_dict.setdefault("worker_id", self.worker_id)
-                    p_schema = PluginState(**p_dict)
-                    await self.bus.update_plugin_state(p_schema)
-            logger.info("⚡ Forced Mesh Registry Push Sent.")
+            await self.bus.update_worker_state(
+                WorkerState(
+                    worker_id=self.worker_id,
+                    host=self.host,
+                    port=self.port,
+                    status="healthy",
+                    load=self._get_system_load(),
+                )
+            )
+            logger.info("⚡ Forced Worker Status Push Sent.")
                     
         except Exception as e:
             logger.error(f"Force Report Failed: {e}")

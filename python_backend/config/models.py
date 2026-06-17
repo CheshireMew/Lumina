@@ -31,10 +31,72 @@ class MemoryConfig(BaseModel):
     overflow_strategy: str = Field(default="slide", pattern="^(slide|reset)$")
 
 
+class LLMProviderConfig(BaseModel):
+    id: str
+    type: str = "openai"
+    base_url: str = ""
+    api_key: str = ""
+    models: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class LLMFeatureRoute(BaseModel):
+    feature: str
+    provider_id: str
+    model: str
+    temperature: float = 0.7
+    top_p: float = 1.0
+    presence_penalty: float = 0.0
+    frequency_penalty: float = 0.0
+
+
+DEFAULT_LLM_PROVIDER_DATA: Dict[str, Dict[str, Any]] = {
+    "free_tier": {
+        "id": "free_tier",
+        "type": "pollinations",
+        "base_url": "",
+        "api_key": "none",
+        "models": ["gpt-4o-mini", "claude-3-haiku"],
+        "enabled": True,
+    },
+    "custom_provider": {
+        "id": "custom_provider",
+        "type": "openai",
+        "base_url": "http://localhost:11434/v1",
+        "api_key": "",
+        "models": [],
+        "enabled": True,
+    },
+}
+
+
+DEFAULT_LLM_ROUTE_DATA: Dict[str, Dict[str, Any]] = {
+    "chat": {"feature": "chat", "provider_id": "free_tier", "model": "gpt-4o-mini"},
+    "memory": {"feature": "memory", "provider_id": "free_tier", "model": "gpt-4o-mini"},
+    "dreaming": {"feature": "dreaming", "provider_id": "free_tier", "model": "gpt-4o-mini"},
+    "evolution": {"feature": "evolution", "provider_id": "free_tier", "model": "gpt-4o-mini"},
+    "proactive": {"feature": "proactive", "provider_id": "free_tier", "model": "gpt-4o-mini"},
+    "vision": {"feature": "vision", "provider_id": "free_tier", "model": "gpt-4o"},
+}
+
+
+def _default_llm_providers() -> Dict[str, LLMProviderConfig]:
+    return {
+        provider_id: LLMProviderConfig(**provider_data)
+        for provider_id, provider_data in DEFAULT_LLM_PROVIDER_DATA.items()
+    }
+
+
+def _default_llm_routes() -> Dict[str, LLMFeatureRoute]:
+    return {
+        route_id: LLMFeatureRoute(**route_data)
+        for route_id, route_data in DEFAULT_LLM_ROUTE_DATA.items()
+    }
+
+
 class LLMConfig(BaseModel):
-    api_key: str = Field(default="")
-    base_url: str = Field(default="https://api.deepseek.com/v1")
-    model: str = Field(default="deepseek-chat")
+    providers: Dict[str, LLMProviderConfig] = Field(default_factory=_default_llm_providers)
+    routes: Dict[str, LLMFeatureRoute] = Field(default_factory=_default_llm_routes)
 
 
 class STTConfig(BaseModel):
@@ -62,23 +124,23 @@ class SearchConfig(BaseModel):
     enabled: bool = True
 
 
-class PluginsConfig(BaseModel):
+class CapabilitiesConfig(BaseModel):
     desired_state: Dict[str, bool] = Field(default_factory=dict)
     selected_providers: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_SELECTED_PROVIDERS))
     prewarm_core: bool = Field(default=True)
     settings: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
-    def is_enabled(self, plugin_id: str) -> bool:
-        return self.desired_state.get(plugin_id, True)
+    def is_enabled(self, provider_id: str) -> bool:
+        return self.desired_state.get(provider_id, True)
 
-    def is_disabled(self, plugin_id: str) -> bool:
-        return not self.is_enabled(plugin_id)
+    def is_disabled(self, provider_id: str) -> bool:
+        return not self.is_enabled(provider_id)
 
-    def set_enabled(self, plugin_id: str, enabled: bool):
-        self.desired_state[plugin_id] = enabled
+    def set_enabled(self, provider_id: str, enabled: bool):
+        self.desired_state[provider_id] = enabled
 
-    def set_disabled(self, plugin_id: str, disabled: bool):
-        self.set_enabled(plugin_id, not disabled)
+    def set_disabled(self, provider_id: str, disabled: bool):
+        self.set_enabled(provider_id, not disabled)
 
 class WorkerNodeConfig(BaseModel):
     host: str = "127.0.0.1"

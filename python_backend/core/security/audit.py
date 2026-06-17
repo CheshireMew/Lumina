@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger("AuditLogger")
 
+
 class AuditLogger:
     """
     Asynchronous Security Audit Logger.
@@ -27,64 +28,60 @@ class AuditLogger:
         target: e.g. "system.filesystem", "/etc/passwd"
         status: "granted" or "blocked"
         """
-        try:
-            from services.infra.bus_factory import get_lifecycle_bus
-            bus = get_lifecycle_bus()
-            
-            # Ensure bus is connected
-            if not bus.is_connected:
-                await bus.connect()
-            
-            pool = await bus.get_pool()
-            if not pool:
-                logger.warning(f"⚠️ [Audit] Lifecycle store not available. Event: {actor_id} {action}")
-                return
+        from services.infra.bus_factory import get_lifecycle_bus
 
-            data = {
-                "timestamp": datetime.now(),
-                "actor_id": actor_id,
-                "action": action,
-                "target": target,
-                "status": status,
-                "metadata": json.dumps(metadata or {}),
-            }
+        bus = get_lifecycle_bus()
+        pool = await bus.get_pool()
 
-            await pool.execute(
-                """
-                INSERT INTO security_audit (timestamp, actor_id, action, target, status, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                """,
-                data["timestamp"],
-                data["actor_id"],
-                data["action"],
-                data["target"],
-                data["status"],
-                data["metadata"],
-            )
+        data = {
+            "timestamp": datetime.now(),
+            "actor_id": actor_id,
+            "action": action,
+            "target": target,
+            "status": status,
+            "metadata": json.dumps(metadata or {}),
+        }
 
-            logger.info(f"🛡️ [Audit] {status.upper()}: {actor_id} -> {action} on {target}")
-                
-        except Exception as e:
-            logger.error(f"❌ Failed to write audit log: {e}")
+        await pool.execute(
+            """
+            INSERT INTO security_audit (timestamp, actor_id, action, target, status, metadata)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            data["timestamp"],
+            data["actor_id"],
+            data["action"],
+            data["target"],
+            data["status"],
+            data["metadata"],
+        )
 
     @staticmethod
-    def log_event_sync(
+    async def _try_log_event(
         actor_id: str,
         action: str,
         target: str,
         status: str = "granted",
         metadata: Optional[Dict[str, Any]] = None
     ):
-        """Sync wrapper to schedule log in existing loop"""
+        try:
+            await AuditLogger.log_event(actor_id, action, target, status, metadata)
+        except Exception as e:
+            logger.error(f"❌ Failed to write audit log: {e}")
+
+    @staticmethod
+    def schedule_event(
+        actor_id: str,
+        action: str,
+        target: str,
+        status: str = "granted",
+        metadata: Optional[Dict[str, Any]] = None
+    ):
+        """Schedule a best-effort audit write without blocking the caller."""
         try:
             loop = asyncio.get_running_loop()
             if loop.is_running():
-                asyncio.create_task(AuditLogger.log_event(actor_id, action, target, status, metadata))
+                asyncio.create_task(AuditLogger._try_log_event(actor_id, action, target, status, metadata))
             else:
-                asyncio.run(AuditLogger.log_event(actor_id, action, target, status, metadata))
+                asyncio.run(AuditLogger._try_log_event(actor_id, action, target, status, metadata))
         except RuntimeError:
-            # Fallback if no loop
-            try:
-                asyncio.run(AuditLogger.log_event(actor_id, action, target, status, metadata))
-            except:
-                pass
+            asyncio.run(AuditLogger._try_log_event(actor_id, action, target, status, metadata))

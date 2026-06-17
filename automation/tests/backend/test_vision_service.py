@@ -18,10 +18,10 @@ class ConfigStub:
     def get_selected_provider(self, _capability):
         return self.selected_provider
 
-    def is_plugin_desired_enabled(self, _plugin_id):
+    def is_provider_desired_enabled(self, _provider_id):
         return True
 
-    def get_plugin_settings(self, _plugin_id):
+    def get_provider_settings(self, _provider_id):
         return {}
 
 

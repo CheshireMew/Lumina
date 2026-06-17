@@ -27,8 +27,8 @@ class WsMessageType(str, Enum):
     ERROR = "error"
 
 
-class PluginStatusPayload(BaseModel):
-    """Plugin status included in status reports."""
+class ProviderStatusPayload(BaseModel):
+    """Provider status included in status reports."""
     id: str
     name: str
     enabled: bool
@@ -76,7 +76,7 @@ class StatusPayload(BaseModel):
     worker_id: str
     status: str = "healthy"  # healthy, degraded, error
     load: float = 0.0
-    plugins: List[PluginStatusPayload] = Field(default_factory=list)
+    providers: List[ProviderStatusPayload] = Field(default_factory=list)
     uptime_seconds: Optional[float] = None
 
 
@@ -90,7 +90,7 @@ class ConfigUpdatePayload(BaseModel):
 class LifecyclePayload(BaseModel):
     """Lifecycle command from Main."""
     action: str  # enable, disable, restart
-    target_id: str  # plugin_id or "worker"
+    target_id: str  # provider id or "worker"
 
 
 class WsMessage(BaseModel):
@@ -112,14 +112,14 @@ class WsMessage(BaseModel):
         )
     
     @classmethod
-    def status(cls, worker_id: str, plugins: List[PluginStatusPayload], 
+    def status(cls, worker_id: str, providers: List[ProviderStatusPayload],
                load: float = 0.0, uptime: float = None) -> "WsMessage":
         return cls(
             type=WsMessageType.STATUS,
             payload=StatusPayload(
                 worker_id=worker_id,
                 load=load,
-                plugins=plugins,
+                providers=providers,
                 uptime_seconds=uptime
             ).model_dump()
         )

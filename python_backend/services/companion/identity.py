@@ -1,0 +1,2 @@
+DEFAULT_USER_ID = "default_user"
+DEFAULT_SESSION_ID = 0

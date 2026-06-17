@@ -4,12 +4,11 @@ Unit tests for SecretManager.
 Tests the priority-based secret loading:
 1. Environment Variables (highest)
 2. System Keyring
-3. Config Fallback (lowest)
 """
 import os
 import sys
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # Add python_backend to path
 sys.path.insert(0, str(__file__).replace("\\automation\\tests\\infra\\test_secret_manager.py", "\\python_backend"))
@@ -99,6 +98,7 @@ class TestSecretManager:
     def setup_method(self):
         """Reset singleton before each test."""
         SecretManager.reset()
+        KeyringSecretBackend._available = False
     
     def test_singleton_pattern(self):
         """instance() should return the same object."""
@@ -114,30 +114,31 @@ class TestSecretManager:
         assert sm1 is not sm2
     
     def test_env_has_highest_priority(self):
-        """Environment variables should override other sources."""
+        """Environment variables should override persisted sources."""
         sm = SecretManager.instance()
-        
-        # Set config fallback
-        sm.set_config_fallback(SecretKey.OPENAI_API_KEY, "config-value")
-        
-        # Set env var
+        sm._backends.append(_MemorySecretBackend("Keyring", {SecretKey.OPENAI_API_KEY: "keyring-value"}))
+
         with patch.dict(os.environ, {"OPENAI_API_KEY": "env-value"}):
             result = sm.get(SecretKey.OPENAI_API_KEY)
             assert result == "env-value"
-    
-    def test_config_fallback_used_when_no_env(self):
-        """Config fallback should be used when env var is not set."""
+
+    def test_persisted_secret_used_when_no_env(self):
+        """Persisted backends should be used when env var is not set."""
         sm = SecretManager.instance()
-        
-        # Ensure env var is not set
         os.environ.pop("OPENAI_API_KEY", None)
-        
-        # Set config fallback
-        sm.set_config_fallback(SecretKey.OPENAI_API_KEY, "config-value")
-        
+        sm._backends.append(_MemorySecretBackend("Keyring", {SecretKey.OPENAI_API_KEY: "keyring-value"}))
+
         result = sm.get(SecretKey.OPENAI_API_KEY)
-        assert result == "config-value"
-    
+        assert result == "keyring-value"
+
+    def test_get_persisted_skips_environment(self):
+        """Config composition should be able to read keyring without consuming env overrides."""
+        sm = SecretManager.instance()
+        sm._backends.append(_MemorySecretBackend("Keyring", {SecretKey.OPENAI_API_KEY: "keyring-value"}))
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "env-value"}):
+            assert sm.get_persisted(SecretKey.OPENAI_API_KEY) == "keyring-value"
+
     def test_default_returned_when_nothing_set(self):
         """Should return default when no source has the key."""
         sm = SecretManager.instance()
@@ -178,10 +179,31 @@ class TestSecretManager:
         
         with patch.dict(os.environ, {"OPENAI_API_KEY": "env-value"}):
             assert sm.get_source(SecretKey.OPENAI_API_KEY) == "Environment"
-        
+
         os.environ.pop("BRAVE_API_KEY", None)
-        sm.set_config_fallback(SecretKey.BRAVE_API_KEY, "config-value")
-        assert sm.get_source(SecretKey.BRAVE_API_KEY) == "Config"
+        sm._backends.append(_MemorySecretBackend("Keyring", {SecretKey.BRAVE_API_KEY: "keyring-value"}))
+        assert sm.get_source(SecretKey.BRAVE_API_KEY) == "Keyring"
+
+
+class _MemorySecretBackend:
+    def __init__(self, name: str, values: dict[SecretKey, str]):
+        self._name = name
+        self._values = values
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def get(self, key: SecretKey) -> str | None:
+        return self._values.get(key)
+
+    def set(self, key: SecretKey, value: str) -> bool:
+        self._values[key] = value
+        return True
+
+    def delete(self, key: SecretKey) -> bool:
+        self._values.pop(key, None)
+        return True
 
 
 if __name__ == "__main__":

@@ -8,14 +8,14 @@ import types
 from pathlib import Path
 from typing import Type
 
-from core.manifest import PluginManifest, read_manifest_file
+from core.manifest import CapabilityManifest, read_manifest_file
 from core.runtime import normalize_runtime_target
 from security.policy import SecurityPolicy
 
 logger = logging.getLogger("DriverLoader")
 
 
-class DriverPluginLoader:
+class DriverLoader:
     @staticmethod
     def _package_name(directory: Path) -> str:
         digest = hashlib.sha1(
@@ -47,8 +47,8 @@ class DriverPluginLoader:
         logger.info("Scanning driver directory: %s", directory)
         instances = []
         files = list(directory.rglob("*.py")) if recursive else list(directory.glob("*.py"))
-        package_name = DriverPluginLoader._package_name(directory)
-        DriverPluginLoader._ensure_package(package_name, directory)
+        package_name = DriverLoader._package_name(directory)
+        DriverLoader._ensure_package(package_name, directory)
 
         for entry in files:
             if entry.name == "__init__.py":
@@ -78,12 +78,12 @@ class DriverPluginLoader:
         return instances
 
 
-def allow_extension_driver(manifest_path: Path, capability: str, runtime_target: str) -> tuple[bool, PluginManifest | None]:
+def allow_extension_driver(manifest_path: Path, capability: str, runtime_target: str) -> tuple[bool, CapabilityManifest | None]:
     if not manifest_path.exists():
         return (False, None)
 
     raw = read_manifest_file(manifest_path)
-    manifest = PluginManifest(**{**raw, "path": str(manifest_path.parent)})
+    manifest = CapabilityManifest(**{**raw, "path": str(manifest_path.parent)})
     allowed, warnings = SecurityPolicy.check_permissions(manifest)
     for warning in warnings:
         logger.warning("[%s] %s", manifest.id, warning)

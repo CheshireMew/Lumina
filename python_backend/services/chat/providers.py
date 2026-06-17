@@ -1,9 +1,6 @@
-
-import logging
 from typing import Optional, Any
 from core.interfaces.context import ContextProvider
 
-logger = logging.getLogger("ContextProviders")
 
 class RAGContextProvider(ContextProvider):
     """
@@ -16,11 +13,7 @@ class RAGContextProvider(ContextProvider):
         if not ctx.enable_rag:
             return None
 
-        try:
-            return await self._retrieve_memory(ctx)
-        except Exception as e:
-            logger.warning(f"RAG Provider failed: {e}")
-            return None
+        return await self._retrieve_memory(ctx)
 
     async def _retrieve_memory(self, ctx) -> Optional[str]:
         user_text = ""
@@ -35,7 +28,7 @@ class RAGContextProvider(ContextProvider):
         memory = self.services.get_memory()
         rag_context = await memory.retrieve_context(
             query=user_text,
-            character_id=ctx.character_id,
+            context=ctx.companion_context,
             limit=10,
         )
         if rag_context:
@@ -43,24 +36,3 @@ class RAGContextProvider(ContextProvider):
             return None
 
         return None
-
-
-class SoulContextProvider(ContextProvider):
-    """
-    Renders personality and dynamic state (Short-Term Mood/State).
-    """
-    def __init__(self, services_container):
-        self.services = services_container
-
-    async def provide(self, ctx: Any) -> Optional[str]:
-        soul = self.services.get_soul()
-        if not soul:
-            return None
-            
-        try:
-            # Use unified get_system_prompt which handles fallback to config
-            return await soul.get_system_prompt({'context': ctx})
-            
-        except Exception as e:
-            logger.warning(f"Soul Provider failed: {e}")
-            return "You are a helpful AI assistant."

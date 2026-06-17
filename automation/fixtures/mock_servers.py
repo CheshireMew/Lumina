@@ -24,7 +24,7 @@ class MockHTTPServer:
     def _setup_routes(self):
         """Setup default routes"""
         self.app.router.add_get("/health", self._health_handler)
-        self.app.router.add_post("/api/chat", self._chat_handler)
+        self.app.router.add_post("/companion/message", self._chat_handler)
         self.app.router.add_get("/api/memory", self._memory_handler)
 
     async def _health_handler(self, request):
@@ -35,7 +35,7 @@ class MockHTTPServer:
         """Chat completion endpoint"""
         data = await request.json()
         return web.json_response({
-            "content": f"Mock response to: {data.get('content', '')}",
+            "content": f"Mock response to: {data.get('text', '')}",
             "finish_reason": "stop"
         })
 

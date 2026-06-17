@@ -16,9 +16,6 @@ class InMemorySoulRepository:
         self.config = {"name": "Hiyori", "description": "AI companion", "system_prompt": ""}
         self.modules: dict[str, dict] = {}
 
-    def set_character_id(self, character_id: str):
-        self.character_id = character_id
-
     def get_character_id(self) -> str:
         return self.character_id
 
@@ -59,17 +56,8 @@ async def test_soul_service_initialization_uses_repository_character():
     assert service._active_driver is None
 
 
-async def test_system_config_sets_repository_character():
-    repo = InMemorySoulRepository()
-    config = SimpleNamespace(memory=SimpleNamespace(character_id="sakura"))
-
-    service = SoulService(system_config=config, repo=repo)
-
-    assert service.get_active_character_id() == "sakura"
-
-
-async def test_soul_service_requires_config_or_repository():
-    with pytest.raises(ValueError, match="requires system_config or repo"):
+async def test_soul_service_requires_repository():
+    with pytest.raises(ValueError, match="requires ISoulRepository"):
         SoulService()
 
 
@@ -135,12 +123,44 @@ async def test_get_system_prompt_renders_template_from_repository_config(tmp_pat
     service = SoulService(repo=repo)
     template_path = tmp_path / "prompts" / "chat" / "system.yaml"
     template_path.parent.mkdir(parents=True)
-    template_path.write_text("line: |\n  {{ char_name }} {{ custom_prompt }}", encoding="utf-8")
+    template_path.write_text("line: |\n  {{ companion_name }} {{ custom_prompt }}", encoding="utf-8")
 
     with patch("app_config.BASE_DIR", tmp_path):
         prompt = await service.get_system_prompt()
 
     assert prompt == "TestChar Custom instructions"
+
+
+async def test_get_system_prompt_missing_template_propagates(tmp_path: Path):
+    service = SoulService(repo=InMemorySoulRepository())
+
+    with patch("app_config.BASE_DIR", tmp_path):
+        with pytest.raises(FileNotFoundError, match="System prompt template not found"):
+            await service.get_system_prompt()
+
+
+async def test_get_system_prompt_empty_template_is_rejected(tmp_path: Path):
+    service = SoulService(repo=InMemorySoulRepository())
+    template_path = tmp_path / "prompts" / "chat" / "system.yaml"
+    template_path.parent.mkdir(parents=True)
+    template_path.write_text("", encoding="utf-8")
+
+    with patch("app_config.BASE_DIR", tmp_path):
+        with pytest.raises(ValueError, match="System prompt template is empty"):
+            await service.get_system_prompt()
+
+
+async def test_get_system_prompt_requires_character_name(tmp_path: Path):
+    repo = InMemorySoulRepository()
+    repo.config = {"description": "No name", "system_prompt": "Custom instructions"}
+    service = SoulService(repo=repo)
+    template_path = tmp_path / "prompts" / "chat" / "system.yaml"
+    template_path.parent.mkdir(parents=True)
+    template_path.write_text("line: |\n  {{ companion_name }}", encoding="utf-8")
+
+    with patch("app_config.BASE_DIR", tmp_path):
+        with pytest.raises(ValueError, match="Character config must include name"):
+            await service.get_system_prompt()
 
 
 async def test_on_interaction_delegates_to_active_driver():

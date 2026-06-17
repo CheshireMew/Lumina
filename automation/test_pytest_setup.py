@@ -28,10 +28,10 @@ def test_imports():
         return False
 
     try:
-        from services.plugin_service import PluginService
-        print("✓ PluginService imported")
+        from services.provider_config_service import ProviderConfigService
+        print("✓ ProviderConfigService imported")
     except Exception as e:
-        print(f"✗ PluginService failed: {e}")
+        print(f"✗ ProviderConfigService failed: {e}")
         return False
 
     try:

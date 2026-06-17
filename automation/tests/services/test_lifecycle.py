@@ -82,8 +82,8 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         # EventBus should be initialized with lifecycle request schemas.
         event_bus = services.get_event_bus()
         self.assertIsNotNone(event_bus)
-        self.assertIn("plugin.lifecycle.request_enable", event_bus._schemas)
-        self.assertIn("plugin.lifecycle.request_disable", event_bus._schemas)
+        self.assertIn("capability.lifecycle.request_enable", event_bus._schemas)
+        self.assertIn("capability.lifecycle.request_disable", event_bus._schemas)
         print("✅ EventBusBootstrapper verified")
 
     async def test_shutdown_sequence_mcp_host(self):
@@ -116,11 +116,11 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         mock_plugin2 = MagicMock()
         mock_plugin2.terminate = MagicMock()
 
-        mock_manager.plugins = {"plugin1": mock_plugin1, "plugin2": mock_plugin2}
-        container.set_system_plugin_manager(mock_manager)
+        mock_manager.modules = {"plugin1": mock_plugin1, "plugin2": mock_plugin2}
+        container.set_capability_module_manager(mock_manager)
 
         # Simulate plugin shutdown
-        for pid, plugin in mock_manager.plugins.items():
+        for pid, plugin in mock_manager.modules.items():
             try:
                 plugin.terminate()
             except Exception as e:
@@ -154,10 +154,10 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
 
         container = ServiceContainer()
         mock_config = MagicMock()
-        mock_config.plugins.prewarm_core = False
+        mock_config.capabilities.prewarm_core = False
 
         # ProcessManager should not be called when prewarm is disabled
-        self.assertFalse(mock_config.plugins.prewarm_core)
+        self.assertFalse(mock_config.capabilities.prewarm_core)
         print("✅ Pre-warm skip when disabled verified")
 
     async def test_connection_json_writing(self):

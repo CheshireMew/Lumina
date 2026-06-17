@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 class ContextProvider(ABC):
     """
-    Interface for plugins that inject context into the system prompt.
+    Interface for providers that inject context into the system prompt.
     """
     
     @abstractmethod

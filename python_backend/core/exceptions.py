@@ -7,18 +7,18 @@ All custom exceptions inherit from LuminaError for unified handling.
 Usage:
     from core.exceptions import (
         LuminaError,
-        PluginError, PluginLoadError, PluginPermissionError,
+        CapabilityModuleError, CapabilityModuleLoadError, CapabilityModulePermissionError,
         ConfigError, ConfigValidationError,
         ServiceError, ServiceUnavailableError,
         NetworkError, WorkerOfflineError,
     )
     
     try:
-        await load_plugin(plugin_id)
-    except PluginLoadError as e:
-        logger.error(f"Failed to load plugin: {e}")
-    except PluginError as e:
-        logger.error(f"Plugin error: {e}")
+        await load_capability(module_id)
+    except CapabilityModuleLoadError as e:
+        logger.error(f"Failed to load capability module: {e}")
+    except CapabilityModuleError as e:
+        logger.error(f"Capability module error: {e}")
     except LuminaError as e:
         logger.error(f"System error: {e}")
 """
@@ -69,57 +69,57 @@ class LuminaError(Exception):
 
 
 # =============================================================================
-# Plugin Errors
+# Capability Module Errors
 # =============================================================================
 
-class PluginError(LuminaError):
-    """Base class for all plugin-related errors."""
+class CapabilityModuleError(LuminaError):
+    """Base class for all capability module-related errors."""
     
     def __init__(
         self, 
         message: str, 
-        plugin_id: Optional[str] = None,
+        module_id: Optional[str] = None,
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        self.plugin_id = plugin_id
-        if plugin_id:
-            self.details["plugin_id"] = plugin_id
+        self.module_id = module_id
+        if module_id:
+            self.details["module_id"] = module_id
 
 
-class PluginLoadError(PluginError):
-    """Failed to load a plugin."""
+class CapabilityModuleLoadError(CapabilityModuleError):
+    """Failed to load a capability module."""
     pass
 
 
-class PluginInitError(PluginError):
-    """Plugin loaded but failed to initialize."""
+class CapabilityModuleInitError(CapabilityModuleError):
+    """Capability module loaded but failed to initialize."""
     pass
 
 
-class PluginPermissionError(PluginError):
-    """Plugin attempted unauthorized action."""
+class CapabilityModulePermissionError(CapabilityModuleError):
+    """Capability module attempted unauthorized action."""
     
     def __init__(
         self, 
         message: str, 
-        plugin_id: Optional[str] = None,
+        module_id: Optional[str] = None,
         permission: Optional[str] = None,
         **kwargs
     ):
-        super().__init__(message, plugin_id=plugin_id, **kwargs)
+        super().__init__(message, module_id=module_id, **kwargs)
         self.permission = permission
         if permission:
             self.details["permission"] = permission
 
 
-class PluginNotFoundError(PluginError):
-    """Plugin does not exist."""
+class CapabilityModuleNotFoundError(CapabilityModuleError):
+    """Capability module does not exist."""
     pass
 
 
-class PluginStateError(PluginError):
-    """Plugin is in unexpected state."""
+class CapabilityModuleStateError(CapabilityModuleError):
+    """Capability module is in unexpected state."""
     pass
 
 

@@ -19,15 +19,13 @@ from services.voiceprint_store import (
 )
 
 logger = logging.getLogger("VoiceprintRouter")
-router = APIRouter(prefix="/plugins/voiceprint", tags=["Voiceprint"])
+router = APIRouter(prefix="/capabilities/voiceprint", tags=["Voiceprint"])
 
 
 def _voiceprint_package_status():
-    from services.container.service_definitions import service_container
+    from services.container import services
 
-    registry = service_container.get_capability_package_registry()
-    if registry is None:
-        return None
+    registry = services.get_capability_package_registry()
     return registry.resolve("voiceprint-runtime")
 
 

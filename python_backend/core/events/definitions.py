@@ -12,43 +12,43 @@ class SystemShutdownPayload(BaseModel):
     """Payload for system.shutdown"""
     reason: str = "user_request"
 
-# --- Plugin Lifecycle Events (Hybrid Mesh Control Plane) ---
+# --- Capability Lifecycle Events ---
 
-class PluginLifecycleRequest(BaseModel):
+class CapabilityLifecycleRequest(BaseModel):
     """
-    Payload for plugin.lifecycle.request_enable / request_disable
+    Payload for capability.lifecycle.request_enable / request_disable
     UI -> Service
     """
-    plugin_id: str
+    module_id: str
     requester: str = "ui" # ui, system, automation
     config_overrides: Optional[Dict[str, Any]] = None
 
-class PluginLoadedPayload(BaseModel):
+class CapabilityLoadedPayload(BaseModel):
     """
-    Payload for plugin.lifecycle.enabled
+    Payload for capability.lifecycle.enabled
     Service -> UI/Config
     """
-    plugin_id: str
+    module_id: str
     version: str = "unknown"
     enabled: bool = True
     # [Architecture 4.2] Active Provider Info
     group_id: Optional[str] = None
     is_active_provider: bool = False
 
-class PluginDisabledPayload(BaseModel):
+class CapabilityDisabledPayload(BaseModel):
     """
-    Payload for plugin.lifecycle.disabled
+    Payload for capability.lifecycle.disabled
     Service -> UI/Config
     """
-    plugin_id: str
+    module_id: str
     reason: str = "user_action"
 
-class PluginErrorPayload(BaseModel):
+class CapabilityErrorPayload(BaseModel):
     """
-    Payload for plugin.lifecycle.error
+    Payload for capability.lifecycle.error
     Service -> UI
     """
-    plugin_id: str
+    module_id: str
     error_type: str
     message: str
     traceback: Optional[str] = None

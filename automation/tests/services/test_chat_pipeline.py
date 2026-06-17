@@ -12,7 +12,21 @@ PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
 
-from services.chat.pipeline import PipelineContext, PipelineStep, ContextBuilderStep
+from services.chat.pipeline import ChatPipeline, PipelineContext, PipelineStep, ContextBuilderStep
+from services.companion.context import CompanionContext
+
+
+def companion_context(
+    *,
+    session_id: int = 1,
+    user_id: str = "user",
+    character_id: str = "char",
+) -> CompanionContext:
+    return CompanionContext(
+        session_id=session_id,
+        user_id=user_id,
+        character_id=character_id,
+    )
 
 
 class MockPipelineStep(PipelineStep):
@@ -33,15 +47,20 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         """Reset services before each test"""
         from services.container import ServiceContainer
+        from services.container import services
+        from services.container.provider_registry import ProviderRegistry
+        from services.container.service_definitions import LuminaContainer
+
         ServiceContainer._instance = None
-        self.container = ServiceContainer()
+        services._container = LuminaContainer()
+        services._providers = ProviderRegistry()
+        self.container = services
 
     async def test_pipeline_context_creation(self):
         """Test PipelineContext dataclass initialization"""
         ctx = PipelineContext(
             original_messages=[{"role": "user", "content": "Hello"}],
-            user_id="test_user",
-            character_id="test_char",
+            companion_context=companion_context(user_id="test_user", character_id="test_char"),
             enable_rag=True,
             enable_tools=False,
             model_override=None,
@@ -49,8 +68,8 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
             stream=True
         )
 
-        self.assertEqual(ctx.user_id, "test_user")
-        self.assertEqual(ctx.character_id, "test_char")
+        self.assertEqual(ctx.companion_context.user_id, "test_user")
+        self.assertEqual(ctx.companion_context.character_id, "test_char")
         self.assertTrue(ctx.enable_rag)
         self.assertFalse(ctx.enable_tools)
         self.assertEqual(ctx.temperature, 0.7)
@@ -61,8 +80,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         """Test PipelineContext default field values"""
         ctx = PipelineContext(
             original_messages=[],
-            user_id="user",
-            character_id="char",
+            companion_context=companion_context(),
             enable_rag=False,
             enable_tools=False,
             model_override=None,
@@ -93,8 +111,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         step = ContextBuilderStep(services)
         ctx = PipelineContext(
             original_messages=[{"role": "user", "content": "Hello"}],
-            user_id="user",
-            character_id="char",
+            companion_context=companion_context(),
             enable_rag=False,
             enable_tools=False,
             model_override=None,
@@ -126,8 +143,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
                 {"role": "assistant", "content": "First response"},
                 {"role": "user", "content": "Second message"}
             ],
-            user_id="user",
-            character_id="char",
+            companion_context=companion_context(),
             enable_rag=True,
             enable_tools=False,
             model_override=None,
@@ -149,16 +165,14 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         self.assertIn("User likes cats", last_user_msg["content"])
         print("✅ RAG context injection verified")
 
-    async def test_context_builder_provider_error_handling(self):
-        """Test that failing providers don't break the pipeline"""
+    async def test_context_builder_provider_failure_propagates(self):
+        """Test that provider failures break context construction."""
         from services.container import services
 
-        # Create a failing provider
         failing_provider = MagicMock()
         failing_provider.provide = AsyncMock(side_effect=Exception("Provider failed"))
         failing_provider.__class__.__name__ = "FailingProvider"
 
-        # Create a working provider
         working_provider = MagicMock()
         working_provider.provide = AsyncMock(return_value="Working context")
         working_provider.__class__.__name__ = "WorkingProvider"
@@ -169,8 +183,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         step = ContextBuilderStep(services)
         ctx = PipelineContext(
             original_messages=[{"role": "user", "content": "Hello"}],
-            user_id="user",
-            character_id="char",
+            companion_context=companion_context(),
             enable_rag=False,
             enable_tools=False,
             model_override=None,
@@ -183,12 +196,62 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         mock_soul.get_system_prompt = AsyncMock(return_value="System")
         services.set_soul(mock_soul)
 
-        # Execute should not raise despite failing provider
-        await step.execute(ctx)
+        with self.assertRaisesRegex(Exception, "Provider failed"):
+            await step.execute(ctx)
 
-        # Verify working provider's content was included
-        working_provider.provide.assert_called_once()
-        print("✅ Provider error handling verified")
+        working_provider.provide.assert_not_called()
+        print("✅ Provider failure propagation verified")
+
+    async def test_context_builder_soul_prompt_failure_propagates(self):
+        """Test that missing system prompt source is not replaced by a generic prompt."""
+        from services.container import services
+
+        step = ContextBuilderStep(services)
+        ctx = PipelineContext(
+            original_messages=[{"role": "user", "content": "Hello"}],
+            companion_context=companion_context(),
+            enable_rag=False,
+            enable_tools=False,
+            model_override=None,
+            temperature=0.7,
+            stream=True
+        )
+
+        mock_soul = MagicMock()
+        mock_soul.get_system_prompt = AsyncMock(side_effect=RuntimeError("Soul prompt failed"))
+        services.set_soul(mock_soul)
+
+        with self.assertRaisesRegex(RuntimeError, "Soul prompt failed"):
+            await step.execute(ctx)
+
+        self.assertEqual(ctx.system_prompt, "")
+        print("✅ Soul prompt failure propagation verified")
+
+    async def test_rag_context_provider_memory_failure_propagates(self):
+        """Test that memory retrieval failures are not converted into missing RAG context."""
+        from services.chat.providers import RAGContextProvider
+
+        memory = MagicMock()
+        memory.retrieve_context = AsyncMock(side_effect=RuntimeError("memory retrieval failed"))
+        container = MagicMock()
+        container.get_memory.return_value = memory
+        provider = RAGContextProvider(container)
+        ctx = PipelineContext(
+            original_messages=[{"role": "user", "content": "remember this"}],
+            companion_context=companion_context(),
+            enable_rag=True,
+            enable_tools=False,
+            model_override=None,
+            temperature=0.7,
+            stream=True
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "memory retrieval failed"):
+            await provider.provide(ctx)
+
+        memory.retrieve_context.assert_awaited_once()
+        self.assertEqual(ctx.rag_context, "")
+        print("✅ RAG memory failure propagation verified")
 
     async def test_context_builder_message_filtering(self):
         """Test that system messages are filtered correctly"""
@@ -201,8 +264,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
                 {"role": "user", "content": "Keep this"},
                 {"role": "assistant", "content": "Keep this too"}
             ],
-            user_id="user",
-            character_id="char",
+            companion_context=companion_context(),
             enable_rag=False,
             enable_tools=False,
             model_override=None,
@@ -228,8 +290,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         """Test that pipeline steps execute in order"""
         ctx = PipelineContext(
             original_messages=[],
-            user_id="user",
-            character_id="char",
+            companion_context=companion_context(),
             enable_rag=False,
             enable_tools=False,
             model_override=None,
@@ -258,8 +319,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         """Test that step failures propagate correctly"""
         ctx = PipelineContext(
             original_messages=[],
-            user_id="user",
-            character_id="char",
+            companion_context=companion_context(),
             enable_rag=False,
             enable_tools=False,
             model_override=None,
@@ -284,6 +344,62 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(step2.executed)
         self.assertFalse(step3.executed)
         print("✅ Step failure propagation verified")
+
+    async def test_pipeline_run_requires_companion_context(self):
+        """Test that ChatPipeline cannot run with legacy scattered identity kwargs"""
+        pipeline = ChatPipeline(self.container)
+
+        with self.assertRaisesRegex(ValueError, "requires companion_context"):
+            async for _ in pipeline.run(
+                [{"role": "user", "content": "Hello"}],
+                user_id="legacy-user",
+                character_id="legacy-character",
+            ):
+                pass
+
+    async def test_execute_tool_rejects_invalid_json_arguments(self):
+        container = MagicMock()
+        container.get_tool_provider.return_value = None
+        step = ChatPipeline(container).exec_step
+        tool_call = {
+            "function": {
+                "name": "known_tool",
+                "arguments": "{invalid-json",
+            }
+        }
+
+        with self.assertRaises(ValueError):
+            await step._execute_tool(tool_call)
+
+    async def test_execute_tool_rejects_unknown_tool(self):
+        container = MagicMock()
+        container.get_tool_provider.return_value = None
+        step = ChatPipeline(container).exec_step
+        tool_call = {
+            "function": {
+                "name": "missing_tool",
+                "arguments": "{}",
+            }
+        }
+
+        with self.assertRaisesRegex(ValueError, "Unknown tool: missing_tool"):
+            await step._execute_tool(tool_call)
+
+    async def test_execute_tool_provider_failure_propagates(self):
+        provider = MagicMock()
+        provider.execute = AsyncMock(side_effect=RuntimeError("tool provider failed"))
+        container = MagicMock()
+        container.get_tool_provider.return_value = provider
+        step = ChatPipeline(container).exec_step
+        tool_call = {
+            "function": {
+                "name": "known_tool",
+                "arguments": "{\"query\": \"hello\"}",
+            }
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "tool provider failed"):
+            await step._execute_tool(tool_call)
 
 
 if __name__ == "__main__":

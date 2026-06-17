@@ -2,7 +2,7 @@
 Pydantic Request/Response Models
 Extracted from memory_server.py for shared use
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional
 
 
@@ -17,19 +17,16 @@ class MessageModel(BaseModel):
 
 class AddMemoryRequest(BaseModel):
     """Add Memory Request"""
-    user_id: str = "user"
+    user_id: Optional[str] = None
     character_id: Optional[str] = None
     user_name: str = "User"
-    character_name: str = Field(default="AI", alias="char_name")
+    companion_name: str = "AI"
     messages: List[MessageModel]
-
-    class Config:
-        populate_by_name = True
 
 
 class SearchRequest(BaseModel):
     """Search Memory Request"""
-    user_id: str
+    user_id: Optional[str] = None
     character_id: Optional[str] = None
     query: str
     limit: Optional[int] = 10

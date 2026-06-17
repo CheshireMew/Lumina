@@ -5,7 +5,7 @@ import { useVoiceManager } from "../hooks/useVoiceManager";
 import { GeneralSettingsInput } from "../hooks/useSettings";
 import DataViewer from "./DataViewer";
 import LLMConfigModal from "./LLMConfig/LLMConfigModal";
-import type { ProviderType } from "./LLMConfig/types";
+import type { LlmProviderId } from "./LLMConfig/types";
 import MotionTester from "./MotionTester";
 import SettingsModal, { SettingsTab } from "./SettingsModal";
 
@@ -32,7 +32,7 @@ interface LlmConfigLayerConfig {
     isOpen: boolean;
     onClose: () => void;
     currentSettings: {
-        providerType?: ProviderType;
+        providerId?: LlmProviderId;
         apiKey: string;
         apiBaseUrl: string;
         modelName: string;
@@ -55,7 +55,7 @@ interface LlmConfigLayerConfig {
         topP?: number,
         presencePenalty?: number,
         frequencyPenalty?: number,
-        providerType?: ProviderType,
+        providerId?: LlmProviderId,
     ) => void;
     activeCharacterId: string | null;
 }

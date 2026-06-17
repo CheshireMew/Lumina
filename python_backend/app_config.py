@@ -126,25 +126,25 @@ class ConfigManager:
         self._network_config = bundle.network
         self._models_config = bundle.models
         self._search_config = bundle.search
-        self._plugins_config = bundle.plugins
+        self._capabilities_config = bundle.capabilities
 
-    def is_plugin_desired_enabled(self, plugin_id: str) -> bool:
-        return self._plugins_config.desired_state.get(plugin_id, True)
+    def is_provider_desired_enabled(self, provider_id: str) -> bool:
+        return self._capabilities_config.desired_state.get(provider_id, True)
 
-    def set_plugin_desired_state(self, plugin_id: str, enabled: bool):
-        self._plugins_config.desired_state[plugin_id] = enabled
+    def set_provider_desired_state(self, provider_id: str, enabled: bool):
+        self._capabilities_config.desired_state[provider_id] = enabled
 
-    def get_plugin_settings(self, plugin_id: str) -> dict[str, Any]:
-        return dict(self._plugins_config.settings.get(plugin_id, {}))
+    def get_provider_settings(self, provider_id: str) -> dict[str, Any]:
+        return dict(self._capabilities_config.settings.get(provider_id, {}))
 
     def get_selected_provider(self, capability: str) -> str | None:
-        return self._plugins_config.selected_providers.get(capability)
+        return self._capabilities_config.selected_providers.get(capability)
 
-    def set_selected_provider(self, capability: str, plugin_id: str):
-        if not plugin_id:
+    def set_selected_provider(self, capability: str, provider_id: str):
+        if not provider_id:
             raise ValueError("Selected provider id is required")
-        self._plugins_config.selected_providers[capability] = plugin_id
-        self._plugins_config.desired_state.setdefault(plugin_id, True)
+        self._capabilities_config.selected_providers[capability] = provider_id
+        self._capabilities_config.desired_state.setdefault(provider_id, True)
 
     @property
     def memory(self):
@@ -171,8 +171,8 @@ class ConfigManager:
         return self._search_config
 
     @property
-    def plugins(self):
-        return self._plugins_config
+    def capabilities(self):
+        return self._capabilities_config
 
     @property
     def network(self):

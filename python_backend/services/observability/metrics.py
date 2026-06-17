@@ -69,19 +69,19 @@ WORKER_HEARTBEATS = Counter(
 )
 
 # ============================================================
-# Plugin Metrics
+# Capability Module Metrics
 # ============================================================
 
-PLUGIN_STATUS = Gauge(
-    'lumina_plugin_status',
-    'Plugin status (1=enabled, 0=disabled)',
-    ['plugin_id', 'plugin_type']
+CAPABILITY_MODULE_STATUS = Gauge(
+    'lumina_capability_module_status',
+    'Capability module status (1=enabled, 0=disabled)',
+    ['module_id', 'module_type']
 )
 
-PLUGIN_INVOCATIONS = Counter(
-    'lumina_plugin_invocations_total',
-    'Total plugin invocations',
-    ['plugin_id', 'result']  # result: success, error
+CAPABILITY_MODULE_INVOCATIONS = Counter(
+    'lumina_capability_module_invocations_total',
+    'Total capability module invocations',
+    ['module_id', 'result']  # result: success, error
 )
 
 # ============================================================
@@ -225,9 +225,9 @@ def update_worker_status(worker_id: str, worker_type: str, load: float):
     WORKER_HEARTBEATS.labels(worker_id=worker_id).inc()
 
 
-def update_plugin_status(plugin_id: str, plugin_type: str, enabled: bool):
-    """Update plugin status metric."""
-    PLUGIN_STATUS.labels(plugin_id=plugin_id, plugin_type=plugin_type).set(1 if enabled else 0)
+def update_capability_module_status(module_id: str, module_type: str, enabled: bool):
+    """Update capability module status metric."""
+    CAPABILITY_MODULE_STATUS.labels(module_id=module_id, module_type=module_type).set(1 if enabled else 0)
 
 
 logger.info("📊 Prometheus metrics module initialized")

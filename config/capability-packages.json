@@ -169,7 +169,7 @@
             "version.json",
             "hashes.json",
             "runtime/lumina_backend.exe",
-            "plugins/extensions/stt_sensevoice/manifest.yaml"
+            "capability_modules/stt_sensevoice/manifest.yaml"
           ]
         },
         {
@@ -236,7 +236,7 @@
             "version.json",
             "hashes.json",
             "runtime/lumina_backend.exe",
-            "plugins/extensions/tts_edge/manifest.yaml"
+            "capability_modules/tts_edge/manifest.yaml"
           ]
         },
         {
@@ -268,8 +268,8 @@
         "manifest.json",
         "version.json",
         "hashes.json",
-        "plugins/extensions/voiceprint/manifest.yaml",
-        "plugins/extensions/voiceauth_sherpa/drivers/voiceauth/sherpa_cam_driver.py"
+        "capability_modules/voiceprint/manifest.yaml",
+        "capability_modules/voiceauth_sherpa/drivers/voiceauth/sherpa_cam_driver.py"
       ],
       "resourceDirs": {},
       "platform": [
@@ -293,8 +293,8 @@
             "manifest.json",
             "version.json",
             "hashes.json",
-            "plugins/extensions/voiceprint/manifest.yaml",
-            "plugins/extensions/voiceauth_sherpa/drivers/voiceauth/sherpa_cam_driver.py"
+            "capability_modules/voiceprint/manifest.yaml",
+            "capability_modules/voiceauth_sherpa/drivers/voiceauth/sherpa_cam_driver.py"
           ]
         }
       ]

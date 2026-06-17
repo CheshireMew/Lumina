@@ -1,10 +1,9 @@
 """
 Lumina Secret Manager - Lightweight Credential Management
 
-Provides a unified interface to access secrets from multiple backends:
+Provides a unified interface to access secrets from external backends:
 1. Environment Variables (highest priority)
 2. System Keyring (Windows Credential Manager / macOS Keychain)
-3. Config File (fallback, lowest priority)
 
 Usage:
     from security.secrets import SecretManager, SecretKey
@@ -16,7 +15,7 @@ import os
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Optional, List, Dict
+from typing import Optional, List
 
 logger = logging.getLogger("SecretManager")
 
@@ -159,8 +158,8 @@ class KeyringSecretBackend(SecretBackend):
 
 class SecretManager:
     """
-    Facade for accessing secrets across multiple backends.
-    Implements priority-based lookup: Env > Keyring > Config
+    Facade for accessing secrets across external backends.
+    Implements priority-based lookup: Env > Keyring.
     
     Singleton pattern - use SecretManager.instance()
     """
@@ -178,9 +177,6 @@ class SecretManager:
         else:
             logger.info("ℹ️ Keyring not available, using env-only mode")
         
-        # Config fallback is handled by ConfigManager, not here
-        self._config_cache: Dict[SecretKey, str] = {}
-    
     @classmethod
     def instance(cls) -> "SecretManager":
         """Get singleton instance."""
@@ -202,15 +198,20 @@ class SecretManager:
             value = backend.get(key)
             if value:
                 return value
-        
-        # Check config cache (set by ConfigManager during initialization)
-        if key in self._config_cache:
-            logger.debug(f"🔑 [Config] Found secret: {key.name}")
-            return self._config_cache[key]
-        
+
         if default:
             logger.debug(f"🔑 [Default] Using default for: {key.name}")
         return default
+
+    def get_persisted(self, key: SecretKey) -> Optional[str]:
+        """Retrieve a secret from writable system backends, excluding environment variables."""
+        for backend in self._backends:
+            if backend.name == "Environment":
+                continue
+            value = backend.get(key)
+            if value:
+                return value
+        return None
     
     def set(self, key: SecretKey, value: str, backend_name: str = "Keyring") -> bool:
         """
@@ -223,14 +224,6 @@ class SecretManager:
         logger.error(f"❌ Backend not found: {backend_name}")
         return False
     
-    def set_config_fallback(self, key: SecretKey, value: str):
-        """
-        Register a config-based fallback value.
-        Called by ConfigManager during initialization.
-        """
-        if value:  # Only cache non-empty values
-            self._config_cache[key] = value
-    
     def has_secret(self, key: SecretKey) -> bool:
         """Check if a secret exists in any backend."""
         return self.get(key) is not None
@@ -240,6 +233,4 @@ class SecretManager:
         for backend in self._backends:
             if backend.get(key):
                 return backend.name
-        if key in self._config_cache:
-            return "Config"
         return None

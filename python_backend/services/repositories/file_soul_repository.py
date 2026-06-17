@@ -23,10 +23,6 @@ class FileSoulRepository(ISoulRepository):
         character_dir.mkdir(parents=True, exist_ok=True)
         return SoulPersistence(character_dir)
 
-    def set_character_id(self, character_id: str):
-        self.character_id = self._normalize_character_id(character_id)
-        self._persistence = self._build_persistence(self.character_id)
-
     def get_character_id(self) -> str:
         return self.character_id
 

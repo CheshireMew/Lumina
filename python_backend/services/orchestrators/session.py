@@ -2,6 +2,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from core.interfaces.repository import ISessionRepository
+from services.companion.context import CompanionContext
 from services.repositories.file_session_repository import FileSessionRepository
 
 # Define SessionState locally since core.cognitive is missing
@@ -23,16 +24,19 @@ class SessionManager:
         self.config = config
         self._cache = {}
 
-    async def load_session(self, user_id: str, char_id: str) -> SessionState:
+    def _cache_key(self, context: CompanionContext) -> str:
+        return f"{context.user_id}:{context.character_id}"
+
+    async def load_session(self, context: CompanionContext) -> SessionState:
         """
         Loads the session state from repository (Async).
         """
         # [Optimization] Check Cache First (In-Memory L1)
-        cache_key = f"{user_id}:{char_id}"
+        cache_key = self._cache_key(context)
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        data = await self.repo.get_session(user_id, char_id)
+        data = await self.repo.get_session(context.user_id, context.character_id)
         
         if data:
             try:
@@ -49,38 +53,41 @@ class SessionManager:
         self._cache[cache_key] = state
         return state
 
-    async def save_session(self, user_id: str, char_id: str, state: SessionState):
+    async def save_session(self, context: CompanionContext, state: SessionState):
         """
         Persists the session state (Async).
         """
         # [Optimization] Update Cache
-        cache_key = f"{user_id}:{char_id}"
+        cache_key = self._cache_key(context)
         self._cache[cache_key] = state
         
         try:
             data = state.model_dump()
-            await self.repo.save_session(user_id, char_id, data)
+            await self.repo.save_session(context.user_id, context.character_id, data)
         except Exception as e:
             logger.error(f"Failed to save session: {e}")
             raise
 
-    async def clear_history(self, user_id: str, char_id: str):
-        state = await self.load_session(user_id, char_id) 
+    async def clear_history(self, context: CompanionContext):
+        state = await self.load_session(context)
         old_len = len(state.short_term_history)
         state.short_term_history = []
-        await self.save_session(user_id, char_id, state)
-        logger.info(f"🧹 CLEARED HISTORY for {user_id}:{char_id} (Was {old_len} turns)")
+        await self.save_session(context, state)
+        logger.info(
+            f"🧹 CLEARED HISTORY for {context.user_id}:{context.character_id} "
+            f"(Was {old_len} turns)"
+        )
 
-    async def clear_session(self, user_id: str, char_id: str):
+    async def clear_session(self, context: CompanionContext):
         # [Optimization] Invalidate Cache
-        cache_key = f"{user_id}:{char_id}"
+        cache_key = self._cache_key(context)
         if cache_key in self._cache:
             del self._cache[cache_key]
             
-        await self.repo.delete_session(user_id, char_id)
+        await self.repo.delete_session(context.user_id, context.character_id)
     
-    async def add_turn(self, user_id: str, char_id: str, user_msg: str, ai_msg: str):
-        state = await self.load_session(user_id, char_id)
+    async def add_turn(self, context: CompanionContext, user_msg: str, ai_msg: str):
+        state = await self.load_session(context)
         state.short_term_history.append({"role": "user", "content": user_msg})
         state.short_term_history.append({"role": "assistant", "content": ai_msg})
         
@@ -100,17 +107,14 @@ class SessionManager:
             else:
                  state.short_term_history = state.short_term_history[-limit:]
                  
-        await self.save_session(user_id, char_id, state)
+        await self.save_session(context, state)
 
-    async def get_history(self, user_id: str, char_id: str):
-        state = await self.load_session(user_id, char_id)
+    async def get_history(self, context: CompanionContext):
+        state = await self.load_session(context)
         return state.short_term_history
 
-    async def update_history(self, user_id: str, char_id: str, new_history: list):
-        state = await self.load_session(user_id, char_id)
+    async def update_history(self, context: CompanionContext, new_history: list):
+        state = await self.load_session(context)
         state.short_term_history = new_history
-        await self.save_session(user_id, char_id, state)
-
-# Instantiate with default (will use FileRepo)
-session_manager = SessionManager()
+        await self.save_session(context, state)
 

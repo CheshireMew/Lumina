@@ -34,12 +34,12 @@ class TokenManager:
         return cls._secret_key
 
     @classmethod
-    def create_token(cls, plugin_id: str, permissions: list, ttl_minutes: int = 60, scope: str = "plugin") -> str:
+    def create_token(cls, subject: str, permissions: list, ttl_minutes: int = 60, scope: str = "runtime_client") -> str:
         """
-        Create a Scoped JWT for a plugin or worker.
+        Create a scoped JWT for a runtime client or worker.
         """
         payload = {
-            "sub": plugin_id,
+            "sub": subject,
             "scope": scope,
             "permissions": permissions,
             "iat": datetime.datetime.utcnow(),

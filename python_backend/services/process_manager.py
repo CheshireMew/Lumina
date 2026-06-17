@@ -12,14 +12,17 @@ logger = logging.getLogger("ProcessManager")
 
 
 class ProcessManager:
-    def __init__(self):
+    def __init__(self, capability_package_registry):
+        if capability_package_registry is None:
+            raise ValueError("ProcessManager requires CapabilityPackageRegistry")
+
         self.workers: Dict[str, Any] = {}
         self.registry: Dict[str, dict] = {}
         self._shutdown_event = asyncio.Event()
         self._managed_scripts: Dict[str, Optional[str]] = {}
-        self.capability_package_registry = None
+        self.capability_package_registry = capability_package_registry
         self.health_probe = HealthProbe()
-        self.launcher = WorkerLauncher()
+        self.launcher = WorkerLauncher(capability_package_registry)
         self.supervisor = WorkerSupervisor(
             workers=self.workers,
             shutdown_event=self._shutdown_event,
@@ -52,10 +55,6 @@ class ProcessManager:
     def register_mcp_client(self, client):
         self.workers[client.name] = client
         logger.info(f"Registered MCP Service: {client.name} (PID: {client.pid})")
-
-    def set_capability_package_registry(self, registry):
-        self.capability_package_registry = registry
-        self.launcher.set_capability_package_registry(registry)
 
     def start_worker(
         self,
@@ -128,9 +127,6 @@ class ProcessManager:
             return False
 
     def _is_worker_package_ready(self, worker_id: str) -> bool:
-        if not self.capability_package_registry:
-            return True
-
         if not worker_id.startswith("worker:"):
             return True
 

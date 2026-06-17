@@ -1,118 +1,33 @@
 from __future__ import annotations
 
-import json
 import logging
-import os
 from typing import Any, Callable, Dict, List, Optional
 
-from pydantic import BaseModel
-
+from config.models import (
+    LLMConfig,
+    LLMFeatureRoute as FeatureRoute,
+    LLMProviderConfig as ProviderConfig,
+)
 from core.interfaces.driver import BaseLLMDriver
 
 logger = logging.getLogger("LLMManager")
 
 
-class ProviderConfig(BaseModel):
-    id: str
-    type: str = "openai"
-    base_url: str = ""
-    api_key: str = ""
-    models: List[str] = []
-    enabled: bool = True
-
-
-class FeatureRoute(BaseModel):
-    feature: str
-    provider_id: str
-    model: str
-    temperature: float = 0.7
-    top_p: float = 1.0
-    presence_penalty: float = 0.0
-    frequency_penalty: float = 0.0
-
-
-class LLMConfig(BaseModel):
-    providers: Dict[str, ProviderConfig] = {}
-    routes: Dict[str, FeatureRoute] = {}
-
-
 class LLMManager:
-    def __init__(self):
-        from app_config import config
+    def __init__(self, app_settings):
+        if app_settings is None:
+            raise ValueError("LLMManager requires app settings")
 
-        self.config_path = config.config_root / "llm_registry.json"
-        self.config: LLMConfig = self.load_config()
+        self.app_settings = app_settings
+        self.config: LLMConfig = app_settings.llm
         self.drivers: Dict[str, BaseLLMDriver] = {}
         self._driver_factories: Dict[str, Callable[[str], BaseLLMDriver]] = {}
         self._driver_descriptors: Dict[str, Dict[str, Any]] = {}
         self._drivers_loaded = False
         self._parameter_calculator = None
 
-    def _resolve_env_vars(self, config: LLMConfig) -> LLMConfig:
-        for provider in config.providers.values():
-            if provider.api_key.startswith("${") and provider.api_key.endswith("}"):
-                env_val = os.getenv(provider.api_key[2:-1], "")
-                if env_val:
-                    provider.api_key = env_val
-            if provider.base_url.startswith("${") and provider.base_url.endswith("}"):
-                env_val = os.getenv(provider.base_url[2:-1], "")
-                if env_val:
-                    provider.base_url = env_val
-        return config
-
-    def load_config(self) -> LLMConfig:
-        if not self.config_path.exists():
-            return self._create_default_config()
-
-        try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return self._resolve_env_vars(LLMConfig(**data))
-        except Exception as exc:
-            logger.error("Failed to load LLM config: %s", exc)
-            return self._create_default_config()
-
-    def save_config(self, config: Optional[LLMConfig] = None):
-        if config is not None:
-            self.config = config
-
-        try:
-            self.config_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                json.dump(self.config.model_dump(), f, indent=4, ensure_ascii=False)
-        except Exception as exc:
-            logger.error("Failed to save LLM config: %s", exc)
-
-    def _create_default_config(self) -> LLMConfig:
-        conf = LLMConfig(
-            providers={
-                "free_tier": ProviderConfig(
-                    id="free_tier",
-                    type="pollinations",
-                    base_url="",
-                    api_key="none",
-                    models=["gpt-4o-mini", "claude-3-haiku"],
-                ),
-                "custom_provider": ProviderConfig(
-                    id="custom_provider",
-                    type="openai",
-                    base_url="https://api.openai.com/v1",
-                    api_key="",
-                    models=[],
-                    enabled=True,
-                ),
-            },
-            routes={
-                "chat": FeatureRoute(feature="chat", provider_id="free_tier", model="gpt-4o-mini"),
-                "memory": FeatureRoute(feature="memory", provider_id="free_tier", model="gpt-4o-mini"),
-                "dreaming": FeatureRoute(feature="dreaming", provider_id="free_tier", model="gpt-4o-mini"),
-                "evolution": FeatureRoute(feature="evolution", provider_id="free_tier", model="gpt-4o-mini"),
-                "proactive": FeatureRoute(feature="proactive", provider_id="free_tier", model="gpt-4o-mini"),
-                "vision": FeatureRoute(feature="vision", provider_id="free_tier", model="gpt-4o"),
-            },
-        )
-        self.save_config(conf)
-        return conf
+    def save_config(self):
+        self.app_settings.save()
 
     def register_driver_type(
         self,

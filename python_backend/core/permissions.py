@@ -1,8 +1,8 @@
 """
-Lumina Plugin Permission System
+Lumina Capability Permission System
 Security & Sandboxing
 
-Defines standardized permissions that plugins can request.
+Defines standardized permissions that capability modules can request.
 """
 
 from enum import Enum
@@ -11,9 +11,9 @@ from typing import List, Set
 
 class Permission(str, Enum):
     """
-    Standard permission types for Lumina plugins.
+    Standard permission types for Lumina capability modules.
     
-    Plugins must declare required permissions in their manifest.yaml:
+    Modules must declare required permissions in their manifest.yaml:
     
     permissions:
       - filesystem.data_read
@@ -49,8 +49,8 @@ class Permission(str, Enum):
     # Time-based Events
     TICKER_SUBSCRIBE = "ticker.subscribe"     # Subscribe to tick events
     
-    # Plugin Interaction
-    PLUGIN_DISCOVERY = "plugin.discovery"     # Discover and interact with other plugins
+    # Capability Interaction
+    CAPABILITY_DISCOVERY = "capability.discovery"
     
     # System Events
     EVENT_SUBSCRIBE = "event.subscribe"       # Subscribe to system events
@@ -72,7 +72,7 @@ TIER_SAFE: Set[str] = {
     Permission.FILESYSTEM_ASSETS.value,
     Permission.EVENT_SUBSCRIBE.value,
     Permission.EVENT_EMIT.value,
-    Permission.PLUGIN_DISCOVERY.value,
+    Permission.CAPABILITY_DISCOVERY.value,
 }
 
 TIER_TRUSTED: Set[str] = {
@@ -91,7 +91,7 @@ TIER_SYSTEM: Set[str] = {
     Permission.NETWORK_LISTEN.value,
 }
 
-# Default permissions granted to all plugins (Alias to SAFE)
+# Default permissions granted to all modules (Alias to SAFE)
 DEFAULT_PERMISSIONS: Set[str] = TIER_SAFE
 
 # Dangerous permissions that require explicit user approval (Union of TRUSTED and SYSTEM)

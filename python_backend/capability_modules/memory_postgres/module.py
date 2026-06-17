@@ -1,0 +1,68 @@
+import logging
+from typing import Any
+
+from core.interfaces.module import CapabilityModule
+from memory.factory import MemoryDriverFactory
+
+logger = logging.getLogger("capability_modules.memory.postgres")
+
+
+class Capability(CapabilityModule):
+    async def enable(self):
+        await super().enable()
+        memory_service = self.context.get_service("memory")
+        if not memory_service:
+            return
+
+        config = self.context.get_service("config")
+        selected_provider = config.get_selected_provider("memory")
+        if selected_provider != self.id:
+            return
+
+        if memory_service.is_driver_active(self.id):
+            return
+
+        try:
+            next_driver = MemoryDriverFactory.create_driver(
+                self.id,
+                driver_config=config.memory.model_dump(),
+            )
+            await next_driver.connect()
+        except Exception as exc:
+            logger.error("Memory backend %s is unavailable: %s", self.id, exc)
+            return
+
+        await memory_service.replace_driver(next_driver)
+        logger.info("Memory backend switched to %s", self.id)
+
+    async def disable(self):
+        memory_service = self.context.get_service("memory")
+        if memory_service and memory_service.is_driver_active(self.id):
+            logger.warning("Active memory backend %s was disabled; runtime will keep current connection until another provider is selected.", self.id)
+        await super().disable()
+
+    async def health(self) -> dict[str, Any]:
+        memory_service = self.context.get_service("memory")
+        is_active = bool(memory_service and memory_service.is_driver_active(self.id))
+        config = self.context.get_service("config")
+        selected_provider = config.get_selected_provider("memory")
+        if selected_provider == self.id and not is_active:
+            status = "error"
+        else:
+            status = "ready" if is_active else ("disabled" if not self.enabled else "idle")
+        return {
+            "status": status,
+            "active": is_active,
+            "driver_id": memory_service.driver_id if memory_service else None,
+        }
+
+    def get_metadata(self) -> dict[str, Any]:
+        metadata = super().get_metadata()
+        metadata.update(
+            {
+                "name": "PostgreSQL Memory",
+                "description": "PostgreSQL + pgvector memory backend exposed as a formal memory provider plugin.",
+                "func_tag": "Memory",
+            }
+        )
+        return metadata

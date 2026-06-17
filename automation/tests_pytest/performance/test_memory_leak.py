@@ -22,12 +22,8 @@ async def test_memory_leak_detection():
     # 所以这个测试主要监控客户端内存泄露，如果要监控服务端，需要服务端暴露 /debug/memory 接口。
     # 鉴于无法修改服务端，我们将重点放在服务端对压力请求的响应稳定性和耗时增长上。
     
-    url = f"{SERVICES['memory']}/v1/chat/completions"
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": "Ping"}],
-        "stream": False
-    }
+    url = f"{SERVICES['memory']}/companion/message"
+    payload = {"model": "gpt-4o-mini", "text": "Ping"}
 
     print("\n[Test] Starting 50 repeated requests to check for response degradation...")
     
@@ -67,7 +63,7 @@ async def test_client_side_memory_leak():
     tracemalloc.start()
     snapshot1 = tracemalloc.take_snapshot()
     
-    url = f"{SERVICES['memory']}/v1/chat/completions"
+    url = f"{SERVICES['memory']}/companion/message"
     async with httpx.AsyncClient() as client:
         tasks = [client.get(f"{SERVICES['memory']}/health") for _ in range(100)]
         await asyncio.gather(*tasks)

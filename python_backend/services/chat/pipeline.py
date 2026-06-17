@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, AsyncGenerator
 
+from services.companion.context import CompanionContext
+
 logger = logging.getLogger("ChatPipeline")
 
 # ==================== CONTEXT ====================
@@ -14,8 +16,7 @@ class PipelineContext:
     """Shared state passed through the pipeline steps."""
     # Input
     original_messages: List[Dict[str, Any]]
-    user_id: str
-    character_id: str
+    companion_context: CompanionContext
     enable_rag: bool
     enable_tools: bool
     model_override: Optional[str]
@@ -55,22 +56,12 @@ class ContextBuilderStep(PipelineStep):
         
         # Iterate over all registered providers (RAG, Soul, etc.)
         for provider in self.services.get_context_providers():
-            try:
-                if content := await provider.provide(ctx):
-                    prompts.append(content)
-            except Exception as e:
-                logger.warning(f"ContextProvider {provider.__class__.__name__} failed: {e}")
+            if content := await provider.provide(ctx):
+                prompts.append(content)
 
         # Assemble System Prompt
-        base_system = "You are a helpful AI assistant."
-        
         soul = self.services.get_soul()
-        if soul:
-             try:
-                 # Use unified prompt system
-                 base_system = await soul.get_system_prompt({"pipeline": "context_builder"})
-             except Exception as e:
-                 logger.warning(f"Failed to load system prompt from Soul: {e}")
+        base_system = await soul.get_system_prompt({"pipeline": "context_builder"})
              
         ctx.system_prompt = base_system
         
@@ -228,21 +219,14 @@ class LLMExecutionStep(PipelineStep):
     async def _execute_tool(self, tool_call: dict) -> str:
         func_name = tool_call.get("function", {}).get("name")
         args_str = tool_call.get("function", {}).get("arguments", "{}")
-        try:
-            args = json.loads(args_str)
-        except Exception:
-            args = {}
+        args = json.loads(args_str)
             
         # Dynamic Dispatch via Registry
         provider = self.services.get_tool_provider(func_name)
-        if provider:
-            try:
-                return await provider.execute(args)
-            except Exception as e:
-                logger.error(f"Tool {func_name} failed: {e}")
-                return f"Error executing tool {func_name}: {e}"
-        
-        return f"Error: Unknown tool '{func_name}'"
+        if provider is None:
+            raise ValueError(f"Unknown tool: {func_name}")
+
+        return await provider.execute(args)
 
 
 
@@ -258,10 +242,13 @@ class ChatPipeline:
 
     async def run(self, messages: List[Dict], **kwargs) -> AsyncGenerator[str, None]:
         # 1. Init Context
+        companion_context = kwargs.get("companion_context")
+        if not isinstance(companion_context, CompanionContext):
+            raise ValueError("ChatPipeline requires companion_context")
+
         ctx = PipelineContext(
             original_messages=messages,
-            user_id=kwargs.get("user_id", "default"),
-            character_id=kwargs.get("character_id", "default"),
+            companion_context=companion_context,
             enable_rag=kwargs.get("enable_rag", True),
             enable_tools=kwargs.get("enable_tools", True),
             model_override=kwargs.get("model", None),
@@ -274,20 +261,6 @@ class ChatPipeline:
         await self.tool_step.execute(ctx)
         await self.context_step.execute(ctx)
         
-        # 3. Yield Execution & Persist History
-        full_response = ""
-        user_msg = next((m["content"] for m in reversed(ctx.original_messages) if m.get("role") == "user"), None)
-        save_history = kwargs.get("save_history", True)
-
+        # 3. Yield Execution
         async for token in self.exec_step.run_stream(ctx):
-            full_response += token
             yield token
-
-        # 4. Auto-Save to SessionManager
-        if save_history and user_msg and full_response:
-            try:
-                sm = self.services.get_session_manager()
-                if sm:
-                    await sm.add_turn(ctx.user_id, ctx.character_id, user_msg, full_response)
-            except Exception as e:
-                logger.error(f"Failed to auto-save session history: {e}")

@@ -142,21 +142,21 @@ class StructuredLogger:
             })
         )
     
-    def log_plugin_event(
+    def log_capability_module_event(
         self,
-        plugin_id: str,
+        module_id: str,
         event: str,
         success: bool = True,
         **extra
     ):
-        """Log a plugin lifecycle event."""
+        """Log a capability module lifecycle event."""
         level = logging.INFO if success else logging.WARNING
         self._logger.log(
             level,
-            f"Plugin [{plugin_id}] {event}",
+            f"Capability module [{module_id}] {event}",
             extra=self._build_extra({
-                "event_type": "plugin_event",
-                "plugin_id": plugin_id,
+                "event_type": "capability_module_event",
+                "module_id": module_id,
                 "event": event,
                 "success": success,
                 **extra

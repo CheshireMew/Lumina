@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Any, Type
 
 from core.interfaces.driver import BaseLLMDriver
-from core.interfaces.plugin import Plugin as BasePlugin
+from core.interfaces.module import CapabilityModule
 
 
-class LLMDriverTypePlugin(BasePlugin):
+class LLMDriverTypeModule(CapabilityModule):
     DRIVER_TYPE = ""
     DRIVER_CLASS: Type[BaseLLMDriver]
     DISPLAY_NAME = ""
@@ -27,14 +27,16 @@ class LLMDriverTypePlugin(BasePlugin):
             {
                 "name": self.DISPLAY_NAME,
                 "description": self.DESCRIPTION,
-                "plugin_id": self.id,
+                "module_id": self.id,
             },
         )
 
     async def disable(self):
         llm_manager = self.context.get_service("llm_manager")
-        if llm_manager:
-            llm_manager.unregister_driver_type(self.DRIVER_TYPE)
+        if llm_manager is None:
+            raise RuntimeError("LLMManager is not available for driver unregistration")
+
+        llm_manager.unregister_driver_type(self.DRIVER_TYPE)
         await super().disable()
 
     def get_metadata(self) -> dict[str, Any]:

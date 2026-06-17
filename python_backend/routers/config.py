@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from schemas.runtime_settings import RuntimeLlmSettings
-from routers.deps import get_config_controller, get_soul_service
+from routers.deps import get_companion_context_resolver, get_config_controller
 
 logger = logging.getLogger("ConfigRouter")
 
@@ -34,7 +34,7 @@ async def update_llm_runtime_settings(
             frequency_penalty=payload.frequencyPenalty,
             history_limit=payload.historyLimit,
             overflow_strategy=payload.overflowStrategy,
-            provider_type=payload.providerType,
+            provider_id=payload.providerId,
         )
         return config_service.get_llm_runtime_settings()
     except Exception as exc:
@@ -43,11 +43,12 @@ async def update_llm_runtime_settings(
 
 
 @router.get("/health")
-async def health_check(soul_service=Depends(get_soul_service)):
+async def health_check(context_resolver=Depends(get_companion_context_resolver)):
     """Health Check"""
+    context = context_resolver.resolve()
     return {
         "status": "healthy",
-        "active_character_id": soul_service.get_active_character_id(),
+        "active_character_id": context.character_id,
     }
 
 @router.get("/network")

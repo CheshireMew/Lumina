@@ -196,22 +196,22 @@ def test_input_safety_check(data, should_be_safe):
 @pytest.mark.security
 def test_plugin_manifest_validation():
     """Test that plugin manifests are validated"""
-    from core.manifest import PluginManifest
+    from core.manifest import CapabilityManifest
 
     # Valid manifest
     valid_manifest = """
-id: test.plugin
+id: test.module
 name: Test Plugin
 version: 1.0.0
 permissions:
   - event.subscribe
-entry_point: plugin.py
+entry_point: module.py
 """
 
     # Should parse without error
     import yaml
     manifest_data = yaml.safe_load(valid_manifest)
-    assert manifest_data["id"] == "test.plugin"
+    assert manifest_data["id"] == "test.module"
     assert "permissions" in manifest_data
 
     # Check for dangerous permissions

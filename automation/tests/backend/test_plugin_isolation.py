@@ -13,19 +13,23 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
 
 from core.events.bus import bus
+from services.capability_registry import CapabilityRegistry
 from services.process_manager import ProcessManager, WorkerProcess
-from services.system_plugin_manager import SystemPluginManager
+from services.capability_module_manager import CapabilityModuleManager
 
 class TestPluginIsolation(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.process_manager = ProcessManager()
+        package_registry = MagicMock()
+        package_registry.package_for_capability.return_value = None
+        package_registry.should_auto_start.return_value = False
+        self.process_manager = ProcessManager(package_registry)
         self.mock_container = MagicMock()
         self.mock_container.has_service.return_value = True
         self.mock_container.get_event_bus.return_value = bus
-        self.mock_container.get_capability_registry.return_value = None
+        self.mock_container.get_capability_registry.return_value = CapabilityRegistry()
         self.mock_container.get_config.return_value = MagicMock()
-        self.mock_container.get_capability_package_registry.return_value = None
-        self.plugin_manager = SystemPluginManager(container=self.mock_container)
+        self.mock_container.get_capability_package_registry.return_value = MagicMock()
+        self.module_manager = CapabilityModuleManager(container=self.mock_container)
         
     async def test_process_spawn_logic(self):
         """验证 Isolation Mode 为 process 时是否尝试启动子进程"""
@@ -37,7 +41,7 @@ class TestPluginIsolation(unittest.IsolatedAsyncioTestCase):
             mock_popen.return_value.poll.return_value = None
             
             # 模拟一个需要隔离运行的插件配置
-            plugin_id = "test.isolated.plugin"
+            plugin_id = "test.isolated.module"
             manifest = {
                 "id": plugin_id,
                 "isolation_mode": "process",
@@ -90,7 +94,7 @@ class TestPluginIsolation(unittest.IsolatedAsyncioTestCase):
         print("\n[Test] Testing Discovery of Failed Plugin Processes...")
 
         # 模拟心跳丢失场景
-        # Note: SystemPluginManager no longer has _handle_process_crash method
+        # Note: CapabilityModuleManager no longer has _handle_process_crash method
         # The crash detection is handled by ProcessManager.is_running()
         # We verify that ProcessManager correctly detects dead processes
 

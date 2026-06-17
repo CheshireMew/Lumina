@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -11,6 +11,23 @@ sys.path.append(str(PROJECT_ROOT))
 
 from core.protocol import EventPacket, EventType
 from services.chat.service import ChatTurnService, TextTurnRequest
+from services.companion.context import CompanionContext, CompanionContextResolver
+from services.companion.interaction import CompanionInteraction, CompanionInteractionRecorder
+
+
+def companion_context(
+    *,
+    session_id: int = 1,
+    user_id: str = "u",
+    character_id: str = "c",
+    user_name: str | None = None,
+) -> CompanionContext:
+    return CompanionContext(
+        session_id=session_id,
+        user_id=user_id,
+        character_id=character_id,
+        user_name=user_name,
+    )
 
 
 class FakePipeline:
@@ -24,10 +41,32 @@ class FakePipeline:
             yield token
 
 
+def fake_context_resolver(character_id: str = "lillian") -> CompanionContextResolver:
+    return CompanionContextResolver(
+        SimpleNamespace(get_active_character_id=lambda: character_id)
+    )
+
+
+def fake_recorder() -> SimpleNamespace:
+    return SimpleNamespace(record=AsyncMock())
+
+
+def fake_session_manager(history=None) -> SimpleNamespace:
+    return SimpleNamespace(
+        load_session=AsyncMock(
+            return_value=SimpleNamespace(short_term_history=history or [])
+        )
+    )
+
+
 @pytest.mark.anyio
 async def test_build_text_turn_request_uses_packet_payload_and_active_character():
-    soul = SimpleNamespace(get_active_character_id=lambda: "lillian")
-    service = ChatTurnService(pipeline=FakePipeline(), soul_service=soul)
+    service = ChatTurnService(
+        pipeline=FakePipeline(),
+        session_manager=fake_session_manager(),
+        context_resolver=fake_context_resolver("lillian"),
+        interaction_recorder=fake_recorder(),
+    )
 
     packet = EventPacket(
         session_id=42,
@@ -39,33 +78,26 @@ async def test_build_text_turn_request_uses_packet_payload_and_active_character(
     request = service.build_text_turn_request(packet)
 
     assert request == TextTurnRequest(
-        session_id=42,
         text="hi",
-        user_id="u1",
-        character_id="lillian",
+        companion_context=companion_context(
+            session_id=42,
+            user_id="u1",
+            character_id="lillian",
+            user_name="Ada",
+        ),
         user_name="Ada",
         model="m",
     )
 
 
 @pytest.mark.anyio
-async def test_build_text_turn_request_requires_soul_service_without_payload_character():
-    service = ChatTurnService(pipeline=FakePipeline())
-
-    packet = EventPacket(
-        session_id=42,
-        type=EventType.INPUT_TEXT,
-        source="frontend",
-        payload={"text": "hi"},
+async def test_build_text_turn_request_uses_payload_character():
+    service = ChatTurnService(
+        pipeline=FakePipeline(),
+        session_manager=fake_session_manager(),
+        context_resolver=fake_context_resolver("lillian"),
+        interaction_recorder=fake_recorder(),
     )
-
-    with pytest.raises(RuntimeError, match="SoulService is required"):
-        service.build_text_turn_request(packet)
-
-
-@pytest.mark.anyio
-async def test_build_text_turn_request_uses_payload_character_without_soul_service():
-    service = ChatTurnService(pipeline=FakePipeline())
 
     packet = EventPacket(
         session_id=42,
@@ -76,7 +108,7 @@ async def test_build_text_turn_request_uses_payload_character_without_soul_servi
 
     request = service.build_text_turn_request(packet)
 
-    assert request.character_id == "explicit-char"
+    assert request.companion_context.character_id == "explicit-char"
 
 
 @pytest.mark.anyio
@@ -85,12 +117,20 @@ async def test_stream_text_turn_emits_started_delta_and_ended_events():
     session_manager = SimpleNamespace(
         load_session=AsyncMock(return_value=SimpleNamespace(short_term_history=[]))
     )
-    service = ChatTurnService(pipeline=pipeline, session_manager=session_manager)
+    service = ChatTurnService(
+        pipeline=pipeline,
+        session_manager=session_manager,
+        context_resolver=fake_context_resolver(),
+        interaction_recorder=fake_recorder(),
+    )
 
     events = [
         event
         async for event in service.stream_text_turn(
-            TextTurnRequest(session_id=1, text=" hello ", user_id="u", character_id="c")
+            TextTurnRequest(
+                text=" hello ",
+                companion_context=companion_context(session_id=1, user_id="u", character_id="c"),
+            )
         )
     ]
 
@@ -104,17 +144,108 @@ async def test_stream_text_turn_emits_started_delta_and_ended_events():
 async def test_stream_response_logs_turn_to_memory():
     pipeline = FakePipeline(tokens=["ok"])
     memory = SimpleNamespace(log_conversation=AsyncMock())
-    service = ChatTurnService(pipeline=pipeline, memory_service=memory)
+    session_manager = SimpleNamespace(add_turn=AsyncMock())
+    soul = SimpleNamespace(
+        update_last_interaction=MagicMock(),
+        on_interaction=AsyncMock(),
+    )
+    service = ChatTurnService(
+        pipeline=pipeline,
+        session_manager=fake_session_manager(),
+        context_resolver=fake_context_resolver(),
+        interaction_recorder=CompanionInteractionRecorder(
+            memory_service=memory,
+            session_manager=session_manager,
+            soul_service=soul,
+        ),
+    )
 
     response = [
         token
         async for token in service.stream_response(
             messages=[{"role": "user", "content": "ping"}],
-            user_id="u",
+            companion_context=companion_context(user_id="u", character_id="hiyori"),
             user_name="Ada",
-            character_id="hiyori",
         )
     ]
 
     assert response == ["ok"]
-    memory.log_conversation.assert_awaited_once_with("hiyori", "Ada: ping\nhiyori: ok")
+    session_manager.add_turn.assert_awaited_once()
+    soul.update_last_interaction.assert_called_once_with()
+    soul.on_interaction.assert_awaited_once()
+    memory.log_conversation.assert_awaited_once_with(
+        companion_context(user_id="u", character_id="hiyori"),
+        "Ada: ping\nhiyori: ok",
+    )
+
+
+@pytest.mark.anyio
+async def test_stream_response_records_companion_interaction():
+    pipeline = FakePipeline(tokens=["ok"])
+    recorder = SimpleNamespace(record=AsyncMock())
+    service = ChatTurnService(
+        pipeline=pipeline,
+        session_manager=fake_session_manager(),
+        context_resolver=fake_context_resolver(),
+        interaction_recorder=recorder,
+    )
+    context = companion_context(session_id=7, user_id="u", character_id="hiyori")
+
+    response = [
+        token
+        async for token in service.stream_response(
+            messages=[{"role": "user", "content": "ping"}],
+            companion_context=context,
+            log_memory=False,
+        )
+    ]
+
+    assert response == ["ok"]
+    recorder.record.assert_awaited_once_with(
+        CompanionInteraction(
+            companion_context=context,
+            user_message="ping",
+            assistant_message="ok",
+            save_history=True,
+            log_memory=False,
+        )
+    )
+
+
+def test_chat_turn_service_requires_core_dependencies():
+    pipeline = FakePipeline()
+    session_manager = fake_session_manager()
+    context_resolver = fake_context_resolver()
+    recorder = fake_recorder()
+
+    with pytest.raises(ValueError, match="ChatPipeline"):
+        ChatTurnService(
+            pipeline=None,
+            session_manager=session_manager,
+            context_resolver=context_resolver,
+            interaction_recorder=recorder,
+        )
+
+    with pytest.raises(ValueError, match="SessionManager"):
+        ChatTurnService(
+            pipeline=pipeline,
+            session_manager=None,
+            context_resolver=context_resolver,
+            interaction_recorder=recorder,
+        )
+
+    with pytest.raises(ValueError, match="CompanionContextResolver"):
+        ChatTurnService(
+            pipeline=pipeline,
+            session_manager=session_manager,
+            context_resolver=None,
+            interaction_recorder=recorder,
+        )
+
+    with pytest.raises(ValueError, match="CompanionInteractionRecorder"):
+        ChatTurnService(
+            pipeline=pipeline,
+            session_manager=session_manager,
+            context_resolver=context_resolver,
+            interaction_recorder=None,
+        )

@@ -6,6 +6,7 @@ from typing import Any
 
 
 BRAVE_SEARCH_PROVIDER_ID = "driver.tool.search.brave"
+CUSTOM_LLM_PROVIDER_ID = "custom_provider"
 
 _DOTENV_LOADED = False
 
@@ -35,7 +36,8 @@ def load_environment(logger: logging.Logger) -> None:
 def apply_env_overrides(bundle: Any) -> None:
     network = bundle.network
     llm = bundle.llm
-    plugins = bundle.plugins
+    custom_llm_provider = llm.providers.get(CUSTOM_LLM_PROVIDER_ID)
+    capabilities = bundle.capabilities
     postgres = bundle.memory.postgres
 
     if os.environ.get("LUMINA_MEMORY_PORT"):
@@ -45,15 +47,16 @@ def apply_env_overrides(bundle: Any) -> None:
     if os.environ.get("LUMINA_TTS_PORT"):
         network.tts_port = int(os.environ["LUMINA_TTS_PORT"])
 
-    if os.environ.get("OPENAI_API_KEY"):
-        llm.api_key = os.environ["OPENAI_API_KEY"]
-    if os.environ.get("OPENAI_BASE_URL"):
-        llm.base_url = os.environ["OPENAI_BASE_URL"]
+    if custom_llm_provider and os.environ.get("OPENAI_API_KEY"):
+        custom_llm_provider.api_key = os.environ["OPENAI_API_KEY"]
+    if custom_llm_provider and os.environ.get("OPENAI_BASE_URL"):
+        custom_llm_provider.base_url = os.environ["OPENAI_BASE_URL"]
     if os.environ.get("LLM_MODEL"):
-        llm.model = os.environ["LLM_MODEL"]
+        for route in llm.routes.values():
+            route.model = os.environ["LLM_MODEL"]
 
     if os.environ.get("BRAVE_API_KEY"):
-        plugins.settings.setdefault(BRAVE_SEARCH_PROVIDER_ID, {})["api_key"] = os.environ["BRAVE_API_KEY"]
+        capabilities.settings.setdefault(BRAVE_SEARCH_PROVIDER_ID, {})["api_key"] = os.environ["BRAVE_API_KEY"]
 
     if os.environ.get("LUMINA_PG_HOST"):
         postgres.host = os.environ["LUMINA_PG_HOST"]
@@ -67,4 +70,4 @@ def apply_env_overrides(bundle: Any) -> None:
         postgres.database = os.environ["LUMINA_PG_DATABASE"]
 
     if os.environ.get("SEARCH_PROVIDER"):
-        plugins.selected_providers["tool.search"] = os.environ["SEARCH_PROVIDER"]
+        capabilities.selected_providers["tool.search"] = os.environ["SEARCH_PROVIDER"]

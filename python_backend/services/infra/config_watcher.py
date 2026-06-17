@@ -88,7 +88,7 @@ class ConfigWatcherService:
                     logger.error(f"Error in ConfigWatcher callback: {e}")
             
             # 2.5 Notify IConfigurables
-            config_dump = config._plugins_config.model_dump() # Or full config?
+            config_dump = config.capabilities.model_dump()
             # Ideally pass the whole config context or let them pull
             # IConfigurable.on_config_update(data)
             # For now, we trigger them. They can pull from 'config' singleton or we pass data.
@@ -100,7 +100,7 @@ class ConfigWatcherService:
                 "llm": config.llm.model_dump(),
                 "stt": config.stt.model_dump(),
                 "tts": config.tts.model_dump(),
-                "plugins": config.plugins.model_dump()
+                "capabilities": config.capabilities.model_dump()
             }
             
             for conf in self._configurables:

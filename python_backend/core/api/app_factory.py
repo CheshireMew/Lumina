@@ -5,7 +5,6 @@ from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from app_config import config as app_settings
 from routers import gateway
@@ -15,7 +14,7 @@ from routers import config as config_router
 from routers import runtime as runtime_router
 from routers import llm_mgmt
 from routers import character
-from routers import completions
+from routers import companion
 from routers import admin
 from routers import debug as debug_router
 from routers import vision_routes
@@ -23,7 +22,6 @@ from routers import stt_routes
 from routers import tts_routes
 from routers import metrics as metrics_router
 from routers.voiceprint import router as voiceprint_router
-from services.container import services as service_instance
 from services.infra.worker_control_hub import get_worker_control_hub
 from services.lifecycle import lifespan
 from services.middleware.metrics_middleware import MetricsMiddleware
@@ -47,7 +45,6 @@ def create_app(logger, request_id_ctx) -> FastAPI:
     _configure_middleware(app, logger, request_id_ctx)
     _configure_exception_handlers(app, logger)
     _configure_routes(app)
-    _mount_capability_resources(app, logger)
     _configure_root(app)
     return app
 
@@ -148,9 +145,9 @@ def _configure_exception_handlers(app: FastAPI, logger) -> None:
 
 def _configure_routes(app: FastAPI) -> None:
     app.include_router(gateway.router)
+    app.include_router(companion.router)
     app.include_router(llm_mgmt.router)
     app.include_router(llm_mgmt.models_router)
-    app.include_router(completions.router)
     app.include_router(admin.router)
     app.include_router(debug_router.router)
     app.include_router(config_router.router)
@@ -170,17 +167,6 @@ def _configure_routes(app: FastAPI) -> None:
         await hub.handle_connection(websocket)
 
 
-def _mount_capability_resources(app: FastAPI, logger) -> None:
-    package_registry = getattr(service_instance, "capability_package_registry", None)
-    if not package_registry:
-        return
-
-    for route, directory in package_registry.static_mounts():
-        route_name = route.strip("/").replace("/", ".")
-        app.mount(route, StaticFiles(directory=str(directory)), name=route_name)
-        logger.info("Mounted capability resource %s from %s", route, directory)
-
-
 def _configure_root(app: FastAPI) -> None:
     @app.get("/")
     async def root():
@@ -190,6 +176,7 @@ def _configure_root(app: FastAPI) -> None:
             "status": "running",
             "endpoints": {
                 "config": "/config/llm, /health",
+                "companion": "/companion/message",
                 "memory": "/memory/add, /memory/search, /memory/search/hybrid, /memory/all",
                 "character": "/character/*",
                 "soul": "/soul/*",

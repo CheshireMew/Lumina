@@ -210,8 +210,8 @@ async def websocket_endpoint(websocket: WebSocket):
     if token:
         try:
             from security.tokens import TokenManager
-            if not TokenManager.verify_token(token, expected_scope="plugin"):
-                raise ValueError("invalid plugin token")
+            if not TokenManager.verify_token(token, expected_scope="runtime_client"):
+                raise ValueError("invalid runtime client token")
         except Exception as e:
             logger.warning(f"🚨 WS Token Validation Failed: {e}")
             await websocket.close(code=1008)

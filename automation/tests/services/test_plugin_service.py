@@ -17,8 +17,8 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
 
 
-class TestPluginService(unittest.IsolatedAsyncioTestCase):
-    """Test PluginService functionality"""
+class TestProviderConfigService(unittest.IsolatedAsyncioTestCase):
+    """Test ProviderConfigService functionality"""
 
     def setUp(self):
         """Reset services before each test"""
@@ -27,15 +27,15 @@ class TestPluginService(unittest.IsolatedAsyncioTestCase):
         self.container = ServiceContainer()
 
     def test_plugin_registry_initialization(self):
-        """Test that PluginService registry initializes correctly"""
+        """Test that ProviderConfigService registry initializes correctly"""
         # Mock plugin service structure
-        class MockPluginService:
+        class MockProviderConfigService:
             def __init__(self, container):
                 self.services = container
                 self.registry = {}
                 self._last_healthy_workers = set()
 
-        mock_service = MockPluginService(self.container)
+        mock_service = MockProviderConfigService(self.container)
 
         self.assertIsNotNone(mock_service.registry)
         self.assertIsInstance(mock_service.registry, dict)
@@ -46,7 +46,7 @@ class TestPluginService(unittest.IsolatedAsyncioTestCase):
         """Test YAML manifest parsing"""
         # Create a temporary manifest file
         manifest_content = """
-id: test.plugin
+id: test.module
 name: Test Plugin
 version: 1.0.0
 description: A test plugin
@@ -66,7 +66,7 @@ permissions:
 
             manifest = read_manifest_file(manifest_path)
 
-            self.assertEqual(manifest['id'], 'test.plugin')
+            self.assertEqual(manifest['id'], 'test.module')
             self.assertEqual(manifest['version'], '1.0.0')
             self.assertIn('event.subscribe', manifest['permissions'])
             print("✅ Plugin manifest parsing verified")
@@ -76,10 +76,10 @@ permissions:
     def test_plugin_id_validation(self):
         """Test plugin ID validation"""
         valid_ids = [
-            "test.plugin",
+            "test.module",
             "my_extension",
-            "vendor.plugin-name",
-            "com.example.plugin"
+            "vendor.module-name",
+            "com.example.module"
         ]
 
         invalid_ids = [
@@ -155,7 +155,7 @@ permissions:
 
     async def test_plugin_registration(self):
         """Test plugin capability registration"""
-        class MockPluginService:
+        class MockProviderConfigService:
             def __init__(self):
                 self.registry = {}
 
@@ -167,7 +167,7 @@ permissions:
             def get_capabilities(self, worker_id):
                 return self.registry.get(worker_id, [])
 
-        service = MockPluginService()
+        service = MockProviderConfigService()
 
         # Register capabilities for a worker
         service.register_capability("worker:stt", {
@@ -206,9 +206,9 @@ permissions:
             manifest2 = os.path.join(plugin2_dir, "manifest.yaml")
 
             with open(manifest1, 'w') as f:
-                f.write("id: ext.plugin1\nname: Extension 1\n")
+                f.write("id: ext.module1\nname: Extension 1\n")
             with open(manifest2, 'w') as f:
-                f.write("id: sys.plugin2\nname: System Plugin 2\n")
+                f.write("id: sys.module2\nname: System Plugin 2\n")
 
             # Scan for plugins
             plugins_found = []
@@ -277,9 +277,9 @@ permissions:
 
         sandbox = MockSandbox()
 
-        # Spawn isolated plugin
-        pid1 = sandbox.spawn_isolated("test.plugin", "plugin.py")
-        pid2 = sandbox.spawn_isolated("another.plugin", "main.py")
+        # Spawn isolated capability modules
+        pid1 = sandbox.spawn_isolated("test.capability", "module.py")
+        pid2 = sandbox.spawn_isolated("another.capability", "main.py")
 
         self.assertIn(pid1, sandbox.isolated_processes)
         self.assertIn(pid2, sandbox.isolated_processes)
@@ -290,38 +290,38 @@ permissions:
         self.assertTrue(result)
         self.assertNotIn(pid1, sandbox.isolated_processes)
         self.assertEqual(len(sandbox.isolated_processes), 1)
-        print("✅ Plugin isolation sandbox verified")
+        print("✅ Capability isolation sandbox verified")
 
-    async def test_plugin_metadata_extraction(self):
-        """Test extraction of plugin metadata"""
+    async def test_capability_metadata_extraction(self):
+        """Test extraction of capability metadata"""
         mock_metadata = {
-            "id": "test.plugin",
-            "name": "Test Plugin",
+            "id": "test.capability",
+            "name": "Test Capability",
             "version": "1.0.0",
-            "description": "A test plugin",
+            "description": "A test capability module",
             "author": "Test Author",
             "license": "MIT",
             "permissions": ["event.subscribe"],
             "dependencies": [],
-            "entry_point": "plugin.py",
+            "entry_point": "module.py",
             "min_lumina_version": "0.1.0"
         }
 
         # Extract key fields
-        plugin_id = mock_metadata.get("id")
+        capability_id = mock_metadata.get("id")
         name = mock_metadata.get("name")
         permissions = mock_metadata.get("permissions", [])
         deps = mock_metadata.get("dependencies", [])
 
-        self.assertEqual(plugin_id, "test.plugin")
-        self.assertEqual(name, "Test Plugin")
+        self.assertEqual(capability_id, "test.capability")
+        self.assertEqual(name, "Test Capability")
         self.assertEqual(len(permissions), 1)
         self.assertEqual(len(deps), 0)
         print("✅ Plugin metadata extraction verified")
 
 
 if __name__ == "__main__":
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestPluginService)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestProviderConfigService)
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
@@ -330,5 +330,5 @@ if __name__ == "__main__":
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
     if result.wasSuccessful():
-        print("✅ All PluginService tests passed!")
+        print("✅ All ProviderConfigService tests passed!")
     print("="*60)

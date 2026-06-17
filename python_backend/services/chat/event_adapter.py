@@ -8,11 +8,11 @@ logger = logging.getLogger("ChatTurnEventAdapter")
 
 
 class ChatTurnEventAdapter:
-    """Transport adapter from EventBus input events to ChatTurnService."""
+    """Transport adapter from EventBus input events to CompanionRuntime."""
 
-    def __init__(self, chat_turn_service):
+    def __init__(self, companion_runtime):
         self.bus = get_event_bus()
-        self.chat_turn_service = chat_turn_service
+        self.companion_runtime = companion_runtime
         self.subscribed = False
         self.current_task = None
         self._dedupe_lock = asyncio.Lock()
@@ -43,9 +43,8 @@ class ChatTurnEventAdapter:
             if await self._is_duplicate(packet):
                 return
 
-            request = self.chat_turn_service.build_text_turn_request(packet)
-            async for turn_event in self.chat_turn_service.stream_text_turn(request):
-                await self._emit_turn_event(request.session_id, turn_event)
+            async for turn_event in self.companion_runtime.stream_text_packet(packet):
+                await self._emit_turn_event(packet.session_id, turn_event)
 
         except asyncio.CancelledError:
             pass

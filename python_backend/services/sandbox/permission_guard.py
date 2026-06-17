@@ -1,6 +1,6 @@
 """
 Permission Guard.
-Fine-grained permission checking for sandboxed plugins.
+Fine-grained permission checking for sandboxed capability modules.
 """
 
 import os
@@ -15,7 +15,7 @@ logger = logging.getLogger("PermissionGuard")
 
 
 class Permission(Enum):
-    """Standard permission types for plugins."""
+    """Standard permission types for capability modules."""
     
     # Filesystem
     FILESYSTEM_DATA_READ = "filesystem.data_read"
@@ -41,14 +41,14 @@ class Permission(Enum):
     
     # Data
     DATA_USER_MEMORY = "data.user_memory"
-    DATA_PLUGIN_STATE = "data.plugin_state"
+    DATA_MODULE_STATE = "data.module_state"
 
 
 @dataclass
-class PluginPermissions:
+class CapabilityModulePermissions:
     """
-    Permission configuration for a plugin.
-    Parsed from plugin manifest.yaml permissions section.
+    Permission configuration for a capability module.
+    Parsed from manifest.yaml permissions section.
     """
     allowed: Set[str] = field(default_factory=set)
     
@@ -59,13 +59,13 @@ class PluginPermissions:
     env_vars: Set[str] = field(default_factory=set)          # Allowed env vars to read
     
     @classmethod
-    def from_manifest(cls, permissions: List[str]) -> "PluginPermissions":
+    def from_manifest(cls, permissions: List[str]) -> "CapabilityModulePermissions":
         """
         Parse permissions from manifest format.
         
         Examples:
             - "filesystem.data_read" -> basic permission
-            - "filesystem.data_write:plugins/{id}/data" -> scoped to path
+            - "filesystem.data_write:capability_modules/{id}/data" -> scoped to path
             - "network.external:api.example.com" -> scoped to host
             - "resource.memory:512mb" -> resource limit (handled separately)
         """
@@ -100,10 +100,10 @@ class PluginPermissions:
 
 class PermissionGuard:
     """
-    Guards access to protected resources based on plugin permissions.
+    Guards access to protected resources based on capability module permissions.
     
     Usage:
-        guard = PermissionGuard(plugin_permissions)
+        guard = PermissionGuard(module_permissions)
         
         if guard.check_filesystem("/path/to/file", write=True):
             # Allowed
@@ -111,13 +111,13 @@ class PermissionGuard:
             raise PermissionError("Write access denied")
     """
     
-    def __init__(self, permissions: PluginPermissions, plugin_id: str = None):
+    def __init__(self, permissions: CapabilityModulePermissions, module_id: str = None):
         self.permissions = permissions
-        self.plugin_id = plugin_id or "unknown"
+        self.module_id = module_id or "unknown"
         
-        # Allowed base paths for all plugins (read-only)
+        # Allowed base paths for all capability modules (read-only)
         self._safe_read_paths = {
-            Path("plugins").resolve(),      # Plugin assets
+            Path("capability_modules").resolve(),
             Path("public").resolve(),       # Public assets
             Path("data/models").resolve(),  # ML models
         }
@@ -175,7 +175,7 @@ class PermissionGuard:
             if self.permissions.filesystem_paths:
                 for allowed in self.permissions.filesystem_paths:
                     # Expand {id} placeholder
-                    allowed_path = allowed.replace("{id}", self.plugin_id)
+                    allowed_path = allowed.replace("{id}", self.module_id)
                     try:
                         allowed_resolved = Path(allowed_path).resolve()
                         if target == allowed_resolved or allowed_resolved in target.parents:
@@ -184,9 +184,9 @@ class PermissionGuard:
                         continue
                 return False
             
-            # If no scoped paths, allow only plugin data directory
-            plugin_data = Path(f"plugins/{self.plugin_id}/data").resolve()
-            return target == plugin_data or plugin_data in target.parents
+            # If no scoped paths, allow only module data directory
+            module_data = Path(f"capability_modules/{self.module_id}/data").resolve()
+            return target == module_data or module_data in target.parents
         
         else:
             # Read access
@@ -322,21 +322,21 @@ class PermissionGuard:
 
 
 # Convenience function
-def create_guard_from_manifest(manifest: Dict[str, Any], plugin_id: str) -> PermissionGuard:
+def create_guard_from_manifest(manifest: Dict[str, Any], module_id: str) -> PermissionGuard:
     """
-    Create a PermissionGuard from a plugin manifest.
+    Create a PermissionGuard from a capability manifest.
     
     Args:
         manifest: Parsed manifest dict
-        plugin_id: Plugin identifier
+        module_id: Capability module identifier
         
     Returns:
         Configured PermissionGuard
     """
     perms_list = manifest.get("permissions", [])
     if isinstance(perms_list, list):
-        permissions = PluginPermissions.from_manifest(perms_list)
+        permissions = CapabilityModulePermissions.from_manifest(perms_list)
     else:
-        permissions = PluginPermissions()
+        permissions = CapabilityModulePermissions()
     
-    return PermissionGuard(permissions, plugin_id)
+    return PermissionGuard(permissions, module_id)

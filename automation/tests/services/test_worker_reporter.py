@@ -15,7 +15,7 @@ class BusStub:
     def __init__(self):
         self.is_connected = False
         self.connect = AsyncMock(side_effect=self._connect)
-        self.update_plugin_state = AsyncMock()
+        self.update_worker_state = AsyncMock()
 
     async def _connect(self):
         self.is_connected = True
@@ -37,4 +37,4 @@ async def test_force_report_uses_lifecycle_bus_connection_contract():
     await reporter.force_report()
 
     bus.connect.assert_awaited_once_with()
-    bus.update_plugin_state.assert_awaited_once()
+    bus.update_worker_state.assert_awaited_once()

@@ -11,7 +11,7 @@ import websockets
 from websockets.exceptions import ConnectionClosed, InvalidStatusCode
 
 from core.protocols.worker_control import (
-    ConfigUpdatePayload, LifecyclePayload, WsMessage, WsMessageType, PluginStatusPayload
+    ConfigUpdatePayload, LifecyclePayload, WsMessage, WsMessageType, ProviderStatusPayload
 )
 from pydantic import ValidationError
 from services.observability.structured_logger import set_log_context, reset_log_context
@@ -192,19 +192,19 @@ class WorkerControlClient:
         load = self._get_system_load()
         uptime = time.time() - self._start_time
         
-        # Get plugin status
-        plugins = []
+        # Get provider status
+        providers = []
         if self.status_provider:
             try:
                 if asyncio.iscoroutinefunction(self.status_provider):
-                    raw_plugins = await self.status_provider()
+                    raw_providers = await self.status_provider()
                 else:
-                    raw_plugins = self.status_provider()
+                    raw_providers = self.status_provider()
                 
-                for p in raw_plugins:
+                for p in raw_providers:
                     active_status = p.get("active_status")
                     computed_status = p.get("computed_status")
-                    plugins.append(PluginStatusPayload(
+                    providers.append(ProviderStatusPayload(
                         id=p.get("id", "unknown"),
                         name=p.get("name", p.get("id", "unknown")),
                         enabled=bool(p.get("enabled", True)),
@@ -235,7 +235,7 @@ class WorkerControlClient:
         
         msg = WsMessage.status(
             worker_id=self.worker_id,
-            plugins=plugins,
+            providers=providers,
             load=load,
             uptime=uptime
         )

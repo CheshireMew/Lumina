@@ -1,7 +1,7 @@
 import React, { Component, Suspense, forwardRef } from 'react';
 import { AvatarRendererRef } from './types';
 
-const Live2DPlugin = React.lazy(() => import('../../plugins/avatar/live2d/Live2DPlugin'));
+const Live2DRenderer = React.lazy(() => import('./live2d/Live2DRenderer'));
 
 interface AvatarContainerProps {
     modelPath: string;
@@ -46,7 +46,7 @@ const AvatarContainer = forwardRef<AvatarRendererRef, AvatarContainerProps>(({ m
     return (
         <AvatarErrorBoundary>
             <Suspense fallback={LoadingFallback}>
-                <Live2DPlugin
+                <Live2DRenderer
                     ref={ref}
                     modelPath={modelPath}
                     highDpi={highDpi}

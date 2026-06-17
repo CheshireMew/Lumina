@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class CapabilityContract(BaseModel):
     """
     Defines a capability provided or consumed by a plugin.
-    Used in PluginManifest.
+    Used in CapabilityManifest.
     """
     type: str
     version: str = "1.0.0"
@@ -61,6 +61,6 @@ class IWorkerCapability(ABC):
     def get_state_provider(self) -> Callable[[], List[Dict[str, Any]]]:
         """
         Return the function used by WorkerReporter to gather state.
-        This function should return a list of plugin states.
+        This function should return capability-specific runtime state entries.
         """
         pass

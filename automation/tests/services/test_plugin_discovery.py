@@ -47,10 +47,10 @@ class TestPluginDiscovery(unittest.TestCase):
 
     def test_plugin_discovery_parse_manifest(self):
         """Test parsing plugin manifest"""
-        from core.manifest import PluginManifest
+        from core.manifest import CapabilityManifest
 
         manifest_data = {
-            "id": "test.plugin",
+            "id": "test.module",
             "name": "Test Plugin",
             "api_version": "1.0",
             "description": "A test plugin",
@@ -59,9 +59,9 @@ class TestPluginDiscovery(unittest.TestCase):
             "permissions": ["network.read"]
         }
 
-        manifest = PluginManifest(**manifest_data)
+        manifest = CapabilityManifest(**manifest_data)
 
-        self.assertEqual(manifest.id, "test.plugin")
+        self.assertEqual(manifest.id, "test.module")
         self.assertEqual(manifest.name, "Test Plugin")
         self.assertEqual(manifest.api_version, "1.0")
         self.assertEqual(manifest.permissions, ["network.read"])
@@ -69,10 +69,10 @@ class TestPluginDiscovery(unittest.TestCase):
 
     def test_plugin_discovery_extract_metadata(self):
         """Test extracting metadata from manifest"""
-        from core.manifest import PluginManifest
+        from core.manifest import CapabilityManifest
 
         manifest_data = {
-            "id": "meta.plugin",
+            "id": "meta.module",
             "name": "Metadata Plugin",
             "api_version": "1.0",
             "description": "Tests metadata extraction",
@@ -82,9 +82,9 @@ class TestPluginDiscovery(unittest.TestCase):
             "capability": "system"
         }
 
-        manifest = PluginManifest(**manifest_data)
+        manifest = CapabilityManifest(**manifest_data)
 
-        self.assertEqual(manifest.id, "meta.plugin")
+        self.assertEqual(manifest.id, "meta.module")
         self.assertEqual(manifest.author, "Developer")
         self.assertEqual(manifest.tags, ["test", "metadata"])
         self.assertEqual(manifest.kind, "system")
@@ -94,23 +94,23 @@ class TestPluginDiscovery(unittest.TestCase):
     def test_plugin_discovery_api_version_enforcement(self):
         """Test manifest API major version enforcement."""
         from pydantic import ValidationError
-        from core.manifest import PluginManifest
+        from core.manifest import CapabilityManifest
 
-        manifest = PluginManifest(id="supported.plugin", api_version="1.5.0")
+        manifest = CapabilityManifest(id="supported.module", api_version="1.5.0")
         self.assertEqual(manifest.api_version, "1.5.0")
 
         with self.assertRaises(ValidationError):
-            PluginManifest(id="future.plugin", api_version="2.0.0")
+            CapabilityManifest(id="future.module", api_version="2.0.0")
 
         with self.assertRaises(ValidationError):
-            PluginManifest(id="invalid.plugin", api_version="invalid")
+            CapabilityManifest(id="invalid.module", api_version="invalid")
 
     def test_plugin_discovery_dependencies(self):
         """Test dependency parsing"""
-        from core.manifest import PluginManifest
+        from core.manifest import CapabilityManifest
 
         manifest_data = {
-            "id": "dependent.plugin",
+            "id": "dependent.module",
             "name": "Dependent Plugin",
             "api_version": "1.0",
             "dependencies": [
@@ -119,7 +119,7 @@ class TestPluginDiscovery(unittest.TestCase):
             ]
         }
 
-        manifest = PluginManifest(**manifest_data)
+        manifest = CapabilityManifest(**manifest_data)
 
         self.assertEqual(len(manifest.dependencies), 2)
         self.assertIn("dep1", manifest.dependencies)
@@ -128,10 +128,10 @@ class TestPluginDiscovery(unittest.TestCase):
 
     def test_plugin_discovery_permissions(self):
         """Test permission parsing"""
-        from core.manifest import PluginManifest
+        from core.manifest import CapabilityManifest
 
         manifest_data = {
-            "id": "perms.plugin",
+            "id": "perms.module",
             "name": "Permissions Plugin",
             "api_version": "1.0",
             "permissions": [
@@ -142,7 +142,7 @@ class TestPluginDiscovery(unittest.TestCase):
             ]
         }
 
-        manifest = PluginManifest(**manifest_data)
+        manifest = CapabilityManifest(**manifest_data)
 
         self.assertEqual(len(manifest.permissions), 4)
         self.assertIn("network.read", manifest.permissions)
@@ -151,12 +151,12 @@ class TestPluginDiscovery(unittest.TestCase):
 
     def test_plugin_discovery_isolation_mode(self):
         """Unknown isolation_mode is not part of the manifest contract."""
-        from core.manifest import PluginManifest
+        from core.manifest import CapabilityManifest
         from pydantic import ValidationError
 
         with self.assertRaises(ValidationError):
-            PluginManifest(
-                id="local.plugin",
+            CapabilityManifest(
+                id="local.module",
                 name="Local Plugin",
                 api_version="1.0",
                 isolation_mode="local"
@@ -192,16 +192,16 @@ class TestPluginDiscovery(unittest.TestCase):
 
     def test_plugin_discovery_invalid_manifest(self):
         """Test handling of invalid manifest"""
-        from core.manifest import PluginManifest
+        from core.manifest import CapabilityManifest
         from pydantic import ValidationError
 
         # Invalid required field
         invalid_data = {
-            "id": "../invalid.plugin"
+            "id": "../invalid.module"
         }
 
         with self.assertRaises(ValidationError):
-            PluginManifest(**invalid_data)
+            CapabilityManifest(**invalid_data)
 
         print("✅ Plugin discovery invalid manifest handling verified")
 
@@ -210,21 +210,21 @@ class TestPluginDiscovery(unittest.TestCase):
         discovered = {}
 
         # Add first instance
-        discovered["test.plugin"] = {"path": "/path1", "version": "1.0.0"}
+        discovered["test.module"] = {"path": "/path1", "version": "1.0.0"}
 
         # Try to add duplicate
-        if "test.plugin" in discovered:
+        if "test.module" in discovered:
             # Handle duplicate - compare versions
-            existing = discovered["test.plugin"]
+            existing = discovered["test.module"]
             new = {"path": "/path2", "version": "1.1.0"}
 
             # Keep higher version
             if new["version"] > existing["version"]:
-                discovered["test.plugin"] = new
+                discovered["test.module"] = new
 
         # Should still have one entry
         self.assertEqual(len(discovered), 1)
-        self.assertEqual(discovered["test.plugin"]["path"], "/path2")
+        self.assertEqual(discovered["test.module"]["path"], "/path2")
         print("✅ Plugin discovery duplicate detection verified")
 
     def test_plugin_discovery_recursive_scan(self):
@@ -253,11 +253,11 @@ class TestPluginDiscovery(unittest.TestCase):
 
     def test_plugin_discovery_runtime_target(self):
         """Test runtime_target parsing"""
-        from core.manifest import PluginManifest
+        from core.manifest import CapabilityManifest
 
         # Main process target
-        main_manifest = PluginManifest(
-            id="main.plugin",
+        main_manifest = CapabilityManifest(
+            id="main.module",
             name="Main Plugin",
             api_version="1.0",
             runtime_target="main"
@@ -266,8 +266,8 @@ class TestPluginDiscovery(unittest.TestCase):
         self.assertEqual(main_manifest.runtime_target, "main")
 
         # STT worker target
-        stt_manifest = PluginManifest(
-            id="stt.plugin",
+        stt_manifest = CapabilityManifest(
+            id="stt.module",
             name="STT Plugin",
             api_version="1.0",
             runtime_target="worker:stt"
@@ -276,8 +276,8 @@ class TestPluginDiscovery(unittest.TestCase):
         self.assertEqual(stt_manifest.runtime_target, "worker:stt")
 
         # TTS worker target
-        tts_manifest = PluginManifest(
-            id="tts.plugin",
+        tts_manifest = CapabilityManifest(
+            id="tts.module",
             name="TTS Plugin",
             api_version="1.0",
             runtime_target="worker:tts"
@@ -289,11 +289,11 @@ class TestPluginDiscovery(unittest.TestCase):
 
     def test_plugin_discovery_rejects_ui_slots(self):
         """UI slots are not part of the plugin manifest contract."""
-        from core.manifest import PluginManifest
+        from core.manifest import CapabilityManifest
         from pydantic import ValidationError
 
         manifest_data = {
-            "id": "ui.plugin",
+            "id": "ui.module",
             "name": "UI Plugin",
             "api_version": "1.0",
             "ui_slots": [
@@ -307,7 +307,7 @@ class TestPluginDiscovery(unittest.TestCase):
         }
 
         with self.assertRaises(ValidationError):
-            PluginManifest(**manifest_data)
+            CapabilityManifest(**manifest_data)
         print("✅ Plugin discovery UI slots are rejected")
 
 

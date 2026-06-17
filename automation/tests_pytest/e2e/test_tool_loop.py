@@ -21,18 +21,14 @@ async def test_multi_turn_tool_loop_failure():
     如果 LLM 第一轮调用了工具，在获取结果后需要再次调用工具才能完成任务，
     当前的架构（pipeline.py）会强制进入 Final Pass 并禁用工具，导致多轮逻辑中断。
     """
-    url = f"{SERVICES['memory']}/v1/chat/completions"
+    url = f"{SERVICES['memory']}/companion/message"
     
     # 构造一个需要两步搜索的任务：
     # 1. 搜索 A 的最新成员 (假设是个虚构或实时变化的)
     # 2. 搜索该成员的出生地
     prompt = "First, use web_search to find the current CEO of a fictional company 'Z-Alpha' (just assume it returns 'John Doe'). Then, use web_search again to find where 'John Doe' was born."
     
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False
-    }
+    payload = {"model": "gpt-4o-mini", "text": prompt}
 
     print(f"\n[Test] Sending multi-turn tool request to {url}...")
     
@@ -43,7 +39,7 @@ async def test_multi_turn_tool_loop_failure():
             
             if response.status_code == 200:
                 data = response.json()
-                content = data['choices'][0]['message']['content']
+                content = data["content"]
                 print(f"[Test] Response: {content}")
                 
                 # 如果系统只能做一轮工具调用，它可能会在找不到 CEO 出生地的情况下胡编乱造，
@@ -60,20 +56,16 @@ async def test_multi_turn_tool_loop_failure():
 @pytest.mark.anyio
 async def test_tool_output_injection_consistency():
     """验证工具返回的结果是否被正确注入到上下文中"""
-    url = f"{SERVICES['memory']}/v1/chat/completions"
+    url = f"{SERVICES['memory']}/companion/message"
     
     # 强制让 LLM 调用工具并验证它是否看到了结果
     prompt = "Use web_search to find the 'Secret Code of Lumina 2026'. (It's just for testing, tell me whatever you find)"
     
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False
-    }
+    payload = {"model": "gpt-4o-mini", "text": prompt}
     
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(url, json=payload)
         if response.status_code == 200:
-            print(f"[Test] Tool usage response: {response.json()['choices'][0]['message']['content'][:200]}")
+            print(f"[Test] Tool usage response: {response.json()['content'][:200]}")
         else:
             print(f"[Test] Status {response.status_code}")

@@ -8,11 +8,11 @@ from typing import Any, Dict, Optional
 
 from .models import (
     AudioConfig,
+    CapabilitiesConfig,
     LLMConfig,
     MemoryConfig,
     ModelsConfig,
     NetworkConfig,
-    PluginsConfig,
     SearchConfig,
     STTConfig,
     TTSConfig,
@@ -34,7 +34,7 @@ class ConfigBundle:
     network: NetworkConfig = field(default_factory=NetworkConfig)
     models: ModelsConfig = field(default_factory=ModelsConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
-    plugins: PluginsConfig = field(default_factory=PluginsConfig)
+    capabilities: CapabilitiesConfig = field(default_factory=CapabilitiesConfig)
 
     def section_map(self) -> Dict[str, Any]:
         return {
@@ -45,7 +45,7 @@ class ConfigBundle:
             "audio": self.audio,
             "network": self.network,
             "search": self.search,
-            "plugins": self.plugins,
+            "capabilities": self.capabilities,
             "models": self.models,
         }
 
@@ -59,7 +59,7 @@ class ConfigBundle:
             "audio": self.audio.model_dump(),
             "search": self.search.model_dump(),
             "models": self.models.model_dump(),
-            "plugins": self.plugins.model_dump(),
+            "capabilities": self.capabilities.model_dump(),
         }
 
 
@@ -134,7 +134,7 @@ def hydrate_config(data: Dict[str, Any], logger: logging.Logger) -> ConfigBundle
         "audio": AudioConfig,
         "search": SearchConfig,
         "models": ModelsConfig,
-        "plugins": PluginsConfig,
+        "capabilities": CapabilitiesConfig,
     }
 
     for section, constructor in constructors.items():
@@ -151,15 +151,15 @@ def hydrate_config(data: Dict[str, Any], logger: logging.Logger) -> ConfigBundle
 def normalize_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     normalized = dict(data or {})
 
-    if "plugins" in normalized:
-        plugins_data = dict(normalized.get("plugins") or {})
-        if "settings" in plugins_data:
-            plugins_data["settings"] = dict(plugins_data.get("settings") or {})
-        if "desired_state" in plugins_data:
-            plugins_data["desired_state"] = dict(plugins_data.get("desired_state") or {})
-        if "selected_providers" in plugins_data:
-            plugins_data["selected_providers"] = dict(plugins_data.get("selected_providers") or {})
-        normalized["plugins"] = plugins_data
+    if "capabilities" in normalized:
+        capabilities_data = dict(normalized.get("capabilities") or {})
+        if "settings" in capabilities_data:
+            capabilities_data["settings"] = dict(capabilities_data.get("settings") or {})
+        if "desired_state" in capabilities_data:
+            capabilities_data["desired_state"] = dict(capabilities_data.get("desired_state") or {})
+        if "selected_providers" in capabilities_data:
+            capabilities_data["selected_providers"] = dict(capabilities_data.get("selected_providers") or {})
+        normalized["capabilities"] = capabilities_data
 
     return normalized
 

@@ -4,7 +4,7 @@ import shutil
 import sys
 import json
 import hashlib
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 def run_build(spec_file: str, dist_dir: Path, build_dir: Path, env: dict[str, str] | None = None):
@@ -73,7 +73,7 @@ def write_hashes(target_dir: Path):
         json.dumps(
             {
                 "algorithm": "sha256",
-                "generatedAt": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
                 "files": hashes,
             },
             indent=2,
@@ -132,11 +132,11 @@ def stage_runtime_copy(
     )
     shutil.copytree(package_dist_dir / "lumina_backend", runtime_dir)
 
-    plugin_root = target_dir / "plugins" / "extensions"
-    plugin_root.mkdir(parents=True, exist_ok=True)
-    source_root = project_root / "python_backend" / "plugins" / "extensions"
-    for plugin_name in plugin_names:
-        shutil.copytree(source_root / plugin_name, plugin_root / plugin_name)
+    module_root = target_dir / "capability_modules"
+    module_root.mkdir(parents=True, exist_ok=True)
+    source_root = project_root / "python_backend" / "capability_modules"
+    for module_name in plugin_names:
+        shutil.copytree(source_root / module_name, module_root / module_name)
 
     requirements_file = project_root / "python_backend" / f"requirements-{package_id.split('-', 1)[0]}.txt"
     if requirements_file.exists():
@@ -152,11 +152,11 @@ def stage_voiceprint_runtime(project_root: Path, dist_dir: Path, contract: dict)
     target_dir = reset_package_dir(dist_dir, "voiceprint-runtime")
     write_package_metadata(target_dir, definition)
 
-    plugin_root = target_dir / "plugins" / "extensions"
-    plugin_root.mkdir(parents=True, exist_ok=True)
-    source_root = project_root / "python_backend" / "plugins" / "extensions"
-    for plugin_name in ("voiceprint", "voiceauth_sherpa"):
-        shutil.copytree(source_root / plugin_name, plugin_root / plugin_name)
+    module_root = target_dir / "capability_modules"
+    module_root.mkdir(parents=True, exist_ok=True)
+    source_root = project_root / "python_backend" / "capability_modules"
+    for module_name in ("voiceprint", "voiceauth_sherpa"):
+        shutil.copytree(source_root / module_name, module_root / module_name)
 
     shutil.copy2(
         project_root / "python_backend" / "requirements-voiceprint.txt",

@@ -1,4 +1,4 @@
-import { ProviderType } from "./types";
+import { FREE_LLM_PROVIDER_ID, LlmProviderId } from "./types";
 
 export interface ProviderPreset {
     baseUrl: string;
@@ -36,20 +36,8 @@ export const PRESET_PROVIDERS: Record<string, ProviderPreset> = {
 
 const normalizeUrl = (url: string) => url.trim().replace(/\/+$/, "");
 
-export const getFreeProviderBaseUrl = () => "";
-
-export const isFreeProviderUrl = (baseUrl: string) => {
-    const url = normalizeUrl(baseUrl);
-
-    return (
-        !url ||
-        url.includes("localhost:8010") ||
-        url.includes("127.0.0.1:8010")
-    );
-};
-
-export const getProviderTypeFromBaseUrl = (baseUrl: string): ProviderType =>
-    isFreeProviderUrl(baseUrl) ? "free" : "custom";
+export const isFreeProvider = (providerId: string) =>
+    providerId === FREE_LLM_PROVIDER_ID;
 
 export const identifyPresetProvider = (baseUrl: string) => {
     const url = normalizeUrl(baseUrl);
@@ -80,25 +68,14 @@ export const getDefaultModelForProvider = (
 };
 
 export const normalizeModelForSave = (
-    providerType: ProviderType,
+    providerId: LlmProviderId,
     modelName: string,
 ) => {
-    if (providerType === "free") {
+    if (isFreeProvider(providerId)) {
         return modelName || FREE_PROVIDER_DEFAULT_MODEL;
     }
 
     return modelName;
-};
-
-export const normalizeBaseUrlForSave = (
-    providerType: ProviderType,
-    baseUrl: string,
-) => {
-    if (providerType === "free") {
-        return getFreeProviderBaseUrl();
-    }
-
-    return baseUrl;
 };
 
 export const normalizeOverflowStrategy = (strategy: unknown) =>

@@ -34,8 +34,6 @@ class EventType:
     # Plugin Lifecycle (internal)
     PLUGIN_LOADED = "plugin.loaded"
     PLUGIN_UNLOADED = "plugin.unloaded"
-    PLUGIN_STATE_LOCAL = "plugin.state.local"
-    PLUGIN_STATE_WORKER = "plugin.state.worker"
     
     # Emotion/Avatar
     EMOTION_CHANGED = "emotion:changed"
@@ -72,10 +70,9 @@ class EventPacket(BaseModel):
 
 class InputTextPayload(BaseModel):
     text: str
-    user_id: Optional[str] = "default_user"
+    user_id: Optional[str] = None
     character_id: Optional[str] = None
     user_name: Optional[str] = "User"
-    char_name: Optional[str] = "Assistant"
     model: Optional[str] = None
 
 class BrainResponsePayload(BaseModel):

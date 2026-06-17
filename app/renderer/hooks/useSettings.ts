@@ -3,10 +3,15 @@ import {
     fetchRuntimeLlmSettings,
     updateRuntimeLlmSettings,
 } from "../api/settingsApi";
+import {
+    CUSTOM_LLM_PROVIDER_ID,
+    FREE_LLM_PROVIDER_ID,
+    LlmProviderId,
+} from "../components/LLMConfig/types";
 import { electronSettings, loadBootstrapState } from "../platform/electron";
 
 export interface LLMSettings {
-    providerType: "free" | "custom";
+    providerId: LlmProviderId;
     apiKey: string;
     baseUrl: string;
     model: string;
@@ -43,10 +48,10 @@ export interface GeneralSettingsInput {
 
 const DEFAULT_SETTINGS: AppSettings = {
     llm: {
-        providerType: "custom",
+        providerId: FREE_LLM_PROVIDER_ID,
         apiKey: "",
-        baseUrl: "https://api.deepseek.com/v1",
-        model: "deepseek-chat",
+        baseUrl: "",
+        model: "gpt-4o-mini",
         temperature: 0.7,
         topP: 1.0,
         presencePenalty: 0.0,
@@ -135,7 +140,7 @@ export function useSettings(backendReady: boolean) {
             setSettings((prev) => {
                 const nextLlm: LLMSettings = {
                     apiKey: llm.apiKey ?? prev.llm.apiKey,
-                    providerType: llm.providerType ?? prev.llm.providerType,
+                    providerId: (llm.providerId as LlmProviderId) ?? prev.llm.providerId,
                     baseUrl: llm.baseUrl || prev.llm.baseUrl,
                     model: llm.model || prev.llm.model,
                     temperature: llm.temperature ?? prev.llm.temperature,
@@ -215,7 +220,7 @@ export function useSettings(backendReady: boolean) {
         const changed =
             !prev ||
             prev.apiKey !== llm.apiKey ||
-            prev.providerType !== llm.providerType ||
+            prev.providerId !== llm.providerId ||
             prev.baseUrl !== llm.baseUrl ||
             prev.model !== llm.model ||
             prev.temperature !== llm.temperature ||
@@ -232,7 +237,7 @@ export function useSettings(backendReady: boolean) {
 
         const persisted = await updateRuntimeLlmSettings({
             apiKey: llm.apiKey,
-            providerType: llm.providerType,
+            providerId: llm.providerId,
             baseUrl: llm.baseUrl,
             model: llm.model,
             temperature: llm.temperature,
@@ -245,7 +250,7 @@ export function useSettings(backendReady: boolean) {
 
         const next = {
             ...llm,
-            providerType: persisted.providerType,
+            providerId: persisted.providerId as LlmProviderId,
             apiKey: persisted.apiKey,
             baseUrl: persisted.baseUrl,
             model: persisted.model,

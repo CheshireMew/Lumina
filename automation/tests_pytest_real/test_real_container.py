@@ -66,6 +66,24 @@ def test_service_container_uninitialized_error():
     # Verify error message is helpful
     assert "not initialized" in str(exc_info.value).lower()
 
+    with pytest.raises(ServiceNotInitializedError):
+        container.get_soul()
+
+    with pytest.raises(ServiceNotInitializedError):
+        container.get_session_manager()
+
+    with pytest.raises(ServiceNotInitializedError):
+        container.get_process_manager()
+
+    with pytest.raises(ServiceNotInitializedError):
+        container.get_capability_package_registry()
+
+    with pytest.raises(ServiceNotInitializedError):
+        container.get_capability_registry()
+
+    with pytest.raises(ServiceNotInitializedError):
+        container.get_capability_module_manager()
+
 
 # ============================================================================
 # Test 3: Service Container Thread Safety (REAL TEST)
@@ -296,6 +314,24 @@ def test_service_container_explicit_gateway_access():
     via_getter = container.get_gateway()
 
     assert via_getter is gateway_service
+
+
+def test_service_container_companion_services_are_explicit():
+    container = ServiceContainer()
+
+    context_resolver = MagicMock(name="companion_context_resolver")
+    interaction_recorder = MagicMock(name="companion_interaction_recorder")
+    soul = MagicMock(name="soul")
+    session_manager = MagicMock(name="session_manager")
+    container.set_companion_context_resolver(context_resolver)
+    container.set_companion_interaction_recorder(interaction_recorder)
+    container.set_soul(soul)
+    container.set_session_manager(session_manager)
+
+    assert container.get_companion_context_resolver() is context_resolver
+    assert container.get_companion_interaction_recorder() is interaction_recorder
+    assert container.get_soul() is soul
+    assert container.get_session_manager() is session_manager
 
 
 # ============================================================================

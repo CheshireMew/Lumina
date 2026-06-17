@@ -1,7 +1,7 @@
 import { API_CONFIG } from "../config";
 
 export interface RuntimeLlmSettingsDto {
-    providerType: "free" | "custom";
+    providerId: string;
     apiKey: string;
     baseUrl: string;
     model: string;

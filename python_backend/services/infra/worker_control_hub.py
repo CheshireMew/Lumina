@@ -34,7 +34,7 @@ class WorkerConnection:
         self.last_heartbeat = time.time()
         self.load = 0.0
         self.status = "healthy"
-        self.plugins: List[Dict[str, Any]] = []
+        self.providers: List[Dict[str, Any]] = []
 
 
 class WorkerControlHub:
@@ -203,18 +203,8 @@ class WorkerControlHub:
             worker.last_heartbeat = time.time()
             worker.load = payload.load
             worker.status = payload.status
-            worker.plugins = [p.model_dump() if hasattr(p, 'model_dump') else p for p in payload.plugins]
-            logger.debug(f"📊 Status from {worker_id}: {len(payload.plugins)} plugins")
-
-            # Notify PluginStateAggregator via EventBus
-            try:
-                from core.events.bus import bus as _event_bus
-                await _event_bus.emit("plugin.state.worker", {
-                    "worker_id": worker_id,
-                    "plugins": worker.plugins
-                })
-            except Exception as e:
-                logger.debug(f"Failed to emit plugin.state.worker: {e}")
+            worker.providers = [p.model_dump() if hasattr(p, 'model_dump') else p for p in payload.providers]
+            logger.debug(f"📊 Status from {worker_id}: {len(payload.providers)} providers")
 
             # Update metrics
             if update_worker_status:
@@ -326,13 +316,6 @@ class WorkerControlHub:
         while True:
             await asyncio.sleep(30)
 
-            # Prune stale plugin state cache
-            try:
-                from services.plugin_state_aggregator import get_plugin_state_aggregator
-                await get_plugin_state_aggregator().prune_stale(max_age_seconds=300)
-            except Exception:
-                pass
-
             now = time.time()
             stale = [
                 wid for wid, w in self._workers.items()
@@ -345,12 +328,6 @@ class WorkerControlHub:
                 except Exception as e:
                     logger.debug(f"Error closing stale websocket for {wid}: {e}")
                 del self._workers[wid]
-                # Notify PluginStateAggregator so it marks plugins as offline
-                try:
-                    from core.events.bus import bus as _event_bus
-                    await _event_bus.emit("worker.offline", {"worker_id": wid})
-                except Exception:
-                    pass
     
     async def shutdown(self):
         """Gracefully shut down all connections."""

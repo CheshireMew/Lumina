@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 class ToolProvider(ABC):
     """
-    Interface for plugins that provide tools to the LLM.
+    Interface for providers that expose tools to the LLM.
     """
     
     @property

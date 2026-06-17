@@ -63,9 +63,9 @@ class LuminaUser(HttpUser):
     def send_chat_message(self):
         """Send a chat message (most common operation)"""
         response = self.client.post(
-            "/api/chat",
+            "/companion/message",
             json={
-                "user_input": "Hello, this is a test message",
+                "text": "Hello, this is a test message",
                 "user_id": self.user_id,
                 "character_id": "hiyori"
             }
@@ -79,7 +79,7 @@ class LuminaUser(HttpUser):
     @task(1)
     def get_character_info(self):
         """Get character information"""
-        self.client.get(f"/api/characters/hiyori")
+        self.client.get("/character/config")
 
     @task(1)
     def check_health(self):
@@ -95,9 +95,9 @@ class StressTestUser(HttpUser):
         """Send very long messages"""
         long_content = "Test message " * 100  # ~1200 characters
         self.client.post(
-            "/api/chat",
+            "/companion/message",
             json={
-                "user_input": long_content,
+                "text": long_content,
                 "user_id": "stress_test_user",
                 "character_id": "hiyori"
             }
@@ -108,9 +108,9 @@ class StressTestUser(HttpUser):
         """Send rapid successive requests"""
         for _ in range(5):
             self.client.post(
-                "/api/chat",
+                "/companion/message",
                 json={
-                    "user_input": "Quick test",
+                    "text": "Quick test",
                     "user_id": "rapid_user",
                     "character_id": "hiyori"
                 }
@@ -126,9 +126,9 @@ class SpikeTestUser(HttpUser):
     def send_message(self):
         """Send messages with minimal wait time"""
         self.client.post(
-            "/api/chat",
+            "/companion/message",
             json={
-                "user_input": "Spike test message",
+                "text": "Spike test message",
                 "user_id": "spike_user",
                 "character_id": "hiyori"
             }
@@ -160,9 +160,9 @@ class LoadTestRunner:
                 while time.time() - start_time < duration_seconds:
                     try:
                         response = await client.post(
-                            f"{self.base_url}/api/chat",
+                            f"{self.base_url}/companion/message",
                             json={
-                                "user_input": f"Load test message {requests_made}",
+                                "text": f"Load test message {requests_made}",
                                 "user_id": f"load_user_{user_id}",
                                 "character_id": "hiyori"
                             },
@@ -240,7 +240,7 @@ def test_memory_service_under_load():
             tasks = []
             for i in range(50):
                 task = client.post(
-                    "http://127.0.0.1:8010/api/memory/search",
+                    "http://127.0.0.1:8010/memory/search",
                     json={"query": f"test {i}", "limit": 10},
                     timeout=10.0
                 )
@@ -276,9 +276,9 @@ def test_burst_traffic():
             tasks = []
             for i in range(100):
                 task = client.post(
-                    "http://127.0.0.1:8010/api/chat",
+                    "http://127.0.0.1:8010/companion/message",
                     json={
-                        "user_input": f"Burst message {i}",
+                        "text": f"Burst message {i}",
                         "user_id": "burst_user",
                         "character_id": "hiyori"
                     },
