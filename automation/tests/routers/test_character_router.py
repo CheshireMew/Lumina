@@ -13,7 +13,7 @@ from schemas.character import CharacterConfig
 
 class MissingCharacterService:
     def load_config(self):
-        raise FileNotFoundError("missing configured character")
+        raise FileNotFoundError("missing active companion")
 
 
 class FakeCharacterService:
@@ -22,7 +22,7 @@ class FakeCharacterService:
 
 
 @pytest.mark.anyio
-async def test_get_character_config_returns_configured_character():
+async def test_get_character_config_returns_active_companion():
     config = await get_character_config(character_service=FakeCharacterService())
 
     assert config.id == "sakura"
@@ -34,4 +34,4 @@ async def test_get_character_config_does_not_fallback_to_hiyori():
         await get_character_config(character_service=MissingCharacterService())
 
     assert exc_info.value.status_code == 404
-    assert "missing configured character" in exc_info.value.detail
+    assert "missing active companion" in exc_info.value.detail

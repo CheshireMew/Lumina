@@ -3,7 +3,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from routers.deps import get_character_service, get_optional_system_plugin_manager
+from routers.deps import get_character_service
 from schemas.character import CharacterConfig
 
 logger = logging.getLogger("CharacterRouter")
@@ -42,11 +42,10 @@ async def update_character_config(
 @router.get("/models")
 async def list_models(
     character_service=Depends(get_character_service),
-    system_plugin_manager=Depends(get_optional_system_plugin_manager),
 ):
     """List available avatar models."""
     try:
-        return {"models": character_service.list_live2d_models(system_plugin_manager)}
+        return {"models": character_service.list_live2d_models()}
     except Exception as e:
         logger.error(f"[API] Error listing models: {e}")
         return {"models": []}

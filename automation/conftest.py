@@ -193,7 +193,7 @@ def sample_memory_data():
 def sample_plugin_manifest():
     """Sample plugin manifest YAML content"""
     return """
-id: test.plugin
+id: test.module
 name: Test Plugin
 version: 1.0.0
 description: A test plugin for testing
@@ -201,7 +201,7 @@ author: Test Author
 permissions:
   - event.subscribe
   - event.emit
-entry_point: plugin.py
+entry_point: module.py
 """
 
 
@@ -214,8 +214,8 @@ def temp_plugin_dir(sample_plugin_manifest):
             f.write(sample_plugin_manifest)
 
         # Create entry point
-        plugin_file = Path(tmpdir) / "plugin.py"
-        plugin_file.write_text("# Test plugin\n")
+        module_file = Path(tmpdir) / "module.py"
+        module_file.write_text("# Test capability module\n")
 
         yield tmpdir
 

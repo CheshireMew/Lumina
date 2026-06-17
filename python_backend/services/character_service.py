@@ -15,20 +15,22 @@ class CharacterService:
 
     def __init__(
         self,
+        *,
+        soul_service: Any,
         characters_root: Path | None = None,
         package_registry: Any | None = None,
-        system_config: Any | None = None,
     ):
+        if soul_service is None:
+            raise ValueError("CharacterService requires SoulService")
+
         self.characters_root = characters_root or (BASE_DIR / "characters")
         self.package_registry = package_registry
-        self.system_config = system_config
+        self.soul_service = soul_service
 
     def _active_character_id(self) -> str:
-        if self.system_config is None:
-            raise ValueError("CharacterService requires system_config")
-        character_id = str(self.system_config.memory.character_id or "").strip()
+        character_id = str(self.soul_service.get_active_character_id() or "").strip()
         if not character_id:
-            raise ValueError("memory.character_id must be configured")
+            raise ValueError("Active companion character_id is not configured")
         return character_id
 
     def _character_dir(self) -> Path:
@@ -88,8 +90,7 @@ class CharacterService:
         self._write_storage_config(config_path, payload)
         return normalized
 
-    def list_live2d_models(self, system_plugin_manager: Any = None) -> list[dict[str, Any]]:
-        _ = system_plugin_manager
+    def list_live2d_models(self) -> list[dict[str, Any]]:
         models: list[dict[str, Any]] = []
         models.extend(self._scan_live2d_models())
         return sorted(models, key=lambda item: item["name"])

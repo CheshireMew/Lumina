@@ -11,7 +11,7 @@ import { events } from './core/events';
 import { API_CONFIG, updateApiConfig } from './config';
 import { ttsService } from '@core/voice/tts_service'
 import { GeneralSettingsInput } from './hooks/useSettings';
-import type { ProviderType } from './components/LLMConfig/types';
+import { CUSTOM_LLM_PROVIDER_ID, LlmProviderId } from './components/LLMConfig/types';
 
 // Core Hooks
 import { useCoreSystem } from './hooks/useCoreSystem';
@@ -74,8 +74,8 @@ function App() {
         interrupt();
     }, [interrupt]);
 
-    const handleLLMSettingsChange = useCallback((apiKey: string, baseUrl: string, model: string, temperature: number, thinkingEnabled: boolean, historyLimit: number, overflowStrategy: 'slide' | 'reset', topP?: number, presencePenalty?: number, frequencyPenalty?: number, providerType: ProviderType = 'custom') => {
-        updateLLMSettings({ providerType, apiKey, baseUrl, model, temperature, thinkingEnabled, historyLimit, overflowStrategy, topP, presencePenalty, frequencyPenalty });
+    const handleLLMSettingsChange = useCallback((apiKey: string, baseUrl: string, model: string, temperature: number, thinkingEnabled: boolean, historyLimit: number, overflowStrategy: 'slide' | 'reset', topP?: number, presencePenalty?: number, frequencyPenalty?: number, providerId: LlmProviderId = CUSTOM_LLM_PROVIDER_ID) => {
+        updateLLMSettings({ providerId, apiKey, baseUrl, model, temperature, thinkingEnabled, historyLimit, overflowStrategy, topP, presencePenalty, frequencyPenalty });
     }, [updateLLMSettings]);
 
     const handleSaveGeneralSettings = useCallback(async (next: GeneralSettingsInput) => {
@@ -306,7 +306,7 @@ function App() {
                             onClose: () => setIsLLMConfigOpen(false),
                             currentSettings: {
                                 apiKey: settings.llm.apiKey,
-                                providerType: settings.llm.providerType,
+                                providerId: settings.llm.providerId,
                                 apiBaseUrl: settings.llm.baseUrl,
                                 modelName: settings.llm.model,
                                 temperature: settings.llm.temperature,

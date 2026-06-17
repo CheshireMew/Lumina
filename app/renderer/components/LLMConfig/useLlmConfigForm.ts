@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
 import {
     getDefaultModelForProvider,
-    getProviderTypeFromBaseUrl,
     identifyPresetProvider,
-    normalizeBaseUrlForSave,
     normalizeModelForSave,
     normalizeOverflowStrategy,
     PRESET_PROVIDERS,
 } from "./providerPresets";
 import {
+    FREE_LLM_PROVIDER_ID,
     LlmConfigFormState,
     LlmSettings,
     LlmSettingsChangeHandler,
@@ -22,7 +21,7 @@ interface UseLlmConfigFormArgs {
 }
 
 const initialFormState: LlmConfigFormState = {
-    providerType: "free",
+    providerId: FREE_LLM_PROVIDER_ID,
     selectedPlatform: "custom",
     apiKey: "",
     baseUrl: "",
@@ -49,14 +48,12 @@ export const useLlmConfigForm = ({
             return;
         }
 
-        const providerType =
-            currentLlmSettings.providerType ??
-            getProviderTypeFromBaseUrl(currentLlmSettings.apiBaseUrl);
+        const providerId = currentLlmSettings.providerId ?? FREE_LLM_PROVIDER_ID;
 
         setForm({
-            providerType,
+            providerId,
             selectedPlatform:
-                providerType === "free"
+                providerId === FREE_LLM_PROVIDER_ID
                     ? "custom"
                     : identifyPresetProvider(currentLlmSettings.apiBaseUrl),
             apiKey: currentLlmSettings.apiKey,
@@ -117,18 +114,14 @@ export const useLlmConfigForm = ({
     };
 
     const save = () => {
-        const finalBaseUrl = normalizeBaseUrlForSave(
-            form.providerType,
-            form.baseUrl,
-        );
         const finalModel = normalizeModelForSave(
-            form.providerType,
+            form.providerId,
             form.modelName,
         );
 
         onSettingsChange(
             form.apiKey,
-            finalBaseUrl,
+            form.baseUrl,
             finalModel,
             form.temperature,
             form.thinkingEnabled,
@@ -137,7 +130,7 @@ export const useLlmConfigForm = ({
             form.topP,
             form.presencePenalty,
             form.frequencyPenalty,
-            form.providerType,
+            form.providerId,
         );
         onClose();
     };

@@ -1,4 +1,3 @@
-import datetime as dt
 import logging
 from typing import Any
 
@@ -13,16 +12,16 @@ class VoiceprintStoreUnavailable(RuntimeError):
     pass
 
 
-async def _get_db():
+async def _get_pool():
     bus = get_lifecycle_bus()
-    db = await bus.get_pool()
-    if db is None:
-        raise VoiceprintStoreUnavailable("Voiceprint database is unavailable")
-    return db
+    try:
+        return await bus.get_pool()
+    except Exception as exc:
+        raise VoiceprintStoreUnavailable("Voiceprint database is unavailable") from exc
 
 
-async def _ensure_postgres_table(db):
-    async with db.acquire() as conn:
+async def _ensure_postgres_table(pool):
+    async with pool.acquire() as conn:
         await conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {TABLE} (
@@ -38,14 +37,10 @@ async def _ensure_postgres_table(db):
 
 
 async def list_profiles() -> list[dict[str, Any]]:
-    db = await _get_db()
+    pool = await _get_pool()
 
-    if hasattr(db, "select"):
-        results = await db.select(TABLE)
-        return results if isinstance(results, list) else []
-
-    await _ensure_postgres_table(db)
-    async with db.acquire() as conn:
+    await _ensure_postgres_table(pool)
+    async with pool.acquire() as conn:
         rows = await conn.fetch(
             f"""
             SELECT id, name, enabled, embedding, created_at, updated_at
@@ -57,19 +52,10 @@ async def list_profiles() -> list[dict[str, Any]]:
 
 
 async def set_profile_enabled(name: str, enabled: bool):
-    db = await _get_db()
+    pool = await _get_pool()
 
-    if hasattr(db, "query"):
-        record_id = f"{TABLE}:{name}"
-        now = dt.datetime.now(dt.timezone.utc).isoformat()
-        await db.query(
-            f"UPDATE {record_id} SET enabled = $enabled, updated_at = $now",
-            {"enabled": enabled, "now": now},
-        )
-        return
-
-    await _ensure_postgres_table(db)
-    async with db.acquire() as conn:
+    await _ensure_postgres_table(pool)
+    async with pool.acquire() as conn:
         await conn.execute(
             f"""
             UPDATE {TABLE}
@@ -82,36 +68,18 @@ async def set_profile_enabled(name: str, enabled: bool):
 
 
 async def delete_profile(name: str):
-    db = await _get_db()
+    pool = await _get_pool()
 
-    if hasattr(db, "delete") and hasattr(db, "query"):
-        await db.delete(f"{TABLE}:{name}")
-        return
-
-    await _ensure_postgres_table(db)
-    async with db.acquire() as conn:
+    await _ensure_postgres_table(pool)
+    async with pool.acquire() as conn:
         await conn.execute(f"DELETE FROM {TABLE} WHERE name = $1", name)
 
 
 async def upsert_profile(name: str, embedding_b64: str, enabled: bool = True):
-    db = await _get_db()
+    pool = await _get_pool()
 
-    if hasattr(db, "query"):
-        record_id = f"{TABLE}:{name}"
-        now = dt.datetime.now(dt.timezone.utc).isoformat()
-        data = {
-            "id": record_id,
-            "name": name,
-            "enabled": enabled,
-            "embedding": embedding_b64,
-            "created_at": now,
-            "updated_at": now,
-        }
-        await db.query(f"UPDATE {record_id} MERGE $data", {"data": data})
-        return
-
-    await _ensure_postgres_table(db)
-    async with db.acquire() as conn:
+    await _ensure_postgres_table(pool)
+    async with pool.acquire() as conn:
         await conn.execute(
             f"""
             INSERT INTO {TABLE} (id, name, enabled, embedding, created_at, updated_at)

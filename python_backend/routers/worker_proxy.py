@@ -12,25 +12,24 @@ logger = logging.getLogger("WorkerProxy")
 
 def get_worker_control_url(capability: str, container) -> str:
     package_registry = container.get_capability_package_registry()
-    if package_registry:
-        definition = package_registry.package_for_capability(capability)
-        if definition:
-            snapshot = package_registry.resolve(definition.id)
-            if not snapshot or snapshot.status != "ready":
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "code": "capability_package_unavailable",
-                        "capability": capability,
-                        "packageId": definition.id,
-                        "displayName": definition.display_name,
-                        "status": snapshot.status if snapshot else "unavailable",
-                    },
-                )
+    definition = package_registry.package_for_capability(capability)
+    if definition:
+        snapshot = package_registry.resolve(definition.id)
+        if not snapshot or snapshot.status != "ready":
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "capability_package_unavailable",
+                    "capability": capability,
+                    "packageId": definition.id,
+                    "displayName": definition.display_name,
+                    "status": snapshot.status if snapshot else "unavailable",
+                },
+            )
 
     runtime_target = runtime_target_for_capability(capability)
     process_manager = container.get_process_manager()
-    if process_manager and not process_manager.is_running(runtime_target):
+    if not process_manager.is_running(runtime_target):
         started = process_manager.start_worker(runtime_target)
         if not started:
             raise HTTPException(

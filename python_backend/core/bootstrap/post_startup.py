@@ -27,9 +27,9 @@ class PrewarmBootstrapper(Bootstrapper):
         try:
             await asyncio.sleep(4)
             warm_targets = []
-            registry = getattr(process_manager, "capability_package_registry", None)
+            registry = process_manager.capability_package_registry
             for capability in ("tts", "stt"):
-                if registry and not registry.should_auto_start(capability):
+                if not registry.should_auto_start(capability):
                     continue
                 warm_targets.append(
                     asyncio.to_thread(
@@ -48,48 +48,18 @@ class PrewarmBootstrapper(Bootstrapper):
             logger.warning(f"Pre-warm task failed: {e}")
     
     async def bootstrap(self, container: Any):
-        try:
-            from app_config import config
-            
-            if not config.plugins.prewarm_core:
-                logger.debug("Prewarm disabled in config")
-                return
-            
-            pm = container.get_process_manager()
-            if not pm:
-                logger.debug("Prewarm skipped: No ProcessManager")
-                return
-            
-            logger.info("🔥 Scheduling Core Service Prewarm (TTS/STT)...")
-            container.set_prewarm_task(asyncio.create_task(
-                self._prewarm_workers(pm)
-            ))
-            
-        except Exception as e:
-            logger.warning(f"Pre-warm failed: {e}")
+        config = container.get_config()
 
+        if not config.capabilities.prewarm_core:
+            logger.debug("Prewarm disabled in config")
+            return
 
-class ReconciliationBootstrapper(Bootstrapper):
-    """
-    Start Reconciliation Service for state consistency.
-    Ensures Worker and Main Process states remain synchronized.
-    """
-    
-    @property
-    def name(self) -> str:
-        return "ReconciliationService"
-    
-    async def bootstrap(self, container: Any):
-        try:
-            from services.utilities.reconciliation import ReconciliationService
-            
-            reconciler = ReconciliationService(container)
-            container.set_reconciliation_service(reconciler)
-            reconciler.start()
-            logger.info("⚖️ Reconciliation Service Started")
-            
-        except Exception as e:
-            logger.error(f"Failed to start ReconciliationService: {e}")
+        pm = container.get_process_manager()
+
+        logger.info("🔥 Scheduling Core Service Prewarm (TTS/STT)...")
+        container.set_prewarm_task(asyncio.create_task(
+            self._prewarm_workers(pm)
+        ))
 
 
 class ConfigWatcherBootstrapper(Bootstrapper):
@@ -106,29 +76,25 @@ class ConfigWatcherBootstrapper(Bootstrapper):
         return "ConfigWatcher"
     
     async def bootstrap(self, container: Any):
-        try:
-            from services.infra.config_watcher import ConfigWatcherService
-            
-            watcher = ConfigWatcherService()
-            container.set_config_watcher(watcher)
-            
-            # Register callback for physical config changes
-            async def on_config_physical_change():
-                logger.info("📢 [Watcher] Physical config change detected")
-                # WebSocket broadcast is handled inside ConfigWatcherService
-            
-            watcher.on_change(on_config_physical_change)
-            
-            # Start background loop
-            if self._app:
-                self._app.state.config_watcher_task = asyncio.create_task(watcher.start())
-            else:
-                asyncio.create_task(watcher.start())
-            
-            logger.info("👀 ConfigWatcher Started")
-            
-        except Exception as e:
-            logger.error(f"Failed to start ConfigWatcher: {e}")
+        from services.infra.config_watcher import ConfigWatcherService
+
+        watcher = ConfigWatcherService()
+        container.set_config_watcher(watcher)
+
+        # Register callback for physical config changes
+        async def on_config_physical_change():
+            logger.info("📢 [Watcher] Physical config change detected")
+            # WebSocket broadcast is handled inside ConfigWatcherService
+
+        watcher.on_change(on_config_physical_change)
+
+        # Start background loop
+        if self._app:
+            self._app.state.config_watcher_task = asyncio.create_task(watcher.start())
+        else:
+            asyncio.create_task(watcher.start())
+
+        logger.info("👀 ConfigWatcher Started")
 
 
 class WorkerControlHubBootstrapper(Bootstrapper):
@@ -142,26 +108,12 @@ class WorkerControlHubBootstrapper(Bootstrapper):
         return "WorkerControlHub"
     
     async def bootstrap(self, container: Any):
-        try:
-            from services.infra.worker_control_hub import get_worker_control_hub
-            
-            hub = get_worker_control_hub()
-            hub.start_cleanup_task()
+        from services.infra.worker_control_hub import get_worker_control_hub
 
-            # Initialize PluginStateAggregator (unified state view for frontend)
-            from services.plugin_state_aggregator import init_plugin_state_aggregator
-            aggregator = await init_plugin_state_aggregator(container.get_event_bus())
-            container.set_plugin_state_aggregator(aggregator)
+        hub = get_worker_control_hub()
+        hub.start_cleanup_task()
 
-            # Seed with existing local plugin states (SystemPlugins loaded at Level 3)
-            spm = container.get_system_plugin_manager()
-            if spm:
-                await aggregator.bulk_update(spm.list_plugins(), source="local")
-
-            logger.info("🎛️ WorkerControlHub Ready")
-            
-        except Exception as e:
-            logger.warning(f"WorkerControlHub init failed: {e}")
+        logger.info("🎛️ WorkerControlHub Ready")
 
 
 class ProcessSupervisorBootstrapper(Bootstrapper):
@@ -174,16 +126,9 @@ class ProcessSupervisorBootstrapper(Bootstrapper):
         return "ProcessSupervisor"
     
     async def bootstrap(self, container: Any):
-        try:
-            pm = container.get_process_manager()
-            if pm:
-                await pm.start_supervisor()
-                logger.info("🛡️ Process Supervisor Auto-Healing Enabled")
-            else:
-                logger.warning("Process Supervisor skipped: No PM")
-                
-        except Exception as e:
-            logger.error(f"Failed to start Process Supervisor: {e}")
+        pm = container.get_process_manager()
+        await pm.start_supervisor()
+        logger.info("🛡️ Process Supervisor Auto-Healing Enabled")
 
 
 class AutomationBootstrapper(Bootstrapper):
@@ -195,17 +140,8 @@ class AutomationBootstrapper(Bootstrapper):
     def name(self) -> str: return "AutomationService"
 
     async def bootstrap(self, container: Any):
-        try:
-            from services.automation.service import AutomationService
-            
-            # Instantiate
-            auto_service = AutomationService(container)
-            
-            # Register in container
-            container.set_automation_service(auto_service)
-            
-            # Start
-            auto_service.start()
-            
-        except Exception as e:
-            logger.error(f"Failed to start Automation Service: {e}")
+        from services.automation.service import AutomationService
+
+        auto_service = AutomationService(container)
+        container.set_automation_service(auto_service)
+        auto_service.start()

@@ -12,7 +12,7 @@ from config.models import DEFAULT_SELECTED_PROVIDERS
 def test_default_config_materializes_selected_providers():
     bundle = ConfigBundle()
 
-    assert bundle.plugins.selected_providers == DEFAULT_SELECTED_PROVIDERS
+    assert bundle.capabilities.selected_providers == DEFAULT_SELECTED_PROVIDERS
 
 
 def test_legacy_provider_fields_do_not_drive_selected_providers():
@@ -26,13 +26,13 @@ def test_legacy_provider_fields_do_not_drive_selected_providers():
         logging.getLogger("test"),
     )
 
-    assert bundle.plugins.selected_providers == DEFAULT_SELECTED_PROVIDERS
+    assert bundle.capabilities.selected_providers == DEFAULT_SELECTED_PROVIDERS
 
 
-def test_plugin_settings_use_plugin_ids():
+def test_provider_settings_use_provider_ids():
     bundle = hydrate_config(
         {
-            "plugins": {
+            "capabilities": {
                 "settings": {
                     "driver.tool.search.brave": {"api_key": "test-key"},
                 },
@@ -41,15 +41,32 @@ def test_plugin_settings_use_plugin_ids():
         logging.getLogger("test"),
     )
 
-    assert bundle.plugins.settings == {
+    assert bundle.capabilities.settings == {
         "driver.tool.search.brave": {"api_key": "test-key"},
     }
 
 
-def test_explicit_selected_providers_are_not_backfilled():
+def test_legacy_llm_fields_do_not_drive_runtime_routes_or_providers():
     bundle = hydrate_config(
-        {"plugins": {"selected_providers": {}}},
+        {
+            "llm": {
+                "model": "legacy-model",
+                "base_url": "https://legacy.invalid/v1",
+                "api_key": "legacy-key",
+            },
+        },
         logging.getLogger("test"),
     )
 
-    assert bundle.plugins.selected_providers == {}
+    assert bundle.llm.routes["chat"].model == "gpt-4o-mini"
+    assert bundle.llm.providers["custom_provider"].base_url == "http://localhost:11434/v1"
+    assert bundle.llm.providers["custom_provider"].api_key == ""
+
+
+def test_explicit_selected_providers_are_not_backfilled():
+    bundle = hydrate_config(
+        {"capabilities": {"selected_providers": {}}},
+        logging.getLogger("test"),
+    )
+
+    assert bundle.capabilities.selected_providers == {}

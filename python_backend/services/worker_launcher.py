@@ -25,12 +25,12 @@ def stream_worker_output(stream, prefix: str) -> None:
 
 
 class WorkerLauncher:
-    def __init__(self, base_dir: Optional[Path] = None):
-        self.base_dir = base_dir or Path(__file__).parent.parent
-        self.capability_package_registry = None
+    def __init__(self, capability_package_registry, base_dir: Optional[Path] = None):
+        if capability_package_registry is None:
+            raise ValueError("WorkerLauncher requires CapabilityPackageRegistry")
 
-    def set_capability_package_registry(self, registry) -> None:
-        self.capability_package_registry = registry
+        self.base_dir = base_dir or Path(__file__).parent.parent
+        self.capability_package_registry = capability_package_registry
 
     def build_launch_config(
         self,
@@ -98,7 +98,7 @@ class WorkerLauncher:
         }
 
     def _apply_package_environment(self, worker_id: str, env: Dict[str, str]) -> None:
-        if not self.capability_package_registry or not worker_id.startswith("worker:"):
+        if not worker_id.startswith("worker:"):
             return
 
         capability = worker_id.split(":", 1)[1]
@@ -123,11 +123,15 @@ class WorkerLauncher:
             package_roots.append(voiceprint.root_dir)
             env["LUMINA_VOICEPRINT_PACKAGE_DIR"] = str(voiceprint.root_dir)
 
-        plugin_roots = [str(root / "plugins") for root in package_roots if (root / "plugins").exists()]
-        if plugin_roots:
-            existing_plugin_roots = env.get("LUMINA_PLUGIN_ROOTS")
-            env["LUMINA_PLUGIN_ROOTS"] = os.pathsep.join(
-                [*plugin_roots, *([existing_plugin_roots] if existing_plugin_roots else [])]
+        module_roots = [
+            str(root / "capability_modules")
+            for root in package_roots
+            if (root / "capability_modules").exists()
+        ]
+        if module_roots:
+            existing_module_roots = env.get("LUMINA_CAPABILITY_MODULE_ROOTS")
+            env["LUMINA_CAPABILITY_MODULE_ROOTS"] = os.pathsep.join(
+                [*module_roots, *([existing_module_roots] if existing_module_roots else [])]
             )
             existing_pythonpath = env.get("PYTHONPATH")
             env["PYTHONPATH"] = os.pathsep.join(

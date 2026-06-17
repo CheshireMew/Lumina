@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from core.interfaces.repository import ISessionRepository
+from services.companion.identity import DEFAULT_USER_ID
 
 logger = logging.getLogger("FileSessionRepository")
 
@@ -15,7 +16,7 @@ class FileSessionRepository(ISessionRepository):
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _session_key(self, user_id: str, char_id: str) -> str:
-        safe_user = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(user_id)) or "default_user"
+        safe_user = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(user_id)) or DEFAULT_USER_ID
         safe_char = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(char_id))
         if not safe_char:
             raise ValueError("char_id must be non-empty")

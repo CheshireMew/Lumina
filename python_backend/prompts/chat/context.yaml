@@ -1,6 +1,6 @@
 # Default Context Template
 # Used for injecting generic system context variables
 system_time: "{{ now_str }}"
-bot_name: "{{ char_name }}"
+bot_name: "{{ companion_name }}"
 user_name: "{{ user_name }}"
 location: "Desktop Device"

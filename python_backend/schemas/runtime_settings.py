@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 
 class RuntimeLlmSettings(BaseModel):
-    providerType: Literal["free", "custom"] = "custom"
+    providerId: str = "custom_provider"
     apiKey: str = ""
     baseUrl: str = ""
     model: str

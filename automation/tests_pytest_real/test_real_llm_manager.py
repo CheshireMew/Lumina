@@ -1,8 +1,7 @@
-from pathlib import Path
-import json
-
 import pytest
 
+from config.loader import ConfigBundle
+from config.models import LLMConfig, LLMFeatureRoute, LLMProviderConfig
 from core.interfaces.driver import BaseLLMDriver
 from llm.manager import LLMManager
 
@@ -45,12 +44,18 @@ class FakeLLMDriver(BaseLLMDriver):
         return list(self.config.get("models", []))
 
 
-@pytest.fixture
-def llm_manager(tmp_path: Path, monkeypatch):
-    import app_config
+class ConfigStub:
+    def __init__(self, llm: LLMConfig | None = None):
+        self.llm = llm or ConfigBundle().llm
+        self.saved = 0
 
-    monkeypatch.setattr(app_config, "CONFIG_ROOT", tmp_path)
-    manager = LLMManager()
+    def save(self):
+        self.saved += 1
+
+
+@pytest.fixture
+def llm_manager():
+    manager = LLMManager(ConfigStub())
     manager.register_driver_type(
         "pollinations",
         lambda provider_id: FakeLLMDriver(provider_id),
@@ -62,6 +67,11 @@ def llm_manager(tmp_path: Path, monkeypatch):
         {"display_name": "Fake Provider"},
     )
     return manager
+
+
+def test_llm_manager_requires_explicit_app_settings():
+    with pytest.raises(ValueError, match="requires app settings"):
+        LLMManager(None)
 
 
 def test_llm_manager_creates_default_routes(llm_manager: LLMManager):
@@ -79,39 +89,63 @@ def test_driver_type_registration_controls_provider_loading(llm_manager: LLMMana
     assert {"type": "pollinations", "display_name": "Fake Pollinations"} in driver_types
 
 
-def test_llm_manager_does_not_backfill_missing_routes(tmp_path: Path, monkeypatch):
-    import app_config
-
-    monkeypatch.setattr(app_config, "CONFIG_ROOT", tmp_path)
-    (tmp_path / "llm_registry.json").write_text(
-        json.dumps(
-            {
-                "providers": {
-                    "free_tier": {
-                        "id": "free_tier",
-                        "type": "pollinations",
-                        "api_key": "none",
-                        "models": ["gpt-4o-mini"],
-                        "enabled": True,
-                    }
-                },
-                "routes": {
-                    "chat": {
-                        "feature": "chat",
-                        "provider_id": "free_tier",
-                        "model": "gpt-4o-mini",
-                    }
-                },
-            }
-        ),
-        encoding="utf-8",
+def test_llm_manager_does_not_backfill_missing_routes():
+    settings = ConfigStub(
+        LLMConfig(
+            providers={
+                "free_tier": LLMProviderConfig(
+                    id="free_tier",
+                    type="pollinations",
+                    api_key="none",
+                    models=["gpt-4o-mini"],
+                    enabled=True,
+                )
+            },
+            routes={
+                "chat": LLMFeatureRoute(
+                    feature="chat",
+                    provider_id="free_tier",
+                    model="gpt-4o-mini",
+                )
+            },
+        )
     )
 
-    manager = LLMManager()
+    manager = LLMManager(settings)
 
     assert set(manager.config.routes) == {"chat"}
     with pytest.raises(KeyError, match="Unknown LLM route"):
         manager.get_model_name("vision")
+
+
+def test_llm_manager_does_not_resolve_unified_config_env_placeholders(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "env-secret")
+    settings = ConfigStub(
+        LLMConfig(
+            providers={
+                "custom_provider": LLMProviderConfig(
+                    id="custom_provider",
+                    type="openai",
+                    base_url="${OPENAI_BASE_URL}",
+                    api_key="${OPENAI_API_KEY}",
+                    models=["custom-model"],
+                    enabled=True,
+                )
+            },
+            routes={
+                "chat": LLMFeatureRoute(
+                    feature="chat",
+                    provider_id="custom_provider",
+                    model="custom-model",
+                )
+            },
+        )
+    )
+
+    manager = LLMManager(settings)
+
+    assert manager.config.providers["custom_provider"].api_key == "${OPENAI_API_KEY}"
+    assert manager.config.providers["custom_provider"].base_url == "${OPENAI_BASE_URL}"
 
 
 def test_register_route_requires_explicit_provider(llm_manager: LLMManager):

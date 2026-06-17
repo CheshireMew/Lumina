@@ -82,27 +82,27 @@ class MemoryFactory:
         return [MemoryFactory.create() for _ in range(count)]
 
 
-class PluginFactory:
-    """Factory for creating plugin test data"""
+class CapabilityModuleFactory:
+    """Factory for creating capability module test data"""
 
     @staticmethod
     def create_manifest(
-        plugin_id: str = "test.plugin",
+        plugin_id: str = "test.capability",
         version: str = "1.0.0",
         permissions: List[str] = None
     ) -> Dict:
-        """Create a plugin manifest"""
+        """Create a capability manifest"""
         if permissions is None:
             permissions = ["event.subscribe"]
 
         return {
             "id": plugin_id,
-            "name": "Test Plugin",
+            "name": "Test Capability",
             "version": version,
-            "description": "A test plugin",
+            "description": "A test capability module",
             "author": "Test Author",
             "permissions": permissions,
-            "entry_point": "plugin.py",
+            "entry_point": "module.py",
             "min_lumina_version": "0.1.0"
         }
 
@@ -112,7 +112,7 @@ class PluginFactory:
         capability_type: str = "stt",
         name: str = "Test Capability"
     ) -> Dict:
-        """Create a plugin capability"""
+        """Create a runtime capability"""
         return {
             "id": capability_id,
             "type": capability_type,
@@ -202,9 +202,9 @@ def memory_factory():
 
 
 @pytest.fixture
-def plugin_factory():
-    """Provide PluginFactory"""
-    return PluginFactory
+def capability_module_factory():
+    """Provide CapabilityModuleFactory"""
+    return CapabilityModuleFactory
 
 
 @pytest.fixture

@@ -1,9 +1,11 @@
-export type ProviderType = "free" | "custom";
+export const FREE_LLM_PROVIDER_ID = "free_tier";
+export const CUSTOM_LLM_PROVIDER_ID = "custom_provider";
+export type LlmProviderId = typeof FREE_LLM_PROVIDER_ID | typeof CUSTOM_LLM_PROVIDER_ID;
 
 export type OverflowStrategy = "slide" | "reset";
 
 export interface LlmSettings {
-    providerType?: ProviderType;
+    providerId?: LlmProviderId;
     apiKey: string;
     apiBaseUrl: string;
     modelName: string;
@@ -27,11 +29,11 @@ export type LlmSettingsChangeHandler = (
     topP?: number,
     presencePenalty?: number,
     frequencyPenalty?: number,
-    providerType?: ProviderType,
+    providerId?: LlmProviderId,
 ) => void;
 
 export interface LlmConfigFormState {
-    providerType: ProviderType;
+    providerId: LlmProviderId;
     selectedPlatform: string;
     apiKey: string;
     baseUrl: string;

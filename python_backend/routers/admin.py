@@ -19,9 +19,6 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 def _require_memory_system(memory_system):
     if not memory_system:
         raise HTTPException(status_code=503, detail="Memory service unavailable")
-    if not getattr(memory_system, "available", True):
-        detail = getattr(memory_system, "degraded_reason", None) or "Memory backend unavailable"
-        raise HTTPException(status_code=503, detail=detail)
     return memory_system
 
 

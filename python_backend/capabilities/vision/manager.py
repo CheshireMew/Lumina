@@ -3,7 +3,7 @@ import base64
 import logging
 from typing import Callable, Optional
 from core.interfaces.driver import BaseVisionDriver
-from services.managers.driver_loader import DriverPluginLoader
+from services.managers.driver_loader import DriverLoader
 from services.managers.provider_host import ProviderHostManager
 import os
 
@@ -26,17 +26,17 @@ class VisionPluginManager(ProviderHostManager):
         self._mss_tools = MSS_TOOLS
         self.model_name_resolver = model_name_resolver
 
-    async def load_driver_plugins(self):
-        """Load vision drivers from plugins directory."""
+    async def load_drivers(self):
+        """Load vision drivers from capability modules."""
         try:
             # Resolve root (python_backend)
             current_dir = os.path.dirname(os.path.abspath(__file__))
             backend_root = os.path.dirname(os.path.dirname(current_dir))
             
-            drivers_dir = os.path.join(backend_root, "plugins", "drivers", "vision")
+            drivers_dir = os.path.join(backend_root, "capability_modules", "vision", "drivers", "vision")
             if os.path.exists(drivers_dir):
                 logger.info(f"Scanning Built-in Vision Drivers: {drivers_dir}")
-                loaded = DriverPluginLoader.load_plugins(drivers_dir, BaseVisionDriver)
+                loaded = DriverLoader.load_plugins(drivers_dir, BaseVisionDriver)
                 for d in loaded:
                     self.register_driver(d)
                     logger.info(f"Loaded Vision Driver: {d.id}")
@@ -48,11 +48,11 @@ class VisionPluginManager(ProviderHostManager):
 
     async def activate_startup_driver(self):
         target_provider = self.resolve_startup_driver_id()
-        if target_provider and self.config.is_plugin_desired_enabled(target_provider):
+        if target_provider and self.config.is_provider_desired_enabled(target_provider):
             await self.activate(target_provider)
 
     async def register_drivers(self):
-        await self.load_driver_plugins()
+        await self.load_drivers()
         await self.activate_startup_driver()
 
     async def activate(self, driver_id: str):

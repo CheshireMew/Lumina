@@ -57,26 +57,23 @@ class ServiceContainer:
     def get_stt(self) -> "ISTTManager":
         return self._require(self._container.stt, "STTManager")
 
-    def get_plugin_service(self) -> Any:
-        return self._require(self._container.plugin_service, "PluginService")
+    def get_provider_config_service(self) -> Any:
+        return self._require(self._container.provider_config_service, "ProviderConfigService")
 
-    def get_system_plugin_manager(self) -> Any:
-        return self._value("system_plugin_manager")
+    def get_capability_module_manager(self) -> Any:
+        return self._require(self._container.capability_module_manager, "CapabilityModuleManager")
 
     def get_character_service(self) -> Any:
         return self._require(self._container.character_service, "CharacterService")
 
     def get_soul(self) -> Any:
-        return self._value("soul")
+        return self._require(self._container.soul, "SoulService")
 
     def get_mcp_host(self) -> Any:
         return self._value("mcp_host")
 
-    def get_batch_manager(self) -> Any:
-        return self._value("batch_manager")
-
     def get_session_manager(self) -> Any:
-        return self._value("session_manager")
+        return self._require(self._container.session_manager, "SessionManager")
 
     def get_skill_manager(self) -> Any:
         return self._value("skill_manager")
@@ -91,34 +88,43 @@ class ServiceContainer:
         return self._value("chat_pipeline")
 
     def get_capability_registry(self) -> Any:
-        return self._value("capability_registry")
-
-    def get_plugin_state_aggregator(self) -> Any:
-        return self._value("plugin_state_aggregator")
+        return self._require(self._container.capability_registry, "CapabilityRegistry")
 
     def get_automation_service(self) -> Any:
         return self._value("automation_service")
-
-    def get_plugin_sync(self) -> Any:
-        return self._value("plugin_sync")
 
     def get_prewarm_task(self) -> Any:
         return self._value("prewarm_task")
 
     def get_process_manager(self) -> Any:
-        return self._value("process_manager")
+        return self._require(self._container.process_manager, "ProcessManager")
 
     def get_capability_package_registry(self) -> Any:
-        return self._value("capability_package_registry")
-
-    def get_reconciliation_service(self) -> Any:
-        return self._value("reconciliation_service")
+        return self._require(
+            self._container.capability_package_registry,
+            "CapabilityPackageRegistry",
+        )
 
     def get_config_watcher(self) -> Any:
         return self._value("config_watcher")
 
     def get_chat_turn_service(self) -> Any:
         return self._require(self._container.chat_turn_service, "ChatTurnService")
+
+    def get_companion_runtime(self) -> Any:
+        return self._require(self._container.companion_runtime, "CompanionRuntime")
+
+    def get_companion_context_resolver(self) -> Any:
+        return self._require(
+            self._container.companion_context_resolver,
+            "CompanionContextResolver",
+        )
+
+    def get_companion_interaction_recorder(self) -> Any:
+        return self._require(
+            self._container.companion_interaction_recorder,
+            "CompanionInteractionRecorder",
+        )
 
     def set_gateway(self, instance: Any):
         self._override("gateway", instance)
@@ -144,11 +150,11 @@ class ServiceContainer:
     def set_stt(self, instance: Any):
         self._override("stt", instance)
 
-    def set_plugin_service(self, instance: Any):
-        self._override("plugin_service", instance)
+    def set_provider_config_service(self, instance: Any):
+        self._override("provider_config_service", instance)
 
-    def set_system_plugin_manager(self, instance: Any):
-        self._override("system_plugin_manager", instance)
+    def set_capability_module_manager(self, instance: Any):
+        self._override("capability_module_manager", instance)
 
     def set_character_service(self, instance: Any):
         self._override("character_service", instance)
@@ -158,9 +164,6 @@ class ServiceContainer:
 
     def set_mcp_host(self, instance: Any):
         self._override("mcp_host", instance)
-
-    def set_batch_manager(self, instance: Any):
-        self._override("batch_manager", instance)
 
     def set_session_manager(self, instance: Any):
         self._override("session_manager", instance)
@@ -180,12 +183,6 @@ class ServiceContainer:
     def set_capability_registry(self, instance: Any):
         self._override("capability_registry", instance)
 
-    def set_reconciliation_service(self, instance: Any):
-        self._override("reconciliation_service", instance)
-
-    def set_plugin_state_aggregator(self, instance: Any):
-        self._override("plugin_state_aggregator", instance)
-
     def set_config_watcher(self, instance: Any):
         self._override("config_watcher", instance)
 
@@ -195,11 +192,17 @@ class ServiceContainer:
     def set_chat_turn_service(self, instance: Any):
         self._override("chat_turn_service", instance)
 
+    def set_companion_runtime(self, instance: Any):
+        self._override("companion_runtime", instance)
+
+    def set_companion_context_resolver(self, instance: Any):
+        self._override("companion_context_resolver", instance)
+
+    def set_companion_interaction_recorder(self, instance: Any):
+        self._override("companion_interaction_recorder", instance)
+
     def set_automation_service(self, instance: Any):
         self._override("automation_service", instance)
-
-    def set_plugin_sync(self, instance: Any):
-        self._override("plugin_sync", instance)
 
     def set_prewarm_task(self, instance: Any):
         self._override("prewarm_task", instance)

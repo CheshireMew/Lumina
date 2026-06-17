@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from core.interfaces.driver import BaseMemoryDriver
-from services.managers.driver_loader import DriverPluginLoader
+from services.managers.driver_loader import DriverLoader
 
 logger = logging.getLogger("memory.factory")
 
@@ -36,23 +36,22 @@ class MemoryDriverFactory:
             target_provider = provider_id
             
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            base_plugins_dir = os.path.abspath(os.path.join(current_dir, "..", "plugins"))
-            
+            modules_dir = os.path.abspath(os.path.join(current_dir, "..", "capability_modules"))
+
             drivers_dirs = []
-            
-            extensions_dir = os.path.join(base_plugins_dir, "extensions")
-            if os.path.exists(extensions_dir):
-                for ext_name in os.listdir(extensions_dir):
-                    mem_driver_path = os.path.join(extensions_dir, ext_name, "drivers", "memory")
+
+            if os.path.exists(modules_dir):
+                for module_name in os.listdir(modules_dir):
+                    mem_driver_path = os.path.join(modules_dir, module_name, "drivers", "memory")
                     if os.path.isdir(mem_driver_path):
                         drivers_dirs.append(mem_driver_path)
 
             loaded_drivers = []
             for d_dir in drivers_dirs:
-                loaded_drivers.extend(DriverPluginLoader.load_plugins(d_dir, BaseMemoryDriver))
+                loaded_drivers.extend(DriverLoader.load_plugins(d_dir, BaseMemoryDriver))
             
             if not loaded_drivers:
-                logger.error("No valid memory drivers found in plugins directory.")
+                logger.error("No valid memory drivers found in capability modules.")
                 raise ImportError("No memory drivers available.")
 
             for d in loaded_drivers:

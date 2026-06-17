@@ -6,7 +6,7 @@ from pathlib import Path
 from core.interfaces.driver import BaseTTSDriver
 from core.runtime import runtime_target_for_capability
 
-from .driver_loader import DriverPluginLoader, allow_extension_driver
+from .driver_loader import DriverLoader, allow_extension_driver
 from .provider_host import ProviderHostManager
 
 logger = logging.getLogger("TTSManager")
@@ -15,25 +15,16 @@ class TTSPluginManager(ProviderHostManager):
     def __init__(self, config):
         super().__init__(config=config, capability="tts")
 
-    async def load_driver_plugins(self):
-        # Dynamic Loading via ProviderLoader
+    async def load_drivers(self):
+        # Dynamic loading via DriverLoader.
         try:
             base_dir = Path(__file__).resolve().parents[2]
-            
-            # 1. Built-in provider drivers
-            drivers_dir = base_dir / "plugins" / "drivers" / "tts"
-            if drivers_dir.exists():
-                logger.info(f"Scanning Built-in TTS Drivers: {drivers_dir}")
-                loaded = DriverPluginLoader.load_plugins(str(drivers_dir), BaseTTSDriver)
-                for d in loaded:
-                    self.register_driver(d)
-            
-            # 2. Internal extension provider drivers
-            extensions_root = base_dir / "plugins" / "extensions"
-            
-            if extensions_root.exists():
-                logger.info(f"Scanning Extensions for TTS Drivers in: {extensions_root}")
-                for ext_path in extensions_root.iterdir():
+
+            modules_root = base_dir / "capability_modules"
+
+            if modules_root.exists():
+                logger.info(f"Scanning capability modules for TTS drivers in: {modules_root}")
+                for ext_path in modules_root.iterdir():
                     if ext_path.is_dir():
                          ext_drivers_dir = ext_path / "drivers" / "tts"
                          if ext_drivers_dir.exists():
@@ -45,7 +36,7 @@ class TTSPluginManager(ProviderHostManager):
                              if not allowed:
                                  continue
                              logger.info(f"Scanning Extension Drivers: {ext_drivers_dir}")
-                             ext_loaded = DriverPluginLoader.load_plugins(str(ext_drivers_dir), BaseTTSDriver)
+                             ext_loaded = DriverLoader.load_plugins(str(ext_drivers_dir), BaseTTSDriver)
                              for d in ext_loaded:
                                  logger.info(f"📦 Loaded Extension Driver from {ext_path.name}: {d.id} ({d.name})")
                                  self.register_driver(d)
@@ -56,13 +47,13 @@ class TTSPluginManager(ProviderHostManager):
     async def activate_startup_driver(self):
         target_provider = self.resolve_startup_driver_id()
         if target_provider:
-            if not self.config.is_plugin_desired_enabled(target_provider):
+            if not self.config.is_provider_desired_enabled(target_provider):
                 logger.info(f"🚫 Driver {target_provider} is disabled in config. Skipping auto-activation.")
             else:
                 await self.activate(target_provider)
 
     async def register_drivers(self):
-        await self.load_driver_plugins()
+        await self.load_drivers()
         await self.activate_startup_driver()
 
     async def activate(self, driver_id: str):
@@ -108,12 +99,11 @@ class TTSPluginManager(ProviderHostManager):
         
         gc.collect()
 
-    # [Architecture 5.6] Bus Sync Interfaces
-    async def enable_plugin(self, plugin_id: str):
-        await self.activate(plugin_id)
+    async def enable_provider(self, provider_id: str):
+        await self.activate(provider_id)
 
-    async def disable_plugin(self, plugin_id: str):
-        if self.active_driver_id == plugin_id:
+    async def disable_provider(self, provider_id: str):
+        if self.active_driver_id == provider_id:
             await self.unload_active_driver()
 
     def resolve_driver(self, engine: str):

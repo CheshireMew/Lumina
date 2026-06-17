@@ -7,10 +7,10 @@ import {
     secondaryColor,
     sectionTitleStyle,
 } from "./styles";
-import { OverflowStrategy, ProviderType } from "./types";
+import { FREE_LLM_PROVIDER_ID, LlmProviderId, OverflowStrategy } from "./types";
 
 interface ContextPolicySectionProps {
-    providerType: ProviderType;
+    providerId: LlmProviderId;
     historyLimit: number;
     overflowStrategy: OverflowStrategy;
     onHistoryLimitChange: (historyLimit: number) => void;
@@ -19,7 +19,7 @@ interface ContextPolicySectionProps {
 }
 
 const ContextPolicySection: FC<ContextPolicySectionProps> = ({
-    providerType,
+    providerId,
     historyLimit,
     overflowStrategy,
     onHistoryLimitChange,
@@ -56,7 +56,7 @@ const ContextPolicySection: FC<ContextPolicySectionProps> = ({
                         }
                         className="gal-range violet"
                     />
-                    {providerType === "free" && historyLimit > 5 && (
+                    {providerId === FREE_LLM_PROVIDER_ID && historyLimit > 5 && (
                         <div style={contextStyles.warning}>
                             ⚠️ Free Tier auto-caps at 5 turns.
                         </div>

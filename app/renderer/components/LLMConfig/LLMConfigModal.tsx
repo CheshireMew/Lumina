@@ -9,7 +9,11 @@ import ProviderModeToggle from "./ProviderModeToggle";
 import { parameterStyles, modalStyles } from "./styles";
 import { useAvailableLlmModels } from "./useAvailableLlmModels";
 import { useLlmConfigForm } from "./useLlmConfigForm";
-import { LlmSettings, LlmSettingsChangeHandler } from "./types";
+import {
+    FREE_LLM_PROVIDER_ID,
+    LlmSettings,
+    LlmSettingsChangeHandler,
+} from "./types";
 
 interface LLMConfigModalProps {
     isOpen: boolean;
@@ -36,7 +40,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
 
     const { availableModels, isLoadingModels } = useAvailableLlmModels(
         isOpen,
-        form.providerType,
+        form.providerId,
     );
 
     const handleResetContext = async () => {
@@ -59,14 +63,14 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
     return (
         <ModalFrame onClose={onClose} onSave={save}>
             <ProviderModeToggle
-                providerType={form.providerType}
-                onChange={(providerType) =>
-                    updateField("providerType", providerType)
+                providerId={form.providerId}
+                onChange={(providerId) =>
+                    updateField("providerId", providerId)
                 }
             />
 
             <div style={modalStyles.formBody}>
-                {form.providerType === "free" ? (
+                {form.providerId === FREE_LLM_PROVIDER_ID ? (
                     <FreeProviderSection
                         modelName={form.modelName}
                         availableModels={availableModels}
@@ -115,7 +119,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
                     />
 
                     <ContextPolicySection
-                        providerType={form.providerType}
+                        providerId={form.providerId}
                         historyLimit={form.historyLimit}
                         overflowStrategy={form.overflowStrategy}
                         onHistoryLimitChange={(historyLimit) =>

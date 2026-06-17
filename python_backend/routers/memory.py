@@ -7,11 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from routers.deps import (
+    get_companion_interaction_recorder,
+    get_companion_context_resolver,
     get_memory_service,
-    get_soul_service,
     get_session_manager,
 )
 from schemas.requests import AddMemoryRequest, SearchRequest
+from services.companion.interaction import CompanionInteraction
 
 logger = logging.getLogger("MemoryRouter")
 
@@ -21,16 +23,7 @@ router = APIRouter(tags=["Memory"])
 def _require_memory(memory_service: Any):
     if not memory_service:
         raise HTTPException(status_code=503, detail="Memory service unavailable")
-    if not memory_service.available:
-        detail = memory_service.degraded_reason or "Memory backend unavailable"
-        raise HTTPException(status_code=503, detail=detail)
     return memory_service
-
-
-def _resolve_character_id(soul_service: Any, character_id: Optional[str]) -> str:
-    if character_id:
-        return character_id
-    return soul_service.get_active_character_id()
 
 
 def _serialize_value(value: Any) -> Any:
@@ -68,10 +61,11 @@ def _encode_query(memory_service: Any, query: str) -> list[float]:
 async def add_memory(
     request: AddMemoryRequest,
     memory_service=Depends(get_memory_service),
-    soul_service=Depends(get_soul_service),
+    context_resolver=Depends(get_companion_context_resolver),
+    interaction_recorder=Depends(get_companion_interaction_recorder),
 ):
     memory_service = _require_memory(memory_service)
-    character_id = _resolve_character_id(soul_service, request.character_id)
+    context = context_resolver.resolve(user_id=request.user_id, character_id=request.character_id)
 
     user_input = ""
     ai_response = ""
@@ -84,17 +78,26 @@ async def add_memory(
     if not user_input and not ai_response:
         return {"status": "skipped", "reason": "Empty interaction"}
 
-    narrative = f"{request.user_name}: {user_input or '(Silence)'}\n{request.character_name}: {ai_response}"
-
     try:
-        log_id = await memory_service.log_conversation(
-            character_id=character_id,
-            narrative=narrative,
+        result = await interaction_recorder.record(
+            CompanionInteraction(
+                companion_context=context,
+                user_message=user_input,
+                assistant_message=ai_response,
+                user_name=request.user_name,
+                companion_name=request.companion_name,
+                save_history=False,
+                log_memory=True,
+                notify_soul_driver=False,
+                strict=True,
+            )
         )
 
-        soul_service.update_last_interaction()
-
-        return {"status": "success", "id": str(log_id), "storage": memory_service.driver_id}
+        return {
+            "status": "success",
+            "id": str(result.memory_log_id or ""),
+            "storage": memory_service.driver_id,
+        }
     except Exception as exc:
         logger.error("Failed to add memory: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -104,18 +107,17 @@ async def add_memory(
 async def search_memory(
     request: SearchRequest,
     memory_service=Depends(get_memory_service),
-    soul_service=Depends(get_soul_service),
+    context_resolver=Depends(get_companion_context_resolver),
 ):
     memory_service = _require_memory(memory_service)
-    character_id = _resolve_character_id(soul_service, request.character_id)
+    context = context_resolver.resolve(user_id=request.user_id, character_id=request.character_id)
 
     try:
         query_vec = _encode_query(memory_service, request.query)
-        results = await memory_service.search(
+        results = await memory_service.search_episodic(
             query_vec,
-            character_id,
+            context,
             limit=request.limit,
-            target_table="episodic_memory",
         )
         logger.info("Memory search '%s' -> %s hits", request.query, len(results))
         return _serialize_memory_rows(results, "score")
@@ -130,19 +132,18 @@ async def search_memory(
 async def search_memory_hybrid(
     request: SearchRequest,
     memory_service=Depends(get_memory_service),
-    soul_service=Depends(get_soul_service),
+    context_resolver=Depends(get_companion_context_resolver),
 ):
     memory_service = _require_memory(memory_service)
-    character_id = _resolve_character_id(soul_service, request.character_id)
+    context = context_resolver.resolve(user_id=request.user_id, character_id=request.character_id)
 
     try:
         query_vec = _encode_query(memory_service, request.query)
-        results = await memory_service.search_hybrid(
+        results = await memory_service.search_episodic_hybrid(
             query=request.query,
             query_vector=query_vec,
-            character_id=character_id,
+            context=context,
             limit=request.limit,
-            target_table="episodic_memory",
         )
         logger.info("Memory hybrid search '%s' -> %s hits", request.query, len(results))
         return _serialize_memory_rows(results, "hybrid_score")
@@ -154,7 +155,7 @@ async def search_memory_hybrid(
 
 
 class ClearContextRequest(BaseModel):
-    user_id: Optional[str] = "default_user"
+    user_id: Optional[str] = None
     character_id: Optional[str] = None
 
 
@@ -162,13 +163,15 @@ class ClearContextRequest(BaseModel):
 async def clear_context(
     request: ClearContextRequest,
     session_manager=Depends(get_session_manager),
-    soul_service=Depends(get_soul_service),
+    context_resolver=Depends(get_companion_context_resolver),
 ):
     try:
-        character_id = _resolve_character_id(soul_service, request.character_id)
-        user_id = request.user_id or "default_user"
+        context = context_resolver.resolve(
+            user_id=request.user_id,
+            character_id=request.character_id,
+        )
 
-        await session_manager.clear_history(user_id, character_id)
+        await session_manager.clear_history(context)
 
         from routers.gateway import gateway_service
 
@@ -183,13 +186,13 @@ async def clear_context(
 async def get_all_memories(
     character_id: Optional[str] = None,
     memory_service=Depends(get_memory_service),
-    soul_service=Depends(get_soul_service),
+    context_resolver=Depends(get_companion_context_resolver),
 ):
     memory_service = _require_memory(memory_service)
-    resolved_character_id = _resolve_character_id(soul_service, character_id)
+    context = context_resolver.resolve(character_id=character_id)
 
     try:
-        results = await memory_service.get_all_conversations(character_id=resolved_character_id)
+        results = await memory_service.get_all_conversations(context)
         memories = []
         for row in results:
             memories.append(
@@ -211,13 +214,13 @@ async def get_inspiration(
     character_id: Optional[str] = None,
     limit: int = 3,
     memory_service=Depends(get_memory_service),
-    soul_service=Depends(get_soul_service),
+    context_resolver=Depends(get_companion_context_resolver),
 ):
     memory_service = _require_memory(memory_service)
-    resolved_character_id = _resolve_character_id(soul_service, character_id)
+    context = context_resolver.resolve(character_id=character_id)
 
     try:
-        results = await memory_service.get_inspiration(character_id=resolved_character_id, limit=limit)
+        results = await memory_service.get_inspiration(context, limit=limit)
         return [
             {
                 "id": str(row.get("id", "")),

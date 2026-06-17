@@ -9,12 +9,12 @@ import pytest
 PROJECT_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from services.plugin_service import PluginService
+from services.provider_config_service import ProviderConfigService
 
 
 class ConfigStub:
     def __init__(self):
-        self.plugins = SimpleNamespace(settings={})
+        self.capabilities = SimpleNamespace(settings={})
         self.saved = 0
 
     def save(self):
@@ -27,21 +27,21 @@ def container():
 
 
 @pytest.mark.anyio
-async def test_plugin_service_ensure_worker_running_skips_main(container):
-    service = PluginService(container)
+async def test_provider_config_service_ensure_worker_running_skips_main(container):
+    service = ProviderConfigService(container)
 
     assert await service.ensure_worker_running("main") is True
     container.get_process_manager.assert_not_called()
 
 
 @pytest.mark.anyio
-async def test_plugin_service_ensure_worker_running_uses_process_manager(container):
+async def test_provider_config_service_ensure_worker_running_uses_process_manager(container):
     process_manager = MagicMock()
     process_manager.is_running.return_value = False
     process_manager.start_worker.return_value = True
     container.get_process_manager.return_value = process_manager
 
-    service = PluginService(container)
+    service = ProviderConfigService(container)
 
     assert await service.ensure_worker_running("worker:stt") is True
     process_manager.is_running.assert_called_once_with("worker:stt")
@@ -49,26 +49,25 @@ async def test_plugin_service_ensure_worker_running_uses_process_manager(contain
 
 
 @pytest.mark.anyio
-async def test_plugin_service_update_config_for_main_runtime(container):
+async def test_provider_config_service_update_config_for_main_runtime(container):
     config = ConfigStub()
     spm = MagicMock()
     spm.get_manifest.return_value = SimpleNamespace(runtime_target="main")
 
     container.get_config.return_value = config
-    container.get_system_plugin_manager.return_value = spm
-    container.get_plugin_state_aggregator.return_value = None
+    container.get_capability_module_manager.return_value = spm
 
-    service = PluginService(container)
+    service = ProviderConfigService(container)
 
-    result = await service.update_config("plugin.main", "api_key", "secret")
+    result = await service.update_config("provider.main", "api_key", "secret")
 
     assert result == {"success": True}
-    assert config.plugins.settings == {"plugin.main": {"api_key": "secret"}}
+    assert config.capabilities.settings == {"provider.main": {"api_key": "secret"}}
     assert config.saved == 1
 
 
 @pytest.mark.anyio
-async def test_plugin_service_update_config_for_worker_runtime(container):
+async def test_provider_config_service_update_config_for_worker_runtime(container):
     config = ConfigStub()
     spm = MagicMock()
     spm.get_manifest.return_value = SimpleNamespace(runtime_target="worker:tts")
@@ -78,15 +77,14 @@ async def test_plugin_service_update_config_for_worker_runtime(container):
 
     container.get_config.return_value = config
     container.get_process_manager.return_value = process_manager
-    container.get_system_plugin_manager.return_value = spm
-    container.get_plugin_state_aggregator.return_value = None
+    container.get_capability_module_manager.return_value = spm
 
     hub = MagicMock()
     hub.broadcast_config_update = AsyncMock()
     fake_worker_control_hub = types.ModuleType("services.infra.worker_control_hub")
     fake_worker_control_hub.get_worker_control_hub = MagicMock(return_value=hub)
 
-    service = PluginService(container)
+    service = ProviderConfigService(container)
 
     with patch.dict(sys.modules, {"services.infra.worker_control_hub": fake_worker_control_hub}):
         result = await service.update_config("driver.tts.edge", "voice", "test-voice")

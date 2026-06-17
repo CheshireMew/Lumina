@@ -196,33 +196,29 @@ class LuminaRunner:
                 self.log(f"[{'FAIL'}] {service} Health ({url}) -> Connection Error")
                 failed += 1
                 
-        # T2: Plugin Registry Check (Async Retry)
+        # T2: Runtime Package Check (Async Retry)
         max_retries = 5
         for attempt in range(max_retries):
             try:
-                # [Fix] Registry is POST-only. Use /list to see loaded plugins.
-                # Also removed /api/v1 prefix based on logs showing root mount.
-                url = f"http://127.0.0.1:{self.ports['memory_port']}/plugins/list"
+                url = f"http://127.0.0.1:{self.ports['memory_port']}/runtime/packages"
                 r = requests.get(url, timeout=2)
                 data = r.json()
-                
-                # Check for Voiceprint capability
-                # /list returns a dict with plugin IDs as keys or a list? 
-                # Assuming list or dict values.
-                if isinstance(data, dict) and "plugins" in data:
-                     plugins = data["plugins"] # normalized response
-                elif isinstance(data, list):
-                     plugins = data
-                else:
-                     plugins = list(data.values()) if isinstance(data, dict) else []
 
-                vp = next((p for p in plugins if isinstance(p, dict) and p.get('id') == 'system.voiceprint'), None)
+                packages = data.get("packages", []) if isinstance(data, dict) else []
+                vp = next(
+                    (
+                        p
+                        for p in packages
+                        if isinstance(p, dict) and p.get("id") == "voiceprint-runtime"
+                    ),
+                    None,
+                )
                 
                 if vp:
-                    self.log(f"[{'PASS'}] Plugin Registry: Voiceprint Found & Enabled ({vp.get('active_in_group', False)})")
+                    self.log(f"[{'PASS'}] Runtime Packages: Voiceprint Found ({vp.get('state')})")
                     break
                 else:
-                    self.log(f"   ... Waiting for Plugins to Load (Attempt {attempt+1}/{max_retries})")
+                    self.log(f"   ... Waiting for Runtime Packages (Attempt {attempt+1}/{max_retries})")
             except:
                 pass
             

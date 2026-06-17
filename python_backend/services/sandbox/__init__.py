@@ -1,6 +1,6 @@
 """
 Sandbox Package.
-Provides plugin isolation, resource limiting, and permission control.
+Provides capability module isolation, resource limiting, and permission control.
 """
 
 from .resource_limiter import (
@@ -10,8 +10,8 @@ from .resource_limiter import (
 )
 
 from .permission_guard import (
+    CapabilityModulePermissions,
     Permission,
-    PluginPermissions,
     PermissionGuard,
     create_guard_from_manifest,
 )
@@ -22,8 +22,8 @@ __all__ = [
     'ResourceLimits',
     'apply_sandbox_limits',
     # Permissions
+    'CapabilityModulePermissions',
     'Permission',
-    'PluginPermissions',
     'PermissionGuard',
     'create_guard_from_manifest',
 ]

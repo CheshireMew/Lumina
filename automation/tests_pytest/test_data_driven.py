@@ -185,7 +185,7 @@ test_cases:
         plugin_yaml.write_text("""
 description: Plugin ID validation test cases
 test_cases:
-  - plugin_id: test.plugin
+  - plugin_id: test.module
     is_valid: True
   - plugin_id: my_extension
     is_valid: True

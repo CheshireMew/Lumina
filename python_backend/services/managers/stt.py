@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 from core.interfaces.driver import BaseSTTDriver
 from core.runtime import runtime_target_for_capability
 
-from .driver_loader import DriverPluginLoader, allow_extension_driver
+from .driver_loader import DriverLoader, allow_extension_driver
 from .provider_host import ProviderHostManager
 
 logger = logging.getLogger("STTManager")
@@ -66,23 +66,17 @@ class STTPluginManager(ProviderHostManager):
             logger.error("Failed to switch STT provider %s: %s", driver_id, exc, exc_info=True)
             raise
 
-    async def load_driver_plugins(self):
+    async def load_drivers(self):
         try:
             base_dir = os.path.dirname(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             )
-            drivers_dir = os.path.join(base_dir, "plugins", "drivers", "stt")
-            if os.path.exists(drivers_dir):
-                loaded = DriverPluginLoader.load_plugins(drivers_dir, BaseSTTDriver)
-                for driver in loaded:
-                    self.register_driver(driver)
-
-            extensions_root = os.path.join(base_dir, "plugins", "extensions")
-            if os.path.exists(extensions_root):
-                for ext_name in os.listdir(extensions_root):
-                    ext_drivers_dir = os.path.join(extensions_root, ext_name, "drivers", "stt")
+            modules_root = os.path.join(base_dir, "capability_modules")
+            if os.path.exists(modules_root):
+                for module_name in os.listdir(modules_root):
+                    ext_drivers_dir = os.path.join(modules_root, module_name, "drivers", "stt")
                     if os.path.exists(ext_drivers_dir):
-                        manifest_path = os.path.join(extensions_root, ext_name, "manifest.yaml")
+                        manifest_path = os.path.join(modules_root, module_name, "manifest.yaml")
                         allowed, manifest = allow_extension_driver(
                             Path(manifest_path),
                             capability="stt",
@@ -90,7 +84,7 @@ class STTPluginManager(ProviderHostManager):
                         )
                         if not allowed:
                             continue
-                        loaded = DriverPluginLoader.load_plugins(ext_drivers_dir, BaseSTTDriver)
+                        loaded = DriverLoader.load_plugins(ext_drivers_dir, BaseSTTDriver)
                         for driver in loaded:
                             self.register_driver(driver)
         except Exception as exc:
@@ -98,11 +92,11 @@ class STTPluginManager(ProviderHostManager):
 
     async def activate_startup_driver(self):
         target_provider = self.resolve_startup_driver_id()
-        if target_provider and self.config.is_plugin_desired_enabled(target_provider):
+        if target_provider and self.config.is_provider_desired_enabled(target_provider):
             await self.activate(target_provider)
 
     async def register_drivers(self):
-        await self.load_driver_plugins()
+        await self.load_drivers()
         await self.activate_startup_driver()
 
     def register_driver(self, driver: BaseSTTDriver):
@@ -171,11 +165,11 @@ class STTPluginManager(ProviderHostManager):
         except Exception as exc:
             logger.error("Error unloading STT provider %s: %s", driver_id, exc)
 
-    async def enable_plugin(self, plugin_id: str):
-        await self.activate(plugin_id)
+    async def enable_provider(self, provider_id: str):
+        await self.activate(provider_id)
 
-    async def disable_plugin(self, plugin_id: str):
-        if self.active_driver_id == plugin_id:
+    async def disable_provider(self, provider_id: str):
+        if self.active_driver_id == provider_id:
             await self.unload_active_driver()
 
     def transcribe(self, audio_data) -> Dict[str, Any]:

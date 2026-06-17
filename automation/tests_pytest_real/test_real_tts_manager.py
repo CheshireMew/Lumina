@@ -20,7 +20,7 @@ class ConfigStub:
     def get_selected_provider(self, _capability):
         return None
 
-    def is_plugin_desired_enabled(self, _plugin_id):
+    def is_provider_desired_enabled(self, _provider_id):
         return True
 
 @pytest.mark.anyio
@@ -28,13 +28,13 @@ async def test_tts_manager_driver_discovery():
     tm = TTSPluginManager(ConfigStub())
     
     # Mock driver plugin discovery
-    with patch("services.managers.driver_loader.DriverPluginLoader.load_plugins") as mock_load:
+    with patch("services.managers.driver_loader.DriverLoader.load_plugins") as mock_load:
         mock_driver = MagicMock()
         mock_driver.id = "test.tts.driver"
         mock_driver.name = "Test TTS"
         mock_load.return_value = [mock_driver]
         
-        await tm.load_driver_plugins()
+        await tm.load_drivers()
         
         assert "test.tts.driver" in tm.drivers
         assert tm.active_driver is None

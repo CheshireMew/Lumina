@@ -18,7 +18,7 @@ def add_memory(content: str):
     payload = {
         "character_id": CHAR_ID,
         "user_name": "Tester",
-        "character_name": "Hiyori",
+        "companion_name": "Hiyori",
         "messages": [
             {"role": "user", "content": content},
             {"role": "assistant", "content": "Acknowledged."} # Needed to form a pair

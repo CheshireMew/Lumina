@@ -724,7 +724,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/voiceprint/list": {
+    "/capabilities/voiceprint/list": {
         parameters: {
             query?: never;
             header?: never;
@@ -735,7 +735,7 @@ export interface paths {
          * List Profiles
          * @description List all voiceprint profiles.
          */
-        get: operations["list_profiles_plugins_voiceprint_list_get"];
+        get: operations["list_profiles_capabilities_voiceprint_list_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -744,7 +744,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/voiceprint/toggle/{name}": {
+    "/capabilities/voiceprint/toggle/{name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -757,14 +757,14 @@ export interface paths {
          * Toggle Profile
          * @description Toggle a voiceprint profile's enabled status.
          */
-        post: operations["toggle_profile_plugins_voiceprint_toggle__name__post"];
+        post: operations["toggle_profile_capabilities_voiceprint_toggle__name__post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/plugins/voiceprint/{name}": {
+    "/capabilities/voiceprint/{name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -778,13 +778,13 @@ export interface paths {
          * Delete Profile
          * @description Delete a voiceprint profile.
          */
-        delete: operations["delete_profile_plugins_voiceprint__name__delete"];
+        delete: operations["delete_profile_capabilities_voiceprint__name__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/plugins/voiceprint/upload": {
+    "/capabilities/voiceprint/upload": {
         parameters: {
             query?: never;
             header?: never;
@@ -798,7 +798,7 @@ export interface paths {
          * @description Upload audio to register a new voiceprint.
          *     Proxies to STT Worker for embedding generation.
          */
-        post: operations["upload_voiceprint_plugins_voiceprint_upload_post"];
+        post: operations["upload_voiceprint_capabilities_voiceprint_upload_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1067,11 +1067,8 @@ export interface components {
          * @description Add Memory Request
          */
         AddMemoryRequest: {
-            /**
-             * User Id
-             * @default user
-             */
-            user_id: string;
+            /** User Id */
+            user_id?: string | null;
             /** Character Id */
             character_id?: string | null;
             /**
@@ -1080,10 +1077,10 @@ export interface components {
              */
             user_name: string;
             /**
-             * Char Name
+             * Companion Name
              * @default AI
              */
-            char_name: string;
+            companion_name: string;
             /** Messages */
             messages: components["schemas"]["MessageModel"][];
         };
@@ -1099,8 +1096,8 @@ export interface components {
              */
             prompt: string;
         };
-        /** Body_upload_voiceprint_plugins_voiceprint_upload_post */
-        Body_upload_voiceprint_plugins_voiceprint_upload_post: {
+        /** Body_upload_voiceprint_capabilities_voiceprint_upload_post */
+        Body_upload_voiceprint_capabilities_voiceprint_upload_post: {
             /**
              * File
              * Format: binary
@@ -1224,16 +1221,10 @@ export interface components {
         };
         /** ClearContextRequest */
         ClearContextRequest: {
-            /**
-             * User Id
-             * @default default_user
-             */
-            user_id: string | null;
-            /**
-             * Character Id
-             * @default hiyori
-             */
-            character_id: string | null;
+            /** User Id */
+            user_id?: string | null;
+            /** Character Id */
+            character_id?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1404,7 +1395,7 @@ export interface components {
              * @default custom
              * @enum {string}
              */
-            providerType: "free" | "custom";
+            providerId?: string;
             /**
              * Apikey
              * @default
@@ -1456,7 +1447,7 @@ export interface components {
          */
         SearchRequest: {
             /** User Id */
-            user_id: string;
+            user_id?: string | null;
             /** Character Id */
             character_id?: string | null;
             /** Query */
@@ -2659,7 +2650,7 @@ export interface operations {
             };
         };
     };
-    list_profiles_plugins_voiceprint_list_get: {
+    list_profiles_capabilities_voiceprint_list_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2679,7 +2670,7 @@ export interface operations {
             };
         };
     };
-    toggle_profile_plugins_voiceprint_toggle__name__post: {
+    toggle_profile_capabilities_voiceprint_toggle__name__post: {
         parameters: {
             query: {
                 enabled: boolean;
@@ -2712,7 +2703,7 @@ export interface operations {
             };
         };
     };
-    delete_profile_plugins_voiceprint__name__delete: {
+    delete_profile_capabilities_voiceprint__name__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -2743,7 +2734,7 @@ export interface operations {
             };
         };
     };
-    upload_voiceprint_plugins_voiceprint_upload_post: {
+    upload_voiceprint_capabilities_voiceprint_upload_post: {
         parameters: {
             query: {
                 name: string;
@@ -2754,7 +2745,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_voiceprint_plugins_voiceprint_upload_post"];
+                "multipart/form-data": components["schemas"]["Body_upload_voiceprint_capabilities_voiceprint_upload_post"];
             };
         };
         responses: {

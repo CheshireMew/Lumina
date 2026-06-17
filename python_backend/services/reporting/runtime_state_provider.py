@@ -4,11 +4,11 @@ import inspect
 from typing import Any, Awaitable, Callable
 
 
-PluginState = dict[str, Any]
-StateProvider = Callable[[], list[PluginState] | Awaitable[list[PluginState]]]
+RuntimeState = dict[str, Any]
+StateProvider = Callable[[], list[RuntimeState] | Awaitable[list[RuntimeState]]]
 
 
-async def _resolve_states(provider: StateProvider | None) -> list[PluginState]:
+async def _resolve_states(provider: StateProvider | None) -> list[RuntimeState]:
     if provider is None:
         return []
 
@@ -26,22 +26,21 @@ def build_runtime_state_provider(
     capability_provider: StateProvider | None,
     *,
     container,
-) -> Callable[[], Awaitable[list[PluginState]]]:
-    async def provide() -> list[PluginState]:
-        merged: dict[str, PluginState] = {}
+) -> Callable[[], Awaitable[list[RuntimeState]]]:
+    async def provide() -> list[RuntimeState]:
+        merged: dict[str, RuntimeState] = {}
 
         for item in await _resolve_states(capability_provider):
-            plugin_id = item.get("id")
-            if plugin_id:
-                merged[plugin_id] = dict(item)
+            state_id = item.get("id")
+            if state_id:
+                merged[state_id] = dict(item)
 
-        plugin_manager = container.get_system_plugin_manager()
-        if plugin_manager:
-            for item in plugin_manager.list_plugins():
-                plugin_id = item.get("id")
-                if not plugin_id:
-                    continue
-                merged[plugin_id] = {**merged.get(plugin_id, {}), **item}
+        module_manager = container.get_capability_module_manager()
+        for item in module_manager.list_modules():
+            state_id = item.get("id")
+            if not state_id:
+                continue
+            merged[state_id] = {**merged.get(state_id, {}), **item}
 
         return list(merged.values())
 

@@ -31,10 +31,10 @@ async def lifespan(app: FastAPI):
     
     # Service Bootstrappers
     from core.bootstrap.services import (
+        CapabilityModulesBootstrapper,
         CoreServicesBootstrapper, 
-        PluginServicesBootstrapper, 
         MiddlewareBootstrapper, 
-        SystemPluginsBootstrapper
+        ProviderConfigBootstrapper,
     )
     
     # Integration Bootstrappers
@@ -46,7 +46,6 @@ async def lifespan(app: FastAPI):
     # Post-Startup Bootstrappers
     from core.bootstrap.post_startup import (
         PrewarmBootstrapper,
-        ReconciliationBootstrapper,
         ConfigWatcherBootstrapper,
         WorkerControlHubBootstrapper,
         ProcessSupervisorBootstrapper,
@@ -67,19 +66,18 @@ async def lifespan(app: FastAPI):
     # Level 2: Core Services
     manager.add(CoreServicesBootstrapper())
     
-    # Level 3: Plugin Services
-    manager.add(PluginServicesBootstrapper())
+    # Level 3: Provider and capability module services
+    manager.add(ProviderConfigBootstrapper())
     manager.add(MiddlewareBootstrapper())
-    manager.add(SystemPluginsBootstrapper())
+    manager.add(CapabilityModulesBootstrapper())
     
-    # Level 4: Integration (requires plugins)
+    # Level 4: Integration
     manager.add(ChatTurnEventAdapterBootstrapper())
     manager.add(MCPHostBootstrapper())
     
     # Level 5: Post-Startup
     manager.add(WorkerControlHubBootstrapper())
     manager.add(PrewarmBootstrapper())
-    manager.add(ReconciliationBootstrapper())
     manager.add(ConfigWatcherBootstrapper(app))
     manager.add(ProcessSupervisorBootstrapper())
     manager.add(AutomationBootstrapper())
@@ -87,6 +85,13 @@ async def lifespan(app: FastAPI):
     # Execute Startup
     try:
         await manager.start(service_instance)
+        from core.api.capability_resources import mount_capability_resources
+
+        mount_capability_resources(
+            app,
+            logger,
+            service_instance.get_capability_package_registry(),
+        )
         logger.info("🚀 Startup complete")
     except Exception as e:
         logger.critical(f"Startup Failed: {e}", exc_info=True)

@@ -3,7 +3,7 @@ Lumina Sandboxed Context
 Security & Sandboxing
 
 Wraps LuminaContext with permission-based access control.
-Plugins receive a SandboxedContext if they have restricted permissions.
+Capability modules receive a SandboxedContext if they have restricted permissions.
 """
 
 import logging
@@ -18,7 +18,7 @@ logger = logging.getLogger("SandboxedContext")
 
 
 class PermissionError(Exception):
-    """Raised when a plugin attempts to access a resource without permission."""
+    """Raised when a capability module attempts to access a resource without permission."""
     pass
 
 
@@ -26,7 +26,7 @@ class SandboxedContext(LuminaContext):
     """
     A permission-checked wrapper around LuminaContext.
     
-    Each API call is gated by permission checks. If a plugin lacks
+    Each API call is gated by permission checks. If a module lacks
     the required permission, a PermissionError is raised.
     
     Usage:
@@ -42,7 +42,7 @@ class SandboxedContext(LuminaContext):
     def __init__(
         self,
         container: Any,
-        plugin_id: str,
+        module_id: str,
         manifest: Any = None,
         event_bus=None,
         permissions: List[str] = None,
@@ -50,7 +50,7 @@ class SandboxedContext(LuminaContext):
     ):
         super().__init__(
             container,
-            plugin_id,
+            module_id,
             manifest,
             event_bus=event_bus,
             service_registry=service_registry,
@@ -66,15 +66,15 @@ class SandboxedContext(LuminaContext):
     
     def _log_denial(self, perm: str, action: str):
         logger.warning(
-            "Sandboxed plugin %s denied permission %s while trying to %s",
-            self.plugin_id,
+            "Sandboxed capability module %s denied permission %s while trying to %s",
+            self.module_id,
             perm,
             action,
         )
 
     def _check_permission(self, perm: str, action: str = "access this resource"):
         """
-        Check if the plugin has the required permission.
+        Check if the module has the required permission.
         
         Args:
             perm: The permission string to check
@@ -120,31 +120,31 @@ class SandboxedContext(LuminaContext):
         return self.get_service("ticker")
     
     def find_capability(self, cap_type: str, **attributes) -> Optional[str]:
-        """Discovery API (requires plugin.discovery permission)."""
-        self._check_permission(Permission.PLUGIN_DISCOVERY.value, "find capability providers")
+        """Discovery API (requires capability.discovery permission)."""
+        self._check_permission(Permission.CAPABILITY_DISCOVERY.value, "find capability providers")
         return super().find_capability(cap_type, **attributes)
 
     # --- Permission-Gated Methods ---
     
     def load_data(self) -> dict[str, Any]:
-        """Load the plugin's own persisted data."""
-        self._check_permission(Permission.FILESYSTEM_DATA_READ.value, "read plugin data")
+        """Load the module's own persisted data."""
+        self._check_permission(Permission.FILESYSTEM_DATA_READ.value, "read module data")
         return super().load_data()
 
     def save_data(self, data: dict[str, Any]):
-        """Persist the plugin's own data."""
-        self._check_permission(Permission.FILESYSTEM_DATA_WRITE.value, "write plugin data")
+        """Persist the module's own data."""
+        self._check_permission(Permission.FILESYSTEM_DATA_WRITE.value, "write module data")
         super().save_data(data)
     
     def get_data_dir(self) -> Path | None:
-        """Return the plugin's data directory."""
+        """Return the module's data directory."""
         self._check_permission(Permission.FILESYSTEM_DATA_READ.value, "access data directory")
         return super().get_data_dir()
     
-    # --- Non-Gated APIs (available to all plugins) ---
+    # --- Non-Gated APIs (available to all modules) ---
     # These inherit from LuminaContext without additional checks:
     # - bus (EventBus - with event.subscribe/event.emit defaults)
     # - soul (read-only access to character state)
     # - config (read-only configuration)
-    # - load_data() (read plugin's own data)
+    # - load_data() (read module data)
     # - get_logger() (logging)

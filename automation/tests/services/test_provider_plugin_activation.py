@@ -53,20 +53,20 @@ class ContextStub:
         raise AttributeError(name)
 
 
-async def _enable_plugin(module_name: str, plugin_id: str, capability: str, selected_provider):
+async def _enable_capability(module_name: str, module_id: str, capability: str, selected_provider):
     module = importlib.import_module(module_name)
-    plugin = module.Plugin()
-    plugin._bind_manifest(SimpleNamespace(id=plugin_id))
+    capability_module = module.Capability()
+    capability_module._bind_manifest(SimpleNamespace(id=module_id))
     context = ContextStub(capability, selected_provider)
-    await plugin.load(context)
-    await plugin.enable()
+    await capability_module.load(context)
+    await capability_module.enable()
     return context.manager
 
 
 @pytest.mark.anyio
 async def test_stt_provider_plugin_registers_without_autoselecting_unselected_provider():
-    manager = await _enable_plugin(
-        "plugins.extensions.stt_sensevoice.plugin",
+    manager = await _enable_capability(
+        "capability_modules.stt_sensevoice.module",
         "driver.stt.sensevoice",
         "stt",
         selected_provider="driver.stt.other",
@@ -78,8 +78,8 @@ async def test_stt_provider_plugin_registers_without_autoselecting_unselected_pr
 
 @pytest.mark.anyio
 async def test_stt_provider_plugin_activates_selected_provider():
-    manager = await _enable_plugin(
-        "plugins.extensions.stt_sensevoice.plugin",
+    manager = await _enable_capability(
+        "capability_modules.stt_sensevoice.module",
         "driver.stt.sensevoice",
         "stt",
         selected_provider="driver.stt.sensevoice",
@@ -97,8 +97,8 @@ async def test_tts_provider_plugin_registers_without_autoselecting_unselected_pr
         Communicate=MagicMock(),
     )
     with patch.dict(sys.modules, {"edge_tts": edge_tts_stub}):
-        manager = await _enable_plugin(
-            "plugins.extensions.tts_edge.plugin",
+        manager = await _enable_capability(
+            "capability_modules.tts_edge.module",
             "driver.tts.edge",
             "tts",
             selected_provider="driver.tts.other",
@@ -116,8 +116,8 @@ async def test_tts_provider_plugin_activates_selected_provider():
         Communicate=MagicMock(),
     )
     with patch.dict(sys.modules, {"edge_tts": edge_tts_stub}):
-        manager = await _enable_plugin(
-            "plugins.extensions.tts_edge.plugin",
+        manager = await _enable_capability(
+            "capability_modules.tts_edge.module",
             "driver.tts.edge",
             "tts",
             selected_provider="driver.tts.edge",
@@ -129,9 +129,9 @@ async def test_tts_provider_plugin_activates_selected_provider():
 
 @pytest.mark.anyio
 async def test_memory_provider_plugin_does_not_connect_unselected_provider():
-    module = importlib.import_module("plugins.extensions.memory_postgres.plugin")
-    plugin = module.Plugin()
-    plugin._bind_manifest(SimpleNamespace(id="driver.memory.postgres"))
+    module = importlib.import_module("capability_modules.memory_postgres.module")
+    capability_module = module.Capability()
+    capability_module._bind_manifest(SimpleNamespace(id="driver.memory.postgres"))
     memory_service = MagicMock()
     context = ContextStub(
         "memory",
@@ -139,9 +139,9 @@ async def test_memory_provider_plugin_does_not_connect_unselected_provider():
         manager=memory_service,
     )
 
-    await plugin.load(context)
+    await capability_module.load(context)
     with patch.object(module.MemoryDriverFactory, "create_driver") as create_driver:
-        await plugin.enable()
+        await capability_module.enable()
 
     create_driver.assert_not_called()
     memory_service.replace_driver.assert_not_called()
@@ -149,9 +149,9 @@ async def test_memory_provider_plugin_does_not_connect_unselected_provider():
 
 @pytest.mark.anyio
 async def test_memory_provider_plugin_connects_selected_provider():
-    module = importlib.import_module("plugins.extensions.memory_postgres.plugin")
-    plugin = module.Plugin()
-    plugin._bind_manifest(SimpleNamespace(id="driver.memory.postgres"))
+    module = importlib.import_module("capability_modules.memory_postgres.module")
+    capability_module = module.Capability()
+    capability_module._bind_manifest(SimpleNamespace(id="driver.memory.postgres"))
     next_driver = MagicMock()
     next_driver.connect = AsyncMock()
     memory_service = MagicMock()
@@ -163,9 +163,9 @@ async def test_memory_provider_plugin_connects_selected_provider():
         manager=memory_service,
     )
 
-    await plugin.load(context)
+    await capability_module.load(context)
     with patch.object(module.MemoryDriverFactory, "create_driver", return_value=next_driver) as create_driver:
-        await plugin.enable()
+        await capability_module.enable()
 
     create_driver.assert_called_once_with(
         "driver.memory.postgres",

@@ -36,9 +36,8 @@ class CoreServicesBootstrapper(Bootstrapper):
         from services.capability_registry import CapabilityRegistry
         from services.character_service import CharacterService
         # from app_config import config # Global import removed
-        pm = ProcessManager()
         package_registry = CapabilityPackageRegistry()
-        pm.set_capability_package_registry(package_registry)
+        pm = ProcessManager(package_registry)
         
         # [Architecture 5.0] Register Core Services
         config = container.get_config()
@@ -49,38 +48,61 @@ class CoreServicesBootstrapper(Bootstrapper):
         container.set_process_manager(pm)
         container.set_capability_package_registry(package_registry)
         container.set_capability_registry(CapabilityRegistry())
-        container.set_character_service(CharacterService(
-            package_registry=package_registry,
-            system_config=container.get_config(),
-        ))
-
         # 1. LLM
         from llm.manager import LLMManager
-        container.set_llm_manager(LLMManager())
+        container.set_llm_manager(LLMManager(config))
         
         # 2. Soul (Service)
         from services.orchestrators.soul import SoulService
+        from services.repositories.file_soul_repository import FileSoulRepository
+
+        character_id = str(config.memory.character_id or "").strip()
+        if not character_id:
+            raise ValueError("memory.character_id must be configured")
+
         container.set_soul(SoulService(
-            system_config=container.get_config(),
-            memory_service=container.get_memory(),
+            repo=FileSoulRepository(character_id=character_id),
+        ))
+
+        container.set_character_service(CharacterService(
+            soul_service=container.get_soul(),
+            package_registry=package_registry,
         ))
         
         # 3. Session
         from services.orchestrators.session import SessionManager
         container.set_session_manager(SessionManager(config=container.get_config()))
 
+        from services.companion.context import CompanionContextResolver
+        from services.companion.interaction import CompanionInteractionRecorder
+
+        container.set_companion_context_resolver(
+            CompanionContextResolver(container.get_soul())
+        )
+        container.set_companion_interaction_recorder(
+            CompanionInteractionRecorder(
+                memory_service=container.get_memory(),
+                session_manager=container.get_session_manager(),
+                soul_service=container.get_soul(),
+            )
+        )
+
         from services.chat.pipeline import ChatPipeline
         from services.chat.service import ChatTurnService
+        from services.companion.runtime import CompanionRuntime
 
         chat_pipeline = ChatPipeline(container)
         container.set_chat_pipeline(chat_pipeline)
         container.set_chat_turn_service(
             ChatTurnService(
                 pipeline=chat_pipeline,
-                memory_service=container.get_memory(),
                 session_manager=container.get_session_manager(),
-                soul_service=container.get_soul(),
+                context_resolver=container.get_companion_context_resolver(),
+                interaction_recorder=container.get_companion_interaction_recorder(),
             )
+        )
+        container.set_companion_runtime(
+            CompanionRuntime(chat_turn_service=container.get_chat_turn_service())
         )
         
         # 4. Skills (Framework)
@@ -93,22 +115,20 @@ class CoreServicesBootstrapper(Bootstrapper):
         ticker = TimeTicker()
         container.set_ticker(ticker)
         ticker.start()
-        if container.has_service("event_bus"):
-            ticker.set_event_bus(container.get_event_bus())
+        ticker.set_event_bus(container.get_event_bus())
             
         logger.info("✅ Core Services (LLM, Soul, Session, Ticker) Initialized")
 
-class PluginServicesBootstrapper(Bootstrapper):
+class ProviderConfigBootstrapper(Bootstrapper):
     @property
-    def name(self) -> str: return "Plugin Services (Vision/TTS/STT)"
+    def name(self) -> str: return "Provider Config Service"
 
     async def bootstrap(self, container):
-        try:
-            from services.plugin_service import PluginService
-            ps = PluginService(container)
-            container.set_plugin_service(ps)
-            logger.info("✅ Plugin Registry Service Initialized")
-        except Exception as e: logger.warning(f"PluginService Init Failed: {e}")
+        from services.provider_config_service import ProviderConfigService
+
+        service = ProviderConfigService(container)
+        container.set_provider_config_service(service)
+        logger.info("✅ Provider Config Service Initialized")
 
         logger.info("✅ Worker-backed media services delegated to STT/TTS workers")
 
@@ -120,7 +140,6 @@ class MiddlewareBootstrapper(Bootstrapper):
         # Context Providers
         from services.chat.providers import RAGContextProvider
         container.register_context_provider(RAGContextProvider(container))
-        # SoulContextProvider removed to avoid duplicate system prompt (handled in pipeline.py)
         
         # Tool Providers
         from services.chat.tools.search import WebSearchTool
@@ -128,15 +147,15 @@ class MiddlewareBootstrapper(Bootstrapper):
         
         logger.info("✅ Middleware Registered")
 
-class SystemPluginsBootstrapper(Bootstrapper):
+class CapabilityModulesBootstrapper(Bootstrapper):
     @property
-    def name(self) -> str: return "System Plugins"
+    def name(self) -> str: return "Capability Modules"
     
     async def bootstrap(self, container):
-        from services.system_plugin_manager import SystemPluginManager
+        from services.capability_module_manager import CapabilityModuleManager
 
-        spm = SystemPluginManager(container=container)
+        manager = CapabilityModuleManager(container=container)
         
-        await spm.start() # Async Load & Init
-        container.set_system_plugin_manager(spm)
-        logger.info("✅ System Plugin Manager Initialized")
+        await manager.start()
+        container.set_capability_module_manager(manager)
+        logger.info("✅ Capability Module Manager Initialized")

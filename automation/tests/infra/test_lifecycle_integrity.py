@@ -11,26 +11,27 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
 
 from core.events.bus import bus
-from core.events.definitions import PluginLifecycleRequest
-from services.system_plugin_manager import SystemPluginManager
+from core.events.definitions import CapabilityLifecycleRequest
+from services.capability_registry import CapabilityRegistry
+from services.capability_module_manager import CapabilityModuleManager
 
 # Mock Logger
 logging.basicConfig(level=logging.INFO)
 
 @pytest.mark.anyio
 async def test_lifecycle_subscription():
-    print("[Test] Setting up SystemPluginManager...")
+    print("[Test] Setting up CapabilityModuleManager...")
     
     # 1. Mock Container & Dependencies
     mock_container = MagicMock()
     mock_container.has_service.return_value = True
     mock_container.get_event_bus.return_value = bus
-    mock_container.get_capability_registry.return_value = None
+    mock_container.get_capability_registry.return_value = CapabilityRegistry()
     mock_container.get_config.return_value = MagicMock()
-    mock_container.get_capability_package_registry.return_value = None
+    mock_container.get_capability_package_registry.return_value = MagicMock()
     
     # Instantiate
-    manager = SystemPluginManager(container=mock_container)
+    manager = CapabilityModuleManager(container=mock_container)
     
     # 2. Mock Heavy Methods to isolate Event Logic
     manager._load_plugins = MagicMock() # Don't scan disk
@@ -40,29 +41,29 @@ async def test_lifecycle_subscription():
     manager.audit_logger = MagicMock()
     
     # 3. Mock the Target Action
-    # We want to verify _on_enable_request calls enable_plugin
-    manager.enable_plugin = AsyncMock(return_value=True)
-    manager.get_plugin = MagicMock(return_value=None) # Simplify Config Update
+    # We want to verify _on_enable_request calls enable_module
+    manager.enable_module = AsyncMock(return_value=True)
+    manager.get_module = MagicMock(return_value=None)
     
     # 4. Start Manager (Triggers Subscription)
     await manager.start()
     
     # 5. Emit Event
-    target_id = "test.plugin"
+    target_id = "test.module"
     print(f"[Test] Emitting request_enable for {target_id}...")
     
-    req = PluginLifecycleRequest(plugin_id=target_id, requester="test_script")
-    await bus.emit("plugin.lifecycle.request_enable", req)
+    req = CapabilityLifecycleRequest(module_id=target_id, requester="test_script")
+    await bus.emit("capability.lifecycle.request_enable", req)
     
     # 6. Verify Outcome
     # Give the loop a moment to process the event
     await asyncio.sleep(0.1)
     
-    if manager.enable_plugin.called:
-        args = manager.enable_plugin.call_args
+    if manager.enable_module.called:
+        args = manager.enable_module.call_args
         assert args[0][0] == target_id
     else:
-        pytest.fail("enable_plugin was not called. Subscription missing or broken.")
+        pytest.fail("enable_module was not called. Subscription missing or broken.")
 
 if __name__ == "__main__":
     try:

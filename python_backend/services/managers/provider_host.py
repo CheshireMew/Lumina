@@ -110,7 +110,7 @@ class ProviderHostManager:
         active_status = "stopped"
         if is_active:
             active_status = "ready" if self.loading_status == "idle" else self.loading_status
-        desired_enabled = bool(self.config.is_plugin_desired_enabled(provider_id))
+        desired_enabled = bool(self.config.is_provider_desired_enabled(provider_id))
         return {
             "id": provider_id,
             "name": driver.name,
@@ -124,7 +124,7 @@ class ProviderHostManager:
             "group_policy": "exclusive",
             "permissions": list(driver.permissions or []),
             "config_schema": driver.config_schema,
-            "current_config": self.config.get_plugin_settings(provider_id),
+            "current_config": self.config.get_provider_settings(provider_id),
             "is_driver": True,
             "driver_id": provider_id,
             "error": self.last_error if provider_id == self.active_driver_id else None,

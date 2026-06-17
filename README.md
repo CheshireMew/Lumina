@@ -112,5 +112,5 @@ npm run build
 - 不为了扩展性恢复插件生态。
 - 不为了趣味性恢复游戏化数值。
 - 不恢复多角色和多形象运行时。
-- 文档只保留这个 README；重要决策直接写在这里。
+- 长期产品边界保留在这个 README；重构执行边界见 `docs/companion-runtime-refactor.md`。
 - `AGENTS.md` 是给编码 Agent 的工作规则，不属于产品文档。

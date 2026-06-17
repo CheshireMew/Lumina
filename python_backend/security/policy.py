@@ -1,6 +1,6 @@
 import logging
 from typing import List, Tuple
-from core.manifest import PluginManifest
+from core.manifest import CapabilityManifest
 from core.permissions import TIER_SAFE, TIER_TRUSTED, TIER_SYSTEM, validate_permissions
 from core.security.audit import AuditLogger
 
@@ -8,13 +8,13 @@ logger = logging.getLogger("SecurityPolicy")
 
 class SecurityPolicy:
     """
-    Enforces permission checks for plugins.
+    Enforces permission checks for capability modules.
     """
 
     @staticmethod
-    def check_permissions(manifest: PluginManifest) -> Tuple[bool, List[str]]:
+    def check_permissions(manifest: CapabilityManifest) -> Tuple[bool, List[str]]:
         """
-        Check if plugin permissions are acceptable.
+        Check if capability module permissions are acceptable.
         Returns: (is_allowed, warnings)
         """
         warnings = []
@@ -41,10 +41,10 @@ class SecurityPolicy:
         
         # Policy Logic
         if is_risky or invalid_permissions:
-            AuditLogger.log_event_sync(
+            AuditLogger.schedule_event(
                 actor_id=manifest.id,
                 action="permission_check",
-                target="plugin.permissions",
+                target="capability.permissions",
                 status="warning",
                 metadata={
                     "permissions": requested_perms,

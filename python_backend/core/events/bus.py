@@ -237,15 +237,15 @@ class EventBus:
             # No running loop
             asyncio.run(self.emit(event_type, data, source))
     
-    # --- Plugin Lifecycle Events ---
+    # --- Capability Module Lifecycle Events ---
     
-    async def plugin_loaded(self, plugin_id: str, plugin_instance: Any):
-        """Emit plugin loaded event."""
-        await self.emit("plugin.loaded", {"id": plugin_id, "instance": plugin_instance})
+    async def capability_module_loaded(self, module_id: str, module_instance: Any):
+        """Emit capability module loaded event."""
+        await self.emit("capability.loaded", {"id": module_id, "instance": module_instance})
     
-    async def plugin_unloaded(self, plugin_id: str):
-        """Emit plugin unloaded event."""
-        await self.emit("plugin.unloaded", {"id": plugin_id})
+    async def capability_module_unloaded(self, module_id: str):
+        """Emit capability module unloaded event."""
+        await self.emit("capability.unloaded", {"id": module_id})
 
     def bulk_register_schemas(self, schemas: Dict[str, Type[BaseModel]], version: str = "1.0"):
         """Bulk register schemas for multiple event types."""

@@ -28,8 +28,20 @@ class FakeProcess:
         self.killed = True
 
 
+class EmptyCapabilityPackageRegistry:
+    def package_for_capability(self, capability: str):
+        return None
+
+    def should_auto_start(self, capability: str) -> bool:
+        return False
+
+
+def build_process_manager():
+    return ProcessManager(EmptyCapabilityPackageRegistry())
+
+
 def test_process_manager_initializes_current_components():
-    manager = ProcessManager()
+    manager = build_process_manager()
 
     assert manager.workers == {}
     assert manager.registry == {}
@@ -38,8 +50,13 @@ def test_process_manager_initializes_current_components():
     assert manager.supervisor is not None
 
 
+def test_process_manager_requires_package_registry():
+    with pytest.raises(ValueError, match="requires CapabilityPackageRegistry"):
+        ProcessManager(None)
+
+
 def test_register_service_def_and_health_path():
-    manager = ProcessManager()
+    manager = build_process_manager()
 
     manager.register_service_def("worker:stt", port=8765, script="backend_launcher.py", args=["--capability", "stt"])
     manager.set_health_path("worker:stt", "/ready")
@@ -54,7 +71,7 @@ def test_register_service_def_and_health_path():
 
 
 def test_start_worker_uses_launcher_and_records_worker_process():
-    manager = ProcessManager()
+    manager = build_process_manager()
     process = FakeProcess()
     manager.health_probe.is_service_reachable = MagicMock(return_value=(False, "none"))
     manager.launcher.build_launch_config = MagicMock(
@@ -71,7 +88,7 @@ def test_start_worker_uses_launcher_and_records_worker_process():
 
 
 def test_start_worker_attaches_reachable_external_service():
-    manager = ProcessManager()
+    manager = build_process_manager()
     manager.register_service_def("worker:stt", port=8765)
     manager.health_probe.is_service_reachable = MagicMock(return_value=(True, "http"))
 
@@ -83,17 +100,16 @@ def test_start_worker_attaches_reachable_external_service():
 
 
 def test_start_worker_respects_capability_package_readiness():
-    manager = ProcessManager()
     registry = MagicMock()
     registry.package_for_capability.return_value = SimpleNamespace(id="stt-runtime")
     registry.resolve.return_value = SimpleNamespace(status="missing", entry_executable=None)
-    manager.set_capability_package_registry(registry)
+    manager = ProcessManager(registry)
 
     assert manager.start_worker("worker:stt", script_name="backend_launcher.py") is False
 
 
 def test_is_running_detects_live_and_dead_processes():
-    manager = ProcessManager()
+    manager = build_process_manager()
     manager.workers["live"] = WorkerProcess(FakeProcess(returncode=None), time.time())
     manager.workers["dead"] = WorkerProcess(
         FakeProcess(returncode=1),
@@ -107,7 +123,7 @@ def test_is_running_detects_live_and_dead_processes():
 
 
 def test_stop_worker_terminates_managed_process_and_removes_record():
-    manager = ProcessManager()
+    manager = build_process_manager()
     process = FakeProcess()
     manager.workers["worker:test"] = WorkerProcess(process, time.time())
 
@@ -118,7 +134,7 @@ def test_stop_worker_terminates_managed_process_and_removes_record():
 
 
 def test_get_active_workers_filters_dead_workers():
-    manager = ProcessManager()
+    manager = build_process_manager()
     manager.workers["live"] = WorkerProcess(FakeProcess(returncode=None), time.time())
     manager.workers["dead"] = WorkerProcess(
         FakeProcess(returncode=1),
@@ -132,7 +148,7 @@ def test_get_active_workers_filters_dead_workers():
 
 @pytest.mark.anyio
 async def test_shutdown_all_stops_every_worker():
-    manager = ProcessManager()
+    manager = build_process_manager()
     process_a = FakeProcess(pid=1)
     process_b = FakeProcess(pid=2)
     manager.workers["a"] = WorkerProcess(process_a, time.time())
@@ -146,7 +162,7 @@ async def test_shutdown_all_stops_every_worker():
 
 
 def test_register_mcp_client_keeps_external_client_record():
-    manager = ProcessManager()
+    manager = build_process_manager()
     client = SimpleNamespace(name="mcp:test", pid=9001)
 
     manager.register_mcp_client(client)

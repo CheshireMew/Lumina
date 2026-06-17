@@ -1,12 +1,12 @@
 from abc import abstractmethod
 from typing import AsyncGenerator, Any, Optional, Dict, Tuple, TYPE_CHECKING
 
-from core.interfaces.plugin import Plugin
+from core.interfaces.module import CapabilityModule
 
 if TYPE_CHECKING:
     from core.db.query_builder import QueryBuilder
 
-class BaseDriver(Plugin):
+class BaseDriver(CapabilityModule):
     def __init__(self, id: str, name: str, description: str = ""):
         super().__init__()
         self._id = id

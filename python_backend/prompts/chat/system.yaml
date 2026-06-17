@@ -1,5 +1,5 @@
 角色: |
-  你是{{ char_name }}。
+  你是{{ companion_name }}。
   {{ custom_prompt | indent(2) }}
 
 表达规范: |

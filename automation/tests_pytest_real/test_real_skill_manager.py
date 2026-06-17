@@ -40,8 +40,8 @@ async def test_skill_manager_registration_and_execution():
 @pytest.mark.anyio
 async def test_skill_manager_tool_not_found():
     sm = SkillManager()
-    result = await sm.execute_tool("non_existent", {})
-    assert "not found" in result.lower()
+    with pytest.raises(ValueError, match="Tool 'non_existent' is not registered"):
+        await sm.execute_tool("non_existent", {})
 
 @pytest.mark.anyio
 async def test_skill_manager_execution_failure():
@@ -51,6 +51,5 @@ async def test_skill_manager_execution_failure():
     mock_tool.execute = AsyncMock(side_effect=ValueError("Boom"))
     
     sm.register_tool(mock_tool)
-    result = await sm.execute_tool("fail_tool", {})
-    assert "Error executing" in result
-    assert "Boom" in result
+    with pytest.raises(ValueError, match="Boom"):
+        await sm.execute_tool("fail_tool", {})

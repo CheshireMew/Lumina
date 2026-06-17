@@ -9,6 +9,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
 from memory.core import MemoryService
 from memory.factory import MemoryDriverFactory
+from services.companion.context import CompanionContext
 
 
 MEMORY_CONFIG = {
@@ -23,6 +24,10 @@ MEMORY_CONFIG = {
 }
 
 
+def companion_context(character_id: str = "test_char") -> CompanionContext:
+    return CompanionContext(session_id=0, user_id="test_user", character_id=character_id)
+
+
 @pytest.fixture
 def memory_service():
     with patch("memory.factory.MemoryDriverFactory.create_driver") as mock_factory:
@@ -34,7 +39,7 @@ def memory_service():
         driver.query = AsyncMock(return_value=[])
         mock_factory.return_value = driver
 
-        svc = MemoryService(driver=driver, character_id="test_char")
+        svc = MemoryService(driver=driver)
         return svc, driver
 
 
@@ -42,7 +47,6 @@ def memory_service():
 async def test_memory_service_init(memory_service):
     svc, driver = memory_service
 
-    assert svc.character_id == "test_char"
     assert svc.driver is driver
     assert svc.driver_id == "driver.memory.test"
     assert svc.vector_store.driver is driver
@@ -70,7 +74,6 @@ async def test_replace_driver_closes_existing_and_syncs_vector_store(memory_serv
     assert svc.driver is next_driver
     assert svc.driver_id == "driver.memory.next"
     assert svc.vector_store.driver is next_driver
-    assert svc.available is True
 
 
 @pytest.mark.anyio
@@ -78,12 +81,13 @@ async def test_log_conversation_delegation(memory_service):
     svc, driver = memory_service
     svc.encoder = None
 
-    result = await svc.log_conversation("test_char", "hello world")
+    result = await svc.log_conversation(companion_context("test_char"), "hello world")
 
     assert result == "msg_123"
     driver.create.assert_awaited_once()
     args, _ = driver.create.call_args
     assert args[0] == "conversation_log"
+    assert args[1]["character_id"] == "test_char"
     assert args[1]["narrative"] == "hello world"
 
 
@@ -92,13 +96,160 @@ async def test_retrieve_context_flow(memory_service):
     svc, _ = memory_service
     mock_encoder = MagicMock(return_value=[0.1, 0.2])
     svc.set_encoder(mock_encoder)
-    svc.search_hybrid = AsyncMock(return_value=[{"content": "memory 1"}, {"content": "memory 2"}])
+    svc.search_episodic_hybrid = AsyncMock(return_value=[{"content": "memory 1"}, {"content": "memory 2"}])
 
-    context = await svc.retrieve_context("query test", character_id="test_char")
+    context = await svc.retrieve_context("query test", companion_context("test_char"))
 
     assert "memory 1" in context
     assert "memory 2" in context
-    svc.search_hybrid.assert_awaited_once()
+    svc.search_episodic_hybrid.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_retrieve_context_fulltext_fallback_uses_companion_context(memory_service):
+    svc, _ = memory_service
+    svc.encoder = None
+    svc._search_episodic_fulltext = AsyncMock(return_value=[{"content": "fallback memory"}])
+
+    context = await svc.retrieve_context("query test", companion_context("test_char"))
+
+    assert context == "fallback memory"
+    svc._search_episodic_fulltext.assert_awaited_once_with(
+        query="query test",
+        context=companion_context("test_char"),
+        limit=3,
+    )
+
+
+def test_memory_service_does_not_expose_raw_vector_store_search_api(memory_service):
+    svc, _ = memory_service
+
+    assert not hasattr(svc, "add_episodic_memory")
+    assert not hasattr(svc, "search")
+    assert not hasattr(svc, "search_fulltext")
+    assert not hasattr(svc, "search_hybrid")
+
+
+@pytest.mark.anyio
+async def test_memory_stats_require_companion_context(memory_service):
+    svc, driver = memory_service
+    driver.query = AsyncMock(
+        side_effect=[
+            [{"count": 3}],
+            [{"count": 5}],
+        ]
+    )
+
+    stats = await svc.get_stats(companion_context("test_char"))
+
+    assert stats == {"entities": 3, "conversations": 5}
+    assert driver.query.await_args_list[0].args[1] == {"cid": "test_char"}
+    assert driver.query.await_args_list[1].args[1] == {"cid": "test_char"}
+
+
+@pytest.mark.anyio
+async def test_memory_stats_query_failure_propagates(memory_service):
+    svc, driver = memory_service
+    driver.query = AsyncMock(side_effect=RuntimeError("stats query failed"))
+
+    with pytest.raises(RuntimeError, match="stats query failed"):
+        await svc.get_stats(companion_context("test_char"))
+
+
+@pytest.mark.anyio
+async def test_unprocessed_conversations_require_companion_context(memory_service):
+    svc, driver = memory_service
+    driver.query = AsyncMock(return_value=[{"id": "log-1", "narrative": "hello"}])
+
+    results = await svc.get_unprocessed_conversations(
+        companion_context("test_char"),
+        limit=7,
+    )
+
+    assert results == [{"id": "log-1", "narrative": "hello"}]
+    driver.query.assert_awaited_once()
+    _, params = driver.query.await_args.args
+    assert params == {"cid": "test_char", "limit": 7}
+
+
+@pytest.mark.anyio
+async def test_unprocessed_conversation_query_failure_propagates(memory_service):
+    svc, driver = memory_service
+    driver.query = AsyncMock(side_effect=RuntimeError("unprocessed query failed"))
+
+    with pytest.raises(RuntimeError, match="unprocessed query failed"):
+        await svc.get_unprocessed_conversations(companion_context("test_char"))
+
+
+@pytest.mark.anyio
+async def test_mark_conversations_processed_failure_propagates(memory_service):
+    svc, driver = memory_service
+    driver.query = AsyncMock(side_effect=RuntimeError("mark processed failed"))
+
+    with pytest.raises(RuntimeError, match="mark processed failed"):
+        await svc.mark_conversations_processed(["log-1", "log-2"])
+
+    driver.query.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_conversation_queries_parse_driver_rows(memory_service):
+    svc, driver = memory_service
+    driver.query = AsyncMock(return_value=[{"id": "log-1", "narrative": "hello"}])
+
+    all_items = await svc.get_all_conversations(companion_context("test_char"))
+    recent_items = await svc.get_recent_conversations(
+        companion_context("test_char"),
+        limit=3,
+    )
+
+    assert all_items == [{"id": "log-1", "narrative": "hello"}]
+    assert recent_items == [{"id": "log-1", "narrative": "hello"}]
+    assert driver.query.await_count == 2
+
+
+@pytest.mark.anyio
+async def test_all_conversations_query_failure_propagates(memory_service):
+    svc, driver = memory_service
+    driver.query = AsyncMock(side_effect=RuntimeError("conversation query failed"))
+
+    with pytest.raises(RuntimeError, match="conversation query failed"):
+        await svc.get_all_conversations(companion_context("test_char"))
+
+
+@pytest.mark.anyio
+async def test_inspiration_parses_driver_rows(memory_service):
+    svc, driver = memory_service
+    driver.query = AsyncMock(
+        return_value=[
+            {"id": "mem-1", "content": "one"},
+            {"id": "mem-2", "content": "two"},
+        ]
+    )
+
+    items = await svc.get_inspiration(companion_context("test_char"), limit=1)
+
+    assert len(items) == 1
+    assert items[0]["id"] in {"mem-1", "mem-2"}
+
+
+@pytest.mark.anyio
+async def test_inspiration_query_failure_propagates(memory_service):
+    svc, driver = memory_service
+    driver.query = AsyncMock(side_effect=RuntimeError("inspiration query failed"))
+
+    with pytest.raises(RuntimeError, match="inspiration query failed"):
+        await svc.get_inspiration(companion_context("test_char"), limit=1)
+
+
+@pytest.mark.anyio
+async def test_retrieve_context_search_failure_propagates(memory_service):
+    svc, _ = memory_service
+    svc.encoder = None
+    svc._search_episodic_fulltext = AsyncMock(side_effect=RuntimeError("search failed"))
+
+    with pytest.raises(RuntimeError, match="search failed"):
+        await svc.retrieve_context("query test", companion_context("test_char"))
 
 
 def test_memory_driver_factory_returns_configured_driver_only():
@@ -114,7 +265,7 @@ def test_memory_driver_factory_returns_configured_driver_only():
         patch("memory.factory.os.path.isdir", return_value=True),
         patch("memory.factory.os.listdir", return_value=["memory_postgres"]),
         patch(
-            "memory.factory.DriverPluginLoader.load_plugins",
+            "memory.factory.DriverLoader.load_plugins",
             return_value=[other_driver, postgres_driver],
         ),
     ):
@@ -137,7 +288,7 @@ def test_memory_driver_factory_rejects_missing_configured_driver():
         patch("memory.factory.os.path.isdir", return_value=True),
         patch("memory.factory.os.listdir", return_value=["memory_postgres"]),
         patch(
-            "memory.factory.DriverPluginLoader.load_plugins",
+            "memory.factory.DriverLoader.load_plugins",
             return_value=[other_driver],
         ),
     ):

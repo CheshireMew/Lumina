@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { listAvailableLlmModels } from "../../api/llmConfigApi";
-import { ProviderType } from "./types";
+import { FREE_LLM_PROVIDER_ID, LlmProviderId } from "./types";
 
 export const useAvailableLlmModels = (
     isOpen: boolean,
-    providerType: ProviderType,
+    providerId: LlmProviderId,
 ) => {
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [isLoadingModels, setIsLoadingModels] = useState(false);
 
     useEffect(() => {
-        if (!isOpen || providerType !== "free") {
+        if (!isOpen || providerId !== FREE_LLM_PROVIDER_ID) {
             return;
         }
 
@@ -33,7 +33,7 @@ export const useAvailableLlmModels = (
         return () => {
             isMounted = false;
         };
-    }, [isOpen, providerType]);
+    }, [isOpen, providerId]);
 
     return {
         availableModels,

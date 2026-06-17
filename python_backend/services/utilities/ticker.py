@@ -9,7 +9,7 @@ class TimeTicker:
     """
     Central Time Service (The Pulse).
     Provides a single asyncio loop for time-based events to prevent
-    multiple `while True` loops across different plugins.
+    multiple `while True` loops across different modules.
     
     Now emits events via EventBus in addition to direct callbacks.
     """

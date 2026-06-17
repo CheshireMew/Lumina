@@ -32,7 +32,7 @@ def _compute_provider_status(desired_enabled: bool, active_status: str) -> str:
 
 class DriverStateCollector:
     """
-    通用工具类：从 PluginManager 收集 Driver 状态用于 WorkerStatusReporter。
+    通用工具类：从 provider manager 收集 Driver 状态用于 WorkerStatusReporter。
     消除 STT/TTS Server 中的代码重复。
     """
     
@@ -47,18 +47,18 @@ class DriverStateCollector:
         从 Manager 中收集所有 Driver 的状态信息。
         
         Args:
-            manager: STTPluginManager 或 TTSPluginManager 实例
-            category: 插件类别 (e.g. "stt", "tts")
+            manager: STT/TTS provider manager 实例
+            category: provider 类别 (e.g. "stt", "tts")
             runtime_target: 运行目标 (e.g. "worker:stt", "worker:tts")
             service_url: 服务切换 URL
             
         Returns:
-            包含所有 Driver 状态的列表，符合 PluginState Schema
+            包含所有 Driver 状态的列表
         """
-        plugins = []
+        states = []
         
         if not manager:
-            return plugins
+            return states
         
         normalized_target = normalize_runtime_target(runtime_target)
 
@@ -66,7 +66,7 @@ class DriverStateCollector:
             state = manager.snapshot_provider_state(pid)
             desired_enabled = bool(state["desired_enabled"])
             active_status = state["active_status"]
-            plugins.append({
+            states.append({
                 **state,
                 "kind": "provider",
                 "category": category,
@@ -78,4 +78,4 @@ class DriverStateCollector:
                 "service_url": service_url,
             })
         
-        return plugins
+        return states

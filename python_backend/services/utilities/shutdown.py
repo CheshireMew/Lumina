@@ -17,12 +17,11 @@ class ShutdownManager:
     Shutdown Order (reverse of startup):
     1. MCP Host (external integrations)
     2. Config Watcher (monitoring)
-    3. Reconciliation Service (sync)
-    4. System Plugins (extensions)
-    5. Ticker (background tasks)
-    6. Worker Control Hub (IPC)
-    7. Process Manager (child processes)
-    8. Database (persistence)
+    3. Capability modules
+    4. Ticker (background tasks)
+    5. Worker Control Hub (IPC)
+    6. Process Manager (child processes)
+    7. Database (persistence)
     """
     
     async def shutdown(self, container: Any, app: FastAPI = None) -> None:
@@ -41,25 +40,22 @@ class ShutdownManager:
         # 2. Config Watcher
         self._stop_config_watcher(container)
         
-        # 3. Reconciliation Service
-        await self._stop_reconciliation(container)
+        # 3. Capability modules
+        await self._stop_capability_modules(container)
         
-        # 4. System Plugins
-        await self._stop_system_plugins(container)
-        
-        # 5. Ticker
+        # 4. Ticker
         self._stop_ticker(container)
         
-        # 6. Pending startup tasks
+        # 5. Pending startup tasks
         await self._stop_prewarm_task(container)
         
-        # 7. Worker Control Hub
+        # 6. Worker Control Hub
         await self._stop_worker_control_hub()
         
-        # 8. Process Manager
+        # 7. Process Manager
         await self._stop_process_manager(container)
         
-        # 9. Database
+        # 8. Database
         await self._stop_database(container)
         
         logger.info("✅ Shutdown complete")
@@ -79,26 +75,16 @@ class ShutdownManager:
             logger.info("Stopping ConfigWatcher...")
             watcher.stop()
     
-    async def _stop_reconciliation(self, container: Any):
-        import asyncio
-        reconciler = container.get_reconciliation_service()
-        if reconciler:
-            logger.info("Stopping Reconciliation Service...")
-            try:
-                await reconciler.stop()
-            except asyncio.CancelledError:
-                logger.warning("Reconciliation stop was cancelled (acceptable)")
-            except Exception as e:
-                logger.error(f"Error stopping Reconciliation: {e}")
-    
-    async def _stop_system_plugins(self, container: Any):
-        system_plugin_manager = container.get_system_plugin_manager()
-        if system_plugin_manager:
-            logger.info("Stopping System Plugins...")
-            try:
-                await system_plugin_manager.shutdown()
-            except Exception as e:
-                logger.error(f"Error stopping unified plugin kernel: {e}")
+    async def _stop_capability_modules(self, container: Any):
+        if not container.has_service("capability_module_manager"):
+            return
+
+        module_manager = container.get_capability_module_manager()
+        logger.info("Stopping capability modules...")
+        try:
+            await module_manager.shutdown()
+        except Exception as e:
+            logger.error(f"Error stopping capability module kernel: {e}")
     
     def _stop_ticker(self, container: Any):
         ticker = container.get_ticker()

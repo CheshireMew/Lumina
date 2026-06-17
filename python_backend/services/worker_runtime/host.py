@@ -100,7 +100,6 @@ class WorkerRuntimeHost:
         await self._start_worker_plugin_kernel()
 
         runtime_state_provider = self._start_status_reporter(app)
-        await self._start_plugin_sync(app)
         await self._start_config_watcher(app)
         await self._start_control_client(app, runtime_state_provider)
 
@@ -108,6 +107,18 @@ class WorkerRuntimeHost:
         ws_control_client = getattr(app.state, "ws_control_client", None)
         if ws_control_client:
             await ws_control_client.stop()
+
+        config_watcher = getattr(app.state, "config_watcher", None)
+        if config_watcher:
+            config_watcher.stop()
+
+        config_watcher_task = getattr(app.state, "config_watcher_task", None)
+        if config_watcher_task:
+            config_watcher_task.cancel()
+            try:
+                await config_watcher_task
+            except asyncio.CancelledError:
+                pass
 
         if self.status_reporter:
             if asyncio.iscoroutinefunction(self.status_reporter.stop):
@@ -119,25 +130,32 @@ class WorkerRuntimeHost:
             await self.current_capability.on_shutdown()
 
     async def _initialize_capability(self, app: FastAPI):
+        self._initialize_container_services()
         app_settings.set_read_only(True)
-        self.container.set_config(app_settings)
         self.current_capability.register_routes(app)
         app.state.container = self.container
         await self.current_capability.on_startup(app)
 
-    async def _start_worker_plugin_kernel(self):
-        try:
-            from services.system_plugin_manager import SystemPluginManager
+    def _initialize_container_services(self):
+        from core.capability_packages import CapabilityPackageRegistry
+        from core.events import init_event_bus
+        from services.capability_registry import CapabilityRegistry
 
-            worker_plugin_manager = SystemPluginManager(
-                container=self.container,
-                runtime_target=self.runtime_target,
-            )
-            await worker_plugin_manager.start()
-            self.container.set_system_plugin_manager(worker_plugin_manager)
-            self.logger.info("Worker plugin kernel initialized")
-        except Exception as exc:
-            self.logger.warning("Worker plugin kernel init failed: %s", exc)
+        self.container.set_config(app_settings)
+        self.container.set_event_bus(init_event_bus())
+        self.container.set_capability_registry(CapabilityRegistry())
+        self.container.set_capability_package_registry(CapabilityPackageRegistry())
+
+    async def _start_worker_plugin_kernel(self):
+        from services.capability_module_manager import CapabilityModuleManager
+
+        worker_module_manager = CapabilityModuleManager(
+            container=self.container,
+            runtime_target=self.runtime_target,
+        )
+        await worker_module_manager.start()
+        self.container.set_capability_module_manager(worker_module_manager)
+        self.logger.info("Worker capability module kernel initialized")
 
     def _start_status_reporter(self, app: FastAPI):
         from services.reporting.runtime_state_provider import build_runtime_state_provider
@@ -169,106 +187,71 @@ class WorkerRuntimeHost:
         )
         return runtime_state_provider
 
-    async def _start_plugin_sync(self, app: FastAPI):
-        try:
-            from services.plugin_state_sync import PluginStateSync
-
-            manager = self.container.get_system_plugin_manager()
-            if not manager:
-                self.logger.warning(
-                    "No plugin controller available for runtime %s; plugin sync skipped",
-                    self.runtime_target,
-                )
-                return
-
-            sync_service = PluginStateSync(
-                manager,
-                worker_id=app.state.worker_id,
-                expected_target=self.runtime_target,
-                reporter=self.status_reporter,
-            )
-            self.container.set_plugin_sync(sync_service)
-            app.state.sync_task = asyncio.create_task(sync_service.start())
-            self.logger.info("Distributed plugin state sync started")
-        except Exception as exc:
-            self.logger.error("Failed to start plugin sync: %s", exc, exc_info=True)
-
     async def _start_config_watcher(self, app: FastAPI):
-        try:
-            from services.infra.config_watcher import ConfigWatcherService
+        from services.infra.config_watcher import ConfigWatcherService
 
-            watcher = ConfigWatcherService()
-            self.container.set_config_watcher(watcher)
-            app.state.config_watcher_task = asyncio.create_task(watcher.start())
-            self.logger.info("Config watcher activated")
-        except Exception as exc:
-            self.logger.error("Failed to start config watcher: %s", exc)
+        watcher = ConfigWatcherService()
+        self.container.set_config_watcher(watcher)
+        app.state.config_watcher = watcher
+        app.state.config_watcher_task = asyncio.create_task(watcher.start())
+        self.logger.info("Config watcher activated")
 
     async def _start_control_client(self, app: FastAPI, runtime_state_provider: Any):
-        try:
-            from services.infra.worker_control_client import WorkerControlClient
+        from services.infra.worker_control_client import WorkerControlClient
 
-            ws_client = WorkerControlClient(
-                worker_id=app.state.worker_id,
-                worker_type=self.current_capability.name,
-                runtime_target=self.runtime_target,
-                main_host="127.0.0.1",
-                main_port=app_settings.network.memory_port,
-                worker_port=self.listen_port,
-                heartbeat_interval=15,
-                status_provider=runtime_state_provider,
-            )
+        ws_client = WorkerControlClient(
+            worker_id=app.state.worker_id,
+            worker_type=self.current_capability.name,
+            runtime_target=self.runtime_target,
+            main_host="127.0.0.1",
+            main_port=app_settings.network.memory_port,
+            worker_port=self.listen_port,
+            heartbeat_interval=15,
+            status_provider=runtime_state_provider,
+        )
 
-            ws_client.on_config_update(self._handle_config_update)
-            ws_client.on_lifecycle(self._handle_lifecycle)
-            ws_client.start()
+        ws_client.on_config_update(self._handle_config_update)
+        ws_client.on_lifecycle(self._handle_lifecycle)
+        ws_client.start()
 
-            app.state.ws_control_client = ws_client
-            self.logger.info("WebSocket control client activated")
-        except Exception as exc:
-            self.logger.warning(
-                "WebSocket control client failed; falling back to HTTP: %s",
-                exc,
-            )
+        app.state.ws_control_client = ws_client
+        self.logger.info("WebSocket control client activated")
 
     def _handle_config_update(self, payload):
         self.logger.info("Config update received: %s", payload.section)
         app_settings.reload()
 
-        plugin_id = payload.data.get("plugin_id") if payload.data else None
-        manager = self.container.get_system_plugin_manager()
-        if not plugin_id or not manager:
+        provider_id = payload.data.get("provider_id") if payload.data else None
+        manager = self.container.get_capability_module_manager()
+        if not provider_id:
             return
 
-        plugin = manager.get_plugin(plugin_id)
-        if not plugin:
+        module = manager.get_module(provider_id)
+        if not module:
             return
 
         settings = payload.data.get("settings")
         if isinstance(settings, dict):
             for key, value in settings.items():
-                plugin.update_config(key, value)
+                module.update_config(key, value)
             return
 
         key = payload.data.get("key")
         if key is not None:
-            plugin.update_config(key, payload.data.get("value"))
+            module.update_config(key, payload.data.get("value"))
 
     async def _handle_lifecycle(self, payload):
         self.logger.info("Lifecycle command: %s -> %s", payload.action, payload.target_id)
 
-        plugin_manager = self.container.get_system_plugin_manager()
-        if plugin_manager and plugin_manager.get_manifest(payload.target_id):
+        manager = self.container.get_capability_module_manager()
+        if manager.get_manifest(payload.target_id):
             if payload.action == "disable":
-                await plugin_manager.disable_plugin(payload.target_id)
+                await manager.disable_module(payload.target_id)
             elif payload.action == "enable":
-                await plugin_manager.enable_plugin(payload.target_id)
+                await manager.enable_module(payload.target_id)
             return
 
-        manager = self.container.get_system_plugin_manager()
-        if not manager:
-            return
         if payload.action == "disable":
-            await manager.disable_plugin(payload.target_id)
+            await manager.disable_module(payload.target_id)
         elif payload.action == "enable":
-            await manager.enable_plugin(payload.target_id)
+            await manager.enable_module(payload.target_id)

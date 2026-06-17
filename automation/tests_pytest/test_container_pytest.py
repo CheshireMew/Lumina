@@ -83,9 +83,9 @@ def test_service_registration_parametrized(service_name, setter_method, getter_m
 # ============================================================================
 
 @pytest.mark.parametrize("input_id,expected_valid", [
-    ("test.plugin", True),
+    ("test.module", True),
     ("my_extension", True),
-    ("vendor.plugin-name", True),
+    ("vendor.module-name", True),
     ("../etc/passwd", False),
     ("plugin with spaces", False),
     ("plugin\nwith\nnewlines", False),

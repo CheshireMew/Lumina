@@ -74,7 +74,7 @@ hiddenimports = [
     'routers',
     'services',
     'core',
-    'plugins',
+    'capability_modules',
     'app_config',
     'logger_setup',
     'main',
@@ -87,10 +87,10 @@ hiddenimports = [
 
 hiddenimports += collect_submodules('services.managers')
 hiddenimports += [
-    'plugins.drivers.llm.deepseek_driver',
-    'plugins.drivers.llm.gemini_driver',
-    'plugins.drivers.llm.openai_driver',
-    'plugins.drivers.llm.pollinations_driver',
+    'llm.drivers.deepseek_driver',
+    'llm.drivers.gemini_driver',
+    'llm.drivers.openai_driver',
+    'llm.drivers.pollinations_driver',
 ]
 
 # Collect all submodules for our packages
@@ -132,9 +132,9 @@ target_excludes = {
         'soundfile',
         'sherpa_onnx',
         'edge_tts',
-        'plugins.extensions.stt_sensevoice',
-        'plugins.extensions.tts_edge',
-        'plugins.extensions.voiceprint',
+        'capability_modules.stt_sensevoice',
+        'capability_modules.tts_edge',
+        'capability_modules.voiceprint',
         'capabilities.stt',
         'capabilities.tts',
         'capabilities.vision',
@@ -146,8 +146,8 @@ target_excludes = {
     ],
     'stt-runtime': [
         'edge_tts',
-        'plugins.extensions.tts_edge',
-        'plugins.extensions.voiceprint',
+        'capability_modules.tts_edge',
+        'capability_modules.voiceprint',
     ],
     'tts-runtime': [
         'faster_whisper',
@@ -155,8 +155,8 @@ target_excludes = {
         'sounddevice',
         'soundfile',
         'sherpa_onnx',
-        'plugins.extensions.stt_sensevoice',
-        'plugins.extensions.voiceprint',
+        'capability_modules.stt_sensevoice',
+        'capability_modules.voiceprint',
     ],
 }.get(build_target, [])
 
@@ -206,13 +206,13 @@ if build_target == 'core-runtime':
 datas += [
     ('../config', 'config'),
     ('../../config/capability-packages.json', 'config'),
-    ('../plugins/drivers', 'plugins/drivers'),
+    ('../llm/drivers', 'llm/drivers'),
     ('../prompts', 'prompts'),
     ('../tts_emotion_styles.json', '.'),
     ('../user_settings.json', '.'),
 ]
-for plugin_name in target_extension_plugins:
-    datas.append((f'../plugins/extensions/{plugin_name}', f'plugins/extensions/{plugin_name}'))
+for module_name in target_extension_plugins:
+    datas.append((f'../capability_modules/{module_name}', f'capability_modules/{module_name}'))
 
 block_cipher = None
 
@@ -244,10 +244,10 @@ a = Analysis(
         'llvmlite',
         'numba',
         'modelscope',
-        'plugins.extensions.voiceauth_sherpa',
-        'plugins.extensions.voiceauth_sherpa.drivers',
-        'plugins.extensions.voiceauth_sherpa.drivers.voiceauth',
-        'plugins.extensions.voiceauth_sherpa.drivers.voiceauth.sherpa_cam_driver',
+        'capability_modules.voiceauth_sherpa',
+        'capability_modules.voiceauth_sherpa.drivers',
+        'capability_modules.voiceauth_sherpa.drivers.voiceauth',
+        'capability_modules.voiceauth_sherpa.drivers.voiceauth.sherpa_cam_driver',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

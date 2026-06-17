@@ -26,6 +26,6 @@ def test_config_sections_are_serializable():
     serialized = json.dumps(extracted, default=str)
 
     assert serialized
-    assert {"audio", "llm", "memory", "models", "network", "plugins", "search", "stt", "tts"}.issubset(
+    assert {"audio", "capabilities", "llm", "memory", "models", "network", "search", "stt", "tts"}.issubset(
         extracted
     )

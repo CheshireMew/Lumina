@@ -5,7 +5,6 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from core.interfaces.soul import BaseSoulDriver
 from core.interfaces.repository import ISoulRepository
-from services.repositories.file_soul_repository import FileSoulRepository
 
 logger = logging.getLogger("SoulService")
 SOUL_DRIVER_CONFIG_KEY = "soul_driver_id"
@@ -74,19 +73,12 @@ class SoulService:
         # Future setup if needed
         logger.info("SoulService Initialized")
 
-    def __init__(self, system_config=None, repo: ISoulRepository = None, memory_service=None):
-        self.system_config = system_config
-        self.memory_service = memory_service
+    def __init__(self, repo: ISoulRepository = None):
+        if repo is None:
+            raise ValueError("SoulService requires ISoulRepository")
+
         self._drivers: Dict[str, BaseSoulDriver] = {}
         self._active_driver: Optional[BaseSoulDriver] = None
-        
-        if repo is None:
-            if system_config is None:
-                raise ValueError("SoulService requires system_config or repo")
-            repo = FileSoulRepository(character_id=system_config.memory.character_id)
-        elif system_config is not None:
-            repo.set_character_id(system_config.memory.character_id)
-
         self.repo = repo
 
     def get_active_character_id(self) -> str:
@@ -128,42 +120,40 @@ class SoulService:
             if driver_prompt and len(driver_prompt) > 10:
                 return driver_prompt
 
-        # 2. Standard Logic: Load Template & Render
-        try:
-            from app_config import BASE_DIR
-            
-            # Load Template
-            template_path = BASE_DIR / "prompts" / "chat" / "system.yaml"
-            if not template_path.exists():
-                logger.warning(f"System template not found at {template_path}")
-                return "You are a helpful AI assistant."
+        from app_config import BASE_DIR
 
-            prompt_sections = _read_prompt_sections(template_path)
-            
-            # Load Character Config via Repository
-            char_config = self.load_character_config()
-            
-            # Prepare Vars
-            render_vars = {
-                "char_name": char_config.get("name", "AI"),
-                "description": char_config.get("description", ""),
-                "custom_prompt": char_config.get("system_prompt", ""), # User's custom instructions
-                **context
-            }
-            
-            # Render Sections
-            parts = []
-            for key, value in prompt_sections.items():
-                if isinstance(value, str):
-                    parts.append(_render_template(value, render_vars))
-            
-            return "\n\n".join(parts)
-            
-        except Exception as e:
-            logger.error(f"Failed to render system template: {e}")
-            # Fallback
-            config = self.load_character_config()
-            return config.get("system_prompt", "You are a helpful AI assistant.")
+        template_path = BASE_DIR / "prompts" / "chat" / "system.yaml"
+        if not template_path.exists():
+            raise FileNotFoundError(f"System prompt template not found: {template_path}")
+
+        prompt_sections = _read_prompt_sections(template_path)
+        if not prompt_sections:
+            raise ValueError(f"System prompt template is empty: {template_path}")
+
+        char_config = self.load_character_config()
+        companion_name = str(char_config.get("name", "")).strip()
+        if not companion_name:
+            raise ValueError("Character config must include name for system prompt rendering")
+
+        render_vars = {
+            "companion_name": companion_name,
+            "description": char_config.get("description", ""),
+            "custom_prompt": char_config.get("system_prompt", ""),
+            **context,
+        }
+
+        parts = []
+        for value in prompt_sections.values():
+            if isinstance(value, str):
+                rendered = _render_template(value, render_vars).strip()
+                if rendered:
+                    parts.append(rendered)
+
+        prompt = "\n\n".join(parts).strip()
+        if not prompt:
+            raise ValueError(f"System prompt template rendered empty: {template_path}")
+
+        return prompt
 
     async def on_interaction(self, user_input: str, ai_response: str, context: Dict[str, Any] = {}):
         """

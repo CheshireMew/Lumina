@@ -29,23 +29,16 @@ class WebSearchTool(ToolProvider):
     async def execute(self, args: Dict[str, Any]) -> str:
         query = args.get("query", "")
         if not query:
-            return "Error: No query provided"
+            raise ValueError("web_search requires query")
 
-        from app_config import config as app_config
-        spm = self.services.get_system_plugin_manager()
+        module_manager = self.services.get_capability_module_manager()
 
-        provider_id = app_config.get_selected_provider("tool.search")
-        if spm and not provider_id:
-            provider_id = spm.find_provider("tool.search")
+        provider_id = self.services.get_config().get_selected_provider("tool.search")
+        if not provider_id:
+            raise ValueError("tool.search provider must be configured")
 
-        if not spm or not provider_id:
-            return "Error: No search provider is configured."
-
-        provider = spm.get_plugin(provider_id)
+        provider = module_manager.get_module(provider_id)
         if not provider or not hasattr(provider, "search"):
-            return f"Error: Search provider '{provider_id}' is not active or installed."
+            raise RuntimeError(f"Search provider '{provider_id}' is not active")
 
-        try:
-             return await provider.search(query)
-        except Exception as e:
-             return f"Error executing search with {provider_id}: {e}"
+        return await provider.search(query)

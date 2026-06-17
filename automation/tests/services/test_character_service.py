@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -10,24 +9,33 @@ sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 from services.character_service import CharacterService
 
 
-def test_character_service_requires_system_config_for_active_character():
-    service = CharacterService(characters_root=Path("characters"))
+class FakeSoulService:
+    def __init__(self, character_id: str = "sakura"):
+        self.character_id = character_id
 
-    with pytest.raises(ValueError, match="requires system_config"):
-        service.load_config()
+    def get_active_character_id(self) -> str:
+        return self.character_id
 
 
-def test_character_service_rejects_empty_configured_character():
+def test_character_service_requires_soul_service_for_active_character():
+    with pytest.raises(ValueError, match="requires SoulService"):
+        CharacterService(
+            characters_root=Path("characters"),
+            soul_service=None,
+        )
+
+
+def test_character_service_rejects_empty_active_character():
     service = CharacterService(
         characters_root=Path("characters"),
-        system_config=SimpleNamespace(memory=SimpleNamespace(character_id="")),
+        soul_service=FakeSoulService(""),
     )
 
-    with pytest.raises(ValueError, match="memory.character_id must be configured"):
+    with pytest.raises(ValueError, match="Active companion character_id is not configured"):
         service.load_config()
 
 
-def test_character_service_loads_config_for_configured_character(tmp_path: Path):
+def test_character_service_loads_config_for_active_companion(tmp_path: Path):
     char_dir = tmp_path / "characters" / "sakura"
     char_dir.mkdir(parents=True)
     (char_dir / "config.json").write_text(
@@ -36,7 +44,7 @@ def test_character_service_loads_config_for_configured_character(tmp_path: Path)
     )
     service = CharacterService(
         characters_root=tmp_path / "characters",
-        system_config=SimpleNamespace(memory=SimpleNamespace(character_id="sakura")),
+        soul_service=FakeSoulService("sakura"),
     )
 
     config = service.load_config()

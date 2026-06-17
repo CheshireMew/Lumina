@@ -1,6 +1,8 @@
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -8,14 +10,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "python_backend"))
 os.environ["LUMINA_ENV"] = "dev"
 
 from core.events.bus import Event
-from core.manifest import PluginManifest
+from core.manifest import CapabilityManifest
 from core.protocol import EventPacket, EventType, InputTextPayload
-from plugins.extensions.emotion_broker.plugin import Plugin as EmotionBrokerPlugin
+from capability_modules.emotion_broker.module import Capability as EmotionBrokerModule
 from services.chat.event_adapter import ChatTurnEventAdapter
 from services.chat.service import ChatTurnService
+from services.companion.context import CompanionContextResolver
+from services.companion.runtime import CompanionRuntime
 
 
-class FakePluginContext:
+class FakeModuleContext:
     def __init__(self):
         self.emitted: list[tuple[str, EventPacket]] = []
 
@@ -40,15 +44,20 @@ class FailingPipeline:
         yield ""
 
 
+class FakeSoulService:
+    def get_active_character_id(self) -> str:
+        return "hiyori"
+
+
 @pytest.mark.anyio
 async def test_emotion_broker_emits_packet_with_top_level_session_id():
-    plugin = EmotionBrokerPlugin()
-    plugin._bind_manifest(PluginManifest(id="system.emotion_broker"))
+    module = EmotionBrokerModule()
+    module._bind_manifest(CapabilityManifest(id="system.emotion_broker"))
 
-    context = FakePluginContext()
-    await plugin.load(context)
+    context = FakeModuleContext()
+    await module.load(context)
 
-    await plugin._broadcast_emotion("joy", session_id=7)
+    await module._broadcast_emotion("joy", session_id=7)
 
     event_type, packet = context.emitted[0]
     assert event_type == EventType.EMOTION_CHANGED
@@ -58,8 +67,15 @@ async def test_emotion_broker_emits_packet_with_top_level_session_id():
 
 @pytest.mark.anyio
 async def test_chat_turn_event_adapter_emits_schema_valid_system_status_on_failure():
-    chat_service = ChatTurnService(pipeline=FailingPipeline())
-    adapter = ChatTurnEventAdapter(chat_service)
+    chat_service = ChatTurnService(
+        pipeline=FailingPipeline(),
+        session_manager=SimpleNamespace(
+            load_session=AsyncMock(return_value=SimpleNamespace(short_term_history=[]))
+        ),
+        context_resolver=CompanionContextResolver(FakeSoulService()),
+        interaction_recorder=SimpleNamespace(record=AsyncMock()),
+    )
+    adapter = ChatTurnEventAdapter(CompanionRuntime(chat_turn_service=chat_service))
     adapter.bus = FakeBus()
 
     packet = EventPacket(
@@ -84,7 +100,8 @@ async def test_chat_turn_event_adapter_emits_schema_valid_system_status_on_failu
     assert "boom" in status_packet.payload["details"]
 
 
-def test_input_text_payload_does_not_default_character_id():
+def test_input_text_payload_does_not_default_identity():
     payload = InputTextPayload(text="hello")
 
+    assert payload.user_id is None
     assert payload.character_id is None
