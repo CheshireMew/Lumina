@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class RuntimeLlmSettings(BaseModel):
-    providerId: str = "custom_provider"
+    providerId: str
     apiKey: str = ""
     baseUrl: str = ""
     model: str

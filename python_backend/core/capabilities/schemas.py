@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 class CapabilityType(str, Enum):
     """
     Standardized Capability Types (Registry).
-    Capability modules must declare these in `provides` list.
     """
     STT_PROVIDER = "stt.provider"
     TTS_PROVIDER = "tts.provider"
@@ -40,7 +39,7 @@ class TTSCapability(BaseCapabilitySchema):
 
 class ToolCapability(BaseCapabilitySchema):
     """
-    Contract for internal tool capability modules.
+    Contract for internal tool providers.
     Must provide a JSON Schema for parameters.
     """
     type: CapabilityType = CapabilityType.TOOL_EXECUTION

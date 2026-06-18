@@ -51,7 +51,7 @@ const DEFAULT_SETTINGS: AppSettings = {
         providerId: FREE_LLM_PROVIDER_ID,
         apiKey: "",
         baseUrl: "",
-        model: "gpt-4o-mini",
+        model: "",
         temperature: 0.7,
         topP: 1.0,
         presencePenalty: 0.0,
@@ -83,7 +83,7 @@ const LOCAL_SETTING_STORE_KEYS: Record<LocalSettingKey, string> = {
  *
  * Extracted from App.tsx to improve modularity.
  */
-export function useSettings(backendReady: boolean) {
+export function useSettings(backendReady: boolean, baseUrl: string) {
     const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -136,7 +136,7 @@ export function useSettings(backendReady: boolean) {
         }
 
         try {
-            const llm = await fetchRuntimeLlmSettings();
+            const llm = await fetchRuntimeLlmSettings(baseUrl);
             setSettings((prev) => {
                 const nextLlm: LLMSettings = {
                     apiKey: llm.apiKey ?? prev.llm.apiKey,
@@ -165,7 +165,7 @@ export function useSettings(backendReady: boolean) {
         } catch (error) {
             console.warn("[useSettings] Runtime settings refresh failed:", error);
         }
-    }, [backendReady]);
+    }, [backendReady, baseUrl]);
 
     useEffect(() => {
         void refreshRuntimeSettings();
@@ -235,7 +235,7 @@ export function useSettings(backendReady: boolean) {
 
         await electronSettings.set("thinking_enabled", llm.thinkingEnabled);
 
-        const persisted = await updateRuntimeLlmSettings({
+        const persisted = await updateRuntimeLlmSettings(baseUrl, {
             apiKey: llm.apiKey,
             providerId: llm.providerId,
             baseUrl: llm.baseUrl,
@@ -267,7 +267,7 @@ export function useSettings(backendReady: boolean) {
         prevLLMRef.current = next;
 
         console.log("[useSettings] LLM settings updated");
-    }, []);
+    }, [baseUrl]);
 
     /**
      * Save a simple setting to the store.

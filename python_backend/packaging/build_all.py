@@ -118,9 +118,9 @@ def stage_runtime_copy(
     )
     shutil.copytree(runtime_dist_dir / "lumina_backend", runtime_dir)
 
-    module_root = target_dir / "capability_modules"
+    module_root = target_dir / "provider_drivers"
     module_root.mkdir(parents=True, exist_ok=True)
-    source_root = project_root / "python_backend" / "capability_modules"
+    source_root = project_root / "python_backend" / "provider_drivers"
     for module_name in module_names:
         shutil.copytree(source_root / module_name, module_root / module_name)
 
@@ -138,10 +138,10 @@ def stage_voiceprint_runtime(project_root: Path, dist_dir: Path, contract: dict)
     target_dir = reset_runtime_dir(dist_dir, "voiceprint-runtime")
     write_runtime_metadata(target_dir, definition)
 
-    module_root = target_dir / "capability_modules"
+    module_root = target_dir / "provider_drivers"
     module_root.mkdir(parents=True, exist_ok=True)
-    source_root = project_root / "python_backend" / "capability_modules"
-    for module_name in ("voiceprint", "voiceauth_sherpa"):
+    source_root = project_root / "python_backend" / "provider_drivers"
+    for module_name in ("voiceauth_sherpa",):
         shutil.copytree(source_root / module_name, module_root / module_name)
 
     shutil.copy2(

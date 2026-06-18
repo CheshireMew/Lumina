@@ -4,6 +4,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from core.protocol import EventPacket
 from services.companion.context import CompanionContext, CompanionContextResolver
+from services.companion.context_pack import CompanionContextPackBuilder
 from services.companion.interaction import CompanionInteraction, CompanionInteractionRecorder
 
 logger = logging.getLogger("ChatTurnService")
@@ -34,6 +35,7 @@ class ChatTurnService:
         pipeline: Any,
         session_manager: Any,
         context_resolver: CompanionContextResolver,
+        context_pack_builder: CompanionContextPackBuilder,
         interaction_recorder: CompanionInteractionRecorder,
     ):
         if pipeline is None:
@@ -42,12 +44,15 @@ class ChatTurnService:
             raise ValueError("ChatTurnService requires SessionManager")
         if context_resolver is None:
             raise ValueError("ChatTurnService requires CompanionContextResolver")
+        if context_pack_builder is None:
+            raise ValueError("ChatTurnService requires CompanionContextPackBuilder")
         if interaction_recorder is None:
             raise ValueError("ChatTurnService requires CompanionInteractionRecorder")
 
         self.pipeline = pipeline
         self.session_manager = session_manager
         self.context_resolver = context_resolver
+        self.context_pack_builder = context_pack_builder
         self.interaction_recorder = interaction_recorder
 
     def build_text_turn_request(self, packet: EventPacket) -> TextTurnRequest:
@@ -73,20 +78,17 @@ class ChatTurnService:
             payload={"mode": request.mode, "text": text},
         )
 
-        messages = await self.build_turn_messages(
-            request.companion_context,
-            text,
+        context_pack = await self.context_pack_builder.build(
+            companion_context=request.companion_context,
+            user_message=text,
             history_limit=request.history_limit,
+            enable_memory=True,
         )
 
-        # Fresh sessions should not retrieve previous conversations as context.
-        enable_rag_for_turn = len(messages) > 1
-
         async for token in self.stream_response(
-            messages=messages,
+            context_pack=context_pack,
             companion_context=request.companion_context,
             model=request.model,
-            enable_rag=enable_rag_for_turn,
             user_name=request.user_name,
         ):
             yield TurnStreamEvent(
@@ -96,55 +98,27 @@ class ChatTurnService:
 
         yield TurnStreamEvent(kind="ended", payload={})
 
-    async def build_turn_messages(
-        self,
-        companion_context: CompanionContext,
-        text: str,
-        history_limit: int = 10,
-    ) -> List[Dict[str, Any]]:
-        messages: List[Dict[str, Any]] = []
-        session_manager = self.session_manager
-        try:
-            state = await session_manager.load_session(companion_context)
-            history = getattr(state, "short_term_history", []) or []
-            messages.extend(
-                {"role": item["role"], "content": item["content"]}
-                for item in history[-history_limit:]
-                if item.get("role") and item.get("content")
-            )
-        except Exception as exc:
-            logger.error("Failed to load session for chat turn: %s", exc)
-
-        messages.append({"role": "user", "content": text})
-        return messages
-
     async def stream_response(
         self,
         *,
-        messages: List[Dict[str, Any]],
         companion_context: CompanionContext,
+        context_pack: Any,
         model: Optional[str] = None,
         temperature: float = 0.7,
         stream: bool = True,
-        enable_rag: bool = True,
         enable_tools: bool = True,
         save_history: bool = True,
         log_memory: bool = True,
         user_name: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         final_response = ""
-        user_msg = next(
-            (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"),
-            "",
-        )
+        user_msg = context_pack.user_message
 
         async for token in self.pipeline.run(
-            messages,
-            companion_context=companion_context,
+            context_pack=context_pack,
             stream=stream,
             model=model,
             temperature=temperature,
-            enable_rag=enable_rag,
             enable_tools=enable_tools,
         ):
             final_response += token

@@ -5,6 +5,7 @@ import { FREE_LLM_PROVIDER_ID, LlmProviderId } from "./types";
 export const useAvailableLlmModels = (
     isOpen: boolean,
     providerId: LlmProviderId,
+    apiBaseUrl: string,
 ) => {
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [isLoadingModels, setIsLoadingModels] = useState(false);
@@ -17,7 +18,7 @@ export const useAvailableLlmModels = (
         let isMounted = true;
         setIsLoadingModels(true);
 
-        listAvailableLlmModels()
+        listAvailableLlmModels(apiBaseUrl)
             .then((models) => {
                 if (isMounted) {
                     setAvailableModels(models);
@@ -33,7 +34,7 @@ export const useAvailableLlmModels = (
         return () => {
             isMounted = false;
         };
-    }, [isOpen, providerId]);
+    }, [apiBaseUrl, isOpen, providerId]);
 
     return {
         availableModels,

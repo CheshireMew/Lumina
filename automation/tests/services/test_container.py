@@ -58,12 +58,6 @@ class TestServiceContainer(unittest.TestCase):
         with self.assertRaises(ServiceNotInitializedError) as cm:
             self.container.get_worker_runtime_registry()
         self.assertIn("WorkerRuntimeRegistry not initialized", str(cm.exception))
-        with self.assertRaises(ServiceNotInitializedError) as cm:
-            self.container.get_capability_registry()
-        self.assertIn("CapabilityRegistry not initialized", str(cm.exception))
-        with self.assertRaises(ServiceNotInitializedError) as cm:
-            self.container.get_capability_module_manager()
-        self.assertIn("CapabilityModuleManager not initialized", str(cm.exception))
         print("✅ Uninitialized service error handling verified")
 
     def test_multiple_service_registrations(self):
@@ -88,22 +82,6 @@ class TestServiceContainer(unittest.TestCase):
 
         self.assertIs(self.container.get_gateway(), mock_gateway)
         print("✅ Explicit gateway access verified")
-
-    def test_context_provider_registry(self):
-        """Test context provider registration and retrieval"""
-        mock_provider1 = MagicMock(name="ContextProvider1")
-        mock_provider1.id = "provider1"
-        mock_provider2 = MagicMock(name="ContextProvider2")
-        mock_provider2.id = "provider2"
-
-        self.container.register_context_provider(mock_provider1)
-        self.container.register_context_provider(mock_provider2)
-
-        providers = self.container.get_context_providers()
-        self.assertEqual(len(providers), 2)
-        self.assertIn(mock_provider1, providers)
-        self.assertIn(mock_provider2, providers)
-        print("✅ Context provider registry verified")
 
     def test_tool_provider_registry(self):
         """Test tool provider registration and retrieval"""
@@ -165,37 +143,40 @@ class TestServiceContainer(unittest.TestCase):
         mock_tts = MagicMock(name="TTSManager")
         mock_provider_config = MagicMock(name="ProviderConfigService")
         mock_context_resolver = MagicMock(name="CompanionContextResolver")
+        mock_context_pack_builder = MagicMock(name="CompanionContextPackBuilder")
         mock_interaction_recorder = MagicMock(name="CompanionInteractionRecorder")
         mock_soul = MagicMock(name="SoulService")
         mock_session_manager = MagicMock(name="SessionManager")
         mock_process_manager = MagicMock(name="ProcessManager")
         mock_runtime_registry = MagicMock(name="WorkerRuntimeRegistry")
-        mock_capability_registry = MagicMock(name="CapabilityRegistry")
-        mock_capability_module_manager = MagicMock(name="CapabilityModuleManager")
+        mock_emotion_broker = MagicMock(name="EmotionBroker")
+        mock_voiceprint_filter = MagicMock(name="VoiceprintFilter")
 
         self.container.set_vision(mock_vision)
         self.container.set_tts(mock_tts)
         self.container.set_provider_config_service(mock_provider_config)
         self.container.set_companion_context_resolver(mock_context_resolver)
+        self.container.set_companion_context_pack_builder(mock_context_pack_builder)
         self.container.set_companion_interaction_recorder(mock_interaction_recorder)
         self.container.set_soul(mock_soul)
         self.container.set_session_manager(mock_session_manager)
         self.container.set_process_manager(mock_process_manager)
         self.container.set_worker_runtime_registry(mock_runtime_registry)
-        self.container.set_capability_registry(mock_capability_registry)
-        self.container.set_capability_module_manager(mock_capability_module_manager)
+        self.container.set_emotion_broker(mock_emotion_broker)
+        self.container.set_voiceprint_filter(mock_voiceprint_filter)
 
         self.assertIs(self.container.get_vision(), mock_vision)
         self.assertIs(self.container.get_tts(), mock_tts)
         self.assertIs(self.container.get_provider_config_service(), mock_provider_config)
         self.assertIs(self.container.get_companion_context_resolver(), mock_context_resolver)
+        self.assertIs(self.container.get_companion_context_pack_builder(), mock_context_pack_builder)
         self.assertIs(self.container.get_companion_interaction_recorder(), mock_interaction_recorder)
         self.assertIs(self.container.get_soul(), mock_soul)
         self.assertIs(self.container.get_session_manager(), mock_session_manager)
         self.assertIs(self.container.get_process_manager(), mock_process_manager)
         self.assertIs(self.container.get_worker_runtime_registry(), mock_runtime_registry)
-        self.assertIs(self.container.get_capability_registry(), mock_capability_registry)
-        self.assertIs(self.container.get_capability_module_manager(), mock_capability_module_manager)
+        self.assertIs(self.container.get_emotion_broker(), mock_emotion_broker)
+        self.assertIs(self.container.get_voiceprint_filter(), mock_voiceprint_filter)
         print("✅ Setter/getter consistency verified")
 
 

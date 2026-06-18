@@ -2,6 +2,7 @@ import { WhisperModelInfo } from "./voice/types";
 import { useSttVoiceState } from "./voice/useSttVoiceState";
 import { useTtsVoiceState } from "./voice/useTtsVoiceState";
 import { useVoiceprintState } from "./voice/useVoiceprintState";
+import { RuntimeConfig } from "../runtime/runtimeConfig";
 
 export type { WhisperModelInfo } from "./voice/types";
 
@@ -35,10 +36,17 @@ export interface VoiceManagerData {
     refreshVoiceData: () => Promise<void>;
 }
 
-export const useVoiceManager = (isActive: boolean): VoiceManagerData => {
-    const stt = useSttVoiceState(isActive);
-    const tts = useTtsVoiceState(isActive);
-    const voiceprint = useVoiceprintState(isActive, stt.currentAudioDevice);
+export const useVoiceManager = (
+    isActive: boolean,
+    runtimeConfig: RuntimeConfig,
+): VoiceManagerData => {
+    const stt = useSttVoiceState(isActive, runtimeConfig.sttBaseUrl);
+    const tts = useTtsVoiceState(isActive, runtimeConfig.ttsBaseUrl);
+    const voiceprint = useVoiceprintState(
+        isActive,
+        stt.currentAudioDevice,
+        runtimeConfig.sttBaseUrl,
+    );
 
     const refreshVoiceData = async () => {
         await Promise.all([

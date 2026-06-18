@@ -27,8 +27,10 @@ async def get_network_config():
         "memory_port": app_config.network.memory_port,
         "stt_port": app_config.network.stt_port,
         "tts_port": app_config.network.tts_port,
-        "stt_url": f"{app_config.network.memory_url}/stt",
-        "tts_url": f"{app_config.network.memory_url}/tts",
+        "vision_port": app_config.network.vision_port,
+        "stt_url": f"{app_config.network.memory_url}/capabilities/stt",
+        "tts_url": f"{app_config.network.memory_url}/capabilities/tts",
+        "vision_url": f"{app_config.network.memory_url}/capabilities/vision",
         "memory_url": app_config.network.memory_url,
         "host": app_config.network.host,
     }

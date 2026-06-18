@@ -1,8 +1,36 @@
 """Pydantic models for Lumina backend configuration."""
 
 from typing import Any, Dict, Optional
+import json
+import os
+from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+
+def _load_configured_ports() -> Dict[str, int]:
+    candidates = []
+    app_root = os.environ.get("LUMINA_APP_ROOT")
+    if app_root:
+        candidates.append(Path(app_root) / "config" / "ports.json")
+    candidates.append(Path(__file__).resolve().parents[2] / "config" / "ports.json")
+
+    path = next((candidate for candidate in candidates if candidate.exists()), None)
+    if path is None:
+        searched = ", ".join(str(candidate) for candidate in candidates)
+        raise FileNotFoundError(f"config/ports.json not found. Searched: {searched}")
+
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        data = json.load(handle)
+    return {
+        "memory_port": int(data["memory_port"]),
+        "stt_port": int(data["stt_port"]),
+        "tts_port": int(data["tts_port"]),
+        "vision_port": int(data["vision_port"]),
+    }
+
+
+CONFIGURED_PORTS = _load_configured_ports()
 
 
 DEFAULT_SELECTED_PROVIDERS: Dict[str, str] = {
@@ -12,6 +40,9 @@ DEFAULT_SELECTED_PROVIDERS: Dict[str, str] = {
     "tool.search": "driver.tool.search.brave",
     "vision": "driver.vision.moondream",
 }
+
+FREE_LLM_PROVIDER_ID = "free_tier"
+CUSTOM_LLM_PROVIDER_ID = "custom_provider"
 
 
 class PostgresConfig(BaseModel):
@@ -51,16 +82,16 @@ class LLMFeatureRoute(BaseModel):
 
 
 DEFAULT_LLM_PROVIDER_DATA: Dict[str, Dict[str, Any]] = {
-    "free_tier": {
-        "id": "free_tier",
+    FREE_LLM_PROVIDER_ID: {
+        "id": FREE_LLM_PROVIDER_ID,
         "type": "pollinations",
         "base_url": "",
         "api_key": "none",
         "models": ["gpt-4o-mini", "claude-3-haiku"],
         "enabled": True,
     },
-    "custom_provider": {
-        "id": "custom_provider",
+    CUSTOM_LLM_PROVIDER_ID: {
+        "id": CUSTOM_LLM_PROVIDER_ID,
         "type": "openai",
         "base_url": "http://localhost:11434/v1",
         "api_key": "",
@@ -71,12 +102,12 @@ DEFAULT_LLM_PROVIDER_DATA: Dict[str, Dict[str, Any]] = {
 
 
 DEFAULT_LLM_ROUTE_DATA: Dict[str, Dict[str, Any]] = {
-    "chat": {"feature": "chat", "provider_id": "free_tier", "model": "gpt-4o-mini"},
-    "memory": {"feature": "memory", "provider_id": "free_tier", "model": "gpt-4o-mini"},
-    "dreaming": {"feature": "dreaming", "provider_id": "free_tier", "model": "gpt-4o-mini"},
-    "evolution": {"feature": "evolution", "provider_id": "free_tier", "model": "gpt-4o-mini"},
-    "proactive": {"feature": "proactive", "provider_id": "free_tier", "model": "gpt-4o-mini"},
-    "vision": {"feature": "vision", "provider_id": "free_tier", "model": "gpt-4o"},
+    "chat": {"feature": "chat", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
+    "memory": {"feature": "memory", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
+    "dreaming": {"feature": "dreaming", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
+    "evolution": {"feature": "evolution", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
+    "proactive": {"feature": "proactive", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
+    "vision": {"feature": "vision", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o"},
 }
 
 
@@ -151,9 +182,10 @@ class WorkerNodeConfig(BaseModel):
 
 class NetworkConfig(BaseModel):
     host: str = "127.0.0.1"
-    memory_port: int = 8010
-    stt_port: int = 8765
-    tts_port: int = 8766
+    memory_port: int = Field(default_factory=lambda: CONFIGURED_PORTS["memory_port"])
+    stt_port: int = Field(default_factory=lambda: CONFIGURED_PORTS["stt_port"])
+    tts_port: int = Field(default_factory=lambda: CONFIGURED_PORTS["tts_port"])
+    vision_port: int = Field(default_factory=lambda: CONFIGURED_PORTS["vision_port"])
     bind_localhost_only: bool = True
     workers: Dict[str, WorkerNodeConfig] = Field(default_factory=dict)
 
@@ -190,12 +222,12 @@ class NetworkConfig(BaseModel):
             return self.stt_port
         if capability == "tts":
             return self.tts_port
+        if capability == "vision":
+            return self.vision_port
 
         worker = self.workers.get(normalized)
         if worker:
             return worker.port
-        if capability == "vision":
-            return 8005
         return None
 
     def runtime_base_url(self, runtime_target: str) -> Optional[str]:

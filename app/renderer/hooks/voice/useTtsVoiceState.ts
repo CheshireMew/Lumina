@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { API_CONFIG } from "../../config";
 import { VoiceOption } from "./types";
 import { normalizeVoices } from "./utils";
 
-export const useTtsVoiceState = (isActive: boolean) => {
+export const useTtsVoiceState = (isActive: boolean, ttsBaseUrl: string) => {
     const [edgeVoices, setEdgeVoices] = useState<VoiceOption[]>([]);
     const [gptVoices, setGptVoices] = useState<VoiceOption[]>([]);
     const [activeTtsEngines, setActiveTtsEngines] = useState<string[]>([]);
@@ -13,7 +12,7 @@ export const useTtsVoiceState = (isActive: boolean) => {
 
     const refreshStatus = useCallback(async () => {
         try {
-            const response = await fetch(`${API_CONFIG.TTS_BASE_URL}/models/list`);
+            const response = await fetch(`${ttsBaseUrl}/models/list`);
             if (response.ok) {
                 const data = await response.json();
                 setActiveTtsEngines(data.active ? [data.active] : []);
@@ -27,13 +26,13 @@ export const useTtsVoiceState = (isActive: boolean) => {
             }
             setActiveTtsEngines([]);
         }
-    }, []);
+    }, [ttsBaseUrl]);
 
     const refreshVoices = useCallback(async () => {
         await refreshStatus();
 
         try {
-            const response = await fetch(`${API_CONFIG.TTS_BASE_URL}/voices`);
+            const response = await fetch(`${ttsBaseUrl}/voices`);
             if (!response.ok) {
                 return;
             }

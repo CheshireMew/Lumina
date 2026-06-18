@@ -22,6 +22,87 @@ PYTHON_BACKEND = PROJECT_ROOT / "python_backend"
 sys.path.insert(0, str(PYTHON_BACKEND))
 sys.path.insert(0, str(PROJECT_ROOT))
 
+@pytest.fixture
+def generate_test_user_input():
+    from automation.fixtures.data_generators import generate_test_user_input
+
+    return generate_test_user_input
+
+
+@pytest.fixture
+def chat_message_factory():
+    from automation.fixtures.factories import ChatMessageFactory
+
+    return ChatMessageFactory
+
+
+@pytest.fixture
+def memory_factory():
+    from automation.fixtures.factories import MemoryFactory
+
+    return MemoryFactory
+
+
+@pytest.fixture
+def provider_factory():
+    from automation.fixtures.factories import ProviderFactory
+
+    return ProviderFactory
+
+
+@pytest.fixture
+def soul_profile_factory():
+    from automation.fixtures.factories import SoulProfileFactory
+
+    return SoulProfileFactory
+
+
+@pytest.fixture
+def llm_response_factory():
+    from automation.fixtures.factories import LLMResponseFactory
+
+    return LLMResponseFactory
+
+
+@pytest.fixture
+async def mock_http_server():
+    from automation.fixtures.mock_servers import MockHTTPServer
+
+    server = MockHTTPServer()
+    await server.start()
+    yield server
+    await server.stop()
+
+
+@pytest.fixture
+async def mock_llm_server():
+    from automation.fixtures.mock_servers import MockLLMServer
+
+    server = MockLLMServer()
+    await server.start()
+    yield server
+    await server.stop()
+
+
+@pytest.fixture
+async def mock_memory_server():
+    from automation.fixtures.mock_servers import MockMemoryServer
+
+    server = MockMemoryServer()
+    await server.start()
+    yield server
+    await server.stop()
+
+
+@pytest.fixture
+async def all_mock_servers(mock_llm_server, mock_memory_server):
+    return {
+        "llm": mock_llm_server,
+        "memory": mock_memory_server,
+        "llm_url": mock_llm_server.base_url,
+        "memory_url": mock_memory_server.base_url,
+    }
+
 
 # ============================================================================
 # Service Fixtures
@@ -186,38 +267,6 @@ def sample_memory_data():
 
 
 # ============================================================================
-# Capability module fixtures
-# ============================================================================
-
-@pytest.fixture
-def sample_module_manifest():
-    """Sample capability manifest YAML content"""
-    return """
-id: test.module
-name: Test Capability
-version: 1.0.0
-description: A test capability module
-author: Test Author
-entry_point: module.py
-"""
-
-
-@pytest.fixture
-def temp_module_dir(sample_module_manifest):
-    """Create a temporary capability module directory with manifest"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        manifest_path = Path(tmpdir) / "manifest.yaml"
-        with open(manifest_path, 'w') as f:
-            f.write(sample_module_manifest)
-
-        # Create entry point
-        module_file = Path(tmpdir) / "module.py"
-        module_file.write_text("# Test capability module\n")
-
-        yield tmpdir
-
-
-# ============================================================================
 # Event Loop Fixtures
 # ============================================================================
 
@@ -229,7 +278,7 @@ def event_loop_policy():
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def anyio_backend():
     return "asyncio"
 
@@ -299,7 +348,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.integration)
 
         # Add 'unit' to core/services tests
-        if any(x in str(item.fspath) for x in ["core", "services", "capability_modules"]):
+        if any(x in str(item.fspath) for x in ["core", "services", "provider_drivers"]):
             item.add_marker(pytest.mark.unit)
 
 

@@ -24,15 +24,41 @@ class ChatTurnEventAdapter:
             return
 
         self.bus.subscribe(EventType.INPUT_TEXT, self.handle_input_text)
+        self.bus.subscribe(EventType.CONTROL_INTERRUPT, self.handle_control)
+        self.bus.subscribe(EventType.CONTROL_SESSION, self.handle_control)
         self.subscribed = True
         logger.info("Chat turn event adapter started")
 
     async def handle_input_text(self, event):
         if self.current_task and not self.current_task.done():
             logger.info("Interrupting active chat turn for new input")
+            await self.companion_runtime.interrupt()
             self.current_task.cancel()
 
         self.current_task = asyncio.create_task(self._process_input_text(event))
+
+    async def handle_control(self, event):
+        packet = self._coerce_packet(event.data)
+        if packet is None:
+            return
+        if packet.source == "core.companion_runtime":
+            return
+
+        if self.current_task and not self.current_task.done():
+            await self.companion_runtime.interrupt()
+            self.current_task.cancel()
+
+        result = await self.companion_runtime.handle_control_packet(packet)
+        if result.get("action") == "reset":
+            await self.bus.emit(
+                EventType.CONTROL_SESSION,
+                EventPacket(
+                    session_id=int(result["session_id"]),
+                    type=EventType.CONTROL_SESSION,
+                    source="core.companion_runtime",
+                    payload={"session_id": result["session_id"], "action": "start"},
+                ),
+            )
 
     async def _process_input_text(self, event):
         try:

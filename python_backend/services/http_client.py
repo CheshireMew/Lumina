@@ -116,7 +116,7 @@ async def get_http_client() -> httpx.AsyncClient:
     
     Example:
         client = await get_http_client()
-        response = await client.get("http://localhost:8010/health")
+        response = await client.get(app_settings.network.memory_url + "/health")
     """
     return await _get_pool().get_client()
 

@@ -4,9 +4,9 @@ import logging
 import os
 from typing import Any
 
+from config.models import CUSTOM_LLM_PROVIDER_ID
 
 BRAVE_SEARCH_PROVIDER_ID = "driver.tool.search.brave"
-CUSTOM_LLM_PROVIDER_ID = "custom_provider"
 
 _DOTENV_LOADED = False
 
@@ -46,6 +46,8 @@ def apply_env_overrides(bundle: Any) -> None:
         network.stt_port = int(os.environ["LUMINA_STT_PORT"])
     if os.environ.get("LUMINA_TTS_PORT"):
         network.tts_port = int(os.environ["LUMINA_TTS_PORT"])
+    if os.environ.get("LUMINA_VISION_PORT"):
+        network.vision_port = int(os.environ["LUMINA_VISION_PORT"])
 
     if custom_llm_provider and os.environ.get("OPENAI_API_KEY"):
         custom_llm_provider.api_key = os.environ["OPENAI_API_KEY"]

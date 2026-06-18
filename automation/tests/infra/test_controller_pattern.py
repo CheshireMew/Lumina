@@ -43,14 +43,9 @@ async def test_ensure_worker_running_starts_worker_runtime():
 @pytest.mark.anyio
 async def test_update_config_persists_main_runtime_provider_setting():
     config = ConfigStub()
-    manifest = SimpleNamespace(runtime_target="main")
-
-    capability_module_manager = MagicMock()
-    capability_module_manager.get_manifest.return_value = manifest
 
     container = MagicMock()
     container.get_config.return_value = config
-    container.get_capability_module_manager.return_value = capability_module_manager
 
     service = ProviderConfigService(container)
 
@@ -64,10 +59,6 @@ async def test_update_config_persists_main_runtime_provider_setting():
 @pytest.mark.anyio
 async def test_update_config_broadcasts_worker_runtime_provider_setting():
     config = ConfigStub()
-    manifest = SimpleNamespace(runtime_target="worker:tts")
-
-    capability_module_manager = MagicMock()
-    capability_module_manager.get_manifest.return_value = manifest
 
     process_manager = MagicMock()
     process_manager.is_running.return_value = True
@@ -75,7 +66,6 @@ async def test_update_config_broadcasts_worker_runtime_provider_setting():
     container = MagicMock()
     container.get_config.return_value = config
     container.get_process_manager.return_value = process_manager
-    container.get_capability_module_manager.return_value = capability_module_manager
 
     hub = MagicMock()
     hub.broadcast_config_update = AsyncMock()

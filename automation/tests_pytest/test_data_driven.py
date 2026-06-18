@@ -56,20 +56,20 @@ def test_intent_validation_from_yaml():
 
 
 @pytest.mark.data_driven
-def test_module_validation_from_yaml():
-    """Test capability module validation using YAML test data"""
-    test_cases = load_yaml_test_cases("module_validation.yaml")
+def test_provider_id_validation_from_yaml():
+    """Test provider ID validation using YAML test data"""
+    test_cases = load_yaml_test_cases("provider_id_validation.yaml")
 
     for case in test_cases.get("test_cases", []):
-        module_id = case["module_id"]
+        provider_id = case["provider_id"]
         is_valid = case["is_valid"]
 
-        # Validate module ID format
+        # Validate provider ID format
         import re
         pattern = re.compile(r'^[a-zA-Z0-9_\.\-]+$')
-        actually_valid = bool(pattern.match(module_id))
+        actually_valid = bool(pattern.match(provider_id))
 
-        assert actually_valid == is_valid, f"Module ID: {module_id}, Expected valid: {is_valid}"
+        assert actually_valid == is_valid, f"Provider ID: {provider_id}, Expected valid: {is_valid}"
 
 
 # ============================================================================
@@ -179,21 +179,21 @@ test_cases:
     expected_intent: casual_chat
 """)
 
-    # Create module_validation.yaml
-    module_yaml = TEST_DATA_DIR / "module_validation.yaml"
-    if not module_yaml.exists():
-        module_yaml.write_text("""
-description: Capability module ID validation test cases
+    # Create provider_id_validation.yaml
+    provider_yaml = TEST_DATA_DIR / "provider_id_validation.yaml"
+    if not provider_yaml.exists():
+        provider_yaml.write_text("""
+description: Provider ID validation test cases
 test_cases:
-  - module_id: test.module
+  - provider_id: driver.test.provider
     is_valid: True
-  - module_id: my_extension
+  - provider_id: provider_test
     is_valid: True
-  - module_id: ../etc/passwd
+  - provider_id: ../etc/passwd
     is_valid: False
-  - module_id: module with spaces
+  - provider_id: provider with spaces
     is_valid: False
-  - module_id: <script>alert('xss')</script>
+  - provider_id: <script>alert('xss')</script>
     is_valid: False
 """)
 

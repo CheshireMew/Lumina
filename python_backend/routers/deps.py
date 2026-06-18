@@ -47,10 +47,6 @@ def get_provider_config_service(c: ServiceContainer = Depends(get_container)) ->
     return c.get_provider_config_service()
 
 
-def get_capability_module_manager(c: ServiceContainer = Depends(get_container)) -> Any:
-    return c.get_capability_module_manager()
-
-
 def get_soul_service(c: ServiceContainer = Depends(get_container)) -> Any:
     return c.get_soul()
 

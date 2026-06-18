@@ -1,37 +1,36 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { API_CONFIG } from "../../config";
-
 export const useVoiceprintState = (
     isActive: boolean,
     currentAudioDevice: string | null,
+    sttBaseUrl: string,
 ) => {
     const [voiceprintEnabled, setVoiceprintEnabled] = useState(false);
-    const [voiceprintThreshold, setVoiceprintThreshold] = useState(0.6);
-    const [voiceprintProfile, setVoiceprintProfile] = useState("default");
+    const [voiceprintThreshold, setVoiceprintThreshold] = useState(0);
+    const [voiceprintProfile, setVoiceprintProfile] = useState("");
     const [voiceprintStatus, setVoiceprintStatus] = useState("");
     const [voiceprintLoaded, setVoiceprintLoaded] = useState(false);
-    const [vadStartThreshold, setVadStartThreshold] = useState(0.6);
-    const [vadEndThreshold, setVadEndThreshold] = useState(0.05);
+    const [vadStartThreshold, setVadStartThreshold] = useState(0);
+    const [vadEndThreshold, setVadEndThreshold] = useState(0);
 
     const refreshVoiceprintConfig = useCallback(async () => {
         try {
             const voiceprintResponse = await fetch(
-                `${API_CONFIG.STT_BASE_URL}/voiceprint/status`,
+                `${sttBaseUrl}/voiceprint/status`,
             );
             if (voiceprintResponse.ok) {
                 const data = await voiceprintResponse.json();
-                setVoiceprintEnabled(data.enabled || false);
-                setVoiceprintThreshold(data.threshold || 0.6);
-                setVoiceprintProfile(data.profile || "default");
-                setVoiceprintLoaded(data.profile_loaded || false);
+                setVoiceprintEnabled(data.enabled ?? false);
+                setVoiceprintThreshold(data.threshold ?? 0);
+                setVoiceprintProfile(data.profile ?? "");
+                setVoiceprintLoaded(data.profile_loaded ?? false);
                 setVoiceprintStatus(
                     data.profile_loaded ? "Loaded voiceprint" : "Voiceprint not registered",
                 );
             }
 
             const audioStatusResponse = await fetch(
-                `${API_CONFIG.STT_BASE_URL}/audio/status`,
+                `${sttBaseUrl}/audio/status`,
             );
             if (audioStatusResponse.ok) {
                 const data = await audioStatusResponse.json();
@@ -45,17 +44,17 @@ export const useVoiceprintState = (
         } catch (error) {
             console.warn("Failed to fetch voiceprint config", error);
         }
-    }, []);
+    }, [sttBaseUrl]);
 
     const pushAudioConfig = useCallback(
         async (payload: Record<string, unknown>) => {
-            await fetch(`${API_CONFIG.STT_BASE_URL}/audio/config`, {
+            await fetch(`${sttBaseUrl}/audio/config`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
         },
-        [],
+        [sttBaseUrl],
     );
 
     const handleVoiceprintToggle = useCallback(

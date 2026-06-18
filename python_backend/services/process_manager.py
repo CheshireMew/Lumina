@@ -241,8 +241,7 @@ class ProcessManager:
         if service_def:
             return service_def.get("port"), service_def.get("health_path", "/health")
 
-        port_map = {"worker:stt": 8765, "worker:tts": 8766, "main": 8010}
-        return port_map.get(worker_id), "/health"
+        return None, "/health"
 
     def _poll_process(self, worker_id: str, proc) -> Optional[int]:
         if hasattr(proc, "poll"):

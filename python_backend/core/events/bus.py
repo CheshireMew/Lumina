@@ -5,7 +5,6 @@ Pub/Sub event-driven runtime communication
 Features:
 - Async event subscription and publishing
 - Wildcard subscriptions (e.g., "system.*")
-- Runtime capability module loading/unloading support
 """
 
 import asyncio
@@ -237,16 +236,6 @@ class EventBus:
             # No running loop
             asyncio.run(self.emit(event_type, data, source))
     
-    # --- Capability Module Lifecycle Events ---
-    
-    async def capability_module_loaded(self, module_id: str, module_instance: Any):
-        """Emit capability module loaded event."""
-        await self.emit("capability.loaded", {"id": module_id, "instance": module_instance})
-    
-    async def capability_module_unloaded(self, module_id: str):
-        """Emit capability module unloaded event."""
-        await self.emit("capability.unloaded", {"id": module_id})
-
     def bulk_register_schemas(self, schemas: Dict[str, Type[BaseModel]], version: str = "1.0"):
         """Bulk register schemas for multiple event types."""
         for event_type, model in schemas.items():

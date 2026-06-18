@@ -1,7 +1,7 @@
-import { API_CONFIG } from "../config";
-
-export const listAvailableLlmModels = async (): Promise<string[]> => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/settings/llm/models/list`);
+export const listAvailableLlmModels = async (
+    apiBaseUrl: string,
+): Promise<string[]> => {
+    const response = await fetch(`${apiBaseUrl}/settings/llm/models/list`);
 
     if (!response.ok) {
         throw new Error(`Failed to fetch models: ${response.status}`);
@@ -27,8 +27,11 @@ export const listAvailableLlmModels = async (): Promise<string[]> => {
     return [];
 };
 
-export const clearLlmSessionContext = async (characterId?: string | null) => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/memory/context/clear`, {
+export const clearLlmSessionContext = async (
+    apiBaseUrl: string,
+    characterId?: string | null,
+) => {
+    const response = await fetch(`${apiBaseUrl}/memory/context/clear`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

@@ -3,7 +3,10 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np
-import webrtcvad
+try:
+    import webrtcvad
+except ModuleNotFoundError:
+    webrtcvad = None
 
 
 @dataclass
@@ -32,7 +35,7 @@ class VADProcessor:
         self.speech_end_threshold = speech_end_threshold
         self.min_speech_frames = min_speech_frames
 
-        self.vad = webrtcvad.Vad(aggressiveness)
+        self.vad = webrtcvad.Vad(aggressiveness) if webrtcvad else None
         self.speech_buffer = deque(maxlen=self.window_size)
         pre_buffer_frames = int(0.5 * 1000 / frame_duration_ms)
         self.pre_buffer = deque(maxlen=pre_buffer_frames)
@@ -53,14 +56,17 @@ class VADProcessor:
             self.min_speech_frames = max(5, min(100, min_frames))
 
     def process_frame(self, frame: np.ndarray) -> VADResult:
-        pcm = (frame.clip(-1, 1) * 32767).astype(np.int16).tobytes()
-
-        try:
-            is_speech = self.vad.is_speech(pcm, self.sample_rate)
-        except Exception:
-            is_speech = False
-
         rms = np.sqrt(np.mean(frame**2))
+
+        if self.vad is None:
+            is_speech = rms >= 0.01
+        else:
+            pcm = (frame.clip(-1, 1) * 32767).astype(np.int16).tobytes()
+            try:
+                is_speech = self.vad.is_speech(pcm, self.sample_rate)
+            except Exception:
+                is_speech = False
+
         if rms < 0.001:
             is_speech = False
 

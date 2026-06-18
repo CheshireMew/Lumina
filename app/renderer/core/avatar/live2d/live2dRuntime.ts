@@ -1,5 +1,3 @@
-import { API_CONFIG } from '../../../config';
-
 const LIVE2D_RUNTIME_SCRIPT_ID = 'lumina-pixi-live2d-cubism4';
 
 let runtimePromise: Promise<any> | null = null;
@@ -9,13 +7,13 @@ const getLive2DRuntime = () => {
     return (window as any).PIXI?.live2d || null;
 };
 
-export const ensureLive2DRuntimeLoaded = async (src?: string | null) => {
+export const ensureLive2DRuntimeLoaded = async (src: string) => {
     const existingRuntime = getLive2DRuntime();
     if (existingRuntime?.Live2DModel) {
         return existingRuntime;
     }
 
-    const nextSrc = src || `${API_CONFIG.BASE_URL}/assets/libs/pixi-live2d-display-cubism4.min.js`;
+    const nextSrc = src.trim();
     if (!nextSrc) {
         throw new Error('Live2D renderer runtime script is unavailable.');
     }

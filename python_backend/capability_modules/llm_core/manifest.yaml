@@ -1,8 +1,0 @@
-id: system.llm_core
-api_version: "1.0"
-kind: gateway
-capability: llm
-runtime_target: main
-config_schema: {}
-provides:
-  - chat.context

@@ -32,7 +32,6 @@ async def lifespan(app: FastAPI):
     
     # Service Bootstrappers
     from core.bootstrap.services import (
-        CapabilityModulesBootstrapper,
         CoreServicesBootstrapper, 
         MiddlewareBootstrapper, 
         ProviderConfigBootstrapper,
@@ -67,10 +66,9 @@ async def lifespan(app: FastAPI):
     # Level 2: Core Services
     manager.add(CoreServicesBootstrapper())
     
-    # Level 3: Provider and capability module services
+    # Level 3: Provider and built-in middleware services
     manager.add(ProviderConfigBootstrapper())
     manager.add(MiddlewareBootstrapper())
-    manager.add(CapabilityModulesBootstrapper())
     
     # Level 4: Integration
     manager.add(ChatTurnEventAdapterBootstrapper())

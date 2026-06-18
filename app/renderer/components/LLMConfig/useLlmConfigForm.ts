@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-    getDefaultModelForProvider,
     identifyPresetProvider,
     normalizeModelForSave,
     normalizeOverflowStrategy,
@@ -94,10 +93,6 @@ export const useLlmConfigForm = ({
                 ...current,
                 selectedPlatform: platform,
                 baseUrl: PRESET_PROVIDERS[platform]?.baseUrl ?? "",
-                modelName: getDefaultModelForProvider(
-                    platform,
-                    current.thinkingEnabled,
-                ),
             };
         });
     };
@@ -106,10 +101,6 @@ export const useLlmConfigForm = ({
         setForm((current) => ({
             ...current,
             thinkingEnabled,
-            modelName:
-                current.selectedPlatform === "deepseek"
-                    ? getDefaultModelForProvider("deepseek", thinkingEnabled)
-                    : current.modelName,
         }));
     };
 

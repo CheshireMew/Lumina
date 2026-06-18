@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from routers.deps import get_container
 from .worker_proxy import proxy_json_request, proxy_multipart_request
 
-router = APIRouter(prefix="/vision", tags=["Vision"])
+router = APIRouter(prefix="/capabilities/vision", tags=["Vision"])
 
 
 @router.post("/analyze")

@@ -5,7 +5,7 @@ import { BackendServiceLauncher } from "./backend_launcher";
 import { BackendPortConfigStore } from "./backend_ports";
 import {
     BackendPorts,
-    DEFAULT_BACKEND_PORTS,
+    CONFIGURED_BACKEND_PORTS,
     ServiceConfig,
 } from "./types";
 import { BackendWebSocketLocator } from "./backend_ws";
@@ -15,7 +15,7 @@ export class BackendService {
         { name: "core", port: 0, type: "python" },
     ];
 
-    private ports: BackendPorts = { ...DEFAULT_BACKEND_PORTS };
+    private ports: BackendPorts = { ...CONFIGURED_BACKEND_PORTS };
     private readonly host = "127.0.0.1";
     private isShuttingDown = false;
     private readonly portStore = new BackendPortConfigStore();
@@ -189,7 +189,7 @@ export class BackendService {
 
     public async refreshPortsFromAPI(): Promise<boolean> {
         try {
-            const basePort = this.ports.memory_port || 8010;
+            const basePort = this.ports.memory_port;
             const response = await axios.get(
                 `http://${this.host}:${basePort}/runtime/network`,
                 { timeout: 3000 },

@@ -60,11 +60,14 @@ class ServiceContainer:
     def get_provider_config_service(self) -> Any:
         return self._require(self._container.provider_config_service, "ProviderConfigService")
 
-    def get_capability_module_manager(self) -> Any:
-        return self._require(self._container.capability_module_manager, "CapabilityModuleManager")
-
     def get_character_service(self) -> Any:
         return self._require(self._container.character_service, "CharacterService")
+
+    def get_emotion_broker(self) -> Any:
+        return self._require(self._container.emotion_broker, "EmotionBroker")
+
+    def get_voiceprint_filter(self) -> Any:
+        return self._value("voiceprint_filter")
 
     def get_soul(self) -> Any:
         return self._require(self._container.soul, "SoulService")
@@ -83,9 +86,6 @@ class ServiceContainer:
 
     def get_chat_pipeline(self) -> Any:
         return self._value("chat_pipeline")
-
-    def get_capability_registry(self) -> Any:
-        return self._require(self._container.capability_registry, "CapabilityRegistry")
 
     def get_automation_service(self) -> Any:
         return self._value("automation_service")
@@ -115,6 +115,12 @@ class ServiceContainer:
         return self._require(
             self._container.companion_context_resolver,
             "CompanionContextResolver",
+        )
+
+    def get_companion_context_pack_builder(self) -> Any:
+        return self._require(
+            self._container.companion_context_pack_builder,
+            "CompanionContextPackBuilder",
         )
 
     def get_companion_interaction_recorder(self) -> Any:
@@ -150,11 +156,14 @@ class ServiceContainer:
     def set_provider_config_service(self, instance: Any):
         self._override("provider_config_service", instance)
 
-    def set_capability_module_manager(self, instance: Any):
-        self._override("capability_module_manager", instance)
-
     def set_character_service(self, instance: Any):
         self._override("character_service", instance)
+
+    def set_emotion_broker(self, instance: Any):
+        self._override("emotion_broker", instance)
+
+    def set_voiceprint_filter(self, instance: Any):
+        self._override("voiceprint_filter", instance)
 
     def set_soul(self, instance: Any):
         self._override("soul", instance)
@@ -174,9 +183,6 @@ class ServiceContainer:
     def set_worker_runtime_registry(self, instance: Any):
         self._override("worker_runtime_registry", instance)
 
-    def set_capability_registry(self, instance: Any):
-        self._override("capability_registry", instance)
-
     def set_config_watcher(self, instance: Any):
         self._override("config_watcher", instance)
 
@@ -195,6 +201,9 @@ class ServiceContainer:
     def set_companion_context_resolver(self, instance: Any):
         self._override("companion_context_resolver", instance)
 
+    def set_companion_context_pack_builder(self, instance: Any):
+        self._override("companion_context_pack_builder", instance)
+
     def set_companion_interaction_recorder(self, instance: Any):
         self._override("companion_interaction_recorder", instance)
 
@@ -203,12 +212,6 @@ class ServiceContainer:
 
     def set_prewarm_task(self, instance: Any):
         self._override("prewarm_task", instance)
-
-    def register_context_provider(self, provider: Any):
-        self._providers.register_context_provider(provider)
-
-    def get_context_providers(self):
-        return self._providers.get_context_providers()
 
     def register_tool_provider(self, provider: Any):
         self._providers.register_tool_provider(provider)

@@ -1,5 +1,3 @@
-import { API_CONFIG } from '../../../config';
-
 const CUBISM_CORE_SCRIPT_ID = 'lumina-live2d-cubism-core';
 
 let cubismCorePromise: Promise<void> | null = null;
@@ -18,14 +16,14 @@ const getCubismCore = () => {
     }
 };
 
-export const ensureCubismCoreLoaded = async (src?: string | null) => {
+export const ensureCubismCoreLoaded = async (src: string) => {
     const existingRuntime = getCubismCore();
     if (existingRuntime) {
         (window as any).Live2DCubismCore = existingRuntime;
         return;
     }
 
-    const nextSrc = src || `${API_CONFIG.BASE_URL}/assets/libs/live2dcubismcore.min.js`;
+    const nextSrc = src.trim();
     if (!nextSrc) {
         throw new Error('Live2D core script is unavailable.');
     }

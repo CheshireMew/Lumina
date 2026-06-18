@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback } from "react";
-import { API_CONFIG } from "../config";
 import { useChatStore } from "../store/useChatStore";
 import { gatewayClient, GatewaySubscriber } from "../runtime/gatewayClient";
 
@@ -9,7 +8,7 @@ interface GatewayProps {
     onChatEnd?: () => void;
     onEmotion?: (emotion: string) => void;
     onSessionReset?: (sessionId: number) => void;
-    baseUrl?: string;
+    baseUrl: string;
     enabled?: boolean;
 }
 
@@ -48,7 +47,7 @@ export const useGateway = ({
             return;
         }
 
-        gatewayClient.connect(baseUrl || API_CONFIG.BASE_URL);
+        gatewayClient.connect(baseUrl);
         const unsubscribe = gatewayClient.subscribe({
             onChatStart: (mode) => callbacksRef.current.onChatStart?.(mode),
             onChatStream: (content) =>

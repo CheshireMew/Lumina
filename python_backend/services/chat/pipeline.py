@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, AsyncGenerator
 
 from services.companion.context import CompanionContext
+from services.companion.context_pack import CompanionContextPack
 
 logger = logging.getLogger("ChatPipeline")
 
@@ -15,9 +16,8 @@ logger = logging.getLogger("ChatPipeline")
 class PipelineContext:
     """Shared state passed through the pipeline steps."""
     # Input
-    original_messages: List[Dict[str, Any]]
+    context_pack: CompanionContextPack
     companion_context: CompanionContext
-    enable_rag: bool
     enable_tools: bool
     model_override: Optional[str]
     temperature: float
@@ -46,50 +46,28 @@ class PipelineStep(ABC):
 
 class ContextBuilderStep(PipelineStep):
     """
-    Step 1: Enhances context using registered ContextProviders.
+    Step 1: Converts the companion context pack into LLM messages.
     """
     def __init__(self, services_container):
         self.services = services_container
 
     async def execute(self, ctx: PipelineContext):
-        prompts = []
-        
-        # Iterate over all registered providers (RAG, Soul, etc.)
-        for provider in self.services.get_context_providers():
-            if content := await provider.provide(ctx):
-                prompts.append(content)
+        pack = ctx.context_pack
+        ctx.rag_context = pack.relevant_episodic_memories
+        ctx.system_prompt = pack.system_prompt
+        sections = pack.prompt_sections()
+        if sections:
+            ctx.system_prompt += "\n\n" + "\n\n".join(sections)
 
-        # Assemble System Prompt
-        soul = self.services.get_soul()
-        base_system = await soul.get_system_prompt({"pipeline": "context_builder"})
-             
-        ctx.system_prompt = base_system
-        
-        if prompts:
-            # Append dynamic context
-            ctx.system_prompt += "\n\n" + "\n\n".join(prompts)
-            
-        # Finalize Messages
         ctx.final_messages = [{"role": "system", "content": ctx.system_prompt}]
-        
-        # Add History
-        for i, msg in enumerate(ctx.original_messages):
+
+        for msg in pack.recent_session_history:
             role = msg.get("role")
             if role == "system":
                 continue
-                
-            is_last_user_msg = (ctx.rag_context and 
-                              i == len(ctx.original_messages) - 1 and 
-                              role == "user")
-            
-            if is_last_user_msg:
-                # Inject RAG Context into the LAST User Message
-                enhanced_content = f"{msg.get('content')}\n\n## Relevant Memories/Context:\n{ctx.rag_context}"
-                ctx.final_messages.append({"role": "user", "content": enhanced_content})
-            else: 
-                ctx.final_messages.append(msg)
+            ctx.final_messages.append(msg)
 
-
+        ctx.final_messages.append({"role": "user", "content": pack.user_message})
 
 
 class ToolPreparationStep(PipelineStep):
@@ -240,16 +218,19 @@ class ChatPipeline:
         self.tool_step = ToolPreparationStep(services_container)
         self.exec_step = LLMExecutionStep(services_container)
 
-    async def run(self, messages: List[Dict], **kwargs) -> AsyncGenerator[str, None]:
+    async def run(self, **kwargs) -> AsyncGenerator[str, None]:
         # 1. Init Context
-        companion_context = kwargs.get("companion_context")
+        context_pack = kwargs.get("context_pack")
+        if not isinstance(context_pack, CompanionContextPack):
+            raise ValueError("ChatPipeline requires context_pack")
+
+        companion_context = context_pack.identity
         if not isinstance(companion_context, CompanionContext):
             raise ValueError("ChatPipeline requires companion_context")
 
         ctx = PipelineContext(
-            original_messages=messages,
+            context_pack=context_pack,
             companion_context=companion_context,
-            enable_rag=kwargs.get("enable_rag", True),
             enable_tools=kwargs.get("enable_tools", True),
             model_override=kwargs.get("model", None),
             temperature=kwargs.get("temperature", 0.7),

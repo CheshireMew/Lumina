@@ -11,22 +11,14 @@ sys.path.insert(0, str(backend_root))
 datas = []
 binaries = []
 build_target = os.environ.get('LUMINA_BUILD_TARGET', 'core')
-main_capability_modules = [
-    'emotion_broker',
-    'llm_core',
-    'llm_deepseek',
-    'llm_gemini',
-    'llm_openai',
-    'llm_pollinations',
+main_provider_driver_modules = [
     'memory_postgres',
-    'search_brave',
-    'search_duckduckgo',
 ]
-target_capability_modules = {
-    'core': main_capability_modules,
+target_provider_driver_modules = {
+    'core': main_provider_driver_modules,
     'stt-runtime': ['stt_sensevoice'],
     'tts-runtime': ['tts_edge'],
-}.get(build_target, main_capability_modules)
+}.get(build_target, main_provider_driver_modules)
 cuda_binary_prefixes = (
     'cublas',
     'cudart',
@@ -73,7 +65,7 @@ hiddenimports = [
     'routers',
     'services',
     'core',
-    'capability_modules',
+    'provider_drivers',
     'app_config',
     'logger_setup',
     'main',
@@ -81,7 +73,6 @@ hiddenimports = [
     'httpx',
     'pgvector.asyncpg',
     'pythonosc.udp_client',
-    'services.managers.llm_driver_modules',
 ]
 
 hiddenimports += collect_submodules('services.managers')
@@ -131,9 +122,8 @@ target_excludes = {
         'soundfile',
         'sherpa_onnx',
         'edge_tts',
-        'capability_modules.stt_sensevoice',
-        'capability_modules.tts_edge',
-        'capability_modules.voiceprint',
+        'provider_drivers.stt_sensevoice',
+        'provider_drivers.tts_edge',
         'capabilities.stt',
         'capabilities.tts',
         'capabilities.vision',
@@ -145,8 +135,7 @@ target_excludes = {
     ],
     'stt-runtime': [
         'edge_tts',
-        'capability_modules.tts_edge',
-        'capability_modules.voiceprint',
+        'provider_drivers.tts_edge',
     ],
     'tts-runtime': [
         'faster_whisper',
@@ -154,8 +143,7 @@ target_excludes = {
         'sounddevice',
         'soundfile',
         'sherpa_onnx',
-        'capability_modules.stt_sensevoice',
-        'capability_modules.voiceprint',
+        'provider_drivers.stt_sensevoice',
     ],
 }.get(build_target, [])
 
@@ -214,8 +202,8 @@ datas += [
 ]
 if (backend_root / 'user_settings.json').exists():
     datas.append(('../user_settings.json', '.'))
-for module_name in target_capability_modules:
-    datas.append((f'../capability_modules/{module_name}', f'capability_modules/{module_name}'))
+for module_name in target_provider_driver_modules:
+    datas.append((f'../provider_drivers/{module_name}', f'provider_drivers/{module_name}'))
 
 block_cipher = None
 
@@ -247,10 +235,10 @@ a = Analysis(
         'llvmlite',
         'numba',
         'modelscope',
-        'capability_modules.voiceauth_sherpa',
-        'capability_modules.voiceauth_sherpa.drivers',
-        'capability_modules.voiceauth_sherpa.drivers.voiceauth',
-        'capability_modules.voiceauth_sherpa.drivers.voiceauth.sherpa_cam_driver',
+        'provider_drivers.voiceauth_sherpa',
+        'provider_drivers.voiceauth_sherpa.drivers',
+        'provider_drivers.voiceauth_sherpa.drivers.voiceauth',
+        'provider_drivers.voiceauth_sherpa.drivers.voiceauth.sherpa_cam_driver',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

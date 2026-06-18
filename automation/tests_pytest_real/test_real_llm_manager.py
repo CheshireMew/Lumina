@@ -209,6 +209,12 @@ def test_route_lookup_requires_existing_feature(llm_manager: LLMManager):
 
 @pytest.mark.anyio
 async def test_get_driver_rejects_inactive_route_provider_without_fallback(llm_manager: LLMManager):
+    llm_manager.config.providers["custom_provider"] = LLMProviderConfig(
+        id="custom_provider",
+        type="missing_driver_type",
+        enabled=True,
+        models=["custom-model"],
+    )
     llm_manager.update_route("chat", provider_id="custom_provider", model="custom-model")
 
     with pytest.raises(ValueError, match="custom_provider"):

@@ -6,8 +6,8 @@ export class BackendWebSocketLocator {
     constructor(private readonly host: string = "127.0.0.1") {}
 
     public async getSttWebSocketURL(ports: BackendPorts): Promise<string> {
-        const basePort = ports.memory_port || 8010;
-        await axios.get(`http://${this.host}:${basePort}/stt/models/list`, {
+        const basePort = ports.memory_port;
+        await axios.get(`http://${this.host}:${basePort}/capabilities/stt/models/list`, {
             timeout: 5000,
         });
         const response = await axios.get(

@@ -1,4 +1,3 @@
-import { API_CONFIG } from "../config";
 import { useChatStore } from "../store/useChatStore";
 import { emitRuntimeEvent } from "./events";
 
@@ -47,7 +46,7 @@ class GatewayClient {
         };
     }
 
-    connect(baseUrl: string = API_CONFIG.BASE_URL): void {
+    connect(baseUrl: string): void {
         const nextWsUrl = baseUrl.replace("http", "ws") + "/lumina/gateway/ws";
         this.shouldReconnect = true;
 

@@ -8,6 +8,7 @@ import pytest
 
 websockets = pytest.importorskip("websockets")
 
+@pytest.mark.skip(reason="manual live-backend websocket smoke test")
 async def test_gateway():
     uri = "ws://127.0.0.1:8010/lumina/gateway/ws"
     print(f"Connecting to {uri}...")

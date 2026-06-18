@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
 import DataViewer from './DataViewer'
+import configuredPorts from '../../../../config/ports.json'
 
 // Mock fetch
 global.fetch = vi.fn()
@@ -11,6 +12,7 @@ describe('DataViewer Component', () => {
     isOpen: true,
     onClose: vi.fn(),
     activeCharacterId: 'hiyori',
+    apiBaseUrl: `http://127.0.0.1:${configuredPorts.memory_port}`,
   }
 
   beforeEach(() => {

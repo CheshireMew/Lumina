@@ -17,7 +17,15 @@ SERVICES = {
 @pytest.mark.anyio
 async def test_character_config_file_race():
     """验证并发更新 Character 配置时是否存在文件损坏或覆盖竞争"""
-    url = f"{SERVICES['memory']}/character/config"
+    url = f"{SERVICES['memory']}/settings/character/config"
+
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            health = await client.get(f"{SERVICES['memory']}/runtime/health")
+            if health.status_code != 200:
+                pytest.skip("Lumina backend is not running")
+        except Exception:
+            pytest.skip("Lumina backend is not running")
     
     # 准备 20 个不同的并发更新请求
     async def update_char(i):

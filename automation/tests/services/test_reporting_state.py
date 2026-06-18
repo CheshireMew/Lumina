@@ -70,19 +70,11 @@ def test_driver_state_collector_uses_provider_host_snapshot():
 
 
 @pytest.mark.anyio
-async def test_runtime_state_provider_uses_container_getter():
-    module_manager = MagicMock()
-    module_manager.list_modules.return_value = [{"id": "module.system", "name": "System"}]
-
-    container = MagicMock()
-    container.get_capability_module_manager.return_value = module_manager
-
+async def test_runtime_state_provider_uses_worker_state_provider():
     provider = build_runtime_state_provider(
         lambda: [{"id": "driver.stt.test", "name": "Driver"}],
-        container=container,
     )
 
     states = await provider()
 
-    container.get_capability_module_manager.assert_called_once_with()
-    assert {state["id"] for state in states} == {"driver.stt.test", "module.system"}
+    assert {state["id"] for state in states} == {"driver.stt.test"}

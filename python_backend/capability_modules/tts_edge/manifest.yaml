@@ -1,8 +1,0 @@
-id: driver.tts.edge
-api_version: "1.0"
-kind: provider
-capability: tts
-runtime_target: worker:tts
-runtime: tts-runtime
-config_schema: {}
-provides: []

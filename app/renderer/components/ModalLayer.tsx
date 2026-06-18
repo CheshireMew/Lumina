@@ -3,6 +3,7 @@ import React from "react";
 import { AvatarRendererRef } from "../core/avatar/types";
 import { useVoiceManager } from "../hooks/useVoiceManager";
 import { GeneralSettingsInput } from "../hooks/useSettings";
+import { RuntimeConfig } from "../runtime/runtimeConfig";
 import DataViewer from "./DataViewer";
 import LLMConfigModal from "./LLMConfig/LLMConfigModal";
 import type { LlmProviderId } from "./LLMConfig/types";
@@ -66,6 +67,7 @@ interface ModalLayerProps {
     memoryInspector: MemoryInspectorLayerConfig;
     llmConfig: LlmConfigLayerConfig;
     avatarRef: React.RefObject<AvatarRendererRef>;
+    runtimeConfig: RuntimeConfig;
 }
 
 export const ModalLayer: React.FC<ModalLayerProps> = ({
@@ -74,9 +76,11 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
     memoryInspector,
     llmConfig,
     avatarRef,
+    runtimeConfig,
 }) => {
     const voiceManagerData = useVoiceManager(
         settings.isOpen,
+        runtimeConfig,
     );
 
     return (
@@ -102,6 +106,7 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
                 isOpen={memoryInspector.isOpen}
                 onClose={memoryInspector.onClose}
                 activeCharacterId={memoryInspector.activeCharacterId}
+                apiBaseUrl={runtimeConfig.apiBaseUrl}
             />
 
             <LLMConfigModal
@@ -110,6 +115,7 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
                 currentLlmSettings={llmConfig.currentSettings}
                 onSettingsChange={llmConfig.onSettingsChange}
                 activeCharacterId={llmConfig.activeCharacterId}
+                apiBaseUrl={runtimeConfig.apiBaseUrl}
             />
         </>
     );

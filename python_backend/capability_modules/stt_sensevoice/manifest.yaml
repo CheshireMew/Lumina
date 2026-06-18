@@ -1,8 +1,0 @@
-id: driver.stt.sensevoice
-api_version: "1.0"
-kind: provider
-capability: stt
-runtime_target: worker:stt
-runtime: stt-runtime
-config_schema: {}
-provides: []

@@ -142,21 +142,21 @@ class StructuredLogger:
             })
         )
     
-    def log_capability_module_event(
+    def log_provider_event(
         self,
-        module_id: str,
+        provider_id: str,
         event: str,
         success: bool = True,
         **extra
     ):
-        """Log a capability module lifecycle event."""
+        """Log a provider lifecycle event."""
         level = logging.INFO if success else logging.WARNING
         self._logger.log(
             level,
-            f"Capability module [{module_id}] {event}",
+            f"Provider [{provider_id}] {event}",
             extra=self._build_extra({
-                "event_type": "capability_module_event",
-                "module_id": module_id,
+                "event_type": "provider_event",
+                "provider_id": provider_id,
                 "event": event,
                 "success": success,
                 **extra

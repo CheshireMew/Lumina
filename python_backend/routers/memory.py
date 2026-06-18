@@ -10,8 +10,8 @@ from pydantic import BaseModel
 from routers.deps import (
     get_companion_interaction_recorder,
     get_companion_context_resolver,
+    get_companion_runtime,
     get_memory_service,
-    get_session_manager,
 )
 from schemas.requests import AddMemoryRequest, SearchRequest
 from services.companion.interaction import CompanionInteraction
@@ -184,20 +184,23 @@ class ClearContextRequest(BaseModel):
 @router.post("/context/clear")
 async def clear_context(
     request: ClearContextRequest,
-    session_manager=Depends(get_session_manager),
-    context_resolver=Depends(get_companion_context_resolver),
+    companion_runtime=Depends(get_companion_runtime),
 ):
     try:
-        context = context_resolver.resolve(
-            user_id=request.user_id,
-            character_id=request.character_id,
+        from core.protocol import EventPacket, EventType
+
+        await companion_runtime.reset_session(
+            EventPacket(
+                session_id=0,
+                type=EventType.CONTROL_SESSION,
+                source="api.clear_context",
+                payload={
+                    "action": "reset",
+                    "user_id": request.user_id,
+                    "character_id": request.character_id,
+                },
+            )
         )
-
-        await session_manager.clear_history(context)
-
-        from routers.gateway import gateway_service
-
-        await gateway_service.publish_session_reset(source="api.clear_context")
         return {"status": "success", "message": "Short-term context cleared"}
     except Exception as exc:
         logger.error("Failed to clear context: %s", exc, exc_info=True)

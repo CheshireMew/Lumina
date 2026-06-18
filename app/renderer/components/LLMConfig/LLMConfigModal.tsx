@@ -21,6 +21,7 @@ interface LLMConfigModalProps {
     currentLlmSettings: LlmSettings;
     onSettingsChange: LlmSettingsChangeHandler;
     activeCharacterId?: string | null;
+    apiBaseUrl: string;
 }
 
 const LLMConfigModal: FC<LLMConfigModalProps> = ({
@@ -29,6 +30,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
     currentLlmSettings,
     onSettingsChange,
     activeCharacterId,
+    apiBaseUrl,
 }) => {
     const { form, updateField, selectPlatform, setDeepSeekThinking, save } =
         useLlmConfigForm({
@@ -41,6 +43,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
     const { availableModels, isLoadingModels } = useAvailableLlmModels(
         isOpen,
         form.providerId,
+        apiBaseUrl,
     );
 
     const handleResetContext = async () => {
@@ -49,7 +52,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
         }
 
         try {
-            await clearLlmSessionContext(activeCharacterId);
+            await clearLlmSessionContext(apiBaseUrl, activeCharacterId);
             alert("Session Context Cleared!");
         } catch {
             alert("Failed to clear context");

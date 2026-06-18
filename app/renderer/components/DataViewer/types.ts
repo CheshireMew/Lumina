@@ -18,5 +18,6 @@ export interface DataViewerProps {
     isOpen: boolean;
     onClose: () => void;
     activeCharacterId?: string | null;
+    apiBaseUrl: string;
     dataSource?: string;
 }

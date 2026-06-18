@@ -2,7 +2,7 @@
 import logging
 import inspect
 import gc
-from capability_modules.tts_edge.drivers.tts.edge_tts_driver import EdgeTTSDriver
+from provider_drivers.tts_edge.drivers.tts.edge_tts_driver import EdgeTTSDriver
 from core.interfaces.driver import BaseTTSDriver
 
 from .provider_host import ProviderHostManager

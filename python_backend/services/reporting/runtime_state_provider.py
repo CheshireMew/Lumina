@@ -24,8 +24,6 @@ async def _resolve_states(provider: StateProvider | None) -> list[RuntimeState]:
 
 def build_runtime_state_provider(
     capability_provider: StateProvider | None,
-    *,
-    container,
 ) -> Callable[[], Awaitable[list[RuntimeState]]]:
     async def provide() -> list[RuntimeState]:
         merged: dict[str, RuntimeState] = {}
@@ -34,13 +32,6 @@ def build_runtime_state_provider(
             state_id = item.get("id")
             if state_id:
                 merged[state_id] = dict(item)
-
-        module_manager = container.get_capability_module_manager()
-        for item in module_manager.list_modules():
-            state_id = item.get("id")
-            if not state_id:
-                continue
-            merged[state_id] = {**merged.get(state_id, {}), **item}
 
         return list(merged.values())
 

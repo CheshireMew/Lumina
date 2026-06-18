@@ -3,9 +3,9 @@
 import logging
 from typing import Any
 
+from config.models import CUSTOM_LLM_PROVIDER_ID
 
 BRAVE_SEARCH_PROVIDER_ID = "driver.tool.search.brave"
-CUSTOM_LLM_PROVIDER_ID = "custom_provider"
 
 
 def _secret_manager():

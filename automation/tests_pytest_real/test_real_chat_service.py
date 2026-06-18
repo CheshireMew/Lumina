@@ -10,6 +10,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
 from services.chat.service import ChatTurnService, TextTurnRequest
 from services.companion.context import CompanionContext, CompanionContextResolver
+from services.companion.context_pack import CompanionContextPack
 
 
 def companion_context(
@@ -29,8 +30,8 @@ class StreamingPipeline:
     def __init__(self):
         self.calls = []
 
-    async def run(self, messages, **kwargs):
-        self.calls.append((messages, kwargs))
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
         yield "first"
         yield " second"
 
@@ -39,12 +40,23 @@ def chat_service(pipeline, session_manager=None) -> ChatTurnService:
     session_manager = session_manager or SimpleNamespace(
         load_session=AsyncMock(return_value=SimpleNamespace(short_term_history=[]))
     )
+    async def build_context_pack(*, companion_context, user_message, history_limit, enable_memory=True):
+        state = await session_manager.load_session(companion_context)
+        history = getattr(state, "short_term_history", []) or []
+        return CompanionContextPack(
+            identity=companion_context,
+            user_message=user_message,
+            recent_session_history=history[-history_limit:],
+            system_prompt="System",
+        )
+
     return ChatTurnService(
         pipeline=pipeline,
         session_manager=session_manager,
         context_resolver=CompanionContextResolver(
             SimpleNamespace(get_active_character_id=lambda: "hiyori")
         ),
+        context_pack_builder=SimpleNamespace(build=AsyncMock(side_effect=build_context_pack)),
         interaction_recorder=SimpleNamespace(record=AsyncMock()),
     )
 
@@ -55,13 +67,17 @@ async def test_chat_turn_service_collects_pipeline_response():
     service = chat_service(pipeline)
 
     content = await service.collect_response(
-        messages=[{"role": "user", "content": "hello"}],
         companion_context=companion_context(user_id="user", character_id="hiyori"),
+        context_pack=CompanionContextPack(
+            identity=companion_context(user_id="user", character_id="hiyori"),
+            user_message="hello",
+            system_prompt="System",
+        ),
         log_memory=False,
     )
 
     assert content == "first second"
-    assert pipeline.calls[0][1]["companion_context"].user_id == "user"
+    assert pipeline.calls[0]["context_pack"].identity.user_id == "user"
 
 
 @pytest.mark.anyio
@@ -79,17 +95,24 @@ async def test_chat_turn_service_includes_short_term_history():
     )
     service = chat_service(pipeline, session_manager=session_manager)
 
-    messages = await service.build_turn_messages(
-        companion_context(user_id="u", character_id="c"),
-        "new",
-        history_limit=5,
-    )
+    events = [
+        event
+        async for event in service.stream_text_turn(
+            TextTurnRequest(
+                text="new",
+                companion_context=companion_context(user_id="u", character_id="c"),
+                history_limit=5,
+            )
+        )
+    ]
 
-    assert messages == [
+    pack = pipeline.calls[0]["context_pack"]
+    assert [event.kind for event in events] == ["started", "delta", "delta", "ended"]
+    assert pack.recent_session_history == [
         {"role": "user", "content": "old"},
         {"role": "assistant", "content": "reply"},
-        {"role": "user", "content": "new"},
     ]
+    assert pack.user_message == "new"
 
 
 @pytest.mark.anyio

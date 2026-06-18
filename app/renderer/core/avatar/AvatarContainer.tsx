@@ -6,8 +6,8 @@ const Live2DRenderer = React.lazy(() => import('./live2d/Live2DRenderer'));
 interface AvatarContainerProps {
     modelPath: string;
     highDpi?: boolean;
-    cubismCoreSrc?: string;
-    rendererRuntimeSrc?: string;
+    cubismCoreSrc: string;
+    rendererRuntimeSrc: string;
 }
 
 class AvatarErrorBoundary extends Component<

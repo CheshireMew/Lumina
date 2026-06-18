@@ -1,18 +1,17 @@
 from abc import abstractmethod
 from typing import AsyncGenerator, Any, Optional, Dict, Tuple, TYPE_CHECKING
 
-from core.interfaces.module import CapabilityModule
-
 if TYPE_CHECKING:
     from core.db.query_builder import QueryBuilder
 
-class BaseDriver(CapabilityModule):
+
+class BaseDriver:
     def __init__(self, id: str, name: str, description: str = ""):
-        super().__init__()
         self._id = id
         self._name = name
         self.description = description
         self._config: Dict[str, Any] = {}
+        self._enabled = False
         
     @property
     def id(self) -> str:

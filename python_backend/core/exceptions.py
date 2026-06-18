@@ -5,22 +5,7 @@ Provides a structured exception system for the entire backend.
 All custom exceptions inherit from LuminaError for unified handling.
 
 Usage:
-    from core.exceptions import (
-        LuminaError,
-        CapabilityModuleError, CapabilityModuleLoadError, CapabilityModulePermissionError,
-        ConfigError, ConfigValidationError,
-        ServiceError, ServiceUnavailableError,
-        NetworkError, WorkerOfflineError,
-    )
-    
-    try:
-        await load_capability(module_id)
-    except CapabilityModuleLoadError as e:
-        logger.error(f"Failed to load capability module: {e}")
-    except CapabilityModuleError as e:
-        logger.error(f"Capability module error: {e}")
-    except LuminaError as e:
-        logger.error(f"System error: {e}")
+    from core.exceptions import LuminaError, ConfigError, ServiceError, WorkerOfflineError
 """
 
 from typing import Optional, Dict, Any
@@ -66,61 +51,6 @@ class LuminaError(Exception):
         if self.cause:
             return f"{self.message} (caused by: {self.cause})"
         return self.message
-
-
-# =============================================================================
-# Capability Module Errors
-# =============================================================================
-
-class CapabilityModuleError(LuminaError):
-    """Base class for all capability module-related errors."""
-    
-    def __init__(
-        self, 
-        message: str, 
-        module_id: Optional[str] = None,
-        **kwargs
-    ):
-        super().__init__(message, **kwargs)
-        self.module_id = module_id
-        if module_id:
-            self.details["module_id"] = module_id
-
-
-class CapabilityModuleLoadError(CapabilityModuleError):
-    """Failed to load a capability module."""
-    pass
-
-
-class CapabilityModuleInitError(CapabilityModuleError):
-    """Capability module loaded but failed to initialize."""
-    pass
-
-
-class CapabilityModulePermissionError(CapabilityModuleError):
-    """Capability module attempted unauthorized action."""
-    
-    def __init__(
-        self, 
-        message: str, 
-        module_id: Optional[str] = None,
-        permission: Optional[str] = None,
-        **kwargs
-    ):
-        super().__init__(message, module_id=module_id, **kwargs)
-        self.permission = permission
-        if permission:
-            self.details["permission"] = permission
-
-
-class CapabilityModuleNotFoundError(CapabilityModuleError):
-    """Capability module does not exist."""
-    pass
-
-
-class CapabilityModuleStateError(CapabilityModuleError):
-    """Capability module is in unexpected state."""
-    pass
 
 
 # =============================================================================

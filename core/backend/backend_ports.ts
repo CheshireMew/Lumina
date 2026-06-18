@@ -4,7 +4,7 @@ import { app } from "electron";
 
 import {
     BackendPorts,
-    DEFAULT_BACKEND_PORTS,
+    CONFIGURED_BACKEND_PORTS,
     ServiceConfig,
 } from "./types";
 
@@ -18,7 +18,7 @@ export class BackendPortConfigStore {
                 try {
                     const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
                     console.log("[BackendManager] Loaded ports from:", configPath);
-                    return { ...DEFAULT_BACKEND_PORTS, ...data };
+                    return { ...CONFIGURED_BACKEND_PORTS, ...data };
                 } catch (e) {
                     console.error("[BackendManager] Failed to parse ports.json:", e);
                 }
@@ -32,7 +32,7 @@ export class BackendPortConfigStore {
             console.error("Failed to load ports config:", e);
         }
 
-        return { ...DEFAULT_BACKEND_PORTS };
+        return { ...CONFIGURED_BACKEND_PORTS };
     }
 
     public applyToServices(services: ServiceConfig[], ports: BackendPorts): void {
@@ -88,7 +88,7 @@ export class BackendPortConfigStore {
             }
             fs.writeFileSync(
                 configPath,
-                JSON.stringify(DEFAULT_BACKEND_PORTS, null, 2),
+                JSON.stringify(CONFIGURED_BACKEND_PORTS, null, 2),
             );
             console.log("[BackendManager] Generated ports.json");
         } catch (e) {

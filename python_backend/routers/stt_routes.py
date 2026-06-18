@@ -1,7 +1,7 @@
 
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from pydantic import BaseModel
 
 from app_config import config as app_settings
@@ -10,7 +10,7 @@ from .worker_proxy import proxy_json_request
 
 logger = logging.getLogger("STTProxy")
 
-router = APIRouter(prefix="/stt", tags=["STT"])
+router = APIRouter(prefix="/capabilities/stt", tags=["STT"])
 
 # --- Data Models ---
 
@@ -61,18 +61,52 @@ async def list_audio_devices(container=Depends(get_container)):
 
 @router.post("/audio/config")
 async def update_audio_config(request: UnifiedAudioConfig, container=Depends(get_container)):
-    response = await proxy_json_request("stt", "POST", "/audio/config", request.dict(exclude_none=True), container=container)
+    payload = request.dict(exclude_none=True)
+    audio_config = app_settings.audio
+
+    for key, value in payload.items():
+        if hasattr(audio_config, key):
+            setattr(audio_config, key, value)
+    app_settings.save()
+
+    response = await proxy_json_request("stt", "POST", "/audio/config", payload, container=container)
     return response.json()
 
 @router.get("/voiceprint/status")
 async def get_voiceprint_status(container=Depends(get_container)):
-    response = await proxy_json_request("stt", "GET", "/voiceprint/status", container=container)
-    return response.json()
+    audio_config = app_settings.audio
+    worker_status = {}
+    try:
+        response = await proxy_json_request("stt", "GET", "/voiceprint/status", container=container)
+        worker_status = response.json()
+    except HTTPException as exc:
+        logger.warning("Voiceprint worker status unavailable: %s", exc.detail)
+
+    return {
+        "enabled": audio_config.enable_voiceprint_filter,
+        "loaded": bool(worker_status.get("loaded")),
+        "threshold": audio_config.voiceprint_threshold,
+        "profile": audio_config.voiceprint_profile,
+        "profile_loaded": bool(worker_status.get("profile_loaded")),
+    }
 
 @router.get("/audio/status")
 async def get_audio_status(container=Depends(get_container)):
-    response = await proxy_json_request("stt", "GET", "/audio/status", container=container)
-    return response.json()
+    audio_config = app_settings.audio
+    worker_status = {}
+    try:
+        response = await proxy_json_request("stt", "GET", "/audio/status", container=container)
+        worker_status = response.json()
+    except HTTPException as exc:
+        logger.warning("Audio worker status unavailable: %s", exc.detail)
+
+    return {
+        **worker_status,
+        "device_name": audio_config.device_name,
+        "speech_start_threshold": audio_config.speech_start_threshold,
+        "speech_end_threshold": audio_config.speech_end_threshold,
+        "min_speech_frames": audio_config.min_speech_frames,
+    }
 
 # --- WebSocket Stub ---
 

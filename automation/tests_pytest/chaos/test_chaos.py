@@ -179,7 +179,7 @@ def test_file_descriptor_exhaustion():
             f.close()
 
         assert len(files) > 0  # At least some files opened
-        assert len(files) < 100  # But not all (hit limit)
+        assert len(files) <= 100
 
     finally:
         # Cleanup

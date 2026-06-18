@@ -31,13 +31,11 @@ class WebSearchTool(ToolProvider):
         if not query:
             raise ValueError("web_search requires query")
 
-        module_manager = self.services.get_capability_module_manager()
-
         provider_id = self.services.get_config().get_selected_provider("tool.search")
         if not provider_id:
             raise ValueError("tool.search provider must be configured")
 
-        provider = module_manager.get_module(provider_id)
+        provider = self.services.get_search_provider(provider_id)
         if not provider or not hasattr(provider, "search"):
             raise RuntimeError(f"Search provider '{provider_id}' is not active")
 

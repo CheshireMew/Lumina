@@ -21,6 +21,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companion/interrupt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Interrupt Companion */
+        post: operations["interrupt_companion_companion_interrupt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companion/session/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Companion Session */
+        post: operations["reset_companion_session_companion_session_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companion/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Companion State */
+        get: operations["get_companion_state_companion_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companion/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register Companion Activity */
+        post: operations["register_companion_activity_companion_activity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/llm/runtime": {
         parameters: {
             query?: never;
@@ -144,46 +212,6 @@ export interface paths {
         get: operations["list_models_settings_llm_models_list_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/soul": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Soul
-         * @description Get Soul State
-         */
-        get: operations["get_soul_soul_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/soul/interact": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Register Interaction
-         * @description Centralized Endpoint to signal User Activity.
-         */
-        post: operations["register_interaction_soul_interact_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -578,7 +606,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/vision/analyze": {
+    "/capabilities/vision/analyze": {
         parameters: {
             query?: never;
             header?: never;
@@ -588,14 +616,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Analyze Image */
-        post: operations["analyze_image_vision_analyze_post"];
+        post: operations["analyze_image_capabilities_vision_analyze_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/vision/load": {
+    "/capabilities/vision/load": {
         parameters: {
             query?: never;
             header?: never;
@@ -605,14 +633,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Load Vision Model */
-        post: operations["load_vision_model_vision_load_post"];
+        post: operations["load_vision_model_capabilities_vision_load_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/vision/unload": {
+    "/capabilities/vision/unload": {
         parameters: {
             query?: never;
             header?: never;
@@ -622,14 +650,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Unload Vision Model */
-        post: operations["unload_vision_model_vision_unload_post"];
+        post: operations["unload_vision_model_capabilities_vision_unload_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/character/config": {
+    "/settings/character/config": {
         parameters: {
             query?: never;
             header?: never;
@@ -640,20 +668,20 @@ export interface paths {
          * Get Character Config
          * @description Get the single active character config.
          */
-        get: operations["get_character_config_character_config_get"];
+        get: operations["get_character_config_settings_character_config_get"];
         put?: never;
         /**
          * Update Character Config
          * @description Update the single active character config.
          */
-        post: operations["update_character_config_character_config_post"];
+        post: operations["update_character_config_settings_character_config_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/character/models": {
+    "/settings/character/models": {
         parameters: {
             query?: never;
             header?: never;
@@ -664,7 +692,7 @@ export interface paths {
          * List Models
          * @description List available avatar models.
          */
-        get: operations["list_models_character_models_get"];
+        get: operations["list_models_settings_character_models_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -673,7 +701,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/stt/health": {
+    "/capabilities/stt/health": {
         parameters: {
             query?: never;
             header?: never;
@@ -681,7 +709,7 @@ export interface paths {
             cookie?: never;
         };
         /** Health */
-        get: operations["health_stt_health_get"];
+        get: operations["health_capabilities_stt_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -690,7 +718,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/stt/models/list": {
+    "/capabilities/stt/models/list": {
         parameters: {
             query?: never;
             header?: never;
@@ -701,7 +729,7 @@ export interface paths {
          * Get Models
          * @description Proxy: List available STT models
          */
-        get: operations["get_models_stt_models_list_get"];
+        get: operations["get_models_capabilities_stt_models_list_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -710,7 +738,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/stt/models/switch": {
+    "/capabilities/stt/models/switch": {
         parameters: {
             query?: never;
             header?: never;
@@ -723,14 +751,14 @@ export interface paths {
          * Switch Model
          * @description Proxy: Switch STT Model (and persist in Main)
          */
-        post: operations["switch_model_stt_models_switch_post"];
+        post: operations["switch_model_capabilities_stt_models_switch_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/stt/audio/devices": {
+    "/capabilities/stt/audio/devices": {
         parameters: {
             query?: never;
             header?: never;
@@ -738,7 +766,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Audio Devices */
-        get: operations["list_audio_devices_stt_audio_devices_get"];
+        get: operations["list_audio_devices_capabilities_stt_audio_devices_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -747,7 +775,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/stt/audio/config": {
+    "/capabilities/stt/audio/config": {
         parameters: {
             query?: never;
             header?: never;
@@ -757,14 +785,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Update Audio Config */
-        post: operations["update_audio_config_stt_audio_config_post"];
+        post: operations["update_audio_config_capabilities_stt_audio_config_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/stt/voiceprint/status": {
+    "/capabilities/stt/voiceprint/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -772,7 +800,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Voiceprint Status */
-        get: operations["get_voiceprint_status_stt_voiceprint_status_get"];
+        get: operations["get_voiceprint_status_capabilities_stt_voiceprint_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -781,7 +809,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/stt/audio/status": {
+    "/capabilities/stt/audio/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -789,7 +817,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Audio Status */
-        get: operations["get_audio_status_stt_audio_status_get"];
+        get: operations["get_audio_status_capabilities_stt_audio_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -798,7 +826,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tts/health": {
+    "/capabilities/tts/health": {
         parameters: {
             query?: never;
             header?: never;
@@ -806,7 +834,7 @@ export interface paths {
             cookie?: never;
         };
         /** Health */
-        get: operations["health_tts_health_get"];
+        get: operations["health_capabilities_tts_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -815,7 +843,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tts/models/list": {
+    "/capabilities/tts/models/list": {
         parameters: {
             query?: never;
             header?: never;
@@ -823,7 +851,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Models */
-        get: operations["list_models_tts_models_list_get"];
+        get: operations["list_models_capabilities_tts_models_list_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -832,7 +860,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tts/models/switch": {
+    "/capabilities/tts/models/switch": {
         parameters: {
             query?: never;
             header?: never;
@@ -842,14 +870,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Switch Model */
-        post: operations["switch_model_tts_models_switch_post"];
+        post: operations["switch_model_capabilities_tts_models_switch_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/tts/voices": {
+    "/capabilities/tts/voices": {
         parameters: {
             query?: never;
             header?: never;
@@ -857,7 +885,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Voices */
-        get: operations["list_voices_tts_voices_get"];
+        get: operations["list_voices_capabilities_tts_voices_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -866,7 +894,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tts/synthesize": {
+    "/capabilities/tts/synthesize": {
         parameters: {
             query?: never;
             header?: never;
@@ -876,7 +904,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Synthesize */
-        post: operations["synthesize_tts_synthesize_post"];
+        post: operations["synthesize_capabilities_tts_synthesize_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -969,8 +997,8 @@ export interface components {
             /** Messages */
             messages: components["schemas"]["MessageModel"][];
         };
-        /** Body_analyze_image_vision_analyze_post */
-        Body_analyze_image_vision_analyze_post: {
+        /** Body_analyze_image_capabilities_vision_analyze_post */
+        Body_analyze_image_capabilities_vision_analyze_post: {
             /** File */
             file?: string | null;
             /** Image Base64 */
@@ -1089,6 +1117,20 @@ export interface components {
             /** Character Id */
             character_id?: string | null;
         };
+        /** CompanionControlRequest */
+        CompanionControlRequest: {
+            /**
+             * Session Id
+             * @default 0
+             */
+            session_id: number;
+            /** User Id */
+            user_id?: string | null;
+            /** Character Id */
+            character_id?: string | null;
+            /** User Name */
+            user_name?: string | null;
+        };
         /** CompanionMessageRequest */
         CompanionMessageRequest: {
             /** Text */
@@ -1140,10 +1182,7 @@ export interface components {
         };
         /** RuntimeLlmSettings */
         RuntimeLlmSettings: {
-            /**
-             * Providerid
-             * @default custom_provider
-             */
+            /** Providerid */
             providerId: string;
             /**
              * Apikey
@@ -1317,6 +1356,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    interrupt_companion_companion_interrupt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    reset_companion_session_companion_session_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanionControlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_companion_state_companion_state_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    register_companion_activity_companion_activity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -1520,46 +1652,6 @@ export interface operations {
         };
     };
     list_models_settings_llm_models_list_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_soul_soul_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    register_interaction_soul_interact_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2256,7 +2348,7 @@ export interface operations {
             };
         };
     };
-    analyze_image_vision_analyze_post: {
+    analyze_image_capabilities_vision_analyze_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2265,7 +2357,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_analyze_image_vision_analyze_post"];
+                "multipart/form-data": components["schemas"]["Body_analyze_image_capabilities_vision_analyze_post"];
             };
         };
         responses: {
@@ -2289,7 +2381,7 @@ export interface operations {
             };
         };
     };
-    load_vision_model_vision_load_post: {
+    load_vision_model_capabilities_vision_load_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2309,7 +2401,7 @@ export interface operations {
             };
         };
     };
-    unload_vision_model_vision_unload_post: {
+    unload_vision_model_capabilities_vision_unload_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2329,7 +2421,7 @@ export interface operations {
             };
         };
     };
-    get_character_config_character_config_get: {
+    get_character_config_settings_character_config_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2349,7 +2441,7 @@ export interface operations {
             };
         };
     };
-    update_character_config_character_config_post: {
+    update_character_config_settings_character_config_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2382,7 +2474,7 @@ export interface operations {
             };
         };
     };
-    list_models_character_models_get: {
+    list_models_settings_character_models_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2402,7 +2494,7 @@ export interface operations {
             };
         };
     };
-    health_stt_health_get: {
+    health_capabilities_stt_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2422,7 +2514,7 @@ export interface operations {
             };
         };
     };
-    get_models_stt_models_list_get: {
+    get_models_capabilities_stt_models_list_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2442,7 +2534,7 @@ export interface operations {
             };
         };
     };
-    switch_model_stt_models_switch_post: {
+    switch_model_capabilities_stt_models_switch_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2475,7 +2567,7 @@ export interface operations {
             };
         };
     };
-    list_audio_devices_stt_audio_devices_get: {
+    list_audio_devices_capabilities_stt_audio_devices_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2495,7 +2587,7 @@ export interface operations {
             };
         };
     };
-    update_audio_config_stt_audio_config_post: {
+    update_audio_config_capabilities_stt_audio_config_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2528,7 +2620,7 @@ export interface operations {
             };
         };
     };
-    get_voiceprint_status_stt_voiceprint_status_get: {
+    get_voiceprint_status_capabilities_stt_voiceprint_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2548,7 +2640,7 @@ export interface operations {
             };
         };
     };
-    get_audio_status_stt_audio_status_get: {
+    get_audio_status_capabilities_stt_audio_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2568,7 +2660,7 @@ export interface operations {
             };
         };
     };
-    health_tts_health_get: {
+    health_capabilities_tts_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2588,7 +2680,7 @@ export interface operations {
             };
         };
     };
-    list_models_tts_models_list_get: {
+    list_models_capabilities_tts_models_list_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2608,7 +2700,7 @@ export interface operations {
             };
         };
     };
-    switch_model_tts_models_switch_post: {
+    switch_model_capabilities_tts_models_switch_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2641,7 +2733,7 @@ export interface operations {
             };
         };
     };
-    list_voices_tts_voices_get: {
+    list_voices_capabilities_tts_voices_get: {
         parameters: {
             query?: {
                 engine?: string | null;
@@ -2672,7 +2764,7 @@ export interface operations {
             };
         };
     };
-    synthesize_tts_synthesize_post: {
+    synthesize_capabilities_tts_synthesize_post: {
         parameters: {
             query?: never;
             header?: never;

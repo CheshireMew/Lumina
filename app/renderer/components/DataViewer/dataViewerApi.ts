@@ -1,4 +1,3 @@
-import { API_CONFIG } from "../../config";
 import type { QueryResult } from "./types";
 
 const parseJsonResponse = async (response: Response): Promise<any> => {
@@ -28,20 +27,21 @@ const requestJson = async <T>(
     return data as T;
 };
 
-export const loadTables = async (signal?: AbortSignal) => {
+export const loadTables = async (apiBaseUrl: string, signal?: AbortSignal) => {
     const data = await requestJson<{ tables?: Array<{ name: string; info: string }> }>(
-        `${API_CONFIG.BASE_URL}/memory/inspection/tables`,
+        `${apiBaseUrl}/memory/inspection/tables`,
         { signal },
     );
     return data.tables || [];
 };
 
 export const loadTableRows = async (
+    apiBaseUrl: string,
     tableName: string,
     activeCharacterId: string | null | undefined,
     signal?: AbortSignal,
 ) => {
-    let url = `${API_CONFIG.BASE_URL}/memory/inspection/table/${tableName}?limit=50`;
+    let url = `${apiBaseUrl}/memory/inspection/table/${tableName}?limit=50`;
     if (
         activeCharacterId &&
         (tableName === "conversation_log" || tableName === "episodic_memory")
@@ -54,6 +54,7 @@ export const loadTableRows = async (
 };
 
 export const loadGraphData = async (
+    apiBaseUrl: string,
     activeCharacterId: string | null | undefined,
     signal?: AbortSignal,
 ) => {
@@ -65,16 +66,19 @@ export const loadGraphData = async (
         status?: string;
         graph?: { nodes: any[]; edges: any[] };
     }>(
-        `${API_CONFIG.BASE_URL}/memory/inspection${characterParam}`,
+        `${apiBaseUrl}/memory/inspection${characterParam}`,
         { signal },
     );
 
     return data.status === "success" ? data.graph || null : null;
 };
 
-export const executeQuery = async (query: string): Promise<QueryResult> => {
+export const executeQuery = async (
+    apiBaseUrl: string,
+    query: string,
+): Promise<QueryResult> => {
     const data = await requestJson<{ result?: any[]; detail?: string }>(
-        `${API_CONFIG.BASE_URL}/memory/inspection/query`,
+        `${apiBaseUrl}/memory/inspection/query`,
         {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -88,9 +92,13 @@ export const executeQuery = async (query: string): Promise<QueryResult> => {
     };
 };
 
-export const deleteRecord = async (tableName: string, recordId: string) => {
+export const deleteRecord = async (
+    apiBaseUrl: string,
+    tableName: string,
+    recordId: string,
+) => {
     return requestJson<{ status?: string; detail?: string }>(
-        `${API_CONFIG.BASE_URL}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
+        `${apiBaseUrl}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
         {
             method: "DELETE",
         },
@@ -98,12 +106,13 @@ export const deleteRecord = async (tableName: string, recordId: string) => {
 };
 
 export const updateRecord = async (
+    apiBaseUrl: string,
     tableName: string,
     recordId: string,
     data: Record<string, any>,
 ) => {
     return requestJson<{ status?: string; detail?: string }>(
-        `${API_CONFIG.BASE_URL}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
+        `${apiBaseUrl}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
         {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -113,11 +122,12 @@ export const updateRecord = async (
 };
 
 export const createRecord = async (
+    apiBaseUrl: string,
     tableName: string,
     data: Record<string, any>,
 ) => {
     return requestJson<{ status?: string; detail?: string }>(
-        `${API_CONFIG.BASE_URL}/memory/inspection/record/${tableName}/new`,
+        `${apiBaseUrl}/memory/inspection/record/${tableName}/new`,
         {
             method: "POST",
             headers: { "Content-Type": "application/json" },
