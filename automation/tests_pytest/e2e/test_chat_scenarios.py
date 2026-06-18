@@ -2,7 +2,7 @@
 End-to-end scenario tests for Lumina companion interactions.
 
 These tests target the companion runtime boundary. They intentionally do not
-exercise removed OpenAI-compatible completion, plugin discovery, or multi-
+exercise removed OpenAI-compatible completion, extension discovery, or multi-
 character product flows.
 """
 import asyncio

@@ -4,7 +4,10 @@
     "display_name": "hiyori",
     "description": "女朋友",
     "system_prompt": "",
-    "model_path": "/runtime/packages/live2d-assets/resources/live2d/Hiyori/Hiyori.model3.json",
+    "avatar": {
+        "type": "live2d",
+        "model": "Hiyori"
+    },
     "voice_config": {
         "service": "edge-tts",
         "voiceId": "zh-CN-XiaoyiNeural",

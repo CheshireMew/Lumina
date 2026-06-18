@@ -26,6 +26,17 @@ class ConfigBootstrapper(Bootstrapper):
         logger.info(f"✅ Config Loaded for: {character_id}")
 
 
+class WorkerRuntimeRegistryBootstrapper(Bootstrapper):
+    @property
+    def name(self) -> str: return "Worker Runtime Registry"
+
+    async def bootstrap(self, container):
+        from core.worker_runtimes import WorkerRuntimeRegistry
+
+        container.set_worker_runtime_registry(WorkerRuntimeRegistry())
+        logger.info("✅ Worker Runtime Registry Initialized")
+
+
 class DatabaseBootstrapper(Bootstrapper):
     @property
     def name(self) -> str: return "Memory Backend"
@@ -45,8 +56,8 @@ class DatabaseBootstrapper(Bootstrapper):
             driver_config=config.memory.model_dump(),
         )
         memory_svc = MemoryService(driver=driver)
-        package_registry = container.get_capability_package_registry()
-        vision_snapshot = package_registry.resolve("vision-runtime")
+        runtime_registry = container.get_worker_runtime_registry()
+        vision_snapshot = runtime_registry.resolve("vision-runtime")
         if vision_snapshot and vision_snapshot.status == "ready":
             memory_svc.set_encoder(
                 model_manager.create_lazy_embedding_encoder("all-MiniLM-L6-v2")

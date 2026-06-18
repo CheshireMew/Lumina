@@ -1,5 +1,5 @@
 from llm.drivers.deepseek_driver import DeepSeekDriver
-from services.managers.llm_driver_plugins import LLMDriverTypeModule
+from services.managers.llm_driver_modules import LLMDriverTypeModule
 
 
 class Capability(LLMDriverTypeModule):

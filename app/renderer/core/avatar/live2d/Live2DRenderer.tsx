@@ -2,9 +2,23 @@ import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } f
 import * as PIXI from 'pixi.js';
 import { IAvatarRenderer } from '../types';
 import { ensureCubismCoreLoaded } from './cubismCore';
+import { ensureLive2DRuntimeLoaded } from './live2dRuntime';
 
-// Expose PIXI to window for pixi-live2d-display to use
-(window as any).PIXI = PIXI;
+const exposePixiGlobal = () => {
+    const currentPixi = (window as any).PIXI;
+    if (currentPixi?.Application && Object.isExtensible(currentPixi)) {
+        Object.assign(currentPixi, PIXI);
+        return;
+    }
+
+    (window as any).PIXI = {
+        ...(currentPixi?.live2d ? { live2d: currentPixi.live2d } : {}),
+        ...PIXI,
+    };
+};
+
+// pixi-live2d-display's browser build mutates window.PIXI.live2d.
+exposePixiGlobal();
 
 const MOTION_PRELOAD_NONE = 'NONE';
 
@@ -12,9 +26,17 @@ interface Live2DRendererProps {
     modelPath: string;
     highDpi?: boolean;
     cubismCoreSrc?: string;
+    rendererRuntimeSrc?: string;
 }
 
-const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ modelPath, highDpi = false, cubismCoreSrc }, ref) => {
+const formatLive2DError = (error: unknown) => {
+    if (error instanceof Error) {
+        return error.message;
+    }
+    return String(error);
+};
+
+const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ modelPath, highDpi = false, cubismCoreSrc, rendererRuntimeSrc }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<PIXI.Application | null>(null);
     const modelRef = useRef<any | null>(null);
@@ -49,7 +71,7 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
              }
         },
         speak: async (audioUrl) => {
-            // TODO: Implement LipSync integration here if moving logic from frontend to plugin
+            // TODO: Implement LipSync integration here if moving logic from frontend to avatar runtime.
         },
         setBlendShapes: (data) => {
             const model = modelRef.current as any;
@@ -96,43 +118,54 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
     }));
 
     useEffect(() => {
-        if (!containerRef.current) return;
-
-        // Initialize PIXI Application
-        const app = new PIXI.Application({
-            width: window.innerWidth,
-            height: window.innerHeight,
-            backgroundAlpha: 0, 
-            resizeTo: window,
-            antialias: true,
-            resolution: highDpi ? window.devicePixelRatio : 1,
-            autoDensity: highDpi,
-        });
-
-        containerRef.current.appendChild(app.view as HTMLCanvasElement);
-        appRef.current = app;
+        const container = containerRef.current;
+        if (!container) return;
 
         let isMounted = true;
+        let app: PIXI.Application | null = null;
+        let wheelTarget: HTMLCanvasElement | null = null;
+        let resizeHandler: (() => void) | null = null;
+
+        const fail = (stage: string, error: unknown) => {
+            const message = formatLive2DError(error);
+            console.error(`[Live2DRenderer] ${stage}:`, error);
+            if (isMounted) {
+                setError(`${stage}: ${message}`);
+                setIsLoading(false);
+            }
+        };
 
         const loadModel = async () => {
             try {
                 console.log(`[Live2DRenderer] Loading model from: ${modelPath}`);
                 setIsLoading(true);
                 setError(null);
-                await ensureCubismCoreLoaded(cubismCoreSrc);
 
-                const { Live2DModel } = await import('pixi-live2d-display/cubism4');
+                app = new PIXI.Application({
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    backgroundAlpha: 0,
+                    resizeTo: window,
+                    antialias: true,
+                    resolution: highDpi ? window.devicePixelRatio : 1,
+                    autoDensity: highDpi,
+                });
+                appRef.current = app;
+                container.appendChild(app.view as HTMLCanvasElement);
+
+                await ensureCubismCoreLoaded(cubismCoreSrc);
+                const { Live2DModel } = await ensureLive2DRuntimeLoaded(rendererRuntimeSrc);
                 const model = await Live2DModel.from(modelPath, {
                     motionPreload: MOTION_PRELOAD_NONE as any,
                 });
 
-                if (!isMounted || !appRef.current) {
+                if (!isMounted || !app) {
                     model.destroy();
                     return;
                 }
 
                 modelRef.current = model;
-                appRef.current.stage.addChild(model as any);
+                app.stage.addChild(model as any);
 
                 // --- CONSTANT IDLE ANIMATION ---
                 const motionManager = (model as any).internalModel.motionManager;
@@ -157,14 +190,26 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
                     }
                 }, 1000);
 
-                // Fitting Logic
-                const scaleX = appRef.current.view.width / model.width;
-                const scaleY = appRef.current.view.height / model.height;
-                const scale = Math.min(scaleX, scaleY) * 0.6; 
-                model.scale.set(scale);
-                model.anchor.set(0.5, 0.5);
-                model.x = window.innerWidth / 2;
-                model.y = window.innerHeight * 0.6;
+                const modelBaseWidth = model.width;
+                const modelBaseHeight = model.height;
+                const fitModel = () => {
+                    if (!app) return;
+
+                    const screenWidth = app.renderer.screen.width;
+                    const screenHeight = app.renderer.screen.height;
+                    const scaleX = screenWidth / modelBaseWidth;
+                    const scaleY = screenHeight / modelBaseHeight;
+                    const scale = Math.min(scaleX, scaleY) * 0.6;
+                    const bounds = model.getLocalBounds();
+
+                    model.scale.set(scale);
+                    model.x = screenWidth / 2 - (bounds.x + bounds.width / 2) * scale;
+                    model.y = screenHeight * 0.6 - (bounds.y + bounds.height / 2) * scale;
+                };
+
+                fitModel();
+                resizeHandler = fitModel;
+                window.addEventListener('resize', resizeHandler);
                 (model as any).timeScale = 0.8;
 
                 // --- INTERACTION: Drag & Zoom ---
@@ -205,8 +250,8 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
                 });
 
                 // Zoom logic
-                const canvas = appRef.current.view as HTMLCanvasElement;
-                canvas.onwheel = (e) => {
+                wheelTarget = app.view as HTMLCanvasElement;
+                wheelTarget.onwheel = (e) => {
                     e.preventDefault();
                     const scaleFactor = 1.1;
                     let newScale = model.scale.x;
@@ -230,9 +275,7 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
                 setIsLoading(false);
 
             } catch (error) {
-                console.error('[Live2DRenderer] Failed to load model:', error);
-                setError(error instanceof Error ? error.message : String(error));
-                setIsLoading(false);
+                fail('Failed to load Live2D model', error);
             }
         };
 
@@ -241,12 +284,51 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
         return () => {
             isMounted = false;
             if (idleTimerRef.current) clearInterval(idleTimerRef.current);
-            if (modelRef.current) modelRef.current.destroy();
-            if (appRef.current) appRef.current.destroy(true, { children: true });
+            idleTimerRef.current = null;
+            if (wheelTarget) {
+                wheelTarget.onwheel = null;
+            }
+            if (resizeHandler) {
+                window.removeEventListener('resize', resizeHandler);
+            }
+            if (modelRef.current) {
+                modelRef.current.destroy();
+                modelRef.current = null;
+            }
+            if (appRef.current) {
+                try {
+                    appRef.current.destroy(true, { children: true });
+                } catch (error) {
+                    console.warn('[Live2DRenderer] Failed to destroy PIXI application:', error);
+                }
+                appRef.current = null;
+            }
         };
-    }, [modelPath, highDpi]);
+    }, [modelPath, highDpi, cubismCoreSrc, rendererRuntimeSrc]);
 
-    if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
+    if (error) {
+        return (
+            <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#64748b',
+                    textAlign: 'center',
+                    padding: 24,
+                    pointerEvents: 'none',
+                }}>
+                    <div style={{ maxWidth: 'min(720px, 80vw)', wordBreak: 'break-word' }}>
+                        <div>Avatar failed to load</div>
+                        <div style={{ marginTop: 8, fontSize: 13, color: '#94a3b8' }}>{error}</div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
             {isLoading && (

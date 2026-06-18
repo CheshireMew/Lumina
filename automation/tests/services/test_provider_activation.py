@@ -64,7 +64,7 @@ async def _enable_capability(module_name: str, module_id: str, capability: str, 
 
 
 @pytest.mark.anyio
-async def test_stt_provider_plugin_registers_without_autoselecting_unselected_provider():
+async def test_stt_provider_registers_without_autoselecting_unselected_provider():
     manager = await _enable_capability(
         "capability_modules.stt_sensevoice.module",
         "driver.stt.sensevoice",
@@ -77,7 +77,7 @@ async def test_stt_provider_plugin_registers_without_autoselecting_unselected_pr
 
 
 @pytest.mark.anyio
-async def test_stt_provider_plugin_activates_selected_provider():
+async def test_stt_provider_activates_selected_provider():
     manager = await _enable_capability(
         "capability_modules.stt_sensevoice.module",
         "driver.stt.sensevoice",
@@ -90,7 +90,7 @@ async def test_stt_provider_plugin_activates_selected_provider():
 
 
 @pytest.mark.anyio
-async def test_tts_provider_plugin_registers_without_autoselecting_unselected_provider():
+async def test_tts_provider_registers_without_autoselecting_unselected_provider():
     edge_tts_stub = SimpleNamespace(
         list_voices=AsyncMock(return_value=[]),
         exceptions=SimpleNamespace(NoAudioReceived=Exception),
@@ -109,7 +109,7 @@ async def test_tts_provider_plugin_registers_without_autoselecting_unselected_pr
 
 
 @pytest.mark.anyio
-async def test_tts_provider_plugin_activates_selected_provider():
+async def test_tts_provider_activates_selected_provider():
     edge_tts_stub = SimpleNamespace(
         list_voices=AsyncMock(return_value=[]),
         exceptions=SimpleNamespace(NoAudioReceived=Exception),
@@ -128,7 +128,7 @@ async def test_tts_provider_plugin_activates_selected_provider():
 
 
 @pytest.mark.anyio
-async def test_memory_provider_plugin_does_not_connect_unselected_provider():
+async def test_memory_provider_does_not_connect_unselected_provider():
     module = importlib.import_module("capability_modules.memory_postgres.module")
     capability_module = module.Capability()
     capability_module._bind_manifest(SimpleNamespace(id="driver.memory.postgres"))
@@ -148,7 +148,7 @@ async def test_memory_provider_plugin_does_not_connect_unselected_provider():
 
 
 @pytest.mark.anyio
-async def test_memory_provider_plugin_connects_selected_provider():
+async def test_memory_provider_connects_selected_provider():
     module = importlib.import_module("capability_modules.memory_postgres.module")
     capability_module = module.Capability()
     capability_module._bind_manifest(SimpleNamespace(id="driver.memory.postgres"))

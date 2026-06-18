@@ -297,30 +297,30 @@ def test_cache_hit_rate():
 # ============================================================================
 
 @pytest.mark.performance
-def test_plugin_discovery_performance():
-    """Test that plugin discovery scales well"""
+def test_capability_module_discovery_performance():
+    """Test that capability module discovery scales well"""
     import tempfile
     import os
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create many plugin directories
+        # Create many capability module directories
         for i in range(100):
-            plugin_dir = os.path.join(tmpdir, f"plugin_{i}")
-            os.makedirs(plugin_dir)
-            with open(os.path.join(plugin_dir, "manifest.yaml"), 'w') as f:
-                f.write(f"id: plugin_{i}\nname: Plugin {i}\n")
+            module_dir = os.path.join(tmpdir, f"module_{i}")
+            os.makedirs(module_dir)
+            with open(os.path.join(module_dir, "manifest.yaml"), 'w') as f:
+                f.write(f"id: module_{i}\nname: Module {i}\n")
 
         # Time the discovery
         start = time.perf_counter()
-        plugins_found = []
+        modules_found = []
         for root, dirs, files in os.walk(tmpdir):
             if "manifest.yaml" in files:
-                plugins_found.append(root)
+                modules_found.append(root)
         elapsed = time.perf_counter() - start
 
-        assert len(plugins_found) == 100
-        # Discovery should be fast even with many plugins
-        assert elapsed < 0.5, f"Plugin discovery too slow: {elapsed:.2f}s for 100 plugins"
+        assert len(modules_found) == 100
+        # Discovery should be fast even with many capability modules
+        assert elapsed < 0.5, f"Capability module discovery too slow: {elapsed:.2f}s for 100 modules"
 
 
 # ============================================================================

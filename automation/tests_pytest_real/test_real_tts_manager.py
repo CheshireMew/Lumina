@@ -6,14 +6,14 @@ import sys
 import os
 import pytest
 import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 from pathlib import Path
 
 # Add python_backend to path
 PROJECT_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from services.managers.tts import TTSPluginManager
+from services.managers.tts import TTSProviderManager
 
 
 class ConfigStub:
@@ -25,23 +25,16 @@ class ConfigStub:
 
 @pytest.mark.anyio
 async def test_tts_manager_driver_discovery():
-    tm = TTSPluginManager(ConfigStub())
-    
-    # Mock driver plugin discovery
-    with patch("services.managers.driver_loader.DriverLoader.load_plugins") as mock_load:
-        mock_driver = MagicMock()
-        mock_driver.id = "test.tts.driver"
-        mock_driver.name = "Test TTS"
-        mock_load.return_value = [mock_driver]
-        
-        await tm.load_drivers()
-        
-        assert "test.tts.driver" in tm.drivers
-        assert tm.active_driver is None
+    tm = TTSProviderManager(ConfigStub())
+
+    await tm.load_drivers()
+
+    assert "driver.tts.edge" in tm.drivers
+    assert tm.active_driver is None
 
 @pytest.mark.anyio
 async def test_tts_manager_activation():
-    tm = TTSPluginManager(ConfigStub())
+    tm = TTSProviderManager(ConfigStub())
     
     mock_driver = MagicMock()
     mock_driver.id = "test.tts.driver"
@@ -57,7 +50,7 @@ async def test_tts_manager_activation():
 
 @pytest.mark.anyio
 async def test_tts_manager_unload():
-    tm = TTSPluginManager(ConfigStub())
+    tm = TTSProviderManager(ConfigStub())
     mock_driver = MagicMock()
     mock_driver.unload = AsyncMock()
     

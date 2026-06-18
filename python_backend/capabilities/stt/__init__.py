@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from core.interfaces.capability import IWorkerCapability
 from core.runtime import resolve_contract_url, runtime_target_for_capability
 from services.audio_filter_chain import AudioFilterChain
-from services.managers.stt import STTPluginManager
+from services.managers.stt import STTProviderManager
 from .routes import router as stt_router
 from . import globals as stt_globals
 from app_config import config as app_settings
@@ -30,7 +30,7 @@ class Capability(IWorkerCapability):
     async def on_startup(self, app: FastAPI):
         container = app.state.container
         # 1. Initialize Manager
-        manager = STTPluginManager(config=app_settings)
+        manager = STTProviderManager(config=app_settings)
         await manager.register_drivers()
         
         # 2. Register to Container

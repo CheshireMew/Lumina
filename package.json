@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build:backend": "python python_backend/packaging/build_all.py",
-    "verify-capabilities": "python scripts/verify_capability_packages.py",
+    "verify-runtimes": "python scripts/verify_worker_runtimes.py",
     "gen-types": "powershell scripts/generate_api_client.ps1",
     "build": "npm run build:backend && tsc && vite build && electron-builder",
     "preview": "vite preview",
@@ -81,6 +81,7 @@
           ]
         }
       ],
+      "signAndEditExecutable": false,
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
@@ -95,32 +96,20 @@
         "to": "bin/lumina_backend"
       },
       {
-        "from": "GPT-SoVITS/runtime/ffmpeg.exe",
-        "to": "bin/ffmpeg.exe"
+        "from": "dist_backend/runtimes/stt-runtime",
+        "to": "runtimes/stt-runtime"
       },
       {
-        "from": "dist_backend/packages/core-runtime",
-        "to": "packages/core-runtime"
+        "from": "dist_backend/runtimes/tts-runtime",
+        "to": "runtimes/tts-runtime"
       },
       {
-        "from": "dist_backend/packages/live2d-assets",
-        "to": "packages/live2d-assets"
+        "from": "dist_backend/runtimes/voiceprint-runtime",
+        "to": "runtimes/voiceprint-runtime"
       },
       {
-        "from": "dist_backend/packages/stt-runtime",
-        "to": "packages/stt-runtime"
-      },
-      {
-        "from": "dist_backend/packages/tts-runtime",
-        "to": "packages/tts-runtime"
-      },
-      {
-        "from": "dist_backend/packages/voiceprint-runtime",
-        "to": "packages/voiceprint-runtime"
-      },
-      {
-        "from": "dist_backend/packages/vision-runtime",
-        "to": "packages/vision-runtime"
+        "from": "dist_backend/runtimes/vision-runtime",
+        "to": "runtimes/vision-runtime"
       },
       {
         "from": "config/ports.json",

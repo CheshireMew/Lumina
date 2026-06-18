@@ -21,7 +21,7 @@ class LippHealthResponse(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 class LippLifecycleRequest(BaseModel):
-    """Lifecycle Command (Enable/Disable Plugins)"""
+    """Lifecycle command for enabling or disabling capability modules."""
     action: Literal["enable", "disable", "reload"]
     target_id: str
     config: Optional[Dict[str, Any]] = None

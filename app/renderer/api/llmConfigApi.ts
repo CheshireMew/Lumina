@@ -1,7 +1,7 @@
 import { API_CONFIG } from "../config";
 
 export const listAvailableLlmModels = async (): Promise<string[]> => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/models/list`);
+    const response = await fetch(`${API_CONFIG.BASE_URL}/settings/llm/models/list`);
 
     if (!response.ok) {
         throw new Error(`Failed to fetch models: ${response.status}`);

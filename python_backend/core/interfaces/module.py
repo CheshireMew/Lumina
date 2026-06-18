@@ -76,7 +76,6 @@ class CapabilityModule(ABC):
             "kind": getattr(self._manifest, "kind", "extension"),
             "capability": getattr(self._manifest, "capability", "system"),
             "runtime_target": getattr(self._manifest, "runtime_target", "main"),
-            "permissions": list(getattr(self._manifest, "permissions", []) or []),
             "config_schema": dict(getattr(self._manifest, "config_schema", {}) or {}),
             "provides": list(getattr(self._manifest, "provides", []) or []),
         }

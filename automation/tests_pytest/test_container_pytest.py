@@ -87,10 +87,10 @@ def test_service_registration_parametrized(service_name, setter_method, getter_m
     ("my_extension", True),
     ("vendor.module-name", True),
     ("../etc/passwd", False),
-    ("plugin with spaces", False),
-    ("plugin\nwith\nnewlines", False),
+    ("module with spaces", False),
+    ("module\nwith\nnewlines", False),
 ], ids=["valid1", "valid2", "valid3", "path_traversal", "spaces", "newlines"])
-def test_plugin_id_validation(input_id, expected_valid):
+def test_module_id_validation(input_id, expected_valid):
     """Test with readable test IDs in output"""
     import re
     id_pattern = re.compile(r'^[a-zA-Z0-9_\.\-]+$')

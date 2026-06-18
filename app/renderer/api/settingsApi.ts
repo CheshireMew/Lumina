@@ -14,7 +14,7 @@ export interface RuntimeLlmSettingsDto {
 }
 
 export const fetchRuntimeLlmSettings = async (): Promise<RuntimeLlmSettingsDto> => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/config/llm`);
+    const response = await fetch(`${API_CONFIG.BASE_URL}/settings/llm/runtime`);
     if (!response.ok) {
         throw new Error(`Failed to fetch LLM settings: ${response.status}`);
     }
@@ -24,7 +24,7 @@ export const fetchRuntimeLlmSettings = async (): Promise<RuntimeLlmSettingsDto> 
 export const updateRuntimeLlmSettings = async (
     payload: RuntimeLlmSettingsDto,
 ): Promise<RuntimeLlmSettingsDto> => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/config/llm`, {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/settings/llm/runtime`, {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",

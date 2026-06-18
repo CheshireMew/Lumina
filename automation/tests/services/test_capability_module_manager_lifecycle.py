@@ -20,7 +20,7 @@ def _build_manager(event_bus: EventBus) -> CapabilityModuleManager:
     container.get_event_bus.return_value = event_bus
     container.get_capability_registry.return_value = CapabilityRegistry()
     container.get_config.return_value = MagicMock()
-    container.get_capability_package_registry.return_value = MagicMock()
+    container.get_worker_runtime_registry.return_value = MagicMock()
     return CapabilityModuleManager(container=container)
 
 

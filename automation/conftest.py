@@ -186,32 +186,29 @@ def sample_memory_data():
 
 
 # ============================================================================
-# Plugin Fixtures
+# Capability module fixtures
 # ============================================================================
 
 @pytest.fixture
-def sample_plugin_manifest():
-    """Sample plugin manifest YAML content"""
+def sample_module_manifest():
+    """Sample capability manifest YAML content"""
     return """
 id: test.module
-name: Test Plugin
+name: Test Capability
 version: 1.0.0
-description: A test plugin for testing
+description: A test capability module
 author: Test Author
-permissions:
-  - event.subscribe
-  - event.emit
 entry_point: module.py
 """
 
 
 @pytest.fixture
-def temp_plugin_dir(sample_plugin_manifest):
-    """Create a temporary plugin directory with manifest"""
+def temp_module_dir(sample_module_manifest):
+    """Create a temporary capability module directory with manifest"""
     with tempfile.TemporaryDirectory() as tmpdir:
         manifest_path = Path(tmpdir) / "manifest.yaml"
         with open(manifest_path, 'w') as f:
-            f.write(sample_plugin_manifest)
+            f.write(sample_module_manifest)
 
         # Create entry point
         module_file = Path(tmpdir) / "module.py"
@@ -302,7 +299,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.integration)
 
         # Add 'unit' to core/services tests
-        if any(x in str(item.fspath) for x in ["core", "services", "plugins"]):
+        if any(x in str(item.fspath) for x in ["core", "services", "capability_modules"]):
             item.add_marker(pytest.mark.unit)
 
 

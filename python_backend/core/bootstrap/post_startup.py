@@ -27,7 +27,7 @@ class PrewarmBootstrapper(Bootstrapper):
         try:
             await asyncio.sleep(4)
             warm_targets = []
-            registry = process_manager.capability_package_registry
+            registry = process_manager.worker_runtime_registry
             for capability in ("tts", "stt"):
                 if not registry.should_auto_start(capability):
                     continue
@@ -39,7 +39,7 @@ class PrewarmBootstrapper(Bootstrapper):
                 )
 
             if not warm_targets:
-                logger.info("Prewarm skipped: no runtime package marked for auto start")
+                logger.info("Prewarm skipped: no worker runtime marked for auto start")
                 return
 
             await asyncio.gather(*warm_targets)
@@ -126,6 +126,11 @@ class ProcessSupervisorBootstrapper(Bootstrapper):
         return "ProcessSupervisor"
     
     async def bootstrap(self, container: Any):
+        config = container.get_config()
+        if not config.capabilities.supervise_workers:
+            logger.debug("Process supervisor disabled in config")
+            return
+
         pm = container.get_process_manager()
         await pm.start_supervisor()
         logger.info("🛡️ Process Supervisor Auto-Healing Enabled")

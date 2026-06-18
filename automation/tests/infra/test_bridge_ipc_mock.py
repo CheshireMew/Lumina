@@ -17,9 +17,9 @@ class TestBridgeIPCMock(unittest.IsolatedAsyncioTestCase):
         
         # 模拟从 Electron 桥接层发来的 JSON 数据
         electron_raw_packet = {
-            "cmd": "invoke_plugin",
+            "cmd": "invoke_capability",
             "payload": {
-                "plugin_id": "test_plugin",
+                "module_id": "test_capability",
                 "method": "start",
                 "params": {"arg1": "value"}
             },
@@ -29,12 +29,12 @@ class TestBridgeIPCMock(unittest.IsolatedAsyncioTestCase):
         # 后端接收逻辑模拟
         async def mock_bridge_receiver(raw_data):
             packet = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
-            if packet.get("cmd") == "invoke_plugin":
-                return f"SUCCESS: Invoked {packet['payload']['plugin_id']}"
+            if packet.get("cmd") == "invoke_capability":
+                return f"SUCCESS: Invoked {packet['payload']['module_id']}"
             return "UNKNOWN_CMD"
 
         result = await mock_bridge_receiver(electron_raw_packet)
-        self.assertEqual(result, "SUCCESS: Invoked test_plugin")
+        self.assertEqual(result, "SUCCESS: Invoked test_capability")
         print(f"✅ IPC packet formats are compatible: {result}")
 
     async def test_async_event_bridging(self):

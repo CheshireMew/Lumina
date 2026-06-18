@@ -11,7 +11,7 @@ from core.interfaces.module import CapabilityModule
 from services.audio_filter_chain import AudioFilterChain
 from services.voiceprint_store import VoiceprintStoreUnavailable, list_profiles
 
-logger = logging.getLogger("VoiceprintPlugin")
+logger = logging.getLogger("VoiceprintCapability")
 
 
 class Capability(CapabilityModule, IAudioFilter):

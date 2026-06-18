@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 from typing import AsyncGenerator
-from unittest.mock import patch
 
 import pytest
 
@@ -10,7 +9,7 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
 
 from core.interfaces.driver import BaseTTSDriver
-from services.managers.tts import TTSPluginManager
+from services.managers.tts import TTSProviderManager
 
 
 class ConfigStub:
@@ -51,8 +50,8 @@ class FakeTTSDriver(BaseTTSDriver):
         yield f"{voice}:{text}".encode()
 
 
-def make_manager(selected_provider=None) -> TTSPluginManager:
-    return TTSPluginManager(ConfigStub(selected_provider=selected_provider))
+def make_manager(selected_provider=None) -> TTSProviderManager:
+    return TTSProviderManager(ConfigStub(selected_provider=selected_provider))
 
 
 def test_tts_manager_initialization():
@@ -142,13 +141,8 @@ def test_tts_resolve_driver_supports_direct_and_prefixed_ids():
 @pytest.mark.anyio
 async def test_tts_startup_requires_selected_provider():
     manager = make_manager()
-    driver = FakeTTSDriver("driver.tts.edge")
 
-    with patch(
-        "services.managers.driver_loader.DriverLoader.load_plugins",
-        return_value=[driver],
-    ):
-        await manager.register_drivers()
+    await manager.register_drivers()
 
     assert manager.active_driver is None
     assert manager.active_driver_id == "none"
@@ -157,15 +151,10 @@ async def test_tts_startup_requires_selected_provider():
 
 @pytest.mark.anyio
 async def test_tts_startup_rejects_missing_selected_provider():
-    manager = make_manager(selected_provider="driver.tts.edge")
-    driver = FakeTTSDriver("driver.tts.other")
+    manager = make_manager(selected_provider="driver.tts.missing")
 
-    with patch(
-        "services.managers.driver_loader.DriverLoader.load_plugins",
-        return_value=[driver],
-    ):
-        await manager.register_drivers()
+    await manager.register_drivers()
 
     assert manager.active_driver is None
     assert manager.active_driver_id == "none"
-    assert manager.last_error == "Configured TTS provider not discovered: driver.tts.edge"
+    assert manager.last_error == "Configured TTS provider not discovered: driver.tts.missing"

@@ -14,7 +14,7 @@ from security.tokens import TokenManager
 def test_token_manager_defaults_to_runtime_client_scope(monkeypatch):
     monkeypatch.setattr(TokenManager, "_secret_key", "test-secret")
 
-    token = TokenManager.create_token("frontend", permissions=["gateway.connect"])
+    token = TokenManager.create_token("frontend", scopes=["gateway.connect"])
 
     assert TokenManager.verify_token(token, expected_scope="runtime_client")
     assert TokenManager.verify_token(token, expected_scope="plug" + "in") is None

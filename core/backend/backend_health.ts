@@ -8,7 +8,7 @@ export class BackendHealthProbe {
 
     public async checkServiceHealth(service: ServiceConfig): Promise<boolean> {
         try {
-            const url = `http://${this.host}:${service.port}/health`;
+            const url = `http://${this.host}:${service.port}/runtime/health`;
             const response = await axios.get(url, {
                 timeout: 3000,
                 validateStatus: () => true,

@@ -31,7 +31,6 @@ class ProviderState(BaseModel):
     
     # Metadata
     capabilities: List[str] = Field(default_factory=list, description="List of provided capability strings")
-    permissions: List[str] = Field(default_factory=list, description="Requested Permissions")
     current_config: Dict[str, Any] = Field(default_factory=dict, description="Current persisted config")
     
     group_id: Optional[str] = Field(default=None, description="Exclusive grouping ID")

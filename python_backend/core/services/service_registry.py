@@ -9,7 +9,7 @@ logger = logging.getLogger("ServiceRegistry")
 
 CONTAINER_SERVICE_GETTERS = {
     "automation_service": "get_automation_service",
-    "capability_package_registry": "get_capability_package_registry",
+    "worker_runtime_registry": "get_worker_runtime_registry",
     "capability_registry": "get_capability_registry",
     "character_service": "get_character_service",
     "chat_pipeline": "get_chat_pipeline",
@@ -23,7 +23,6 @@ CONTAINER_SERVICE_GETTERS = {
     "event_bus": "get_event_bus",
     "gateway": "get_gateway",
     "llm_manager": "get_llm_manager",
-    "mcp_host": "get_mcp_host",
     "memory": "get_memory",
     "provider_config_service": "get_provider_config_service",
     "prewarm_task": "get_prewarm_task",
@@ -41,7 +40,7 @@ CONTAINER_SERVICE_GETTERS = {
 
 class ServiceRegistry:
     """
-    Local service registry for plugin and route code.
+    Local service registry for capability modules and route code.
 
     The registry resolves services from two places:
     - explicit registrations

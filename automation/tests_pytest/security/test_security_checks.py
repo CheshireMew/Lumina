@@ -190,21 +190,19 @@ def test_input_safety_check(data, should_be_safe):
 
 
 # ============================================================================
-# Plugin Security Tests
+# Capability module security tests
 # ============================================================================
 
 @pytest.mark.security
-def test_plugin_manifest_validation():
-    """Test that plugin manifests are validated"""
+def test_capability_manifest_validation():
+    """Test that capability manifests are validated"""
     from core.manifest import CapabilityManifest
 
     # Valid manifest
     valid_manifest = """
 id: test.module
-name: Test Plugin
+name: Test Capability
 version: 1.0.0
-permissions:
-  - event.subscribe
 entry_point: module.py
 """
 
@@ -212,32 +210,7 @@ entry_point: module.py
     import yaml
     manifest_data = yaml.safe_load(valid_manifest)
     assert manifest_data["id"] == "test.module"
-    assert "permissions" in manifest_data
-
-    # Check for dangerous permissions
-    dangerous_permissions = ["os.exec", "filesystem.external", "network.external"]
-    for perm in manifest_data.get("permissions", []):
-        # At least verify structure
-        assert isinstance(perm, str)
-
-
-@pytest.mark.security
-def test_plugin_code_execution_sandboxing():
-    """Test that plugin code is sandboxed"""
-    # This test verifies that plugins cannot execute arbitrary code
-    # In a real implementation, this would check:
-    # - Restricted imports
-    # - Limited builtins
-    # - No direct file system access
-    # - No subprocess execution
-
-    safe_builtins = ["print", "len", "str", "int", "float", "bool"]
-    dangerous_builtins = ["eval", "exec", "open", "compile", "__import__"]
-
-    for builtin in dangerous_builtins:
-        # In sandboxed environment, these should not be available
-        # For now, just document the requirement
-        assert builtin in dangerous_builtins
+    assert "permissions" not in manifest_data
 
 
 # ============================================================================
@@ -462,7 +435,7 @@ SECURITY TESTING COVERAGE:
    - Null byte prevention
    - Unicode handling
 
-4. Plugin Security:
+4. Capability Security:
    - Manifest validation
    - Code execution sandboxing
 

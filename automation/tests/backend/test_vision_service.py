@@ -7,7 +7,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.append(str(PROJECT_ROOT / "python_backend"))
 
-from capabilities.vision.manager import VisionPluginManager
+from capabilities.vision.manager import VisionProviderManager
 from core.interfaces.driver import BaseVisionDriver
 
 
@@ -42,7 +42,7 @@ class FakeVisionDriver(BaseVisionDriver):
 
 
 def test_screen_capture_packet():
-    service = VisionPluginManager(config=ConfigStub())
+    service = VisionProviderManager(config=ConfigStub())
     mock_instance = MagicMock()
     mock_instance.monitors = [None, {"top": 0, "left": 0, "width": 1920, "height": 1080}]
     service.mss = mock_instance
@@ -62,7 +62,7 @@ def test_screen_capture_packet():
 
 @pytest.mark.anyio
 async def test_vision_activation_requires_known_driver():
-    service = VisionPluginManager(config=ConfigStub())
+    service = VisionProviderManager(config=ConfigStub())
     service.register_driver(FakeVisionDriver())
 
     with pytest.raises(ValueError, match="Unknown VISION provider"):
@@ -74,7 +74,7 @@ async def test_vision_activation_requires_known_driver():
 
 @pytest.mark.anyio
 async def test_vision_startup_requires_selected_provider():
-    service = VisionPluginManager(config=ConfigStub())
+    service = VisionProviderManager(config=ConfigStub())
     service.register_driver(FakeVisionDriver("driver.vision.moondream"))
 
     await service.register_drivers()
@@ -86,7 +86,7 @@ async def test_vision_startup_requires_selected_provider():
 
 @pytest.mark.anyio
 async def test_vision_startup_rejects_missing_selected_provider():
-    service = VisionPluginManager(config=ConfigStub(selected_provider="driver.vision.moondream"))
+    service = VisionProviderManager(config=ConfigStub(selected_provider="driver.vision.moondream"))
     service.register_driver(FakeVisionDriver("driver.vision.other"))
 
     await service.register_drivers()
@@ -99,7 +99,7 @@ async def test_vision_startup_rejects_missing_selected_provider():
 @pytest.mark.anyio
 async def test_vision_startup_activates_selected_provider():
     driver = FakeVisionDriver("driver.vision.other")
-    service = VisionPluginManager(config=ConfigStub(selected_provider=driver.id))
+    service = VisionProviderManager(config=ConfigStub(selected_provider=driver.id))
     service.register_driver(driver)
 
     await service.register_drivers()

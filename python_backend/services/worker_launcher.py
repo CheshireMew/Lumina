@@ -25,12 +25,12 @@ def stream_worker_output(stream, prefix: str) -> None:
 
 
 class WorkerLauncher:
-    def __init__(self, capability_package_registry, base_dir: Optional[Path] = None):
-        if capability_package_registry is None:
-            raise ValueError("WorkerLauncher requires CapabilityPackageRegistry")
+    def __init__(self, worker_runtime_registry, base_dir: Optional[Path] = None):
+        if worker_runtime_registry is None:
+            raise ValueError("WorkerLauncher requires WorkerRuntimeRegistry")
 
         self.base_dir = base_dir or Path(__file__).parent.parent
-        self.capability_package_registry = capability_package_registry
+        self.worker_runtime_registry = worker_runtime_registry
 
     def build_launch_config(
         self,
@@ -43,7 +43,7 @@ class WorkerLauncher:
         if entry_path.is_absolute():
             env = os.environ.copy()
             env["LUMINA_SERVICE_NAME"] = worker_id
-            self._apply_package_environment(worker_id, env)
+            self._apply_runtime_environment(worker_id, env)
             self.refresh_worker_token(worker_id, env)
 
             command = [str(entry_path)]
@@ -63,7 +63,7 @@ class WorkerLauncher:
         if getattr(sys, "frozen", False):
             env = os.environ.copy()
             env["LUMINA_SERVICE_NAME"] = worker_id
-            self._apply_package_environment(worker_id, env)
+            self._apply_runtime_environment(worker_id, env)
             self.refresh_worker_token(worker_id, env)
 
             return {
@@ -82,7 +82,7 @@ class WorkerLauncher:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(self.base_dir)
         env["LUMINA_SERVICE_NAME"] = worker_id
-        self._apply_package_environment(worker_id, env)
+        self._apply_runtime_environment(worker_id, env)
         self.refresh_worker_token(worker_id, env)
 
         cmd = [sys.executable, str(script_path)]
@@ -97,35 +97,35 @@ class WorkerLauncher:
             "display_name": script_name,
         }
 
-    def _apply_package_environment(self, worker_id: str, env: Dict[str, str]) -> None:
+    def _apply_runtime_environment(self, worker_id: str, env: Dict[str, str]) -> None:
         if not worker_id.startswith("worker:"):
             return
 
         capability = worker_id.split(":", 1)[1]
-        definition = self.capability_package_registry.package_for_capability(capability)
+        definition = self.worker_runtime_registry.runtime_for_capability(capability)
         if not definition:
             return
 
-        package_roots: list[Path] = []
-        snapshot = self.capability_package_registry.resolve(definition.id)
+        runtime_roots: list[Path] = []
+        snapshot = self.worker_runtime_registry.resolve(definition.id)
         if snapshot and snapshot.status == "ready" and snapshot.root_dir:
-            package_roots.append(snapshot.root_dir)
+            runtime_roots.append(snapshot.root_dir)
             if snapshot.source_name == "bundled":
                 env["LUMINA_RESOURCES_DIR"] = str(snapshot.root_dir.parent.parent)
-            env["LUMINA_CAPABILITY_PACKAGE_ID"] = definition.id
-            env["LUMINA_CAPABILITY_PACKAGE_DIR"] = str(snapshot.root_dir)
-            env[f"LUMINA_{capability.upper()}_PACKAGE_DIR"] = str(snapshot.root_dir)
+            env["LUMINA_WORKER_RUNTIME_ID"] = definition.id
+            env["LUMINA_WORKER_RUNTIME_DIR"] = str(snapshot.root_dir)
+            env[f"LUMINA_{capability.upper()}_RUNTIME_DIR"] = str(snapshot.root_dir)
             models_dir = snapshot.root_dir / "data" / "models"
             env[f"LUMINA_{capability.upper()}_MODELS_DIR"] = str(models_dir)
 
-        voiceprint = self.capability_package_registry.resolve("voiceprint-runtime")
+        voiceprint = self.worker_runtime_registry.resolve("voiceprint-runtime")
         if voiceprint and voiceprint.status == "ready" and voiceprint.root_dir:
-            package_roots.append(voiceprint.root_dir)
-            env["LUMINA_VOICEPRINT_PACKAGE_DIR"] = str(voiceprint.root_dir)
+            runtime_roots.append(voiceprint.root_dir)
+            env["LUMINA_VOICEPRINT_RUNTIME_DIR"] = str(voiceprint.root_dir)
 
         module_roots = [
             str(root / "capability_modules")
-            for root in package_roots
+            for root in runtime_roots
             if (root / "capability_modules").exists()
         ]
         if module_roots:
@@ -135,7 +135,7 @@ class WorkerLauncher:
             )
             existing_pythonpath = env.get("PYTHONPATH")
             env["PYTHONPATH"] = os.pathsep.join(
-                [str(root) for root in package_roots]
+                [str(root) for root in runtime_roots]
                 + ([existing_pythonpath] if existing_pythonpath else [])
             )
 
@@ -144,7 +144,7 @@ class WorkerLauncher:
 
         env["LUMINA_WORKER_TOKEN"] = TokenManager.create_token(
             worker_id,
-            permissions=["worker.control"],
+            scopes=["worker.control"],
             ttl_minutes=1440,
             scope="worker",
         )

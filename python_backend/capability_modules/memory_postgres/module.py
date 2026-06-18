@@ -61,7 +61,7 @@ class Capability(CapabilityModule):
         metadata.update(
             {
                 "name": "PostgreSQL Memory",
-                "description": "PostgreSQL + pgvector memory backend exposed as a formal memory provider plugin.",
+                "description": "PostgreSQL + pgvector memory backend exposed as a formal memory provider.",
                 "func_tag": "Memory",
             }
         )

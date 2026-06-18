@@ -3,8 +3,6 @@ api_version: "1.0"
 kind: provider
 capability: tool.search
 runtime_target: main
-permissions:
-  - network.external
 config_schema:
   api_key:
     type: password

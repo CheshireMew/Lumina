@@ -115,7 +115,7 @@ async def get_models(stt_manager: Any = Depends(get_stt_service)):
          models.append({
              "id": pid,
              "name": drv.name,
-             "type": "plugin",
+             "type": "provider",
              "description": drv.description,
              "active": stt_manager.is_driver_active(pid)
          })

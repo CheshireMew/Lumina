@@ -56,20 +56,20 @@ def test_intent_validation_from_yaml():
 
 
 @pytest.mark.data_driven
-def test_plugin_validation_from_yaml():
-    """Test plugin validation using YAML test data"""
-    test_cases = load_yaml_test_cases("plugin_validation.yaml")
+def test_module_validation_from_yaml():
+    """Test capability module validation using YAML test data"""
+    test_cases = load_yaml_test_cases("module_validation.yaml")
 
     for case in test_cases.get("test_cases", []):
-        plugin_id = case["plugin_id"]
+        module_id = case["module_id"]
         is_valid = case["is_valid"]
 
-        # Validate plugin ID format
+        # Validate module ID format
         import re
         pattern = re.compile(r'^[a-zA-Z0-9_\.\-]+$')
-        actually_valid = bool(pattern.match(plugin_id))
+        actually_valid = bool(pattern.match(module_id))
 
-        assert actually_valid == is_valid, f"Plugin ID: {plugin_id}, Expected valid: {is_valid}"
+        assert actually_valid == is_valid, f"Module ID: {module_id}, Expected valid: {is_valid}"
 
 
 # ============================================================================
@@ -179,21 +179,21 @@ test_cases:
     expected_intent: casual_chat
 """)
 
-    # Create plugin_validation.yaml
-    plugin_yaml = TEST_DATA_DIR / "plugin_validation.yaml"
-    if not plugin_yaml.exists():
-        plugin_yaml.write_text("""
-description: Plugin ID validation test cases
+    # Create module_validation.yaml
+    module_yaml = TEST_DATA_DIR / "module_validation.yaml"
+    if not module_yaml.exists():
+        module_yaml.write_text("""
+description: Capability module ID validation test cases
 test_cases:
-  - plugin_id: test.module
+  - module_id: test.module
     is_valid: True
-  - plugin_id: my_extension
+  - module_id: my_extension
     is_valid: True
-  - plugin_id: ../etc/passwd
+  - module_id: ../etc/passwd
     is_valid: False
-  - plugin_id: plugin with spaces
+  - module_id: module with spaces
     is_valid: False
-  - plugin_id: <script>alert('xss')</script>
+  - module_id: <script>alert('xss')</script>
     is_valid: False
 """)
 

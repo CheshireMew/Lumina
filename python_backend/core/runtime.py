@@ -68,7 +68,7 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContractDefinition] = {
         worker_runtime_target="main",
         worker_routes={
             "chat": "/companion/message",
-            "models": "/models/list",
+            "models": "/settings/llm/models/list",
             "health": "/health",
         },
         supported_operations=(

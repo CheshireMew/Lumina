@@ -94,6 +94,7 @@ capabilities:
     vision: "driver.vision.moondream"
   desired_state: {}
   prewarm_core: true
+  supervise_workers: false
   settings:
     driver.tool.search.brave:
       api_key: ""

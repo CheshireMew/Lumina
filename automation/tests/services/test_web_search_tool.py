@@ -14,7 +14,7 @@ class ServicesStub:
             get_selected_provider=MagicMock(return_value=provider_id),
         )
         self.module_manager = MagicMock()
-        self.module_manager.get_plugin.return_value = provider
+        self.module_manager.get_module.return_value = provider
         self.module_manager.find_provider = MagicMock(return_value="provider.search.discovered")
 
     def get_config(self):

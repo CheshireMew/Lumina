@@ -30,7 +30,7 @@ const requestJson = async <T>(
 
 export const loadTables = async (signal?: AbortSignal) => {
     const data = await requestJson<{ tables?: Array<{ name: string; info: string }> }>(
-        `${API_CONFIG.BASE_URL}/admin/tables`,
+        `${API_CONFIG.BASE_URL}/memory/inspection/tables`,
         { signal },
     );
     return data.tables || [];
@@ -41,7 +41,7 @@ export const loadTableRows = async (
     activeCharacterId: string | null | undefined,
     signal?: AbortSignal,
 ) => {
-    let url = `${API_CONFIG.BASE_URL}/admin/table/${tableName}?limit=50`;
+    let url = `${API_CONFIG.BASE_URL}/memory/inspection/table/${tableName}?limit=50`;
     if (
         activeCharacterId &&
         (tableName === "conversation_log" || tableName === "episodic_memory")
@@ -65,7 +65,7 @@ export const loadGraphData = async (
         status?: string;
         graph?: { nodes: any[]; edges: any[] };
     }>(
-        `${API_CONFIG.BASE_URL}/debug/brain_dump${characterParam}`,
+        `${API_CONFIG.BASE_URL}/memory/inspection${characterParam}`,
         { signal },
     );
 
@@ -74,7 +74,7 @@ export const loadGraphData = async (
 
 export const executeQuery = async (query: string): Promise<QueryResult> => {
     const data = await requestJson<{ result?: any[]; detail?: string }>(
-        `${API_CONFIG.BASE_URL}/admin/query`,
+        `${API_CONFIG.BASE_URL}/memory/inspection/query`,
         {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -90,7 +90,7 @@ export const executeQuery = async (query: string): Promise<QueryResult> => {
 
 export const deleteRecord = async (tableName: string, recordId: string) => {
     return requestJson<{ status?: string; detail?: string }>(
-        `${API_CONFIG.BASE_URL}/admin/record/${tableName}/${encodeURIComponent(recordId)}`,
+        `${API_CONFIG.BASE_URL}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
         {
             method: "DELETE",
         },
@@ -103,7 +103,7 @@ export const updateRecord = async (
     data: Record<string, any>,
 ) => {
     return requestJson<{ status?: string; detail?: string }>(
-        `${API_CONFIG.BASE_URL}/admin/record/${tableName}/${encodeURIComponent(recordId)}`,
+        `${API_CONFIG.BASE_URL}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
         {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -117,7 +117,7 @@ export const createRecord = async (
     data: Record<string, any>,
 ) => {
     return requestJson<{ status?: string; detail?: string }>(
-        `${API_CONFIG.BASE_URL}/admin/record/${tableName}/new`,
+        `${API_CONFIG.BASE_URL}/memory/inspection/record/${tableName}/new`,
         {
             method: "POST",
             headers: { "Content-Type": "application/json" },

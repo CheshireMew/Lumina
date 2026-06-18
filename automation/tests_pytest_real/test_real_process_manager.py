@@ -28,8 +28,8 @@ class FakeProcess:
         self.killed = True
 
 
-class EmptyCapabilityPackageRegistry:
-    def package_for_capability(self, capability: str):
+class EmptyWorkerRuntimeRegistry:
+    def runtime_for_capability(self, capability: str):
         return None
 
     def should_auto_start(self, capability: str) -> bool:
@@ -37,7 +37,7 @@ class EmptyCapabilityPackageRegistry:
 
 
 def build_process_manager():
-    return ProcessManager(EmptyCapabilityPackageRegistry())
+    return ProcessManager(EmptyWorkerRuntimeRegistry())
 
 
 def test_process_manager_initializes_current_components():
@@ -50,8 +50,8 @@ def test_process_manager_initializes_current_components():
     assert manager.supervisor is not None
 
 
-def test_process_manager_requires_package_registry():
-    with pytest.raises(ValueError, match="requires CapabilityPackageRegistry"):
+def test_process_manager_requires_runtime_registry():
+    with pytest.raises(ValueError, match="requires WorkerRuntimeRegistry"):
         ProcessManager(None)
 
 
@@ -99,9 +99,9 @@ def test_start_worker_attaches_reachable_external_service():
     assert manager.workers["worker:stt"].process is None
 
 
-def test_start_worker_respects_capability_package_readiness():
+def test_start_worker_respects_worker_runtime_readiness():
     registry = MagicMock()
-    registry.package_for_capability.return_value = SimpleNamespace(id="stt-runtime")
+    registry.runtime_for_capability.return_value = SimpleNamespace(id="stt-runtime")
     registry.resolve.return_value = SimpleNamespace(status="missing", entry_executable=None)
     manager = ProcessManager(registry)
 
@@ -159,13 +159,3 @@ async def test_shutdown_all_stops_every_worker():
     assert process_a.terminated is True
     assert process_b.terminated is True
     assert manager.workers == {}
-
-
-def test_register_mcp_client_keeps_external_client_record():
-    manager = build_process_manager()
-    client = SimpleNamespace(name="mcp:test", pid=9001)
-
-    manager.register_mcp_client(client)
-
-    assert manager.workers["mcp:test"] is client
-    assert manager.is_running("mcp:test") is True

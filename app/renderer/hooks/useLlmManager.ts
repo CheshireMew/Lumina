@@ -31,8 +31,8 @@ export const useLlmManager = () => {
         setError(null);
         try {
             const [routesRes, provRes] = await Promise.all([
-                fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/routes`),
-                fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/providers`),
+                fetch(`${API_CONFIG.BASE_URL}/settings/llm/routes`),
+                fetch(`${API_CONFIG.BASE_URL}/settings/llm/providers`),
             ]);
 
             if (!routesRes.ok || !provRes.ok) {
@@ -67,7 +67,7 @@ export const useLlmManager = () => {
                 enabled: true,
             };
             const res = await fetch(
-                `${API_CONFIG.BASE_URL}/llm-mgmt/providers/${config.id}`,
+                `${API_CONFIG.BASE_URL}/settings/llm/providers/${config.id}`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -89,7 +89,7 @@ export const useLlmManager = () => {
 
     const updateProvider = async (id: string, updates: any) => {
         try {
-            await fetch(`${API_CONFIG.BASE_URL}/llm-mgmt/providers/${id}`, {
+            await fetch(`${API_CONFIG.BASE_URL}/settings/llm/providers/${id}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(updates),
@@ -115,7 +115,7 @@ export const useLlmManager = () => {
     ) => {
         try {
             const res = await fetch(
-                `${API_CONFIG.BASE_URL}/llm-mgmt/routes/${feature}`,
+                `${API_CONFIG.BASE_URL}/settings/llm/routes/${feature}`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },

@@ -5,12 +5,12 @@ from pydantic import BaseModel, Field
 class CapabilityType(str, Enum):
     """
     Standardized Capability Types (Registry).
-    Plugins must declare these in `provides` list.
+    Capability modules must declare these in `provides` list.
     """
     STT_PROVIDER = "stt.provider"
     TTS_PROVIDER = "tts.provider"
     LLM_PROVIDER = "llm.provider"
-    TOOL_EXECUTION = "tool.execution" # Skills / MCP
+    TOOL_EXECUTION = "tool.execution" # Internal tools
     SYSTEM_EXTENSION = "system.extension"
     MEMORY_STORE = "memory.store"
 
@@ -40,7 +40,7 @@ class TTSCapability(BaseCapabilitySchema):
 
 class ToolCapability(BaseCapabilitySchema):
     """
-    Contract for MCP/Skill Plugins.
+    Contract for internal tool capability modules.
     Must provide a JSON Schema for parameters.
     """
     type: CapabilityType = CapabilityType.TOOL_EXECUTION

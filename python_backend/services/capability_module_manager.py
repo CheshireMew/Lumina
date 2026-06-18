@@ -9,10 +9,8 @@ from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target
 from services.capability_kernel import (
     CapabilityContextBinder,
     CapabilityModuleLoader,
-    CapabilityPermissionError,
     CapabilityStateBuilder,
     ManifestRepository,
-    PermissionChecker,
     is_selectable_provider,
 )
 
@@ -38,7 +36,6 @@ class CapabilityModuleManager:
         config = self._require_service(container.get_config(), "Config")
         self._manifest_repository = ManifestRepository(self._module_root)
         self._loader = CapabilityModuleLoader()
-        self._permission_checker = PermissionChecker()
         self._context_binder = CapabilityContextBinder(container, self._capability_registry)
         self._state_builder = CapabilityStateBuilder(config)
         self._lifecycle_subscriptions: list[int] = []
@@ -108,14 +105,14 @@ class CapabilityModuleManager:
         self._errors = {**retained_load_errors, **result.errors}
 
         for module_id, manifest in result.manifests.items():
-            package_id = getattr(manifest, "package", None)
-            if not package_id:
+            runtime_id = getattr(manifest, "runtime", None)
+            if not runtime_id:
                 self._manifests[module_id] = manifest
                 continue
-            if self._is_package_ready(str(package_id)):
+            if self._is_runtime_ready(str(runtime_id)):
                 self._manifests[module_id] = manifest
                 continue
-            self._errors[module_id] = f"package_unavailable:{package_id}"
+            self._errors[module_id] = f"runtime_unavailable:{runtime_id}"
 
         for module_id in previous_manifest_ids - set(self._manifests):
             self._capability_registry.unregister_module(module_id)
@@ -129,9 +126,9 @@ class CapabilityModuleManager:
                 enabled=bool(self._modules.get(module_id) and self._modules[module_id].enabled),
             )
 
-    def _is_package_ready(self, package_id: str) -> bool:
-        package_registry = self.container.get_capability_package_registry()
-        snapshot = package_registry.resolve(package_id)
+    def _is_runtime_ready(self, runtime_id: str) -> bool:
+        runtime_registry = self.container.get_worker_runtime_registry()
+        snapshot = runtime_registry.resolve(runtime_id)
         return bool(snapshot and snapshot.status == "ready")
 
     async def _load_and_enable(self, module_id: str) -> CapabilityModule | None:
@@ -151,15 +148,11 @@ class CapabilityModuleManager:
             return None
 
         try:
-            self._permission_checker.ensure_allowed(manifest)
             module = self._loader.instantiate(manifest)
             await self._context_binder.bind(module, manifest)
             self._modules[module_id] = module
             self._errors.pop(module_id, None)
             return module
-        except CapabilityPermissionError:
-            self._errors[module_id] = "permission_check_failed"
-            return None
         except Exception as exc:
             logger.error("Failed to load capability module %s: %s", module_id, exc, exc_info=True)
             self._errors[module_id] = str(exc)

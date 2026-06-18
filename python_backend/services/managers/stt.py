@@ -1,21 +1,18 @@
 import asyncio
 import inspect
 import logging
-import os
 import threading
-from pathlib import Path
 from typing import Any, Dict, Optional
 
+from capability_modules.stt_sensevoice.drivers.stt.sense_voice_driver import SenseVoiceDriver
 from core.interfaces.driver import BaseSTTDriver
-from core.runtime import runtime_target_for_capability
 
-from .driver_loader import DriverLoader, allow_extension_driver
 from .provider_host import ProviderHostManager
 
 logger = logging.getLogger("STTManager")
 
 
-class STTPluginManager(ProviderHostManager):
+class STTProviderManager(ProviderHostManager):
     def __init__(self, config):
         super().__init__(config=config, capability="stt")
         self.lock = threading.Lock()
@@ -28,8 +25,8 @@ class STTPluginManager(ProviderHostManager):
     def engine_type(self) -> str:
         if self.active_driver_id in {"driver.stt.sensevoice", "sense-voice"}:
             return "sense_voice"
-        if "plugin_asr" in self.active_driver_id:
-            return "plugin_asr"
+        if "provider_asr" in self.active_driver_id:
+            return "provider_asr"
         return "faster_whisper"
 
     @property
@@ -67,28 +64,7 @@ class STTPluginManager(ProviderHostManager):
             raise
 
     async def load_drivers(self):
-        try:
-            base_dir = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            )
-            modules_root = os.path.join(base_dir, "capability_modules")
-            if os.path.exists(modules_root):
-                for module_name in os.listdir(modules_root):
-                    ext_drivers_dir = os.path.join(modules_root, module_name, "drivers", "stt")
-                    if os.path.exists(ext_drivers_dir):
-                        manifest_path = os.path.join(modules_root, module_name, "manifest.yaml")
-                        allowed, manifest = allow_extension_driver(
-                            Path(manifest_path),
-                            capability="stt",
-                            runtime_target=runtime_target_for_capability("stt"),
-                        )
-                        if not allowed:
-                            continue
-                        loaded = DriverLoader.load_plugins(ext_drivers_dir, BaseSTTDriver)
-                        for driver in loaded:
-                            self.register_driver(driver)
-        except Exception as exc:
-            logger.error("Failed to load STT drivers: %s", exc)
+        self.register_driver(SenseVoiceDriver())
 
     async def activate_startup_driver(self):
         target_provider = self.resolve_startup_driver_id()

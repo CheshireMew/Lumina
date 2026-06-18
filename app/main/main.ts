@@ -10,7 +10,6 @@ import { isChildOf } from "./safe_fs";
 app.commandLine.appendSwitch("enable-gpu-rasterization");
 app.commandLine.appendSwitch("ignore-gpu-blacklist");
 app.commandLine.appendSwitch("disable-features", "WidgetLayering");
-// app.commandLine.appendSwitch("no-sandbox"); // Removed for Security Audit #4
 app.commandLine.appendSwitch("disable-gpu-process-crash-limit");
 
 // The built directory structure
@@ -51,7 +50,6 @@ let backendState: BackendState = {
     ports: {},
 };
 
-// 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 
 function getBootstrapState(): BootstrapState {
@@ -215,7 +213,7 @@ function createWindow() {
             preload: path.join(__dirname, "preload.js"),
             contextIsolation: true, // ✅  Security Audit #4
             nodeIntegration: false, // ✅ Security Audit #4
-            sandbox: true, // ✅ Explicitly enabled
+            sandbox: true,
         },
     });
 
@@ -238,11 +236,27 @@ function createWindow() {
         win.show();
     };
 
-    if (VITE_DEV_SERVER_URL) {
-        win.loadURL(VITE_DEV_SERVER_URL);
-    } else {
-        win.loadFile(path.join(process.env.DIST || "", "index.html"));
-    }
+    const loadRenderer = async () => {
+        try {
+            await win?.webContents.session.clearCache();
+        } catch (error) {
+            console.warn("[Window] Failed to clear renderer cache:", error);
+        }
+
+        if (!win || win.isDestroyed()) {
+            return;
+        }
+
+        if (VITE_DEV_SERVER_URL) {
+            await win.loadURL(VITE_DEV_SERVER_URL);
+        } else {
+            await win.loadFile(path.join(process.env.DIST || "", "index.html"), {
+                query: { v: String(Date.now()) },
+            });
+        }
+    };
+
+    void loadRenderer();
 
     win.once("ready-to-show", showWindow);
     win.webContents.once("did-finish-load", showWindow);

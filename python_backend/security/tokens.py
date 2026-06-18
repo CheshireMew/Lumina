@@ -34,14 +34,14 @@ class TokenManager:
         return cls._secret_key
 
     @classmethod
-    def create_token(cls, subject: str, permissions: list, ttl_minutes: int = 60, scope: str = "runtime_client") -> str:
+    def create_token(cls, subject: str, scopes: list[str] | None = None, ttl_minutes: int = 60, scope: str = "runtime_client") -> str:
         """
         Create a scoped JWT for a runtime client or worker.
         """
         payload = {
             "sub": subject,
             "scope": scope,
-            "permissions": permissions,
+            "scopes": scopes or [],
             "iat": datetime.datetime.utcnow(),
             "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=ttl_minutes)
         }

@@ -6,7 +6,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from routers.config import health_check
+from routers.runtime import health_check
 from services.companion.context import CompanionContextResolver
 
 

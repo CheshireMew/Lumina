@@ -1,16 +1,46 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any
-from routers.deps import get_llm_service, get_soul_service
+from routers.deps import get_config_controller, get_llm_service, get_soul_service
+from schemas.runtime_settings import RuntimeLlmSettings
 from services.orchestrators.soul import SoulService
 
 router = APIRouter(
-    prefix="/llm-mgmt",
-    tags=["LLM Management"]
+    prefix="/settings/llm",
+    tags=["LLM Settings"]
 )
 
 import logging
 
-logger = logging.getLogger("LLMManagementRouter")
+logger = logging.getLogger("LLMSettingsRouter")
+
+
+@router.get("/runtime", response_model=RuntimeLlmSettings)
+async def get_llm_runtime_settings(config_service=Depends(get_config_controller)):
+    return config_service.get_llm_runtime_settings()
+
+
+@router.put("/runtime", response_model=RuntimeLlmSettings)
+async def update_llm_runtime_settings(
+    payload: RuntimeLlmSettings,
+    config_service=Depends(get_config_controller),
+):
+    try:
+        config_service.update_llm_runtime(
+            api_key=payload.apiKey,
+            base_url=payload.baseUrl,
+            model=payload.model,
+            temperature=payload.temperature,
+            top_p=payload.topP,
+            presence_penalty=payload.presencePenalty,
+            frequency_penalty=payload.frequencyPenalty,
+            history_limit=payload.historyLimit,
+            overflow_strategy=payload.overflowStrategy,
+            provider_id=payload.providerId,
+        )
+        return config_service.get_llm_runtime_settings()
+    except Exception as exc:
+        logger.error("Failed to update LLM runtime settings: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @router.get("/providers")
 async def get_providers(llm_manager=Depends(get_llm_service)):
@@ -81,15 +111,14 @@ async def get_feature_params(
     if feature in ["chat", "proactive"]:
         soul_state = soul_service.get_llm_adjustment_state() or None
         if soul_state:
-            logger.info(f"[LLM Mgmt] Calculating dynamic params for {feature} using soul state: {soul_state}")
+            logger.info(f"[LLM Settings] Calculating dynamic params for {feature} using soul state: {soul_state}")
             
     params = llm_manager.get_parameters(feature, soul_state=soul_state)
     return params
 
-# --- New Models Router (for /models/list) ---
 models_router = APIRouter(
-    prefix="/models",
-    tags=["Models"]
+    prefix="/settings/llm/models",
+    tags=["LLM Settings"]
 )
 
 @models_router.get("/list")

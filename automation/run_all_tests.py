@@ -41,9 +41,9 @@ TEST_CATEGORIES = {
         "description": "Service layer tests (mock dependencies)",
         "requires_service": False
     },
-    "plugins": {
-        "path": AUTOMATION_ROOT / "tests" / "plugins",
-        "description": "Plugin tests (mock dependencies)",
+    "capabilities": {
+        "path": AUTOMATION_ROOT / "tests" / "capabilities",
+        "description": "Capability tests (mock dependencies)",
         "requires_service": False
     },
     "backend": {

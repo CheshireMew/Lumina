@@ -45,10 +45,6 @@ class BaseDriver(CapabilityModule):
         """
         return None
 
-    @property
-    def permissions(self) -> list[str]:
-        return []
-
     @abstractmethod
     async def load(self):
         """Initialize models/resources."""

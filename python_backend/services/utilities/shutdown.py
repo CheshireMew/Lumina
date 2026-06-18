@@ -15,13 +15,12 @@ class ShutdownManager:
     Manages graceful shutdown of all services in correct order.
     
     Shutdown Order (reverse of startup):
-    1. MCP Host (external integrations)
-    2. Config Watcher (monitoring)
-    3. Capability modules
-    4. Ticker (background tasks)
-    5. Worker Control Hub (IPC)
-    6. Process Manager (child processes)
-    7. Database (persistence)
+    1. Config Watcher (monitoring)
+    2. Capability modules
+    3. Ticker (background tasks)
+    4. Worker Control Hub (IPC)
+    5. Process Manager (child processes)
+    6. Database (persistence)
     """
     
     async def shutdown(self, container: Any, app: FastAPI = None) -> None:
@@ -34,40 +33,28 @@ class ShutdownManager:
         """
         logger.info("🛑 Starting graceful shutdown...")
         
-        # 1. MCP Host
-        await self._stop_mcp_host(container)
-        
-        # 2. Config Watcher
+        # 1. Config Watcher
         self._stop_config_watcher(container)
         
-        # 3. Capability modules
+        # 2. Capability modules
         await self._stop_capability_modules(container)
         
-        # 4. Ticker
+        # 3. Ticker
         self._stop_ticker(container)
         
-        # 5. Pending startup tasks
+        # 4. Pending startup tasks
         await self._stop_prewarm_task(container)
         
-        # 6. Worker Control Hub
+        # 5. Worker Control Hub
         await self._stop_worker_control_hub()
         
-        # 7. Process Manager
+        # 6. Process Manager
         await self._stop_process_manager(container)
         
-        # 8. Database
+        # 7. Database
         await self._stop_database(container)
         
         logger.info("✅ Shutdown complete")
-    
-    async def _stop_mcp_host(self, container: Any):
-        mcp_host = container.get_mcp_host()
-        if mcp_host:
-            logger.info("Stopping MCP Host...")
-            try:
-                await mcp_host.stop()
-            except Exception as e:
-                logger.error(f"Error stopping MCP Host: {e}")
     
     def _stop_config_watcher(self, container: Any):
         watcher = container.get_config_watcher()

@@ -7,7 +7,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from routers.debug import brain_dump, processing_status
+from routers.memory import inspect_memory, inspect_processing_status
 from services.companion.context import CompanionContextResolver
 
 
@@ -33,11 +33,11 @@ class FakeSoulService:
 
 
 @pytest.mark.anyio
-async def test_brain_dump_uses_active_soul_character_when_query_omits_character():
+async def test_memory_inspection_uses_active_soul_character_when_query_omits_character():
     memory = FakeMemory()
 
-    response = await brain_dump(
-        memory=memory,
+    response = await inspect_memory(
+        memory_service=memory,
         context_resolver=CompanionContextResolver(FakeSoulService()),
     )
 
@@ -46,12 +46,12 @@ async def test_brain_dump_uses_active_soul_character_when_query_omits_character(
 
 
 @pytest.mark.anyio
-async def test_processing_status_uses_explicit_character_when_provided():
+async def test_memory_processing_status_uses_explicit_character_when_provided():
     memory = FakeMemory()
 
-    await processing_status(
+    await inspect_processing_status(
         character_id="Lillian",
-        memory=memory,
+        memory_service=memory,
         context_resolver=CompanionContextResolver(FakeSoulService()),
     )
 

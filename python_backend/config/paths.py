@@ -20,6 +20,20 @@ ENV_VAR = os.getenv("LUMINA_ENV", "").lower()
 IS_DEV = (not IS_FROZEN) or (ENV_VAR == "dev") or (ENV_VAR == "development")
 
 
+def resolve_app_root() -> Path:
+    env_value = os.environ.get("LUMINA_APP_ROOT")
+    if env_value:
+        return Path(env_value).resolve()
+
+    if IS_FROZEN:
+        return Path(sys.executable).resolve().parent
+
+    return BASE_DIR.parent.resolve()
+
+
+APP_ROOT = resolve_app_root()
+
+
 def resolve_data_root() -> Path:
     env_value = os.environ.get("LUMINA_DATA_PATH")
     if env_value:
@@ -31,10 +45,7 @@ def resolve_data_root() -> Path:
         except Exception as exc:
             logger.error(f"Failed to create LUMINA_DATA_PATH: {exc}")
 
-    if IS_FROZEN:
-        portable_dir = Path(sys.executable).parent / "Lumina_Data"
-    else:
-        portable_dir = BASE_DIR.parent / "Lumina_Data"
+    portable_dir = APP_ROOT / "Lumina_Data"
 
     if portable_dir.exists():
         logger.info(f"Portable Mode Detected: {portable_dir}")
@@ -60,7 +71,7 @@ def resolve_data_root() -> Path:
 
 DATA_ROOT = resolve_data_root()
 CONFIG_ROOT = DATA_ROOT
-MODELS_DIR = BASE_DIR / "models" if IS_FROZEN else BASE_DIR.parent / "models"
+MODELS_DIR = APP_ROOT / "models"
 
 (DATA_ROOT / "logs").mkdir(parents=True, exist_ok=True)
 (DATA_ROOT / "database").mkdir(parents=True, exist_ok=True)
@@ -68,6 +79,7 @@ MODELS_DIR = BASE_DIR / "models" if IS_FROZEN else BASE_DIR.parent / "models"
 
 @dataclass(frozen=True)
 class PathsConfig:
+    app_root: Path
     base_dir: Path
     models_dir: Path
 
@@ -85,4 +97,4 @@ def get_model_path(model_name: str) -> Path:
 
 
 def get_paths_config() -> PathsConfig:
-    return PathsConfig(BASE_DIR, MODELS_DIR)
+    return PathsConfig(APP_ROOT, BASE_DIR, MODELS_DIR)

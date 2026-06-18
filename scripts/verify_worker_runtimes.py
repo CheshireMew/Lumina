@@ -7,7 +7,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DIST_BACKEND = PROJECT_ROOT / "dist_backend"
-CONTRACT_PATH = PROJECT_ROOT / "config" / "capability-packages.json"
+CONTRACT_PATH = PROJECT_ROOT / "config" / "worker-runtimes.json"
 
 MAIN_FORBIDDEN_NAMES = {
     "torch",
@@ -36,7 +36,7 @@ MAIN_FORBIDDEN_PATHS = {
 
 
 def fail(message: str) -> None:
-    print(f"[capability-verify] {message}", file=sys.stderr)
+    print(f"[runtime-verify] {message}", file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -44,20 +44,20 @@ def load_contract() -> dict:
     return json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
 
-def verify_package(package: dict) -> None:
-    package_id = package["id"]
-    package_dir = DIST_BACKEND / "packages" / package_id
-    if not package_dir.exists():
-        fail(f"missing package directory: {package_id}")
+def verify_runtime(runtime: dict) -> None:
+    runtime_id = runtime["id"]
+    runtime_dir = DIST_BACKEND / "runtimes" / runtime_id
+    if not runtime_dir.exists():
+        fail(f"missing runtime directory: {runtime_id}")
 
-    for required in package.get("requiredFiles") or []:
-        if not (package_dir / required).exists():
-            fail(f"{package_id} missing required file: {required}")
+    for required in runtime.get("requiredFiles") or []:
+        if not (runtime_dir / required).exists():
+            fail(f"{runtime_id} missing required file: {required}")
 
     for metadata_file in ("manifest.json", "version.json", "hashes.json"):
-        path = package_dir / metadata_file
+        path = runtime_dir / metadata_file
         if not path.exists():
-            fail(f"{package_id} missing {metadata_file}")
+            fail(f"{runtime_id} missing {metadata_file}")
         json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -80,9 +80,9 @@ def verify_main_runtime() -> None:
 def main() -> None:
     contract = load_contract()
     verify_main_runtime()
-    for package in contract["packages"]:
-        verify_package(package)
-    print("[capability-verify] OK")
+    for runtime in contract["runtimes"]:
+        verify_runtime(runtime)
+    print("[runtime-verify] OK")
 
 
 if __name__ == "__main__":
