@@ -3,15 +3,8 @@ from typing import Any, Dict, List, Optional
 
 class ProviderRegistry:
     def __init__(self):
-        self._context_providers: List[Any] = []
         self._tool_providers: Dict[str, Any] = {}
         self._search_providers: Dict[str, Any] = {}
-
-    def register_context_provider(self, provider: Any):
-        self._context_providers.append(provider)
-
-    def get_context_providers(self) -> List[Any]:
-        return list(self._context_providers)
 
     def register_tool_provider(self, provider: Any):
         self._tool_providers[provider.name] = provider

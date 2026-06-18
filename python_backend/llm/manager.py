@@ -25,6 +25,46 @@ class LLMManager:
         self._driver_descriptors: Dict[str, Dict[str, Any]] = {}
         self._drivers_loaded = False
         self._parameter_calculator = None
+        self._register_builtin_driver_types()
+
+    def _register_builtin_driver_types(self):
+        from llm.drivers.deepseek_driver import DeepSeekDriver
+        from llm.drivers.gemini_driver import GeminiDriver
+        from llm.drivers.openai_driver import OpenAIDriver
+        from llm.drivers.pollinations_driver import PollinationsDriver
+
+        builtin_drivers = {
+            "openai": (
+                lambda provider_id: OpenAIDriver(id=provider_id),
+                {
+                    "display_name": "OpenAI Compatible",
+                    "description": "OpenAI and OpenAI-compatible chat completion APIs.",
+                },
+            ),
+            "deepseek": (
+                lambda provider_id: DeepSeekDriver(id=provider_id),
+                {
+                    "display_name": "DeepSeek",
+                    "description": "DeepSeek API using the OpenAI-compatible protocol.",
+                },
+            ),
+            "gemini": (
+                lambda provider_id: GeminiDriver(id=provider_id),
+                {
+                    "display_name": "Gemini",
+                    "description": "Google Gemini through the OpenAI-compatible endpoint.",
+                },
+            ),
+            "pollinations": (
+                lambda provider_id: PollinationsDriver(id=provider_id),
+                {
+                    "display_name": "Pollinations",
+                    "description": "Pollinations free chat completion provider.",
+                },
+            ),
+        }
+        for type_id, (factory, metadata) in builtin_drivers.items():
+            self.register_driver_type(type_id, factory, metadata)
 
     def save_config(self):
         self.app_settings.save()
@@ -214,7 +254,7 @@ class LLMManager:
     def register_route(
         self,
         feature: str,
-        default_model: str = "gpt-4o-mini",
+        default_model: str,
         provider_id: Optional[str] = None,
     ):
         if feature in self.config.routes:

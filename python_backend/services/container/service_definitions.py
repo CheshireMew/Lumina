@@ -7,9 +7,7 @@ SERVICE_NAMES = (
     "gateway",
     "memory_service",
     "llm_manager",
-    "capability_module_manager",
     "process_manager",
-    "capability_registry",
     "worker_runtime_registry",
     "automation_service",
     "soul",
@@ -19,6 +17,7 @@ SERVICE_NAMES = (
     "chat_turn_service",
     "companion_runtime",
     "companion_context_resolver",
+    "companion_context_pack_builder",
     "companion_interaction_recorder",
     "chat_turn_event_adapter",
     "tts",
@@ -29,6 +28,8 @@ SERVICE_NAMES = (
     "prewarm_task",
     "provider_config_service",
     "character_service",
+    "emotion_broker",
+    "voiceprint_filter",
 )
 
 

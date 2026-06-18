@@ -15,11 +15,6 @@ class Capability(IWorkerCapability):
     def register_routes(self, app: FastAPI):
         from .routes import router as vision_router
 
-        # Mount with prefix is done by Generic Worker typically, or we define it here.
-        # Original router had prefix="/lumina/vision".
-        # Let's keep it under /vision for cleaner API or respect original.
-        # But generic worker usually maps root or convention.
-        # Let's just include the router. Routes within are /analyze, /load, etc.
         app.include_router(vision_router)
 
     def get_state_provider(self) -> Callable[[], List[Dict[str, Any]]]:

@@ -4,7 +4,7 @@ import logging
 import threading
 from typing import Any, Dict, Optional
 
-from capability_modules.stt_sensevoice.drivers.stt.sense_voice_driver import SenseVoiceDriver
+from provider_drivers.stt_sensevoice.drivers.stt.sense_voice_driver import SenseVoiceDriver
 from core.interfaces.driver import BaseSTTDriver
 
 from .provider_host import ProviderHostManager

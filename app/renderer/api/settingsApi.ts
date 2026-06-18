@@ -1,5 +1,3 @@
-import { API_CONFIG } from "../config";
-
 export interface RuntimeLlmSettingsDto {
     providerId: string;
     apiKey: string;
@@ -13,8 +11,10 @@ export interface RuntimeLlmSettingsDto {
     overflowStrategy: "slide" | "reset";
 }
 
-export const fetchRuntimeLlmSettings = async (): Promise<RuntimeLlmSettingsDto> => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/settings/llm/runtime`);
+export const fetchRuntimeLlmSettings = async (
+    baseUrl: string,
+): Promise<RuntimeLlmSettingsDto> => {
+    const response = await fetch(`${baseUrl}/settings/llm/runtime`);
     if (!response.ok) {
         throw new Error(`Failed to fetch LLM settings: ${response.status}`);
     }
@@ -22,9 +22,10 @@ export const fetchRuntimeLlmSettings = async (): Promise<RuntimeLlmSettingsDto> 
 };
 
 export const updateRuntimeLlmSettings = async (
+    baseUrl: string,
     payload: RuntimeLlmSettingsDto,
 ): Promise<RuntimeLlmSettingsDto> => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/settings/llm/runtime`, {
+    const response = await fetch(`${baseUrl}/settings/llm/runtime`, {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",

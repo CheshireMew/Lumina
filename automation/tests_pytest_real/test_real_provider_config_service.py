@@ -51,11 +51,8 @@ async def test_provider_config_service_ensure_worker_running_uses_process_manage
 @pytest.mark.anyio
 async def test_provider_config_service_update_config_for_main_runtime(container):
     config = ConfigStub()
-    spm = MagicMock()
-    spm.get_manifest.return_value = SimpleNamespace(runtime_target="main")
 
     container.get_config.return_value = config
-    container.get_capability_module_manager.return_value = spm
 
     service = ProviderConfigService(container)
 
@@ -69,15 +66,12 @@ async def test_provider_config_service_update_config_for_main_runtime(container)
 @pytest.mark.anyio
 async def test_provider_config_service_update_config_for_worker_runtime(container):
     config = ConfigStub()
-    spm = MagicMock()
-    spm.get_manifest.return_value = SimpleNamespace(runtime_target="worker:tts")
 
     process_manager = MagicMock()
     process_manager.is_running.return_value = True
 
     container.get_config.return_value = config
     container.get_process_manager.return_value = process_manager
-    container.get_capability_module_manager.return_value = spm
 
     hub = MagicMock()
     hub.broadcast_config_update = AsyncMock()

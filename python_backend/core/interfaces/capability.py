@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 class CapabilityContract(BaseModel):
     """
     Defines a capability provided or consumed by a module.
-    Used in CapabilityManifest.
     """
     type: str
     version: str = "1.0.0"

@@ -1,7 +1,0 @@
-id: driver.llm.gemini
-api_version: "1.0"
-kind: driver
-capability: llm
-runtime_target: main
-config_schema: {}
-provides: []

@@ -18,7 +18,7 @@ def resolve_worker_port(app_settings: Any, options: WorkerRuntimeOptions) -> int
 
 def load_capability(capability_name: str, logger: logging.Logger):
     module_path = f"capabilities.{capability_name}"
-    logger.info("Loading capability module: %s", module_path)
+    logger.info("Loading worker capability: %s", module_path)
 
     module = importlib.import_module(module_path)
     if hasattr(module, "Capability"):

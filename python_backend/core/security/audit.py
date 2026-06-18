@@ -23,7 +23,7 @@ class AuditLogger:
     ):
         """
         Record a security event.
-        actor_id: Capability module ID or user ID
+        actor_id: Service ID, worker ID, or user ID
         action: e.g. "permission_request", "file_access"
         target: e.g. "system.filesystem", "/etc/passwd"
         status: "granted" or "blocked"

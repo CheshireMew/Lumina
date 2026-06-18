@@ -25,7 +25,6 @@ def test_worker_runtime_container_services_are_reset_for_worker_process():
 
     container.set_config.assert_called_once_with(app_settings)
     container.set_event_bus.assert_called_once()
-    container.set_capability_registry.assert_called_once()
     container.set_worker_runtime_registry.assert_called_once()
     container.has_service.assert_not_called()
 

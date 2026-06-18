@@ -113,32 +113,21 @@ async def test_get_all_memories_uses_soul_character_when_query_omits_character()
     )
 
 
-async def test_clear_context_uses_default_companion_user_when_request_omits_user(monkeypatch):
-    session_manager = MagicMock()
-    session_manager.clear_history = AsyncMock()
-    context_resolver = CompanionContextResolver(SoulServiceStub("sakura"))
+async def test_clear_context_delegates_session_reset_to_companion_runtime():
+    class CompanionRuntimeStub:
+        def __init__(self):
+            self.reset_session = AsyncMock()
 
-    class GatewayStub:
-        publish_session_reset = AsyncMock()
-
-    import routers.gateway as gateway_module
-
-    monkeypatch.setattr(gateway_module, "gateway_service", GatewayStub())
-
+    runtime = CompanionRuntimeStub()
     response = await clear_context(
         ClearContextRequest(),
-        session_manager=session_manager,
-        context_resolver=context_resolver,
+        companion_runtime=runtime,
     )
 
     assert response == {"status": "success", "message": "Short-term context cleared"}
-    session_manager.clear_history.assert_awaited_once_with(
-        CompanionContext(
-            session_id=0,
-            user_id=DEFAULT_USER_ID,
-            character_id="sakura",
-        )
-    )
+    packet = runtime.reset_session.await_args.args[0]
+    assert packet.payload["user_id"] is None
+    assert packet.payload["character_id"] is None
 
 
 async def test_get_inspiration_uses_explicit_character_when_query_provides_character():

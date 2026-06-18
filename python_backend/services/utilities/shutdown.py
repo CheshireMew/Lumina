@@ -16,7 +16,7 @@ class ShutdownManager:
     
     Shutdown Order (reverse of startup):
     1. Config Watcher (monitoring)
-    2. Capability modules
+    2. Built-in middleware services
     3. Ticker (background tasks)
     4. Worker Control Hub (IPC)
     5. Process Manager (child processes)
@@ -36,8 +36,8 @@ class ShutdownManager:
         # 1. Config Watcher
         self._stop_config_watcher(container)
         
-        # 2. Capability modules
-        await self._stop_capability_modules(container)
+        # 2. Built-in middleware services
+        await self._stop_emotion_broker(container)
         
         # 3. Ticker
         self._stop_ticker(container)
@@ -62,16 +62,16 @@ class ShutdownManager:
             logger.info("Stopping ConfigWatcher...")
             watcher.stop()
     
-    async def _stop_capability_modules(self, container: Any):
-        if not container.has_service("capability_module_manager"):
+    async def _stop_emotion_broker(self, container: Any):
+        if not container.has_service("emotion_broker"):
             return
 
-        module_manager = container.get_capability_module_manager()
-        logger.info("Stopping capability modules...")
+        emotion_broker = container.get_emotion_broker()
+        logger.info("Stopping EmotionBroker...")
         try:
-            await module_manager.shutdown()
+            await emotion_broker.stop()
         except Exception as e:
-            logger.error(f"Error stopping capability module kernel: {e}")
+            logger.error(f"Error stopping EmotionBroker: {e}")
     
     def _stop_ticker(self, container: Any):
         ticker = container.get_ticker()

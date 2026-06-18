@@ -37,9 +37,10 @@ export class BackendServiceLauncher {
                     : path.join(process.cwd(), "Lumina_Data"),
                 LUMINA_ENV: app.isPackaged ? "production" : "development",
                 LUMINA_ASSETS_DIR: spec.assetsDir,
-                LUMINA_MEMORY_PORT: (ports.memory_port || 8010).toString(),
-                LUMINA_STT_PORT: (ports.stt_port || 8765).toString(),
-                LUMINA_TTS_PORT: (ports.tts_port || 8766).toString(),
+                LUMINA_MEMORY_PORT: ports.memory_port.toString(),
+                LUMINA_STT_PORT: ports.stt_port.toString(),
+                LUMINA_TTS_PORT: ports.tts_port.toString(),
+                LUMINA_VISION_PORT: ports.vision_port.toString(),
             },
         });
 

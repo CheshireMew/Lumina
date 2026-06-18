@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { API_CONFIG } from "../../config";
 import { AudioDevice, WhisperModelInfo } from "./types";
 
-export const useSttVoiceState = (isActive: boolean) => {
+export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
     const [whisperModels, setWhisperModels] = useState<WhisperModelInfo[]>([]);
     const [currentWhisperModel, setCurrentWhisperModel] = useState("base");
     const [loadingStatus, setLoadingStatus] = useState("idle");
@@ -15,7 +14,7 @@ export const useSttVoiceState = (isActive: boolean) => {
 
     const refreshModels = useCallback(async () => {
         try {
-            const response = await fetch(`${API_CONFIG.STT_BASE_URL}/models/list`);
+            const response = await fetch(`${sttBaseUrl}/models/list`);
             if (!response.ok) {
                 return;
             }
@@ -28,11 +27,11 @@ export const useSttVoiceState = (isActive: boolean) => {
         } catch (error) {
             console.error("Failed to fetch STT models", error);
         }
-    }, []);
+    }, [sttBaseUrl]);
 
     const refreshAudioDevices = useCallback(async () => {
         try {
-            const response = await fetch(`${API_CONFIG.STT_BASE_URL}/audio/devices`);
+            const response = await fetch(`${sttBaseUrl}/audio/devices`);
             if (!response.ok) {
                 return;
             }
@@ -47,12 +46,12 @@ export const useSttVoiceState = (isActive: boolean) => {
                 hasWarnedStt.current = true;
             }
         }
-    }, []);
+    }, [sttBaseUrl]);
 
     const handleSttModelChange = useCallback(
         async (newModel: string) => {
             try {
-                await fetch(`${API_CONFIG.STT_BASE_URL}/models/switch`, {
+                await fetch(`${sttBaseUrl}/models/switch`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ model_name: newModel }),
@@ -63,7 +62,7 @@ export const useSttVoiceState = (isActive: boolean) => {
                 alert("Failed to confirm model switch");
             }
         },
-        [refreshModels],
+        [refreshModels, sttBaseUrl],
     );
 
     const handleEngineChange = useCallback(
@@ -86,7 +85,7 @@ export const useSttVoiceState = (isActive: boolean) => {
 
     const handleAudioDeviceChange = useCallback(async (deviceName: string) => {
         try {
-            const response = await fetch(`${API_CONFIG.STT_BASE_URL}/audio/config`, {
+            const response = await fetch(`${sttBaseUrl}/audio/config`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ device_name: deviceName }),
@@ -99,7 +98,7 @@ export const useSttVoiceState = (isActive: boolean) => {
         } catch (error) {
             alert("Failed to connect to STT server");
         }
-    }, []);
+    }, [sttBaseUrl]);
 
     useEffect(() => {
         if (!isActive) {

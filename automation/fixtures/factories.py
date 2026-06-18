@@ -82,23 +82,21 @@ class MemoryFactory:
         return [MemoryFactory.create() for _ in range(count)]
 
 
-class CapabilityModuleFactory:
-    """Factory for creating capability module test data"""
+class ProviderFactory:
+    """Factory for creating provider test data"""
 
     @staticmethod
-    def create_manifest(
-        module_id: str = "test.capability",
+    def create_provider_config(
+        provider_id: str = "driver.test.provider",
         version: str = "1.0.0",
     ) -> Dict:
-        """Create a capability manifest"""
+        """Create a provider config"""
         return {
-            "id": module_id,
-            "name": "Test Capability",
+            "id": provider_id,
+            "name": "Test Provider",
             "version": version,
-            "description": "A test capability module",
-            "author": "Test Author",
-            "entry_point": "module.py",
-            "min_lumina_version": "0.1.0"
+            "description": "A test provider",
+            "enabled": True,
         }
 
     @staticmethod
@@ -197,9 +195,9 @@ def memory_factory():
 
 
 @pytest.fixture
-def capability_module_factory():
-    """Provide CapabilityModuleFactory"""
-    return CapabilityModuleFactory
+def provider_factory():
+    """Provide ProviderFactory"""
+    return ProviderFactory
 
 
 @pytest.fixture

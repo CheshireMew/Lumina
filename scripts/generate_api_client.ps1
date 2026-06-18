@@ -1,7 +1,6 @@
 
 Write-Host "🚀 Generating API Client Types..."
 
-$BACKEND_URL = "http://127.0.0.1:8010/openapi.json"
 # Path relative to Project Root (CWD will be set to Root)
 $OUTPUT_FILE = "app/renderer/api-schema.d.ts" 
 
@@ -20,6 +19,9 @@ if (Test-Path "package.json") {
 elseif (Test-Path "../package.json") {
     Set-Location ..
 }
+
+$PORTS = Get-Content "config/ports.json" | ConvertFrom-Json
+$BACKEND_URL = "http://127.0.0.1:$($PORTS.memory_port)/openapi.json"
 
 # Check if Backend is up
 try {

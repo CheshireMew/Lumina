@@ -190,30 +190,6 @@ def test_input_safety_check(data, should_be_safe):
 
 
 # ============================================================================
-# Capability module security tests
-# ============================================================================
-
-@pytest.mark.security
-def test_capability_manifest_validation():
-    """Test that capability manifests are validated"""
-    from core.manifest import CapabilityManifest
-
-    # Valid manifest
-    valid_manifest = """
-id: test.module
-name: Test Capability
-version: 1.0.0
-entry_point: module.py
-"""
-
-    # Should parse without error
-    import yaml
-    manifest_data = yaml.safe_load(valid_manifest)
-    assert manifest_data["id"] == "test.module"
-    assert "permissions" not in manifest_data
-
-
-# ============================================================================
 # Rate Limiting Tests
 # ============================================================================
 
@@ -435,24 +411,20 @@ SECURITY TESTING COVERAGE:
    - Null byte prevention
    - Unicode handling
 
-4. Capability Security:
-   - Manifest validation
-   - Code execution sandboxing
-
-5. Rate Limiting:
+4. Rate Limiting:
    - Request throttling
    - Abuse prevention
 
-6. File Upload Security:
+5. File Upload Security:
    - Content type validation
    - Extension checking
    - Size limits
 
-7. Authentication:
+6. Authentication:
    - Password strength
    - Token security
 
-8. API Security:
+7. API Security:
    - Request size limits
    - Header validation
 

@@ -158,7 +158,7 @@ def test_multiple_tools_registration(num_tools):
 # ============================================================================
 
 @pytest.mark.parametrize("service_attr,should_be_none", [
-    ("process_manager", True),  # Optional service
+    ("process_manager", False),
     ("gateway", False),  # Will raise error
 ])
 def test_optional_vs_required_services(service_attr, should_be_none):

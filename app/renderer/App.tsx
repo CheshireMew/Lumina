@@ -4,21 +4,23 @@
  * Modularized with AppToolbar and ModalLayer.
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import ChatBubble from './components/ChatBubble'
 import InputBox from './components/InputBox'
 import { events } from './core/events';
-import { API_CONFIG, updateApiConfig } from './config';
-import { ttsService } from '@core/voice/tts_service'
 import { GeneralSettingsInput } from './hooks/useSettings';
 import { CUSTOM_LLM_PROVIDER_ID, LlmProviderId } from './components/LLMConfig/types';
 
 // Core Hooks
-import { useCoreSystem } from './hooks/useCoreSystem';
 import { useBackendState } from './hooks/useBackendState';
 import { useRuntimeCapabilities } from './hooks/useRuntimeCapabilities';
 import { transformImageSrc } from './utils/srcUtils';
 import { syncFrontendServiceUrls } from './runtime/appRuntime';
+import { buildRuntimeConfig, RuntimeConfig } from './runtime/runtimeConfig';
+import {
+    CompanionRuntimeProvider,
+    useCompanionRuntime,
+} from './companion/runtime/CompanionRuntimeProvider';
 
 // Avatar System
 import AvatarContainer from './core/avatar/AvatarContainer';
@@ -34,23 +36,62 @@ const LazyModalLayer = React.lazy(() =>
 );
 
 function App() {
-    // ==================== HOOKS ====================
-    // Refs
     const avatarRef = useRef<AvatarRendererRef>(null);
     const backendState = useBackendState();
     const isBackendReady = backendState.status === 'ready';
-    const runtimeBaseUrl = backendState.ports.memory
-        ? `http://127.0.0.1:${backendState.ports.memory}`
-        : API_CONFIG.BASE_URL;
-    const runtimeCapabilities = useRuntimeCapabilities(isBackendReady, runtimeBaseUrl);
-    
-    // Core System Hook (Unified)
+    const runtimeConfig = useMemo(
+        () => buildRuntimeConfig(backendState),
+        [backendState],
+    );
+    const runtimeCapabilities = useRuntimeCapabilities(isBackendReady, runtimeConfig.apiBaseUrl);
+
+    useEffect(() => {
+        if (Object.keys(backendState.ports).length === 0) {
+            return;
+        }
+
+        console.log("🔌 [App] Syncing runtime ports:", backendState.ports);
+        syncFrontendServiceUrls(runtimeConfig);
+    }, [backendState.ports, runtimeConfig]);
+
+    return (
+        <CompanionRuntimeProvider
+            avatarRef={avatarRef}
+            baseUrl={runtimeConfig.apiBaseUrl}
+            backendReady={isBackendReady}
+        >
+            <CompanionAppShell
+                avatarRef={avatarRef}
+                backendState={backendState}
+                isBackendReady={isBackendReady}
+                runtimeConfig={runtimeConfig}
+                runtimeCapabilities={runtimeCapabilities}
+            />
+        </CompanionRuntimeProvider>
+    );
+}
+
+interface CompanionAppShellProps {
+    avatarRef: React.RefObject<AvatarRendererRef>;
+    backendState: ReturnType<typeof useBackendState>;
+    isBackendReady: boolean;
+    runtimeConfig: RuntimeConfig;
+    runtimeCapabilities: ReturnType<typeof useRuntimeCapabilities>;
+}
+
+function CompanionAppShell({
+    avatarRef,
+    backendState,
+    isBackendReady,
+    runtimeConfig,
+    runtimeCapabilities,
+}: CompanionAppShellProps) {
     const {
         activeCharacter, activeCharacterId,
         settings, isSettingsLoaded, updateLLMSettings, saveGeneralSettings,
         isProcessing, isStreaming, displayMessage, reasoningContent,
         sendMessage, interrupt
-    } = useCoreSystem(avatarRef, isBackendReady);
+    } = useCompanionRuntime();
     
     // ==================== LOCAL STATE ====================
     const [chatMode, setChatMode] = useState<'text' | 'voice'>('text');
@@ -104,24 +145,6 @@ function App() {
     }, [interrupt]);
 
     useEffect(() => {
-        if (activeCharacter) {
-            if (activeCharacter.voiceConfig?.voiceId) {
-                ttsService.setDefaultVoice(activeCharacter.voiceConfig.voiceId);
-            }
-        }
-    }, [activeCharacterId, activeCharacter]);
-
-    useEffect(() => {
-        if (Object.keys(backendState.ports).length === 0) {
-            return;
-        }
-
-        console.log("🔌 [App] Syncing runtime ports:", backendState.ports);
-        updateApiConfig(backendState.ports);
-        syncFrontendServiceUrls();
-    }, [backendState.ports]);
-
-    useEffect(() => {
         setVisibleBackgroundImage('');
 
         if (!isSettingsLoaded || !settings.backgroundImage) {
@@ -136,15 +159,11 @@ function App() {
     }, [isSettingsLoaded, settings.backgroundImage]);
 
     // ==================== RENDER ====================
-    const defaultModel = API_CONFIG.DEFAULT_LIVE2D_MODEL;
     const sttCapability = runtimeCapabilities.stt;
     const visionCapability = runtimeCapabilities.vision;
-    const resolvedModelPath = activeCharacter?.avatar?.modelUrl
-        || `${API_CONFIG.BASE_URL}/assets/live2d/${defaultModel}/${defaultModel}.model3.json`;
-    const cubismCoreSrc = activeCharacter?.avatar?.cubismCoreUrl
-        || `${API_CONFIG.BASE_URL}/assets/libs/live2dcubismcore.min.js`;
-    const rendererRuntimeSrc = activeCharacter?.avatar?.rendererRuntimeUrl
-        || `${API_CONFIG.BASE_URL}/assets/libs/pixi-live2d-display-cubism4.min.js`;
+    const resolvedModelPath = activeCharacter?.avatar?.modelUrl || "";
+    const cubismCoreSrc = activeCharacter?.avatar?.cubismCoreUrl || "";
+    const rendererRuntimeSrc = activeCharacter?.avatar?.rendererRuntimeUrl || "";
     const canLoadAvatar = isSettingsLoaded;
     const shouldRenderAvatar = canLoadAvatar && Boolean(resolvedModelPath);
     const hasOpenModal = isSettingsOpen
@@ -262,6 +281,7 @@ function App() {
                             chatMode={chatMode}
                             onToggleChatMode={toggleChatMode}
                             onSpeechStart={handleUserSpeechStart}
+                            visionBaseUrl={runtimeConfig.visionBaseUrl}
                             voiceCapabilityState={sttCapability?.status || 'unavailable'}
                             visionCapabilityState={visionCapability?.status || 'unavailable'}
                         />
@@ -323,6 +343,7 @@ function App() {
                             activeCharacterId,
                         }}
                         avatarRef={avatarRef}
+                        runtimeConfig={runtimeConfig}
                     />
                 </React.Suspense>
             )}

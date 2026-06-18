@@ -3,6 +3,7 @@ Write-Host "🚀 Starting Lumina MVP Backend..."
 
 $ROOT = ".."
 $PYTHON = "python" # Or specific venv python
+$PORTS = Get-Content "$ROOT\config\ports.json" | ConvertFrom-Json
 
 # Launch Services
 $BACKEND_DIR = "$ROOT\python_backend"
@@ -21,6 +22,7 @@ Start-Sleep -Seconds 1
 Launch-Service "tts"
 
 Write-Host "✅ All Services Launched. Check valid ports:"
-Write-Host "  - Memory: 8010"
-Write-Host "  - STT:    8765"
-Write-Host "  - TTS:    8766"
+Write-Host "  - Memory: $($PORTS.memory_port)"
+Write-Host "  - STT:    $($PORTS.stt_port)"
+Write-Host "  - TTS:    $($PORTS.tts_port)"
+Write-Host "  - Vision: $($PORTS.vision_port)"

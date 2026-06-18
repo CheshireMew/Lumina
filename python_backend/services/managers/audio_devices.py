@@ -1,7 +1,10 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-import sounddevice as sd
+try:
+    import sounddevice as sd
+except ModuleNotFoundError:
+    sd = None
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +16,10 @@ class AudioDeviceSelector:
 
     def list_input_devices(self, check_available: bool = False) -> List[Dict[str, Any]]:
         devices: List[Dict[str, Any]] = []
+        if sd is None:
+            logger.warning("sounddevice is not installed; audio input devices are unavailable.")
+            return devices
+
         try:
             device_list = sd.query_devices()
             for index, device in enumerate(device_list):
@@ -53,10 +60,11 @@ class AudioDeviceSelector:
         return None
 
     def get_device_info(self, device_index: int):
-        return sd.query_devices(device_index)
+        return self._require_sounddevice().query_devices(device_index)
 
     def create_input_stream(self, device_index, callback):
-        return sd.InputStream(
+        sounddevice = self._require_sounddevice()
+        return sounddevice.InputStream(
             device=device_index,
             samplerate=16000,
             channels=1,
@@ -66,6 +74,8 @@ class AudioDeviceSelector:
         )
 
     def _can_open_device(self, device_index: int) -> bool:
+        if sd is None:
+            return False
         try:
             test_stream = sd.InputStream(
                 device=device_index,
@@ -83,3 +93,8 @@ class AudioDeviceSelector:
             except Exception:
                 logger.debug(f"Skipping device {device_index}: {e}")
             return False
+
+    def _require_sounddevice(self):
+        if sd is None:
+            raise RuntimeError("sounddevice is required for audio capture but is not installed.")
+        return sd

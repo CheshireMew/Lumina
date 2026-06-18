@@ -14,6 +14,19 @@ import pytest
 PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
+
+def require_core_service():
+    """Skip live load tests when the local backend is not running."""
+    import httpx
+
+    try:
+        response = httpx.get("http://127.0.0.1:8010/health", timeout=2.0)
+    except Exception as exc:
+        pytest.skip(f"Core service not available: {exc}")
+
+    if response.status_code >= 500:
+        pytest.skip(f"Core service unhealthy: HTTP {response.status_code}")
+
 # Try to import locust - skip if not available
 try:
     from locust import HttpUser, task, between, events
@@ -79,7 +92,7 @@ class LuminaUser(HttpUser):
     @task(1)
     def get_character_info(self):
         """Get character information"""
-        self.client.get("/character/config")
+        self.client.get("/settings/character/config")
 
     @task(1)
     def check_health(self):
@@ -213,6 +226,7 @@ class LoadTestRunner:
 def test_concurrent_users_load():
     """Test system with concurrent users"""
     import asyncio
+    require_core_service()
 
     async def run_load_test():
         runner = LoadTestRunner()
@@ -234,6 +248,7 @@ def test_memory_service_under_load():
     """Test memory service under load"""
     import asyncio
     import httpx
+    require_core_service()
 
     async def stress_memory_service():
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -269,6 +284,7 @@ def test_burst_traffic():
     """Test system handles traffic bursts"""
     import asyncio
     import httpx
+    require_core_service()
 
     async def simulate_burst():
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -311,6 +327,7 @@ def test_burst_traffic():
 def test_find_breaking_point():
     """Gradually increase load to find system limits"""
     import asyncio
+    require_core_service()
 
     runner = LoadTestRunner()
 

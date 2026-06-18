@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CharacterProfile } from "@core/llm/types";
-import { API_CONFIG } from "../config";
 
-export const useCharacterProfile = (backendReady: boolean) => {
+export const useCharacterProfile = (backendReady: boolean, baseUrl: string) => {
     const [activeCharacter, setActiveCharacter] = useState<CharacterProfile>();
     const [isLoading, setIsLoading] = useState(true);
     const activeCharacterId = activeCharacter?.id ?? null;
@@ -15,7 +14,7 @@ export const useCharacterProfile = (backendReady: boolean) => {
 
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_CONFIG.BASE_URL}/character/config`);
+            const response = await fetch(`${baseUrl}/settings/character/config`);
             if (!response.ok) {
                 throw new Error(`Failed to fetch character config: ${response.status}`);
             }
@@ -25,10 +24,10 @@ export const useCharacterProfile = (backendReady: boolean) => {
         } finally {
             setIsLoading(false);
         }
-    }, [backendReady]);
+    }, [backendReady, baseUrl]);
 
     const saveCharacter = useCallback(async (character: CharacterProfile) => {
-        const response = await fetch(`${API_CONFIG.BASE_URL}/character/config`, {
+        const response = await fetch(`${baseUrl}/settings/character/config`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(character),
@@ -41,7 +40,7 @@ export const useCharacterProfile = (backendReady: boolean) => {
         const saved = await response.json();
         setActiveCharacter(saved.character ?? character);
         return true;
-    }, []);
+    }, [baseUrl]);
 
     useEffect(() => {
         void fetchCharacter();

@@ -8,12 +8,9 @@ type Live2DMotionRef = {
 const emotionMap =
     emotionMapRaw as unknown as Record<string, { group: string; index: number }>;
 
-import { API_CONFIG } from "../config";
-
 export interface EmotionProcessorOptions {
     activeCharacter: CharacterProfile | undefined;
     live2dRef: React.RefObject<Live2DMotionRef>;
-    backendUrl?: string; // Optional, defaults to config base url
 }
 
 /**
@@ -25,7 +22,6 @@ export const processEmotions = (
     {
         activeCharacter,
         live2dRef,
-        backendUrl = API_CONFIG.BASE_URL,
     }: EmotionProcessorOptions,
 ) => {
     console.log("[EmotionProcessor] Processing text:", text);

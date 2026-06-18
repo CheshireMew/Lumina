@@ -1,4 +1,5 @@
 import type { ChildProcess } from "child_process";
+import configuredPorts from "../../config/ports.json";
 
 export interface ServiceConfig {
     name: string;
@@ -16,11 +17,8 @@ export interface BackendPorts {
     memory_port: number;
     stt_port: number;
     tts_port: number;
+    vision_port: number;
     [key: string]: number;
 }
 
-export const DEFAULT_BACKEND_PORTS: BackendPorts = {
-    memory_port: 8010,
-    stt_port: 8765,
-    tts_port: 8766,
-};
+export const CONFIGURED_BACKEND_PORTS: BackendPorts = configuredPorts;

@@ -80,10 +80,6 @@ class EventBusBootstrapper(Bootstrapper):
         from core.events.definitions import (
             SystemReadyPayload,
             SystemShutdownPayload,
-            CapabilityLifecycleRequest,
-            CapabilityLoadedPayload,
-            CapabilityDisabledPayload,
-            CapabilityErrorPayload,
         )
         from core.events.bus import EventSchema
         
@@ -101,11 +97,6 @@ class EventBusBootstrapper(Bootstrapper):
         # Schemas
         bus.register_schema("system.ready", EventSchema("1.0", SystemReadyPayload))
         bus.register_schema("system.shutdown", EventSchema("1.0", SystemShutdownPayload))
-        bus.register_schema("capability.lifecycle.request_enable", EventSchema("1.0", CapabilityLifecycleRequest))
-        bus.register_schema("capability.lifecycle.request_disable", EventSchema("1.0", CapabilityLifecycleRequest))
-        bus.register_schema("capability.loaded", EventSchema("1.0", CapabilityLoadedPayload))
-        bus.register_schema("capability.disabled", EventSchema("1.0", CapabilityDisabledPayload))
-        bus.register_schema("capability.error", EventSchema("1.0", CapabilityErrorPayload))
 
 class ProtocolBootstrapper(Bootstrapper):
     @property

@@ -78,12 +78,6 @@ def test_service_container_uninitialized_error():
     with pytest.raises(ServiceNotInitializedError):
         container.get_worker_runtime_registry()
 
-    with pytest.raises(ServiceNotInitializedError):
-        container.get_capability_registry()
-
-    with pytest.raises(ServiceNotInitializedError):
-        container.get_capability_module_manager()
-
 
 # ============================================================================
 # Test 3: Service Container Thread Safety (REAL TEST)
@@ -170,7 +164,7 @@ def test_service_container_getter_consistency():
     """
     Test that explicit setters and getters return same instance.
 
-    This catches REAL bugs where service slot replacement gets out of sync.
+    This catches bugs where service registration replacement gets out of sync.
     """
     container = ServiceContainer()
 

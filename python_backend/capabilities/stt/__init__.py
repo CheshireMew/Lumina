@@ -36,6 +36,14 @@ class Capability(IWorkerCapability):
         # 2. Register to Container
         container.set_stt(manager)
         stt_globals.stt_manager = manager
+
+        if app_settings.is_provider_desired_enabled("system.voiceprint"):
+            from services.voiceprint_filter import VoiceprintFilter
+
+            voiceprint_filter = VoiceprintFilter(app_settings)
+            await voiceprint_filter.start()
+            container.set_voiceprint_filter(voiceprint_filter)
+            stt_globals.voiceprint_manager = voiceprint_filter
         
         # 3. Initialize audio filter chain
         filter_chain = AudioFilterChain.instance()
@@ -134,6 +142,10 @@ class Capability(IWorkerCapability):
         logger.info("AudioManager initialized.")
 
     async def on_shutdown(self):
+        voiceprint_filter = stt_globals.voiceprint_manager
+        if voiceprint_filter and hasattr(voiceprint_filter, "stop"):
+            await voiceprint_filter.stop()
+            stt_globals.voiceprint_manager = None
         if stt_globals.audio_manager:
             stt_globals.audio_manager.stop()
             

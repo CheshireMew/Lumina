@@ -99,9 +99,9 @@ def generate_test_timestamps(
     return timestamps
 
 
-def generate_test_module_ids(count: int = 5) -> List[str]:
-    """Generate test capability module IDs"""
-    prefixes = ["module", "provider", "vendor"]
+def generate_test_provider_ids(count: int = 5) -> List[str]:
+    """Generate test provider IDs"""
+    prefixes = ["driver", "provider", "vendor"]
     ids = []
 
     for _ in range(count):

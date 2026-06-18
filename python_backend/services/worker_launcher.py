@@ -123,16 +123,12 @@ class WorkerLauncher:
             runtime_roots.append(voiceprint.root_dir)
             env["LUMINA_VOICEPRINT_RUNTIME_DIR"] = str(voiceprint.root_dir)
 
-        module_roots = [
-            str(root / "capability_modules")
+        driver_roots = [
+            str(root / "provider_drivers")
             for root in runtime_roots
-            if (root / "capability_modules").exists()
+            if (root / "provider_drivers").exists()
         ]
-        if module_roots:
-            existing_module_roots = env.get("LUMINA_CAPABILITY_MODULE_ROOTS")
-            env["LUMINA_CAPABILITY_MODULE_ROOTS"] = os.pathsep.join(
-                [*module_roots, *([existing_module_roots] if existing_module_roots else [])]
-            )
+        if driver_roots:
             existing_pythonpath = env.get("PYTHONPATH")
             env["PYTHONPATH"] = os.pathsep.join(
                 [str(root) for root in runtime_roots]

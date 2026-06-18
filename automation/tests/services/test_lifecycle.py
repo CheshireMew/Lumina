@@ -79,34 +79,12 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
 
         await manager.start(services)
 
-        # EventBus should be initialized with lifecycle request schemas.
+        # EventBus should be initialized with system lifecycle schemas.
         event_bus = services.get_event_bus()
         self.assertIsNotNone(event_bus)
-        self.assertIn("capability.lifecycle.request_enable", event_bus._schemas)
-        self.assertIn("capability.lifecycle.request_disable", event_bus._schemas)
+        self.assertIn("system.ready", event_bus._schemas)
+        self.assertIn("system.shutdown", event_bus._schemas)
         print("✅ EventBusBootstrapper verified")
-
-    async def test_shutdown_sequence_capability_modules(self):
-        """Test that capability modules are unloaded during shutdown"""
-        from services.container import ServiceContainer
-
-        container = ServiceContainer()
-        mock_manager = MagicMock()
-        mock_module1 = MagicMock()
-        mock_module1.unload = AsyncMock()
-        mock_module2 = MagicMock()
-        mock_module2.unload = AsyncMock()
-
-        mock_manager.modules = {"module1": mock_module1, "module2": mock_module2}
-        container.set_capability_module_manager(mock_manager)
-
-        # Simulate capability module shutdown.
-        for module in mock_manager.modules.values():
-            await module.unload()
-
-        mock_module1.unload.assert_awaited_once()
-        mock_module2.unload.assert_awaited_once()
-        print("✅ Capability module shutdown sequence verified")
 
     async def test_process_manager_shutdown(self):
         """Test that ProcessManager shuts down all workers"""

@@ -1,13 +1,13 @@
 import { ttsService } from "@core/voice/tts_service";
-import { API_CONFIG } from "../config";
+import { RuntimeConfig } from "./runtimeConfig";
 
 let appliedUrlSignature = "";
 
 const normalizeUrl = (url: string) => url.replace(/\/$/, "");
 
-export const syncFrontendServiceUrls = () => {
-    const apiBaseUrl = normalizeUrl(API_CONFIG.BASE_URL);
-    const ttsBaseUrl = normalizeUrl(API_CONFIG.TTS_BASE_URL);
+export const syncFrontendServiceUrls = (runtimeConfig: RuntimeConfig) => {
+    const apiBaseUrl = normalizeUrl(runtimeConfig.apiBaseUrl);
+    const ttsBaseUrl = normalizeUrl(runtimeConfig.ttsBaseUrl);
     const urlSignature = `${apiBaseUrl}::${ttsBaseUrl}`;
 
     if (urlSignature === appliedUrlSignature) {

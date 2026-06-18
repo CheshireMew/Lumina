@@ -50,7 +50,7 @@ def test_zombie_process_cleanup():
     env["LUMINA_STT_PORT"] = str(free_port)
     
     stt_proc = subprocess.Popen(
-        [python_exe, str(launcher_path), "stt"],
+        [python_exe, str(launcher_path), "worker", "--capability", "stt"],
         env=env,
         cwd=str(PROJECT_ROOT / "python_backend"),
         stdout=subprocess.PIPE,

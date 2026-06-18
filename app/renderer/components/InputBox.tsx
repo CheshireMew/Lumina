@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Loader2, Mic, Keyboard, Send, X } from 'lucide-react';
 import { events } from '../core/events';
-import { API_CONFIG } from '../config';
 import { getSttWebSocketUrl } from '../platform/electron';
 
 interface InputBoxProps {
@@ -11,6 +10,7 @@ interface InputBoxProps {
     chatMode: 'text' | 'voice';
     onToggleChatMode: () => void;
     onSpeechStart?: () => void;
+    visionBaseUrl: string;
     voiceCapabilityState?: string;
     visionCapabilityState?: string;
 }
@@ -22,6 +22,7 @@ const InputBox: React.FC<InputBoxProps> = ({
     chatMode,
     onToggleChatMode,
     onSpeechStart,
+    visionBaseUrl,
     voiceCapabilityState = 'ready',
     visionCapabilityState = 'ready',
 }) => {
@@ -149,7 +150,7 @@ const InputBox: React.FC<InputBoxProps> = ({
             const formData = new FormData();
             formData.append('file', file);
             formData.append('prompt', 'Describe this image in detail.');
-            const res = await fetch(`${API_CONFIG.BASE_URL}/vision/analyze`, { method: 'POST', body: formData });
+            const res = await fetch(`${visionBaseUrl}/analyze`, { method: 'POST', body: formData });
             if (res.ok) {
                 const data = await res.json();
                 setValue(prev => (prev ? prev + '\n' + `[Image Context]: ${data.description}` : `[Image Context]: ${data.description}`));

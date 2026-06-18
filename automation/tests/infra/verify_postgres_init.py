@@ -24,7 +24,7 @@ async def verify_postgres():
         # Debug: List all discovered drivers
         current_dir = os.path.dirname(os.path.abspath(__file__))
         # Manual scan to see what's happening
-        logger.info("Checking for postgres driver in capability modules...")
+        logger.info("Checking for postgres provider driver...")
         
         driver = MemoryDriverFactory.create_driver(
             config.get_selected_provider("memory"),

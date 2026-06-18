@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse
 from app_config import config as app_settings
 from routers import gateway
 from routers import memory
-from routers import soul
 from routers import runtime as runtime_router
 from routers import settings_llm
 from routers import character
@@ -126,7 +125,6 @@ def _configure_routes(app: FastAPI) -> None:
     app.include_router(companion.router)
     app.include_router(settings_llm.router)
     app.include_router(settings_llm.models_router)
-    app.include_router(soul.router)
     app.include_router(memory.router, prefix="/memory")
     app.include_router(runtime_router.router)
     app.include_router(voiceprint_router)
@@ -155,7 +153,7 @@ def _configure_root(app: FastAPI) -> None:
                 "settings": "/settings/llm/runtime",
                 "companion": "/companion/message",
                 "memory": "/memory/add, /memory/search, /memory/search/hybrid, /memory/all, /memory/inspection",
-                "character": "/character/*",
-                "soul": "/soul/*",
+                "character": "/settings/character/*",
+                "capabilities": "/capabilities/*",
             },
         }

@@ -32,7 +32,6 @@ class CoreServicesBootstrapper(Bootstrapper):
 
     async def bootstrap(self, container):
         from services.process_manager import ProcessManager
-        from services.capability_registry import CapabilityRegistry
         from services.character_service import CharacterService
         # from app_config import config # Global import removed
         runtime_registry = container.get_worker_runtime_registry()
@@ -46,7 +45,6 @@ class CoreServicesBootstrapper(Bootstrapper):
         
         container.set_process_manager(pm)
         container.set_worker_runtime_registry(runtime_registry)
-        container.set_capability_registry(CapabilityRegistry())
         # 1. LLM
         from llm.manager import LLMManager
         container.set_llm_manager(LLMManager(config))
@@ -72,6 +70,7 @@ class CoreServicesBootstrapper(Bootstrapper):
         container.set_session_manager(SessionManager(config=container.get_config()))
 
         from services.companion.context import CompanionContextResolver
+        from services.companion.context_pack import CompanionContextPackBuilder
         from services.companion.interaction import CompanionInteractionRecorder
 
         container.set_companion_context_resolver(
@@ -82,6 +81,14 @@ class CoreServicesBootstrapper(Bootstrapper):
                 memory_service=container.get_memory(),
                 session_manager=container.get_session_manager(),
                 soul_service=container.get_soul(),
+            )
+        )
+        container.set_companion_context_pack_builder(
+            CompanionContextPackBuilder(
+                session_manager=container.get_session_manager(),
+                memory_service=container.get_memory(),
+                soul_service=container.get_soul(),
+                config=container.get_config(),
             )
         )
 
@@ -96,11 +103,16 @@ class CoreServicesBootstrapper(Bootstrapper):
                 pipeline=chat_pipeline,
                 session_manager=container.get_session_manager(),
                 context_resolver=container.get_companion_context_resolver(),
+                context_pack_builder=container.get_companion_context_pack_builder(),
                 interaction_recorder=container.get_companion_interaction_recorder(),
             )
         )
         container.set_companion_runtime(
-            CompanionRuntime(chat_turn_service=container.get_chat_turn_service())
+            CompanionRuntime(
+                chat_turn_service=container.get_chat_turn_service(),
+                context_resolver=container.get_companion_context_resolver(),
+                session_manager=container.get_session_manager(),
+            )
         )
         
         # 4. Skills (Framework)
@@ -135,25 +147,16 @@ class MiddlewareBootstrapper(Bootstrapper):
     def name(self) -> str: return "Middleware (Context/Tools)"
     
     async def bootstrap(self, container):
-        # Context Providers
-        from services.chat.providers import RAGContextProvider
-        container.register_context_provider(RAGContextProvider(container))
-        
+        from services.chat.emotion_broker import EmotionBroker
         # Tool Providers
         from services.chat.tools.search import WebSearchTool
+        from services.chat.search_providers import BraveSearchProvider, DuckDuckGoSearchProvider
+        container.register_search_provider(BraveSearchProvider(container.get_config()))
+        container.register_search_provider(DuckDuckGoSearchProvider(container.get_config()))
         container.register_tool_provider(WebSearchTool(container))
+
+        emotion_broker = EmotionBroker(container.get_event_bus(), container.get_config())
+        emotion_broker.start()
+        container.set_emotion_broker(emotion_broker)
         
         logger.info("✅ Middleware Registered")
-
-class CapabilityModulesBootstrapper(Bootstrapper):
-    @property
-    def name(self) -> str: return "Capability Modules"
-    
-    async def bootstrap(self, container):
-        from services.capability_module_manager import CapabilityModuleManager
-
-        manager = CapabilityModuleManager(container=container)
-        
-        await manager.start()
-        container.set_capability_module_manager(manager)
-        logger.info("✅ Capability Module Manager Initialized")

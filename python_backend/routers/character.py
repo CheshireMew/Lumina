@@ -8,7 +8,7 @@ from schemas.character import CharacterConfig
 
 logger = logging.getLogger("CharacterRouter")
 
-router = APIRouter(prefix="/character", tags=["Character"])
+router = APIRouter(prefix="/settings/character", tags=["Character"])
 
 
 @router.get("/config", response_model=CharacterConfig)

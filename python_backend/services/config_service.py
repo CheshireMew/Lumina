@@ -2,12 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from config.models import CUSTOM_LLM_PROVIDER_ID, FREE_LLM_PROVIDER_ID
 from core.services.service_registry import get_service_registry
 from schemas.runtime_settings import RuntimeLlmSettings
-
-
-CUSTOM_LLM_PROVIDER_ID = "custom_provider"
-FREE_LLM_PROVIDER_ID = "free_tier"
 
 
 class ConfigService:
@@ -85,7 +82,7 @@ class ConfigService:
             if model:
                 provider_updates["models"] = [model]
 
-            llm_manager.update_provider("custom_provider", provider_updates)
+            llm_manager.update_provider(CUSTOM_LLM_PROVIDER_ID, provider_updates)
 
         for route in llm_manager.list_routes():
             route_updates = {"provider_id": target_provider_id}

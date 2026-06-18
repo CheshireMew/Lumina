@@ -201,6 +201,9 @@ async def update_audio_config(request: UnifiedAudioConfig):
     if not audio_manager:
          raise HTTPException(status_code=503, detail="Audio System not initialized")
 
+    audio_config = app_settings.audio
+    changed_audio_config = False
+
     if request.device_name:
         audio_manager.switch_device(request.device_name)
 
@@ -215,6 +218,22 @@ async def update_audio_config(request: UnifiedAudioConfig):
             min_frames=request.min_speech_frames,
         )
 
+    for key in (
+        "enable_voiceprint_filter",
+        "voiceprint_threshold",
+        "voiceprint_profile",
+    ):
+        value = getattr(request, key)
+        if value is not None:
+            setattr(audio_config, key, value)
+            changed_audio_config = True
+
+    if changed_audio_config:
+        app_settings.save()
+        voiceprint_filter = stt_globals.voiceprint_manager
+        if voiceprint_filter:
+            await voiceprint_filter.refresh_profiles(force=True)
+
     return {
         "status": "updated",
         "current": audio_manager.device_name,
@@ -224,20 +243,21 @@ async def update_audio_config(request: UnifiedAudioConfig):
 @router.get("/voiceprint/status")
 async def get_voiceprint_status():
     from . import globals as stt_globals
+    audio_config = app_settings.audio
     if not stt_globals.voiceprint_manager:
         return {
-            "enabled": False,
+            "enabled": audio_config.enable_voiceprint_filter,
             "loaded": False,
-            "threshold": getattr(audio_manager, "voiceprint_threshold", 0.6),
-            "profile": "default",
+            "threshold": audio_config.voiceprint_threshold,
+            "profile": audio_config.voiceprint_profile,
             "profile_loaded": False,
         }
     return {
-        "enabled": True,
+        "enabled": audio_config.enable_voiceprint_filter,
         "loaded": True,
-        "threshold": getattr(audio_manager, 'voiceprint_threshold', 0.6),
-        "profile": getattr(stt_globals.voiceprint_manager, 'current_profile', None) or "default",
-        "profile_loaded": True
+        "threshold": audio_config.voiceprint_threshold,
+        "profile": audio_config.voiceprint_profile,
+        "profile_loaded": audio_config.voiceprint_profile in stt_globals.voiceprint_manager.profiles,
     }
 
 @router.get("/audio/status")

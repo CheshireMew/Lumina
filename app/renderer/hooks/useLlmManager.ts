@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { API_CONFIG } from "../config";
 
 export interface LlmProvider {
     id: string;
@@ -20,7 +19,7 @@ export interface LlmRoute {
     frequency_penalty?: number;
 }
 
-export const useLlmManager = () => {
+export const useLlmManager = (apiBaseUrl: string) => {
     const [llmRoutes, setLlmRoutes] = useState<LlmRoute[]>([]);
     const [llmProviders, setLlmProviders] = useState<LlmProvider[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -31,8 +30,8 @@ export const useLlmManager = () => {
         setError(null);
         try {
             const [routesRes, provRes] = await Promise.all([
-                fetch(`${API_CONFIG.BASE_URL}/settings/llm/routes`),
-                fetch(`${API_CONFIG.BASE_URL}/settings/llm/providers`),
+                fetch(`${apiBaseUrl}/settings/llm/routes`),
+                fetch(`${apiBaseUrl}/settings/llm/providers`),
             ]);
 
             if (!routesRes.ok || !provRes.ok) {
@@ -51,7 +50,7 @@ export const useLlmManager = () => {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [apiBaseUrl]);
 
     const addProvider = async (config: {
         id: string;
@@ -67,7 +66,7 @@ export const useLlmManager = () => {
                 enabled: true,
             };
             const res = await fetch(
-                `${API_CONFIG.BASE_URL}/settings/llm/providers/${config.id}`,
+                `${apiBaseUrl}/settings/llm/providers/${config.id}`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -89,7 +88,7 @@ export const useLlmManager = () => {
 
     const updateProvider = async (id: string, updates: any) => {
         try {
-            await fetch(`${API_CONFIG.BASE_URL}/settings/llm/providers/${id}`, {
+            await fetch(`${apiBaseUrl}/settings/llm/providers/${id}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(updates),
@@ -115,7 +114,7 @@ export const useLlmManager = () => {
     ) => {
         try {
             const res = await fetch(
-                `${API_CONFIG.BASE_URL}/settings/llm/routes/${feature}`,
+                `${apiBaseUrl}/settings/llm/routes/${feature}`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },

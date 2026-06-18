@@ -11,12 +11,14 @@ import {
 interface UseDataViewerTablesArgs {
     isOpen: boolean;
     activeCharacterId?: string | null;
+    apiBaseUrl: string;
     refreshGraph: () => Promise<void> | void;
 }
 
 export const useDataViewerTables = ({
     isOpen,
     activeCharacterId,
+    apiBaseUrl,
     refreshGraph,
 }: UseDataViewerTablesArgs) => {
     const [selectedTable, setSelectedTable] = useState<string | null>(
@@ -79,6 +81,7 @@ export const useDataViewerTables = ({
 
             try {
                 const rows = await loadTableRows(
+                    apiBaseUrl,
                     tableName,
                     activeCharacterId,
                     signal,
@@ -107,7 +110,7 @@ export const useDataViewerTables = ({
                 }
             }
         },
-        [activeCharacterId, refreshGraph],
+        [activeCharacterId, apiBaseUrl, refreshGraph],
     );
 
     useEffect(() => {
@@ -171,7 +174,7 @@ export const useDataViewerTables = ({
             }
 
             try {
-                await deleteRecord(selectedTable, rawId);
+                await deleteRecord(apiBaseUrl, selectedTable, rawId);
                 setTableData((previous) =>
                     previous.filter((row) => normalizeRecordId(row.id) !== rawId),
                 );
@@ -179,7 +182,7 @@ export const useDataViewerTables = ({
                 alert(`Delete failed: ${error}`);
             }
         },
-        [selectedTable],
+        [apiBaseUrl, selectedTable],
     );
 
     const handleSaveRecord = useCallback(async () => {
@@ -191,7 +194,7 @@ export const useDataViewerTables = ({
             if (!isCreating) {
                 const recordId = normalizeRecordId(editingRecord?.id);
                 const { id: _, ...updateData } = editorForm;
-                await updateRecord(selectedTable, recordId, updateData);
+                await updateRecord(apiBaseUrl, selectedTable, recordId, updateData);
                 setEditingRecord(null);
                 setTableData((previous) =>
                     previous.map((row) =>
@@ -203,13 +206,13 @@ export const useDataViewerTables = ({
                 return;
             }
 
-            await createRecord(selectedTable, editorForm);
+            await createRecord(apiBaseUrl, selectedTable, editorForm);
             setEditingRecord(null);
             void loadTableData(selectedTable, true);
         } catch (error) {
             alert(`Error saving: ${error}`);
         }
-    }, [editorForm, editingRecord, isCreating, loadTableData, selectedTable]);
+    }, [apiBaseUrl, editorForm, editingRecord, isCreating, loadTableData, selectedTable]);
 
     const closeEditor = useCallback(() => {
         setEditingRecord(null);

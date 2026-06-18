@@ -97,7 +97,6 @@ class WorkerRuntimeHost:
         self.logger.info("Loaded capability: %s", self.current_capability.name)
 
         await self._initialize_capability(app)
-        await self._start_worker_capability_kernel()
 
         runtime_state_provider = self._start_status_reporter(app)
         await self._start_config_watcher(app)
@@ -139,23 +138,10 @@ class WorkerRuntimeHost:
     def _initialize_container_services(self):
         from core.worker_runtimes import WorkerRuntimeRegistry
         from core.events import init_event_bus
-        from services.capability_registry import CapabilityRegistry
 
         self.container.set_config(app_settings)
         self.container.set_event_bus(init_event_bus())
-        self.container.set_capability_registry(CapabilityRegistry())
         self.container.set_worker_runtime_registry(WorkerRuntimeRegistry())
-
-    async def _start_worker_capability_kernel(self):
-        from services.capability_module_manager import CapabilityModuleManager
-
-        worker_module_manager = CapabilityModuleManager(
-            container=self.container,
-            runtime_target=self.runtime_target,
-        )
-        await worker_module_manager.start()
-        self.container.set_capability_module_manager(worker_module_manager)
-        self.logger.info("Worker capability module kernel initialized")
 
     def _start_status_reporter(self, app: FastAPI):
         from services.reporting.runtime_state_provider import build_runtime_state_provider
@@ -164,7 +150,6 @@ class WorkerRuntimeHost:
         worker_id = runtime_target_to_worker_id(self.runtime_target)
         runtime_state_provider = build_runtime_state_provider(
             self.current_capability.get_state_provider(),
-            container=self.container,
         )
 
         self.status_reporter = WorkerStatusReporter(
@@ -222,36 +207,40 @@ class WorkerRuntimeHost:
         app_settings.reload()
 
         provider_id = payload.data.get("provider_id") if payload.data else None
-        manager = self.container.get_capability_module_manager()
         if not provider_id:
             return
 
-        module = manager.get_module(provider_id)
-        if not module:
+        manager = self._get_provider_manager()
+        if not manager or not manager.has_driver(provider_id):
             return
 
         settings = payload.data.get("settings")
         if isinstance(settings, dict):
             for key, value in settings.items():
-                module.update_config(key, value)
+                manager.update_driver_config(provider_id, key, value)
             return
 
         key = payload.data.get("key")
         if key is not None:
-            module.update_config(key, payload.data.get("value"))
+            manager.update_driver_config(provider_id, key, payload.data.get("value"))
 
     async def _handle_lifecycle(self, payload):
         self.logger.info("Lifecycle command: %s -> %s", payload.action, payload.target_id)
 
-        manager = self.container.get_capability_module_manager()
-        if manager.get_manifest(payload.target_id):
-            if payload.action == "disable":
-                await manager.disable_module(payload.target_id)
-            elif payload.action == "enable":
-                await manager.enable_module(payload.target_id)
+        manager = self._get_provider_manager()
+        if not manager or not manager.has_driver(payload.target_id):
             return
 
         if payload.action == "disable":
-            await manager.disable_module(payload.target_id)
+            await manager.disable_provider(payload.target_id)
         elif payload.action == "enable":
-            await manager.enable_module(payload.target_id)
+            await manager.enable_provider(payload.target_id)
+
+    def _get_provider_manager(self):
+        if self.options.capability == "stt" and self.container.has_service("stt"):
+            return self.container.get_stt()
+        if self.options.capability == "tts" and self.container.has_service("tts"):
+            return self.container.get_tts()
+        if self.options.capability == "vision" and self.container.has_service("vision"):
+            return self.container.get_vision()
+        return None

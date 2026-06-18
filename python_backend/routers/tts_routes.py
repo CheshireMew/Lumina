@@ -11,7 +11,7 @@ from .worker_proxy import get_worker_control_url, proxy_json_request
 
 logger = logging.getLogger("TTSProxy")
 
-router = APIRouter(prefix="/tts", tags=["TTS"])
+router = APIRouter(prefix="/capabilities/tts", tags=["TTS"])
 
 
 class TTSRequest(BaseModel):

@@ -12,6 +12,7 @@ sys.path.append(str(PROJECT_ROOT))
 from core.protocol import EventPacket, EventType
 from services.chat.service import ChatTurnService, TextTurnRequest
 from services.companion.context import CompanionContext, CompanionContextResolver
+from services.companion.context_pack import CompanionContextPack
 from services.companion.interaction import CompanionInteraction, CompanionInteractionRecorder
 
 
@@ -35,8 +36,8 @@ class FakePipeline:
         self.tokens = tokens or ["Hello", " world"]
         self.calls = []
 
-    async def run(self, messages, **kwargs):
-        self.calls.append({"messages": messages, "kwargs": kwargs})
+    async def run(self, **kwargs):
+        self.calls.append({"kwargs": kwargs})
         for token in self.tokens:
             yield token
 
@@ -49,6 +50,18 @@ def fake_context_resolver(character_id: str = "lillian") -> CompanionContextReso
 
 def fake_recorder() -> SimpleNamespace:
     return SimpleNamespace(record=AsyncMock())
+
+
+def fake_context_pack_builder() -> SimpleNamespace:
+    async def build(*, companion_context, user_message, history_limit, enable_memory=True):
+        return CompanionContextPack(
+            identity=companion_context,
+            user_message=user_message,
+            recent_session_history=[],
+            system_prompt="System",
+        )
+
+    return SimpleNamespace(build=AsyncMock(side_effect=build))
 
 
 def fake_session_manager(history=None) -> SimpleNamespace:
@@ -65,6 +78,7 @@ async def test_build_text_turn_request_uses_packet_payload_and_active_character(
         pipeline=FakePipeline(),
         session_manager=fake_session_manager(),
         context_resolver=fake_context_resolver("lillian"),
+        context_pack_builder=fake_context_pack_builder(),
         interaction_recorder=fake_recorder(),
     )
 
@@ -96,6 +110,7 @@ async def test_build_text_turn_request_uses_payload_character():
         pipeline=FakePipeline(),
         session_manager=fake_session_manager(),
         context_resolver=fake_context_resolver("lillian"),
+        context_pack_builder=fake_context_pack_builder(),
         interaction_recorder=fake_recorder(),
     )
 
@@ -121,6 +136,7 @@ async def test_stream_text_turn_emits_started_delta_and_ended_events():
         pipeline=pipeline,
         session_manager=session_manager,
         context_resolver=fake_context_resolver(),
+        context_pack_builder=fake_context_pack_builder(),
         interaction_recorder=fake_recorder(),
     )
 
@@ -137,7 +153,7 @@ async def test_stream_text_turn_emits_started_delta_and_ended_events():
     assert [event.kind for event in events] == ["started", "delta", "delta", "ended"]
     assert events[0].payload == {"mode": "chat", "text": "hello"}
     assert [event.payload.get("content") for event in events[1:3]] == ["A", "B"]
-    assert pipeline.calls[0]["kwargs"]["enable_rag"] is False
+    assert pipeline.calls[0]["kwargs"]["context_pack"].user_message == "hello"
 
 
 @pytest.mark.anyio
@@ -153,6 +169,7 @@ async def test_stream_response_logs_turn_to_memory():
         pipeline=pipeline,
         session_manager=fake_session_manager(),
         context_resolver=fake_context_resolver(),
+        context_pack_builder=fake_context_pack_builder(),
         interaction_recorder=CompanionInteractionRecorder(
             memory_service=memory,
             session_manager=session_manager,
@@ -163,8 +180,12 @@ async def test_stream_response_logs_turn_to_memory():
     response = [
         token
         async for token in service.stream_response(
-            messages=[{"role": "user", "content": "ping"}],
             companion_context=companion_context(user_id="u", character_id="hiyori"),
+            context_pack=CompanionContextPack(
+                identity=companion_context(user_id="u", character_id="hiyori"),
+                user_message="ping",
+                system_prompt="System",
+            ),
             user_name="Ada",
         )
     ]
@@ -187,6 +208,7 @@ async def test_stream_response_records_companion_interaction():
         pipeline=pipeline,
         session_manager=fake_session_manager(),
         context_resolver=fake_context_resolver(),
+        context_pack_builder=fake_context_pack_builder(),
         interaction_recorder=recorder,
     )
     context = companion_context(session_id=7, user_id="u", character_id="hiyori")
@@ -194,8 +216,12 @@ async def test_stream_response_records_companion_interaction():
     response = [
         token
         async for token in service.stream_response(
-            messages=[{"role": "user", "content": "ping"}],
             companion_context=context,
+            context_pack=CompanionContextPack(
+                identity=context,
+                user_message="ping",
+                system_prompt="System",
+            ),
             log_memory=False,
         )
     ]
@@ -216,6 +242,7 @@ def test_chat_turn_service_requires_core_dependencies():
     pipeline = FakePipeline()
     session_manager = fake_session_manager()
     context_resolver = fake_context_resolver()
+    context_pack_builder = fake_context_pack_builder()
     recorder = fake_recorder()
 
     with pytest.raises(ValueError, match="ChatPipeline"):
@@ -223,6 +250,7 @@ def test_chat_turn_service_requires_core_dependencies():
             pipeline=None,
             session_manager=session_manager,
             context_resolver=context_resolver,
+            context_pack_builder=context_pack_builder,
             interaction_recorder=recorder,
         )
 
@@ -231,6 +259,7 @@ def test_chat_turn_service_requires_core_dependencies():
             pipeline=pipeline,
             session_manager=None,
             context_resolver=context_resolver,
+            context_pack_builder=context_pack_builder,
             interaction_recorder=recorder,
         )
 
@@ -239,6 +268,16 @@ def test_chat_turn_service_requires_core_dependencies():
             pipeline=pipeline,
             session_manager=session_manager,
             context_resolver=None,
+            context_pack_builder=context_pack_builder,
+            interaction_recorder=recorder,
+        )
+
+    with pytest.raises(ValueError, match="CompanionContextPackBuilder"):
+        ChatTurnService(
+            pipeline=pipeline,
+            session_manager=session_manager,
+            context_resolver=context_resolver,
+            context_pack_builder=None,
             interaction_recorder=recorder,
         )
 
@@ -247,5 +286,6 @@ def test_chat_turn_service_requires_core_dependencies():
             pipeline=pipeline,
             session_manager=session_manager,
             context_resolver=context_resolver,
+            context_pack_builder=context_pack_builder,
             interaction_recorder=None,
         )

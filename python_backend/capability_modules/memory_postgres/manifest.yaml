@@ -1,8 +1,0 @@
-id: driver.memory.postgres
-api_version: "1.0"
-kind: provider
-capability: memory
-runtime_target: main
-config_schema: {}
-provides:
-  - chat.context

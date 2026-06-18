@@ -253,9 +253,24 @@ async def test_retrieve_context_search_failure_propagates(memory_service):
 
 
 def test_memory_driver_factory_returns_configured_driver_only(monkeypatch):
-    postgres_driver = MagicMock()
-    postgres_driver.id = "driver.memory.postgres"
-    postgres_driver.name = "Postgres"
+    from core.interfaces.driver import BaseMemoryDriver
+
+    class FakeMemoryDriver(BaseMemoryDriver):
+        async def connect(self): pass
+        async def close(self): pass
+        async def initialize_schema(self): pass
+        async def create(self, table, data): return "id"
+        async def update(self, table, id, data): return True
+        async def delete(self, table, id): return True
+        def get_query_builder(self): return None
+        async def query(self, sql, params=None): return []
+        async def mark_memories_hit(self, memory_ids): pass
+        async def search_vector(self, table, vector, limit, threshold, filter_criteria=None): return []
+        async def search_fulltext(self, table, query, limit, fields, filter_criteria=None): return []
+        async def search_hybrid(self, query, vector, table, limit, threshold, vector_weight=0.5, filter_criteria=None): return []
+
+    postgres_driver = FakeMemoryDriver("driver.memory.postgres", "Postgres")
+    postgres_driver.load_config = MagicMock()
 
     monkeypatch.setitem(
         MemoryDriverFactory._drivers,

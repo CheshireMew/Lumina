@@ -65,10 +65,10 @@ excludes = [
     'llvmlite',
     'numba',
     'modelscope',
-    'capability_modules.voiceauth_sherpa',
-    'capability_modules.voiceauth_sherpa.drivers',
-    'capability_modules.voiceauth_sherpa.drivers.voiceauth',
-    'capability_modules.voiceauth_sherpa.drivers.voiceauth.sherpa_cam_driver',
+    'provider_drivers.voiceauth_sherpa',
+    'provider_drivers.voiceauth_sherpa.drivers',
+    'provider_drivers.voiceauth_sherpa.drivers.voiceauth',
+    'provider_drivers.voiceauth_sherpa.drivers.voiceauth.sherpa_cam_driver',
 ]
 
 a = Analysis(

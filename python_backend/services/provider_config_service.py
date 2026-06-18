@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict
 
-from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target
+from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target, runtime_target_for_capability
 
 logger = logging.getLogger("ProviderConfigService")
 
@@ -17,9 +17,13 @@ class ProviderConfigService:
         if runtime_target:
             return normalize_runtime_target(runtime_target)
 
-        manager = self.services.get_capability_module_manager()
-        manifest = manager.get_manifest(provider_id)
-        return normalize_runtime_target(getattr(manifest, "runtime_target", MAIN_RUNTIME_TARGET))
+        if provider_id.startswith("driver.stt."):
+            return runtime_target_for_capability("stt")
+        if provider_id.startswith("driver.tts."):
+            return runtime_target_for_capability("tts")
+        if provider_id.startswith("driver.vision."):
+            return runtime_target_for_capability("vision")
+        return MAIN_RUNTIME_TARGET
 
     def _ensure_worker_runtime(self, runtime_target: str) -> bool:
         normalized_target = normalize_runtime_target(runtime_target)
@@ -66,7 +70,3 @@ class ProviderConfigService:
         except Exception as e:
             logger.error(f"Failed to update config: {e}")
             return {"success": False, "error": str(e)}
-
-    @property
-    def capability_module_manager(self):
-        return self.services.get_capability_module_manager()

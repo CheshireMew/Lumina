@@ -13,15 +13,13 @@ class ServicesStub:
         self.config = SimpleNamespace(
             get_selected_provider=MagicMock(return_value=provider_id),
         )
-        self.module_manager = MagicMock()
-        self.module_manager.get_module.return_value = provider
-        self.module_manager.find_provider = MagicMock(return_value="provider.search.discovered")
+        self.provider = provider
 
     def get_config(self):
         return self.config
 
-    def get_capability_module_manager(self):
-        return self.module_manager
+    def get_search_provider(self, provider_id: str):
+        return self.provider
 
 
 async def test_web_search_requires_query():
@@ -37,9 +35,6 @@ async def test_web_search_requires_configured_provider():
 
     with pytest.raises(ValueError, match="tool.search provider must be configured"):
         await tool.execute({"query": "hello"})
-
-    services.module_manager.find_provider.assert_not_called()
-
 
 async def test_web_search_requires_active_provider():
     tool = WebSearchTool(ServicesStub(provider_id="provider.search.test", provider=None))

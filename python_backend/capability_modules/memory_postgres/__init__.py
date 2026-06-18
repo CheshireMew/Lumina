@@ -1,1 +1,0 @@
-# PostgreSQL Memory Extension

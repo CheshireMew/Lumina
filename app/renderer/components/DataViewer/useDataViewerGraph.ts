@@ -6,12 +6,14 @@ interface UseDataViewerGraphArgs {
     isOpen: boolean;
     activeTab: "tables" | "query" | "stats" | "graph";
     activeCharacterId?: string | null;
+    apiBaseUrl: string;
 }
 
 export const useDataViewerGraph = ({
     isOpen,
     activeTab,
     activeCharacterId,
+    apiBaseUrl,
 }: UseDataViewerGraphArgs) => {
     const [graphData, setGraphData] = useState<{
         nodes: any[];
@@ -41,7 +43,11 @@ export const useDataViewerGraph = ({
         setLoading(true);
 
         try {
-            const nextGraph = await loadGraphData(activeCharacterId, signal);
+            const nextGraph = await loadGraphData(
+                apiBaseUrl,
+                activeCharacterId,
+                signal,
+            );
             if (signal.aborted || !isMountedRef.current) {
                 return;
             }
@@ -57,7 +63,7 @@ export const useDataViewerGraph = ({
                 setLoading(false);
             }
         }
-    }, [activeCharacterId]);
+    }, [activeCharacterId, apiBaseUrl]);
 
     useEffect(() => {
         if (isOpen && activeTab === "graph") {

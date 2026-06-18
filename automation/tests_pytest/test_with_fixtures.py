@@ -4,6 +4,7 @@ Tests demonstrating pytest fixture usage
 Shows how to use fixtures for cleaner, more reusable test code.
 """
 import sys
+import asyncio
 from pathlib import Path
 import pytest
 from unittest.mock import MagicMock, AsyncMock

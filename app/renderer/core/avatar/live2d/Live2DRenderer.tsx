@@ -25,8 +25,8 @@ const MOTION_PRELOAD_NONE = 'NONE';
 interface Live2DRendererProps {
     modelPath: string;
     highDpi?: boolean;
-    cubismCoreSrc?: string;
-    rendererRuntimeSrc?: string;
+    cubismCoreSrc: string;
+    rendererRuntimeSrc: string;
 }
 
 const formatLive2DError = (error: unknown) => {

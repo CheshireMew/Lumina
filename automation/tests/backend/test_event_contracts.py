@@ -10,24 +10,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "python_backend"))
 os.environ["LUMINA_ENV"] = "dev"
 
 from core.events.bus import Event
-from core.manifest import CapabilityManifest
 from core.protocol import EventPacket, EventType, InputTextPayload
-from capability_modules.emotion_broker.module import Capability as EmotionBrokerModule
+from services.chat.emotion_broker import EmotionBroker
 from services.chat.event_adapter import ChatTurnEventAdapter
 from services.chat.service import ChatTurnService
 from services.companion.context import CompanionContextResolver
+from services.companion.context_pack import CompanionContextPack
 from services.companion.runtime import CompanionRuntime
-
-
-class FakeModuleContext:
-    def __init__(self):
-        self.emitted: list[tuple[str, EventPacket]] = []
-
-    def get_config(self):
-        return {}
-
-    async def emit(self, event_type, packet):
-        self.emitted.append((event_type, packet))
 
 
 class FakeBus:
@@ -36,6 +25,17 @@ class FakeBus:
 
     async def emit(self, event_type, packet, source="system"):
         self.emitted.append((event_type, packet, source))
+
+    def subscribe(self, *_args, **_kwargs):
+        return 1
+
+    def unsubscribe(self, *_args, **_kwargs):
+        return True
+
+
+class FakeConfig:
+    def get_provider_settings(self, _provider_id):
+        return {}
 
 
 class FailingPipeline:
@@ -51,15 +51,12 @@ class FakeSoulService:
 
 @pytest.mark.anyio
 async def test_emotion_broker_emits_packet_with_top_level_session_id():
-    module = EmotionBrokerModule()
-    module._bind_manifest(CapabilityManifest(id="system.emotion_broker"))
+    bus = FakeBus()
+    broker = EmotionBroker(bus, FakeConfig())
 
-    context = FakeModuleContext()
-    await module.load(context)
+    await broker._broadcast_emotion("joy", session_id=7)
 
-    await module._broadcast_emotion("joy", session_id=7)
-
-    event_type, packet = context.emitted[0]
+    event_type, packet, _ = bus.emitted[0]
     assert event_type == EventType.EMOTION_CHANGED
     assert packet.session_id == 7
     assert packet.payload == {"emotion": "joy", "timestamp": packet.payload["timestamp"]}
@@ -73,6 +70,15 @@ async def test_chat_turn_event_adapter_emits_schema_valid_system_status_on_failu
             load_session=AsyncMock(return_value=SimpleNamespace(short_term_history=[]))
         ),
         context_resolver=CompanionContextResolver(FakeSoulService()),
+        context_pack_builder=SimpleNamespace(
+            build=AsyncMock(
+                return_value=CompanionContextPack(
+                    identity=CompanionContextResolver(FakeSoulService()).resolve(),
+                    user_message="hello",
+                    system_prompt="System",
+                )
+            )
+        ),
         interaction_recorder=SimpleNamespace(record=AsyncMock()),
     )
     adapter = ChatTurnEventAdapter(CompanionRuntime(chat_turn_service=chat_service))

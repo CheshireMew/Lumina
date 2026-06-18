@@ -68,25 +68,43 @@ async def test_memory_bootstrap_connection_failure_propagates(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_middleware_registers_only_rag_context_provider():
+async def test_middleware_registers_context_tools_search_and_emotion_broker():
     from core.bootstrap.services import MiddlewareBootstrapper
-    from services.chat.providers import RAGContextProvider
+    from services.chat.emotion_broker import EmotionBroker
+    from services.chat.search_providers import BraveSearchProvider, DuckDuckGoSearchProvider
     from services.chat.tools.search import WebSearchTool
 
     class Container:
         def __init__(self):
-            self.context_providers = []
+            self.search_providers = []
             self.tool_providers = []
+            self.emotion_broker = None
+            self.config = SimpleNamespace(get_provider_settings=lambda _provider_id: {})
+            self.event_bus = MagicMock()
+            self.event_bus.subscribe.return_value = 1
 
-        def register_context_provider(self, provider):
-            self.context_providers.append(provider)
+        def register_search_provider(self, provider):
+            self.search_providers.append(provider)
 
         def register_tool_provider(self, provider):
             self.tool_providers.append(provider)
+
+        def get_config(self):
+            return self.config
+
+        def get_event_bus(self):
+            return self.event_bus
+
+        def set_emotion_broker(self, broker):
+            self.emotion_broker = broker
 
     container = Container()
 
     await MiddlewareBootstrapper().bootstrap(container)
 
-    assert [type(provider) for provider in container.context_providers] == [RAGContextProvider]
+    assert [type(provider) for provider in container.search_providers] == [
+        BraveSearchProvider,
+        DuckDuckGoSearchProvider,
+    ]
     assert [type(provider) for provider in container.tool_providers] == [WebSearchTool]
+    assert type(container.emotion_broker) is EmotionBroker

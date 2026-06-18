@@ -18,6 +18,7 @@ const DataViewer: React.FC<DataViewerProps> = ({
     isOpen,
     onClose,
     activeCharacterId,
+    apiBaseUrl,
 }) => {
     const [activeTab, setActiveTab] = useState<
         "tables" | "query" | "stats" | "graph"
@@ -27,11 +28,13 @@ const DataViewer: React.FC<DataViewerProps> = ({
         isOpen,
         activeTab,
         activeCharacterId,
+        apiBaseUrl,
     });
 
     const tables = useDataViewerTables({
         isOpen,
         activeCharacterId,
+        apiBaseUrl,
         refreshGraph: graph.loadGraph,
     });
 

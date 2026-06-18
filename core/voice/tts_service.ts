@@ -11,7 +11,7 @@ export class TTSService implements ITTSProvider {
   private defaultEngine: string;
 
   constructor(
-    baseUrl: string = "http://127.0.0.1:8010/tts",
+    baseUrl: string = "",
     defaultVoice: string = "zh-CN-XiaoxiaoNeural"
   ) {
     this.baseUrl = baseUrl;
@@ -39,6 +39,10 @@ export class TTSService implements ITTSProvider {
     this.activeControllers.add(controller);
 
     try {
+      if (!this.baseUrl) {
+        throw new Error("TTS base URL has not been initialized.");
+      }
+
       console.log(
         `[TTS] Request: text="${text.substring(
           0,
@@ -92,6 +96,10 @@ export class TTSService implements ITTSProvider {
 
   async listVoices(engine: string = "driver.tts.edge"): Promise<VoiceInfo[]> {
     try {
+      if (!this.baseUrl) {
+        throw new Error("TTS base URL has not been initialized.");
+      }
+
       const query = engine ? `?engine=${encodeURIComponent(engine)}` : "";
       const response = await fetch(`${this.baseUrl}/voices${query}`);
       if (!response.ok) {

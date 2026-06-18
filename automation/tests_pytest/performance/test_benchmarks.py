@@ -184,6 +184,7 @@ def test_thread_safety():
 
     ServiceContainer._instance = None
     container = ServiceContainer()
+    container.set_config(object())
     errors = []
 
     def access_container(thread_id):
@@ -297,30 +298,16 @@ def test_cache_hit_rate():
 # ============================================================================
 
 @pytest.mark.performance
-def test_capability_module_discovery_performance():
-    """Test that capability module discovery scales well"""
-    import tempfile
-    import os
+def test_provider_driver_registry_lookup_performance():
+    """Test that explicit provider lookups stay cheap."""
+    providers = {f"driver.test.{i}": object() for i in range(1000)}
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Create many capability module directories
-        for i in range(100):
-            module_dir = os.path.join(tmpdir, f"module_{i}")
-            os.makedirs(module_dir)
-            with open(os.path.join(module_dir, "manifest.yaml"), 'w') as f:
-                f.write(f"id: module_{i}\nname: Module {i}\n")
+    start = time.perf_counter()
+    for i in range(1000):
+        assert providers[f"driver.test.{i}"] is not None
+    elapsed = time.perf_counter() - start
 
-        # Time the discovery
-        start = time.perf_counter()
-        modules_found = []
-        for root, dirs, files in os.walk(tmpdir):
-            if "manifest.yaml" in files:
-                modules_found.append(root)
-        elapsed = time.perf_counter() - start
-
-        assert len(modules_found) == 100
-        # Discovery should be fast even with many capability modules
-        assert elapsed < 0.5, f"Capability module discovery too slow: {elapsed:.2f}s for 100 modules"
+    assert elapsed < 0.05, f"Provider registry lookup too slow: {elapsed:.4f}s for 1000 providers"
 
 
 # ============================================================================

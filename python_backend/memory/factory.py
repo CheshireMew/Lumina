@@ -3,7 +3,7 @@ import logging
 from typing import Any
 
 from core.interfaces.driver import BaseMemoryDriver
-from capability_modules.memory_postgres.drivers.memory.postgres_driver import PostgresDriver
+from provider_drivers.memory_postgres.drivers.memory.postgres_driver import PostgresDriver
 
 logger = logging.getLogger("memory.factory")
 
