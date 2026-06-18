@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class CapabilityContract(BaseModel):
     """
-    Defines a capability provided or consumed by a plugin.
+    Defines a capability provided or consumed by a module.
     Used in CapabilityManifest.
     """
     type: str
@@ -17,7 +17,7 @@ class CapabilityContract(BaseModel):
 
 class IWorkerCapability(ABC):
     """
-    Interface for Worker Capabilities (Plugins for the Generic Worker Kernel).
+    Interface for worker capabilities.
     Examples: STT, TTS, OCR, RAG.
     """
 

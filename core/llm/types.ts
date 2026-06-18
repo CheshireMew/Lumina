@@ -25,14 +25,19 @@ export interface CharacterProfile {
   displayName?: string;
   description: string;
   systemPrompt?: string; // Full system prompt instructions
-  avatar?: string;
+  avatar: {
+    type: "live2d";
+    model: string;
+    modelUrl: string;
+    cubismCoreUrl: string;
+    rendererRuntimeUrl: string;
+  };
   voiceConfig: {
     service: string; // 'edge-tts' | 'azure' | ...
     voiceId: string; // e.g., "zh-CN-XiaoxiaoNeural"
     rate?: string; // "+0%"
     pitch?: string; // "+0Hz"
   };
-  modelPath?: string; // Path to Live2D model (relative to public)
   heartbeatEnabled?: boolean; // ⚡ Heartbeat Toggle
   // ⚡ Interaction Settings
   soulEvolutionEnabled?: boolean; // ⚡ New: Decoupled Logic Toggle

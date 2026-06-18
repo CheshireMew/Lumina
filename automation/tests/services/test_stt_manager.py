@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -9,7 +8,7 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
 
 from core.interfaces.driver import BaseSTTDriver
-from services.managers.stt import STTPluginManager
+from services.managers.stt import STTProviderManager
 
 
 class ConfigStub:
@@ -49,8 +48,8 @@ class FakeSTTDriver(BaseSTTDriver):
         return {"text": "hello test", "language": "zh", "confidence": 1.0}
 
 
-def make_manager(selected_provider=None) -> STTPluginManager:
-    return STTPluginManager(ConfigStub(selected_provider=selected_provider))
+def make_manager(selected_provider=None) -> STTProviderManager:
+    return STTProviderManager(ConfigStub(selected_provider=selected_provider))
 
 
 def test_stt_manager_initialization():
@@ -98,13 +97,8 @@ def test_stt_provider_snapshot_keeps_intent_and_runtime_state_separate():
 @pytest.mark.anyio
 async def test_stt_startup_requires_selected_provider():
     manager = make_manager()
-    driver = FakeSTTDriver("driver.stt.sensevoice")
 
-    with patch(
-        "services.managers.driver_loader.DriverLoader.load_plugins",
-        return_value=[driver],
-    ):
-        await manager.register_drivers()
+    await manager.register_drivers()
 
     assert manager.active_driver is None
     assert manager.active_driver_id == "none"
@@ -113,18 +107,13 @@ async def test_stt_startup_requires_selected_provider():
 
 @pytest.mark.anyio
 async def test_stt_startup_rejects_missing_selected_provider():
-    manager = make_manager(selected_provider="driver.stt.sensevoice")
-    driver = FakeSTTDriver("driver.stt.other")
+    manager = make_manager(selected_provider="driver.stt.missing")
 
-    with patch(
-        "services.managers.driver_loader.DriverLoader.load_plugins",
-        return_value=[driver],
-    ):
-        await manager.register_drivers()
+    await manager.register_drivers()
 
     assert manager.active_driver is None
     assert manager.active_driver_id == "none"
-    assert manager.last_error == "Configured STT provider not discovered: driver.stt.sensevoice"
+    assert manager.last_error == "Configured STT provider not discovered: driver.stt.missing"
 
 
 @pytest.mark.anyio

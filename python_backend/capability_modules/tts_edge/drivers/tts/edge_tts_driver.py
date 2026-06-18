@@ -1,6 +1,5 @@
 import logging
 from typing import AsyncGenerator
-import edge_tts
 from core.interfaces.driver import BaseTTSDriver
 
 logger = logging.getLogger("EdgeTTSDriver")
@@ -19,6 +18,8 @@ class EdgeTTSDriver(BaseTTSDriver):
 
     async def list_voices(self):
         try:
+            import edge_tts
+
             voices = await edge_tts.list_voices()
         except Exception as exc:
             logger.error(f"EdgeTTS voice list error: {exc}")
@@ -62,13 +63,13 @@ class EdgeTTSDriver(BaseTTSDriver):
         if not isinstance(pitch, str): pitch = "+0Hz"
 
         try:
+            import edge_tts
+
             communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
             
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
                     yield chunk["data"]
-        except edge_tts.exceptions.NoAudioReceived:
-            logger.warning(f"EdgeTTS NoAudioReceived for text: '{text[:20]}...' (Voice: {voice})")
         except Exception as e:
             logger.error(f"EdgeTTS Stream Error: {e}")
             raise e

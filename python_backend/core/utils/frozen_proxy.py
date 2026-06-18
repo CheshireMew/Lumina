@@ -33,7 +33,7 @@ class FrozenProxy:
     def __setattr__(self, name: str, value: Any):
         if name == "_wrapped": # Should not happen via normal assignment due to __init__ logic but good safety
              raise TypeError("FrozenProxy is immutable.")
-        raise TypeError(f"Configuration is read-only. Cannot set '{name}' via Plugin Context.")
+        raise TypeError(f"Configuration is read-only. Cannot set '{name}' via capability context.")
 
     def __getitem__(self, key: Any) -> Any:
         # Support dict-like access if wrapped object supports it
@@ -43,7 +43,7 @@ class FrozenProxy:
         return value
 
     def __setitem__(self, key: Any, value: Any):
-        raise TypeError(f"Configuration is read-only. Cannot set key '{key}' via Plugin Context.")
+        raise TypeError(f"Configuration is read-only. Cannot set key '{key}' via capability context.")
 
     def __repr__(self):
         return f"<FrozenProxy for {repr(self._wrapped)}>"

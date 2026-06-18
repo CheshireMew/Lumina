@@ -252,48 +252,28 @@ async def test_retrieve_context_search_failure_propagates(memory_service):
         await svc.retrieve_context("query test", companion_context("test_char"))
 
 
-def test_memory_driver_factory_returns_configured_driver_only():
+def test_memory_driver_factory_returns_configured_driver_only(monkeypatch):
     postgres_driver = MagicMock()
     postgres_driver.id = "driver.memory.postgres"
     postgres_driver.name = "Postgres"
-    other_driver = MagicMock()
-    other_driver.id = "driver.memory.other"
-    other_driver.name = "Other"
 
-    with (
-        patch("memory.factory.os.path.exists", return_value=True),
-        patch("memory.factory.os.path.isdir", return_value=True),
-        patch("memory.factory.os.listdir", return_value=["memory_postgres"]),
-        patch(
-            "memory.factory.DriverLoader.load_plugins",
-            return_value=[other_driver, postgres_driver],
-        ),
-    ):
-        driver = MemoryDriverFactory.create_driver(
-            "driver.memory.postgres",
-            driver_config=MEMORY_CONFIG,
-        )
+    monkeypatch.setitem(
+        MemoryDriverFactory._drivers,
+        "driver.memory.postgres",
+        lambda: postgres_driver,
+    )
+    driver = MemoryDriverFactory.create_driver(
+        "driver.memory.postgres",
+        driver_config=MEMORY_CONFIG,
+    )
 
     assert driver is postgres_driver
     postgres_driver.load_config.assert_called_once_with(MEMORY_CONFIG)
 
 
 def test_memory_driver_factory_rejects_missing_configured_driver():
-    other_driver = MagicMock()
-    other_driver.id = "driver.memory.other"
-    other_driver.name = "Other"
-
-    with (
-        patch("memory.factory.os.path.exists", return_value=True),
-        patch("memory.factory.os.path.isdir", return_value=True),
-        patch("memory.factory.os.listdir", return_value=["memory_postgres"]),
-        patch(
-            "memory.factory.DriverLoader.load_plugins",
-            return_value=[other_driver],
-        ),
-    ):
-        with pytest.raises(ImportError, match="driver.memory.postgres"):
-            MemoryDriverFactory.create_driver("driver.memory.postgres")
+    with pytest.raises(ImportError, match="driver.memory.missing"):
+        MemoryDriverFactory.create_driver("driver.memory.missing")
 
 
 def test_memory_service_requires_explicit_driver():

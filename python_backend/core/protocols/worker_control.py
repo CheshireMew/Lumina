@@ -46,7 +46,6 @@ class ProviderStatusPayload(BaseModel):
     capability: Optional[str] = None
     capabilities: List[str] = Field(default_factory=list)
     runtime_target: Optional[str] = None
-    permissions: List[str] = Field(default_factory=list)
     config_schema: Optional[Dict[str, Any]] = None
     current_config: Optional[Dict[str, Any]] = None
     error: Optional[str] = None

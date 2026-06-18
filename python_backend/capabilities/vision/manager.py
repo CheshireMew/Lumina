@@ -3,9 +3,7 @@ import base64
 import logging
 from typing import Callable, Optional
 from core.interfaces.driver import BaseVisionDriver
-from services.managers.driver_loader import DriverLoader
 from services.managers.provider_host import ProviderHostManager
-import os
 
 logger = logging.getLogger("VisionManager")
 
@@ -16,7 +14,7 @@ except ModuleNotFoundError:
     MSS_MODULE = None
     MSS_TOOLS = None
 
-class VisionPluginManager(ProviderHostManager):
+class VisionProviderManager(ProviderHostManager):
     """
     Central manager for vision drivers and screen capture.
     """
@@ -27,24 +25,7 @@ class VisionPluginManager(ProviderHostManager):
         self.model_name_resolver = model_name_resolver
 
     async def load_drivers(self):
-        """Load vision drivers from capability modules."""
-        try:
-            # Resolve root (python_backend)
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            backend_root = os.path.dirname(os.path.dirname(current_dir))
-            
-            drivers_dir = os.path.join(backend_root, "capability_modules", "vision", "drivers", "vision")
-            if os.path.exists(drivers_dir):
-                logger.info(f"Scanning Built-in Vision Drivers: {drivers_dir}")
-                loaded = DriverLoader.load_plugins(drivers_dir, BaseVisionDriver)
-                for d in loaded:
-                    self.register_driver(d)
-                    logger.info(f"Loaded Vision Driver: {d.id}")
-            else:
-                logger.debug(f"Vision drivers directory not found: {drivers_dir}")
-                
-        except Exception as e:
-            logger.error(f"Failed to load Vision drivers: {e}")
+        logger.debug("No built-in vision driver registered")
 
     async def activate_startup_driver(self):
         target_provider = self.resolve_startup_driver_id()

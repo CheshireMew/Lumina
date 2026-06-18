@@ -1,4 +1,4 @@
-﻿/**
+/**
  * App.tsx - Refactored Version (Stage 1)
  * 
  * Modularized with AppToolbar and ModalLayer.
@@ -16,8 +16,8 @@ import { CUSTOM_LLM_PROVIDER_ID, LlmProviderId } from './components/LLMConfig/ty
 // Core Hooks
 import { useCoreSystem } from './hooks/useCoreSystem';
 import { useBackendState } from './hooks/useBackendState';
-import { useCapabilityPackages } from './hooks/useCapabilityPackages';
-import { resolveBundledAssetSrc, transformImageSrc } from './utils/srcUtils';
+import { useRuntimeCapabilities } from './hooks/useRuntimeCapabilities';
+import { transformImageSrc } from './utils/srcUtils';
 import { syncFrontendServiceUrls } from './runtime/appRuntime';
 
 // Avatar System
@@ -42,7 +42,7 @@ function App() {
     const runtimeBaseUrl = backendState.ports.memory
         ? `http://127.0.0.1:${backendState.ports.memory}`
         : API_CONFIG.BASE_URL;
-    const capabilityPackages = useCapabilityPackages(isBackendReady, runtimeBaseUrl);
+    const runtimeCapabilities = useRuntimeCapabilities(isBackendReady, runtimeBaseUrl);
     
     // Core System Hook (Unified)
     const {
@@ -136,14 +136,15 @@ function App() {
     }, [isSettingsLoaded, settings.backgroundImage]);
 
     // ==================== RENDER ====================
-    const modelPath = activeCharacter?.modelPath || API_CONFIG.DEFAULT_MODEL_PATH;
-    const live2dPackage = capabilityPackages['live2d-assets'];
-    const sttPackage = capabilityPackages['stt-runtime'];
-    const visionPackage = capabilityPackages['vision-runtime'];
-    const cubismCoreSrc = live2dPackage?.resourceUrls?.libs
-        ? `${live2dPackage.resourceUrls.libs}/live2dcubismcore.min.js`
-        : undefined;
-    const resolvedModelPath = resolveBundledAssetSrc(modelPath);
+    const defaultModel = API_CONFIG.DEFAULT_LIVE2D_MODEL;
+    const sttCapability = runtimeCapabilities.stt;
+    const visionCapability = runtimeCapabilities.vision;
+    const resolvedModelPath = activeCharacter?.avatar?.modelUrl
+        || `${API_CONFIG.BASE_URL}/assets/live2d/${defaultModel}/${defaultModel}.model3.json`;
+    const cubismCoreSrc = activeCharacter?.avatar?.cubismCoreUrl
+        || `${API_CONFIG.BASE_URL}/assets/libs/live2dcubismcore.min.js`;
+    const rendererRuntimeSrc = activeCharacter?.avatar?.rendererRuntimeUrl
+        || `${API_CONFIG.BASE_URL}/assets/libs/pixi-live2d-display-cubism4.min.js`;
     const canLoadAvatar = isSettingsLoaded;
     const shouldRenderAvatar = canLoadAvatar && Boolean(resolvedModelPath);
     const hasOpenModal = isSettingsOpen
@@ -182,6 +183,7 @@ function App() {
                     modelPath={resolvedModelPath}
                     highDpi={settings.live2dHighDpi}
                     cubismCoreSrc={cubismCoreSrc}
+                    rendererRuntimeSrc={rendererRuntimeSrc}
                 />
             ) : canLoadAvatar ? (
                 <div style={{
@@ -260,8 +262,8 @@ function App() {
                             chatMode={chatMode}
                             onToggleChatMode={toggleChatMode}
                             onSpeechStart={handleUserSpeechStart}
-                            voiceCapabilityState={sttPackage?.state || 'unavailable'}
-                            visionCapabilityState={visionPackage?.state || 'unavailable'}
+                            voiceCapabilityState={sttCapability?.status || 'unavailable'}
+                            visionCapabilityState={visionCapability?.status || 'unavailable'}
                         />
                     </div>
                 </div>

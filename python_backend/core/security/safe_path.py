@@ -21,7 +21,7 @@ class SafePath:
         Safely resolves a child path relative to a base directory.
         
         Args:
-            base: The trusted root directory (e.g. plugin_dir, data_dir)
+            base: The trusted root directory (for example module data dir)
             *user_paths: Potentially untrusted path components provided by user/api
             
         Returns:

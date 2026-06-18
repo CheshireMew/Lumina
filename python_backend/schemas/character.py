@@ -11,13 +11,21 @@ class CharacterVoiceConfig(BaseModel):
     pitch: str = "+0Hz"
 
 
+class CharacterAvatarConfig(BaseModel):
+    type: str = "live2d"
+    model: str = "Hiyori"
+    modelUrl: str = ""
+    cubismCoreUrl: str = ""
+    rendererRuntimeUrl: str = ""
+
+
 class CharacterConfig(BaseModel):
     id: str
     name: str
     displayName: str | None = None
     description: str = ""
     systemPrompt: str = ""
-    modelPath: str = ""
+    avatar: CharacterAvatarConfig = Field(default_factory=CharacterAvatarConfig)
     voiceConfig: CharacterVoiceConfig = Field(default_factory=CharacterVoiceConfig)
     heartbeatEnabled: bool = True
     proactiveChatEnabled: bool = True
@@ -29,13 +37,17 @@ class CharacterConfig(BaseModel):
     def from_storage(cls, character_id: str, payload: dict[str, Any] | None) -> "CharacterConfig":
         raw = dict(payload or {})
         voice_config = raw.get("voice_config") if isinstance(raw.get("voice_config"), dict) else {}
+        avatar = raw.get("avatar") if isinstance(raw.get("avatar"), dict) else {}
         return cls(
             id=raw.get("character_id") or raw.get("id") or character_id,
             name=raw.get("name") or character_id,
             displayName=raw.get("display_name") or raw.get("displayName") or raw.get("name") or character_id,
             description=raw.get("description", ""),
             systemPrompt=raw.get("system_prompt") or raw.get("systemPrompt", ""),
-            modelPath=raw.get("model_path") or "",
+            avatar=CharacterAvatarConfig(
+                type=avatar.get("type", "live2d"),
+                model=avatar.get("model", "Hiyori"),
+            ),
             voiceConfig=CharacterVoiceConfig(
                 service=voice_config.get("service", "edge-tts"),
                 voiceId=voice_config.get("voiceId") or voice_config.get("voice_id", ""),
@@ -56,7 +68,10 @@ class CharacterConfig(BaseModel):
             "display_name": self.displayName or self.name,
             "description": self.description,
             "system_prompt": self.systemPrompt,
-            "model_path": self.modelPath,
+            "avatar": {
+                "type": self.avatar.type,
+                "model": self.avatar.model,
+            },
             "voice_config": self.voiceConfig.model_dump(),
             "heartbeat_enabled": self.heartbeatEnabled,
             "proactive_chat_enabled": self.proactiveChatEnabled,

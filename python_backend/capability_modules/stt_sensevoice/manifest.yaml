@@ -3,7 +3,6 @@ api_version: "1.0"
 kind: provider
 capability: stt
 runtime_target: worker:stt
-package: stt-runtime
-permissions: []
+runtime: stt-runtime
 config_schema: {}
 provides: []

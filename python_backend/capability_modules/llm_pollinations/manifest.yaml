@@ -3,7 +3,5 @@ api_version: "1.0"
 kind: driver
 capability: llm
 runtime_target: main
-permissions:
-  - network.external
 config_schema: {}
 provides: []

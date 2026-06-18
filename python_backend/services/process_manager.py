@@ -12,17 +12,17 @@ logger = logging.getLogger("ProcessManager")
 
 
 class ProcessManager:
-    def __init__(self, capability_package_registry):
-        if capability_package_registry is None:
-            raise ValueError("ProcessManager requires CapabilityPackageRegistry")
+    def __init__(self, worker_runtime_registry):
+        if worker_runtime_registry is None:
+            raise ValueError("ProcessManager requires WorkerRuntimeRegistry")
 
         self.workers: Dict[str, Any] = {}
         self.registry: Dict[str, dict] = {}
         self._shutdown_event = asyncio.Event()
         self._managed_scripts: Dict[str, Optional[str]] = {}
-        self.capability_package_registry = capability_package_registry
+        self.worker_runtime_registry = worker_runtime_registry
         self.health_probe = HealthProbe()
-        self.launcher = WorkerLauncher(capability_package_registry)
+        self.launcher = WorkerLauncher(worker_runtime_registry)
         self.supervisor = WorkerSupervisor(
             workers=self.workers,
             shutdown_event=self._shutdown_event,
@@ -52,10 +52,6 @@ class ProcessManager:
         if service_id in self.registry:
             self.registry[service_id]["health_path"] = path
 
-    def register_mcp_client(self, client):
-        self.workers[client.name] = client
-        logger.info(f"Registered MCP Service: {client.name} (PID: {client.pid})")
-
     def start_worker(
         self,
         worker_id: str,
@@ -67,8 +63,8 @@ class ProcessManager:
             logger.info(f"Skip starting {worker_id}: ProcessManager is shutting down.")
             return False
 
-        if not self._is_worker_package_ready(worker_id):
-            logger.info(f"Skip starting {worker_id}: capability package unavailable.")
+        if not self._is_worker_runtime_ready(worker_id):
+            logger.info(f"Skip starting {worker_id}: worker runtime unavailable.")
             return False
 
         if self.is_running(worker_id):
@@ -126,16 +122,16 @@ class ProcessManager:
             logger.error(f"Failed to start worker {worker_id}: {e}")
             return False
 
-    def _is_worker_package_ready(self, worker_id: str) -> bool:
+    def _is_worker_runtime_ready(self, worker_id: str) -> bool:
         if not worker_id.startswith("worker:"):
             return True
 
         capability = worker_id.split(":", 1)[1]
-        definition = self.capability_package_registry.package_for_capability(capability)
+        definition = self.worker_runtime_registry.runtime_for_capability(capability)
         if not definition:
             return True
 
-        snapshot = self.capability_package_registry.resolve(definition.id)
+        snapshot = self.worker_runtime_registry.resolve(definition.id)
         return bool(snapshot and snapshot.status == "ready" and snapshot.entry_executable is not None)
 
     def _attach_external_if_reachable(

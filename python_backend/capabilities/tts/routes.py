@@ -129,7 +129,7 @@ async def list_models(manager: Any = Depends(get_tts_service)):
                 "name": metadata["name"],
                 "desc": metadata["description"],
                 "enabled": True,
-                "type": "plugin",
+                "type": "provider",
                 "config_schema": metadata["config_schema"]
             }
             for _, driver in manager.iter_drivers()

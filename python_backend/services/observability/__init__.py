@@ -11,13 +11,13 @@ from .metrics import (
     record_stt_transcription,
     record_tts_generation,
     update_worker_status,
-    update_plugin_status,
+    update_capability_module_status,
     # Expose raw metrics for direct access
     HTTP_REQUESTS_TOTAL,
     HTTP_REQUEST_DURATION,
     ACTIVE_WORKERS,
     WORKER_LOAD,
-    PLUGIN_STATUS,
+    CAPABILITY_MODULE_STATUS,
     LLM_REQUESTS,
     LLM_TOKENS,
 )
@@ -42,7 +42,7 @@ __all__ = [
     'record_stt_transcription',
     'record_tts_generation',
     'update_worker_status',
-    'update_plugin_status',
+    'update_capability_module_status',
     # Structured Logging
     'get_structured_logger',
     'set_log_context',

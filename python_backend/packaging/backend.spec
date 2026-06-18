@@ -10,9 +10,8 @@ sys.path.insert(0, str(backend_root))
 
 datas = []
 binaries = []
-build_target = os.environ.get('LUMINA_BUILD_TARGET', 'core-runtime')
-main_extension_plugins = [
-    'avatar_server',
+build_target = os.environ.get('LUMINA_BUILD_TARGET', 'core')
+main_capability_modules = [
     'emotion_broker',
     'llm_core',
     'llm_deepseek',
@@ -23,11 +22,11 @@ main_extension_plugins = [
     'search_brave',
     'search_duckduckgo',
 ]
-target_extension_plugins = {
-    'core-runtime': main_extension_plugins,
+target_capability_modules = {
+    'core': main_capability_modules,
     'stt-runtime': ['stt_sensevoice'],
     'tts-runtime': ['tts_edge'],
-}.get(build_target, main_extension_plugins)
+}.get(build_target, main_capability_modules)
 cuda_binary_prefixes = (
     'cublas',
     'cudart',
@@ -82,7 +81,7 @@ hiddenimports = [
     'httpx',
     'pgvector.asyncpg',
     'pythonosc.udp_client',
-    'services.managers.llm_driver_plugins',
+    'services.managers.llm_driver_modules',
 ]
 
 hiddenimports += collect_submodules('services.managers')
@@ -93,7 +92,7 @@ hiddenimports += [
     'llm.drivers.pollinations_driver',
 ]
 
-# Collect all submodules for our packages
+# Collect application submodules.
 for pkg in [
     'routers',
     'services',
@@ -104,28 +103,28 @@ for pkg in [
     binaries += tmp_ret[1]
     hiddenimports += tmp_ret[2]
 
-target_capability_packages = {
+target_worker_runtimes = {
     'stt-runtime': ['capabilities.stt'],
     'tts-runtime': ['capabilities.tts'],
 }.get(build_target, [])
-for pkg in target_capability_packages:
+for pkg in target_worker_runtimes:
     tmp_ret = collect_all(pkg)
     datas += tmp_ret[0]
     binaries += tmp_ret[1]
     hiddenimports += tmp_ret[2]
 
-target_packages = {
+target_python_packages = {
     'stt-runtime': ['faster_whisper', 'webrtcvad', 'sounddevice', 'soundfile', 'sherpa_onnx'],
     'tts-runtime': ['edge_tts'],
 }.get(build_target, [])
-for pkg in target_packages:
+for pkg in target_python_packages:
     tmp_ret = collect_all(pkg)
     datas += tmp_ret[0]
     binaries += tmp_ret[1]
     hiddenimports += tmp_ret[2]
 
 target_excludes = {
-    'core-runtime': [
+    'core': [
         'faster_whisper',
         'webrtcvad',
         'sounddevice',
@@ -162,7 +161,7 @@ target_excludes = {
 
 binaries = _drop_cuda_runtime(binaries)
 
-if build_target == 'core-runtime':
+if build_target == 'core':
     core_forbidden_fragments = [
         'capabilities/stt',
         'capabilities\\stt',
@@ -205,13 +204,17 @@ if build_target == 'core-runtime':
 # Add config files and prompts
 datas += [
     ('../config', 'config'),
-    ('../../config/capability-packages.json', 'config'),
+    ('../../config/worker-runtimes.json', 'config'),
     ('../llm/drivers', 'llm/drivers'),
     ('../prompts', 'prompts'),
+    ('../characters', 'characters'),
+    ('../../public/live2d', 'assets/live2d'),
+    ('../../public/libs', 'assets/libs'),
     ('../tts_emotion_styles.json', '.'),
-    ('../user_settings.json', '.'),
 ]
-for module_name in target_extension_plugins:
+if (backend_root / 'user_settings.json').exists():
+    datas.append(('../user_settings.json', '.'))
+for module_name in target_capability_modules:
     datas.append((f'../capability_modules/{module_name}', f'capability_modules/{module_name}'))
 
 block_cipher = None

@@ -79,23 +79,16 @@ def main():
     # The /memory/add endpoint writes to conversation_log immediately.
     # Hybrid search targets episodic_memory, so force digest/consolidation before searching.
     
-    # Force Digest to ensure episodic memory is populated
-    try:
-        requests.post(f"{BASE_URL}/debug/force_digest")
-        logger.info("⏳ Triggered Force Digest...")
-    except Exception as e:
-        logger.warning(f"Digest failed: {e}")
-
     # Wait for async processing
-    time.sleep(10) 
-    
-    # DEBUG: Check counts
+    time.sleep(10)
+
+    # Check counts
     try:
-        r1 = requests.get(f"{BASE_URL}/admin/table/conversation_log?limit=1&character_id={CHAR_ID}")
+        r1 = requests.get(f"{BASE_URL}/memory/inspection/table/conversation_log?limit=1&character_id={CHAR_ID}")
         c1 = r1.json().get('count', 0)
         logger.info(f"📊 Conversation Logs: {c1}")
         
-        r2 = requests.get(f"{BASE_URL}/admin/table/episodic_memory?limit=1&character_id={CHAR_ID}")
+        r2 = requests.get(f"{BASE_URL}/memory/inspection/table/episodic_memory?limit=1&character_id={CHAR_ID}")
         c2 = r2.json().get('count', 0)
         logger.info(f"📊 Episodic Memories: {c2}")
     except Exception as e:
@@ -106,7 +99,7 @@ def main():
     # Should hit t1 (Quantum keyword) and t2 (physics/particle keywords + semantic)
     
     # DEBUG: Check character_id format
-    url_sql = f"{BASE_URL}/admin/query"
+    url_sql = f"{BASE_URL}/memory/inspection/query"
     try:
         # Check what the character_id actually looks like
         sql = f"SELECT character_id, type::string(character_id) as str_id FROM episodic_memory LIMIT 3;"

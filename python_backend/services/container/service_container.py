@@ -69,9 +69,6 @@ class ServiceContainer:
     def get_soul(self) -> Any:
         return self._require(self._container.soul, "SoulService")
 
-    def get_mcp_host(self) -> Any:
-        return self._value("mcp_host")
-
     def get_session_manager(self) -> Any:
         return self._require(self._container.session_manager, "SessionManager")
 
@@ -99,10 +96,10 @@ class ServiceContainer:
     def get_process_manager(self) -> Any:
         return self._require(self._container.process_manager, "ProcessManager")
 
-    def get_capability_package_registry(self) -> Any:
+    def get_worker_runtime_registry(self) -> Any:
         return self._require(
-            self._container.capability_package_registry,
-            "CapabilityPackageRegistry",
+            self._container.worker_runtime_registry,
+            "WorkerRuntimeRegistry",
         )
 
     def get_config_watcher(self) -> Any:
@@ -162,9 +159,6 @@ class ServiceContainer:
     def set_soul(self, instance: Any):
         self._override("soul", instance)
 
-    def set_mcp_host(self, instance: Any):
-        self._override("mcp_host", instance)
-
     def set_session_manager(self, instance: Any):
         self._override("session_manager", instance)
 
@@ -177,8 +171,8 @@ class ServiceContainer:
     def set_process_manager(self, instance: Any):
         self._override("process_manager", instance)
 
-    def set_capability_package_registry(self, instance: Any):
-        self._override("capability_package_registry", instance)
+    def set_worker_runtime_registry(self, instance: Any):
+        self._override("worker_runtime_registry", instance)
 
     def set_capability_registry(self, instance: Any):
         self._override("capability_registry", instance)
@@ -191,6 +185,9 @@ class ServiceContainer:
 
     def set_chat_turn_service(self, instance: Any):
         self._override("chat_turn_service", instance)
+
+    def set_chat_turn_event_adapter(self, instance: Any):
+        self._override("chat_turn_event_adapter", instance)
 
     def set_companion_runtime(self, instance: Any):
         self._override("companion_runtime", instance)

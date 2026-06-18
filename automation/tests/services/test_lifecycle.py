@@ -86,50 +86,27 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertIn("capability.lifecycle.request_disable", event_bus._schemas)
         print("✅ EventBusBootstrapper verified")
 
-    async def test_shutdown_sequence_mcp_host(self):
-        """Test that MCP Host is stopped during shutdown"""
-        from services.container import ServiceContainer
-
-        # Create container with mock MCP Host
-        container = ServiceContainer()
-        mock_mcp = MagicMock()
-        mock_mcp.stop = AsyncMock()
-
-        container.set_mcp_host(mock_mcp)
-
-        # Simulate MCP Host shutdown (the actual shutdown logic from lifespan)
-        if container.get_mcp_host():
-            await container.get_mcp_host().stop()
-
-        # Verify MCP Host was stopped
-        mock_mcp.stop.assert_called_once()
-        print("✅ MCP Host shutdown sequence verified")
-
-    async def test_shutdown_sequence_plugins(self):
-        """Test that plugins are terminated during shutdown"""
+    async def test_shutdown_sequence_capability_modules(self):
+        """Test that capability modules are unloaded during shutdown"""
         from services.container import ServiceContainer
 
         container = ServiceContainer()
         mock_manager = MagicMock()
-        mock_plugin1 = MagicMock()
-        mock_plugin1.terminate = MagicMock()
-        mock_plugin2 = MagicMock()
-        mock_plugin2.terminate = MagicMock()
+        mock_module1 = MagicMock()
+        mock_module1.unload = AsyncMock()
+        mock_module2 = MagicMock()
+        mock_module2.unload = AsyncMock()
 
-        mock_manager.modules = {"plugin1": mock_plugin1, "plugin2": mock_plugin2}
+        mock_manager.modules = {"module1": mock_module1, "module2": mock_module2}
         container.set_capability_module_manager(mock_manager)
 
-        # Simulate plugin shutdown
-        for pid, plugin in mock_manager.modules.items():
-            try:
-                plugin.terminate()
-            except Exception as e:
-                pass
+        # Simulate capability module shutdown.
+        for module in mock_manager.modules.values():
+            await module.unload()
 
-        # Verify both plugins were terminated
-        mock_plugin1.terminate.assert_called_once()
-        mock_plugin2.terminate.assert_called_once()
-        print("✅ Plugin termination sequence verified")
+        mock_module1.unload.assert_awaited_once()
+        mock_module2.unload.assert_awaited_once()
+        print("✅ Capability module shutdown sequence verified")
 
     async def test_process_manager_shutdown(self):
         """Test that ProcessManager shuts down all workers"""

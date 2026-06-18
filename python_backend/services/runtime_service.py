@@ -15,17 +15,10 @@ from services.infra.service_discovery import discovery
 class RuntimeService:
     def __init__(self, container):
         self.container = container
-        self.package_registry = container.get_capability_package_registry()
 
     def get_capability_runtime(self, capability: str, base_url: str) -> dict[str, Any]:
         contract = get_capability_contract(capability)
         config = self.container.get_config()
-        package_definition = self.package_registry.package_for_capability(capability)
-        package_snapshot = (
-            self.package_registry.get_snapshot(package_definition.id, base_url)
-            if package_definition
-            else None
-        )
         selected_provider = config.get_selected_provider(capability)
         provider_state: dict[str, Any] = {}
         current_provider = selected_provider
@@ -56,7 +49,7 @@ class RuntimeService:
         if contract and direct_base_url and contract.stream_routes.get("audio"):
             token = TokenManager.create_token(
                 worker_id,
-                permissions=["audio.stream", f"capability.{capability}"],
+                scopes=["audio.stream", f"capability.{capability}"],
                 ttl_minutes=10,
                 scope="worker_access",
             )
@@ -81,14 +74,7 @@ class RuntimeService:
             "load_time_ms": provider_state.get("load_time_ms"),
             "status": "ready" if worker_online else "offline",
             "provider_state": provider_state,
-            "package": package_snapshot,
         }
-
-    def list_packages(self, base_url: str) -> list[dict[str, Any]]:
-        return self.package_registry.list_snapshots(base_url)
-
-    def get_package(self, package_id: str, base_url: str) -> dict[str, Any] | None:
-        return self.package_registry.get_snapshot(package_id, base_url)
 
 
 def get_runtime_service(container) -> RuntimeService:

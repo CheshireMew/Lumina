@@ -30,7 +30,7 @@ const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/brain_dump${characterQuery}`);
+            const res = await fetch(`${API_CONFIG.BASE_URL}/memory/inspection${characterQuery}`);
             if (res.ok) {
                 const json = await res.json();
                 if (json.status === 'success') {
@@ -48,7 +48,7 @@ const MemoryInspector: React.FC<{ onClose: () => void, activeCharacterId: string
     
     const fetchStatus = async () => {
         try {
-            const res = await fetch(`${API_CONFIG.BASE_URL}/debug/processing_status${characterQuery}`);
+            const res = await fetch(`${API_CONFIG.BASE_URL}/memory/inspection/status${characterQuery}`);
             if (res.ok) {
                 const json = await res.json();
                 if (json.status === 'success') {

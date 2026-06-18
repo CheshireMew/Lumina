@@ -20,32 +20,32 @@ def run_build(spec_file: str, dist_dir: Path, build_dir: Path, env: dict[str, st
     print(f"Build success for {spec_file}")
 
 
-def load_capability_contract(project_root: Path) -> dict:
-    contract_path = project_root / "config" / "capability-packages.json"
+def load_worker_runtime_contract(project_root: Path) -> dict:
+    contract_path = project_root / "config" / "worker-runtimes.json"
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
-def write_package_metadata(target_dir: Path, package_def: dict):
+def write_runtime_metadata(target_dir: Path, runtime_def: dict):
     target_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "id": package_def["id"],
-        "version": package_def["version"],
-        "type": package_def["type"],
-        "displayName": package_def["displayName"],
-        "minHostVersion": package_def["minHostVersion"],
-        "minPackageVersion": package_def["minPackageVersion"],
-        "autoStart": package_def["autoStart"],
-        "optional": package_def["optional"],
-        "platform": package_def["platform"],
-        "arch": package_def["arch"],
-        "capabilities": package_def.get("capabilities", []),
-        "healthEndpoint": package_def.get("healthEndpoint"),
+        "id": runtime_def["id"],
+        "version": runtime_def["version"],
+        "type": runtime_def["type"],
+        "displayName": runtime_def["displayName"],
+        "minHostVersion": runtime_def["minHostVersion"],
+        "minRuntimeVersion": runtime_def["minRuntimeVersion"],
+        "autoStart": runtime_def["autoStart"],
+        "optional": runtime_def["optional"],
+        "platform": runtime_def["platform"],
+        "arch": runtime_def["arch"],
+        "capabilities": runtime_def.get("capabilities", []),
+        "healthEndpoint": runtime_def.get("healthEndpoint"),
     }
     version = {
-        "packageId": package_def["id"],
-        "version": package_def["version"],
-        "minHostVersion": package_def["minHostVersion"],
-        "minPackageVersion": package_def["minPackageVersion"],
+        "runtimeId": runtime_def["id"],
+        "version": runtime_def["version"],
+        "minHostVersion": runtime_def["minHostVersion"],
+        "minRuntimeVersion": runtime_def["minRuntimeVersion"],
     }
     (target_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False),
@@ -83,30 +83,16 @@ def write_hashes(target_dir: Path):
     )
 
 
-def reset_package_dir(dist_dir: Path, package_id: str) -> Path:
-    target_dir = dist_dir / "packages" / package_id
+def reset_runtime_dir(dist_dir: Path, runtime_id: str) -> Path:
+    target_dir = dist_dir / "runtimes" / runtime_id
     if target_dir.exists():
         shutil.rmtree(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
     return target_dir
 
 
-def package_def(contract: dict, package_id: str) -> dict:
-    return next(package for package in contract["packages"] if package["id"] == package_id)
-
-
-def stage_live2d_assets(project_root: Path, dist_dir: Path, contract: dict):
-    definition = package_def(contract, "live2d-assets")
-    target_dir = reset_package_dir(dist_dir, "live2d-assets")
-
-    write_package_metadata(target_dir, definition)
-    shutil.copytree(project_root / "public" / "live2d", target_dir / "live2d")
-    (target_dir / "libs").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(
-        project_root / "public" / "libs" / "live2dcubismcore.min.js",
-        target_dir / "libs" / "live2dcubismcore.min.js",
-    )
-    write_hashes(target_dir)
+def runtime_def(contract: dict, runtime_id: str) -> dict:
+    return next(runtime for runtime in contract["runtimes"] if runtime["id"] == runtime_id)
 
 
 def stage_runtime_copy(
@@ -114,31 +100,31 @@ def stage_runtime_copy(
     dist_dir: Path,
     build_dir: Path,
     contract: dict,
-    package_id: str,
-    plugin_names: list[str],
+    runtime_id: str,
+    module_names: list[str],
 ):
-    definition = package_def(contract, package_id)
-    target_dir = reset_package_dir(dist_dir, package_id)
+    definition = runtime_def(contract, runtime_id)
+    target_dir = reset_runtime_dir(dist_dir, runtime_id)
     runtime_dir = target_dir / "runtime"
-    package_dist_dir = dist_dir / "_package_build" / package_id
-    package_build_dir = build_dir / package_id
+    runtime_dist_dir = dist_dir / "_runtime_build" / runtime_id
+    runtime_build_dir = build_dir / runtime_id
 
-    write_package_metadata(target_dir, definition)
+    write_runtime_metadata(target_dir, definition)
     run_build(
         "backend.spec",
-        package_dist_dir,
-        package_build_dir,
-        env={"LUMINA_BUILD_TARGET": package_id},
+        runtime_dist_dir,
+        runtime_build_dir,
+        env={"LUMINA_BUILD_TARGET": runtime_id},
     )
-    shutil.copytree(package_dist_dir / "lumina_backend", runtime_dir)
+    shutil.copytree(runtime_dist_dir / "lumina_backend", runtime_dir)
 
     module_root = target_dir / "capability_modules"
     module_root.mkdir(parents=True, exist_ok=True)
     source_root = project_root / "python_backend" / "capability_modules"
-    for module_name in plugin_names:
+    for module_name in module_names:
         shutil.copytree(source_root / module_name, module_root / module_name)
 
-    requirements_file = project_root / "python_backend" / f"requirements-{package_id.split('-', 1)[0]}.txt"
+    requirements_file = project_root / "python_backend" / f"requirements-{runtime_id.split('-', 1)[0]}.txt"
     if requirements_file.exists():
         shutil.copy2(requirements_file, target_dir / requirements_file.name)
 
@@ -148,9 +134,9 @@ def stage_runtime_copy(
 
 
 def stage_voiceprint_runtime(project_root: Path, dist_dir: Path, contract: dict):
-    definition = package_def(contract, "voiceprint-runtime")
-    target_dir = reset_package_dir(dist_dir, "voiceprint-runtime")
-    write_package_metadata(target_dir, definition)
+    definition = runtime_def(contract, "voiceprint-runtime")
+    target_dir = reset_runtime_dir(dist_dir, "voiceprint-runtime")
+    write_runtime_metadata(target_dir, definition)
 
     module_root = target_dir / "capability_modules"
     module_root.mkdir(parents=True, exist_ok=True)
@@ -167,9 +153,9 @@ def stage_voiceprint_runtime(project_root: Path, dist_dir: Path, contract: dict)
 
 
 def stage_vision_runtime(project_root: Path, dist_dir: Path, contract: dict):
-    definition = package_def(contract, "vision-runtime")
-    target_dir = reset_package_dir(dist_dir, "vision-runtime")
-    write_package_metadata(target_dir, definition)
+    definition = runtime_def(contract, "vision-runtime")
+    target_dir = reset_runtime_dir(dist_dir, "vision-runtime")
+    write_runtime_metadata(target_dir, definition)
     shutil.copy2(
         project_root / "python_backend" / "requirements-vision.txt",
         target_dir / "requirements-vision.txt",
@@ -178,23 +164,14 @@ def stage_vision_runtime(project_root: Path, dist_dir: Path, contract: dict):
     write_hashes(target_dir)
 
 
-def stage_core_runtime_metadata(dist_dir: Path, contract: dict):
-    definition = package_def(contract, "core-runtime")
-    target_dir = reset_package_dir(dist_dir, "core-runtime")
-    write_package_metadata(target_dir, definition)
-    write_hashes(target_dir)
-
-
-def stage_capability_packages(project_root: Path, dist_dir: Path, build_dir: Path, contract: dict):
-    stage_core_runtime_metadata(dist_dir, contract)
-    stage_live2d_assets(project_root, dist_dir, contract)
+def stage_worker_runtimes(project_root: Path, dist_dir: Path, build_dir: Path, contract: dict):
     stage_runtime_copy(project_root, dist_dir, build_dir, contract, "stt-runtime", ["stt_sensevoice"])
     stage_runtime_copy(project_root, dist_dir, build_dir, contract, "tts-runtime", ["tts_edge"])
     stage_voiceprint_runtime(project_root, dist_dir, contract)
     stage_vision_runtime(project_root, dist_dir, contract)
-    package_build = dist_dir / "_package_build"
-    if package_build.exists():
-        shutil.rmtree(package_build)
+    runtime_build = dist_dir / "_runtime_build"
+    if runtime_build.exists():
+        shutil.rmtree(runtime_build)
 
 
 def prepare_dist_dir(dist_dir: Path):
@@ -225,8 +202,8 @@ def main():
     prepare_dist_dir(dist_dir)
 
     run_build("backend.spec", dist_dir, build_dir)
-    contract = load_capability_contract(project_root)
-    stage_capability_packages(project_root, dist_dir, build_dir, contract)
+    contract = load_worker_runtime_contract(project_root)
+    stage_worker_runtimes(project_root, dist_dir, build_dir, contract)
         
     print("\nBackend runtime built successfully.")
     print(f"Output: {dist_dir}")

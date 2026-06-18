@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI):
     
     # Infrastructure Bootstrappers
     from core.bootstrap.infrastructure import (
+        WorkerRuntimeRegistryBootstrapper,
         ConfigBootstrapper, 
         DatabaseBootstrapper, 
         EventBusBootstrapper, 
@@ -40,7 +41,6 @@ async def lifespan(app: FastAPI):
     # Integration Bootstrappers
     from core.bootstrap.integration import (
         ChatTurnEventAdapterBootstrapper,
-        MCPHostBootstrapper,
     )
     
     # Post-Startup Bootstrappers
@@ -57,6 +57,7 @@ async def lifespan(app: FastAPI):
     
     # Level 0: Configuration
     manager.add(ConfigBootstrapper())
+    manager.add(WorkerRuntimeRegistryBootstrapper())
     
     # Level 1: Infrastructure
     manager.add(DatabaseBootstrapper())
@@ -73,7 +74,6 @@ async def lifespan(app: FastAPI):
     
     # Level 4: Integration
     manager.add(ChatTurnEventAdapterBootstrapper())
-    manager.add(MCPHostBootstrapper())
     
     # Level 5: Post-Startup
     manager.add(WorkerControlHubBootstrapper())
@@ -85,13 +85,6 @@ async def lifespan(app: FastAPI):
     # Execute Startup
     try:
         await manager.start(service_instance)
-        from core.api.capability_resources import mount_capability_resources
-
-        mount_capability_resources(
-            app,
-            logger,
-            service_instance.get_capability_package_registry(),
-        )
         logger.info("🚀 Startup complete")
     except Exception as e:
         logger.critical(f"Startup Failed: {e}", exc_info=True)

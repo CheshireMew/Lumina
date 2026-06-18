@@ -17,6 +17,7 @@ from config.loader import (  # noqa: E402
     save_config,
 )
 from config.paths import (  # noqa: E402
+    APP_ROOT,
     BASE_DIR,
     CONFIG_ROOT,
     DATA_ROOT,
@@ -185,6 +186,10 @@ class ConfigManager:
     @property
     def paths(self):
         return get_paths_config()
+
+    @property
+    def app_root(self) -> Path:
+        return APP_ROOT
 
     @property
     def base_dir(self) -> Path:

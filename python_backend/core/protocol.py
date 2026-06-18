@@ -31,9 +31,9 @@ class EventType:
     SYSTEM_CONFIG_RELOADED = "system.config_reloaded"
     COGNITIVE_STATE = "cognitive_state"     # State Machine (Idle/Thinking/Speaking)
     
-    # Plugin Lifecycle (internal)
-    PLUGIN_LOADED = "plugin.loaded"
-    PLUGIN_UNLOADED = "plugin.unloaded"
+    # Capability module lifecycle (internal)
+    CAPABILITY_LOADED = "capability.loaded"
+    CAPABILITY_UNLOADED = "capability.unloaded"
     
     # Emotion/Avatar
     EMOTION_CHANGED = "emotion:changed"
@@ -54,7 +54,7 @@ class EventPacket(BaseModel):
     session_id: int = Field(..., description="Global interaction version for interrupt logic")
     sequence_number: int = Field(0, description="Per-session sequence for deduplication")
     type: str = Field(..., description="EventType string")
-    source: str = Field(..., description="Plugin Name or Component ID")
+    source: str = Field(..., description="Capability module or component id")
     
     # 2. Payload Layer (Flexible)
     # [Protocol Hardening] Enforce Dict for better serialization safety

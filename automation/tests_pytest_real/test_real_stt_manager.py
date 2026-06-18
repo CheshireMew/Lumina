@@ -6,14 +6,14 @@ import sys
 import os
 import pytest
 import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 from pathlib import Path
 
 # Add python_backend to path
 PROJECT_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from services.managers.stt import STTPluginManager
+from services.managers.stt import STTProviderManager
 
 
 class ConfigStub:
@@ -25,23 +25,16 @@ class ConfigStub:
 
 @pytest.mark.anyio
 async def test_stt_manager_driver_discovery():
-    sm = STTPluginManager(ConfigStub())
-    
-    # Mock driver plugin discovery
-    with patch("services.managers.driver_loader.DriverLoader.load_plugins") as mock_load:
-        mock_driver = MagicMock()
-        mock_driver.id = "test.stt.driver"
-        mock_driver.name = "Test STT"
-        mock_load.return_value = [mock_driver]
-        
-        await sm.load_drivers()
-        
-        assert "test.stt.driver" in sm.drivers
-        assert sm.active_driver is None
+    sm = STTProviderManager(ConfigStub())
+
+    await sm.load_drivers()
+
+    assert "driver.stt.sensevoice" in sm.drivers
+    assert sm.active_driver is None
 
 @pytest.mark.anyio
 async def test_stt_manager_activation():
-    sm = STTPluginManager(ConfigStub())
+    sm = STTProviderManager(ConfigStub())
     
     mock_driver = MagicMock()
     mock_driver.id = "test.stt.driver"
@@ -56,7 +49,7 @@ async def test_stt_manager_activation():
     assert sm.active_driver == mock_driver
 
 def test_stt_transcribe_delegation():
-    sm = STTPluginManager(ConfigStub())
+    sm = STTProviderManager(ConfigStub())
     mock_driver = MagicMock()
     mock_driver.transcribe.return_value = {"text": "hello test"}
     sm.active_driver = mock_driver

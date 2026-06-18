@@ -1,11 +1,11 @@
 """
-Lumina EventBus - Core Event System for Plugin Architecture
-Pub/Sub Event-Driven Plugin Communication
+Lumina EventBus - Core Event System
+Pub/Sub event-driven runtime communication
 
 Features:
 - Async event subscription and publishing
 - Wildcard subscriptions (e.g., "system.*")
-- Runtime plugin loading/unloading support
+- Runtime capability module loading/unloading support
 """
 
 import asyncio
@@ -50,15 +50,15 @@ class EventBus:
     Usage:
         # Subscribe to events
         bus.subscribe("system.tick", my_handler)
-        bus.subscribe("plugin.*", wildcard_handler)
+        bus.subscribe("capability.*", wildcard_handler)
         
         # Register Schema (Optional but recommended)
         class MyPayload(BaseModel):
             status: str
-        bus.register_schema("my_plugin.status", EventSchema("1.0", MyPayload))
+        bus.register_schema("my_capability.status", EventSchema("1.0", MyPayload))
         
         # Publish events
-        await bus.emit("my_plugin.status", {"status": "ok"})
+        await bus.emit("my_capability.status", {"status": "ok"})
     """
     
     def __init__(self):
@@ -82,7 +82,7 @@ class EventBus:
         Subscribe to an event type.
         
         Args:
-            event_type: Event type string (e.g., "system.tick", "plugin.*")
+            event_type: Event type string (e.g., "system.tick", "capability.*")
             callback: Async or sync function to call when event fires
             
         Returns:

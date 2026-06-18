@@ -181,16 +181,15 @@ class CapabilityManifest(BaseModel):
     - kind
     - capability
     - runtime_target
-    - permissions
     - config_schema
     - provides
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(..., description="Unique plugin identifier")
-    name: str | None = Field(default=None, description="Human-readable plugin name")
-    description: str | None = Field(default=None, description="Human-readable plugin summary")
+    id: str = Field(..., description="Unique capability module identifier")
+    name: str | None = Field(default=None, description="Human-readable capability module name")
+    description: str | None = Field(default=None, description="Human-readable capability module summary")
     author: str | None = Field(default=None, description="Capability module author")
     api_version: str = Field(default="1.0", description="Stable capability module API version")
     kind: str = Field(default="extension", description="provider | extension | gateway | processor")
@@ -200,13 +199,12 @@ class CapabilityManifest(BaseModel):
         pattern=r"^(main|worker:[a-z0-9_.-]+)$",
         description="Target runtime",
     )
-    permissions: list[str] = Field(default_factory=list)
     config_schema: dict[str, Any] = Field(default_factory=dict)
     provides: list[str] = Field(default_factory=list, description="Additional capability ids")
     dependencies: list[str] = Field(default_factory=list)
     entry_point: str | None = Field(default=None)
     min_lumina_version: str | None = Field(default=None)
-    package: str | None = Field(default=None)
+    runtime: str | None = Field(default=None)
     tags: list[str] = Field(default_factory=list)
     path: str | None = Field(default=None, description="Injected module root path")
 
@@ -233,11 +231,6 @@ class CapabilityManifest(BaseModel):
     def normalize_provides(cls, values: Any):
         normalized = [normalize_capability_id(item) for item in (values or [])]
         return [item for item in normalized if item]
-
-    @field_validator("permissions", mode="before")
-    @classmethod
-    def normalize_permissions(cls, values: Any):
-        return [str(item).strip() for item in (values or []) if str(item).strip()]
 
     @field_validator("runtime_target", mode="before")
     @classmethod

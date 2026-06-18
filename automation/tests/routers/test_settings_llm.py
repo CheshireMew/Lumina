@@ -6,7 +6,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from routers.llm_mgmt import get_feature_params
+from routers.settings_llm import get_feature_params
 
 
 class FakeLLMManager:

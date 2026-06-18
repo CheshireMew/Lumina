@@ -1,5 +1,5 @@
 from llm.drivers.pollinations_driver import PollinationsDriver
-from services.managers.llm_driver_plugins import LLMDriverTypeModule
+from services.managers.llm_driver_modules import LLMDriverTypeModule
 
 
 class Capability(LLMDriverTypeModule):

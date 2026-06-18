@@ -196,35 +196,28 @@ class LuminaRunner:
                 self.log(f"[{'FAIL'}] {service} Health ({url}) -> Connection Error")
                 failed += 1
                 
-        # T2: Runtime Package Check (Async Retry)
+        # T2: Runtime Capability Check (Async Retry)
         max_retries = 5
         for attempt in range(max_retries):
             try:
-                url = f"http://127.0.0.1:{self.ports['memory_port']}/runtime/packages"
+                url = f"http://127.0.0.1:{self.ports['memory_port']}/runtime/capabilities"
                 r = requests.get(url, timeout=2)
                 data = r.json()
 
-                packages = data.get("packages", []) if isinstance(data, dict) else []
-                vp = next(
-                    (
-                        p
-                        for p in packages
-                        if isinstance(p, dict) and p.get("id") == "voiceprint-runtime"
-                    ),
-                    None,
-                )
+                capabilities = data.get("capabilities", []) if isinstance(data, dict) else []
+                core = {item.get("capability") for item in capabilities if isinstance(item, dict)}
                 
-                if vp:
-                    self.log(f"[{'PASS'}] Runtime Packages: Voiceprint Found ({vp.get('state')})")
+                if {"llm", "memory", "stt", "tts"}.issubset(core):
+                    self.log(f"[{'PASS'}] Runtime Capabilities: {', '.join(sorted(core))}")
                     break
                 else:
-                    self.log(f"   ... Waiting for Runtime Packages (Attempt {attempt+1}/{max_retries})")
+                    self.log(f"   ... Waiting for Runtime Capabilities (Attempt {attempt+1}/{max_retries})")
             except:
                 pass
             
             time.sleep(2)
         else:
-            self.log(f"[{'FAIL'}] Plugin Registry: Voiceprint Timeout after {max_retries*2}s")
+            self.log(f"[{'FAIL'}] Runtime Capabilities: Timeout after {max_retries*2}s")
             failed += 1
             
         if failed == 0:

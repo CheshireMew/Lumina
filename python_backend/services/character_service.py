@@ -6,6 +6,13 @@ from typing import Any
 from app_config import BASE_DIR
 from core.security.safe_path import SafePath, SecurityException
 from schemas.character import CharacterConfig
+from services.assets import (
+    absolute_asset_url,
+    cubism_core_route,
+    list_live2d_models,
+    live2d_renderer_route,
+    live2d_model_route,
+)
 
 logger = logging.getLogger("CharacterService")
 
@@ -18,13 +25,11 @@ class CharacterService:
         *,
         soul_service: Any,
         characters_root: Path | None = None,
-        package_registry: Any | None = None,
     ):
         if soul_service is None:
             raise ValueError("CharacterService requires SoulService")
 
         self.characters_root = characters_root or (BASE_DIR / "characters")
-        self.package_registry = package_registry
         self.soul_service = soul_service
 
     def _active_character_id(self) -> str:
@@ -53,22 +58,14 @@ class CharacterService:
             handle.flush()
         temp_path.replace(config_path)
 
-    def _get_live2d_snapshot(self) -> Any | None:
-        if not self.package_registry:
-            return None
-
-        snapshot = self.package_registry.resolve("live2d-assets")
-        if not snapshot or snapshot.status != "ready":
-            return None
-        return snapshot
-
-    def load_config(self) -> CharacterConfig:
+    def load_config(self, base_url: str | None = None) -> CharacterConfig:
         character_id = self._active_character_id()
         config_path = self._config_path()
         if not config_path.exists():
             raise FileNotFoundError(f"Config not found for {character_id}")
         storage = self._read_storage_config(config_path)
-        return CharacterConfig.from_storage(character_id, storage)
+        config = CharacterConfig.from_storage(character_id, storage)
+        return self._with_asset_urls(config, base_url)
 
     def save_config(self, config: CharacterConfig) -> CharacterConfig:
         character_id = self._active_character_id()
@@ -91,50 +88,19 @@ class CharacterService:
         return normalized
 
     def list_live2d_models(self) -> list[dict[str, Any]]:
-        models: list[dict[str, Any]] = []
-        models.extend(self._scan_live2d_models())
-        return sorted(models, key=lambda item: item["name"])
+        return sorted(list_live2d_models(), key=lambda item: item["name"])
 
-    def _scan_live2d_models(self) -> list[dict[str, Any]]:
-        snapshot = self._get_live2d_snapshot()
-        if not snapshot:
-            return []
+    def _with_asset_urls(
+        self,
+        config: CharacterConfig,
+        base_url: str | None,
+    ) -> CharacterConfig:
+        if config.avatar.type != "live2d" or not base_url:
+            return config
 
-        live2d_root = snapshot.resource_dirs.get("live2d")
-        if not live2d_root or not live2d_root.exists():
-            return []
-
-        models: list[dict[str, Any]] = []
-        seen_names: set[str] = set()
-        for model_path in live2d_root.rglob("*.model3.json"):
-            name = model_path.parent.name if model_path.parent.name != "imported" else model_path.stem
-            if name in seen_names:
-                continue
-            seen_names.add(name)
-            rel_path = model_path.relative_to(live2d_root).as_posix()
-            models.append(
-                {
-                    "name": name,
-                    "path": snapshot.resource_route("live2d", rel_path),
-                    "type": "live2d",
-                    "thumbnail": self._resolve_live2d_thumbnail(snapshot, model_path, live2d_root),
-                    "availability": "ready",
-                }
-            )
-        return models
-
-    def _resolve_live2d_thumbnail(self, snapshot: Any, asset_path: Path, root: Path) -> str | None:
-        for candidate in (
-            "thumbnail.png",
-            "thumbnail.jpg",
-            "preview.png",
-            "preview.jpg",
-            f"{asset_path.stem}.png",
-            f"{asset_path.stem}.jpg",
-            "icon.png",
-        ):
-            thumb_path = asset_path.parent / candidate
-            if thumb_path.exists():
-                relative = thumb_path.relative_to(root).as_posix()
-                return snapshot.resource_route("live2d", relative)
-        return None
+        avatar = config.avatar.model_copy(update={
+            "modelUrl": absolute_asset_url(base_url, live2d_model_route(config.avatar.model)),
+            "cubismCoreUrl": absolute_asset_url(base_url, cubism_core_route()),
+            "rendererRuntimeUrl": absolute_asset_url(base_url, live2d_renderer_route()),
+        })
+        return config.model_copy(update={"avatar": avatar})

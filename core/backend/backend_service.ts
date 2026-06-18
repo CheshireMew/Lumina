@@ -83,7 +83,7 @@ export class BackendService {
             }
 
             console.warn(
-                `[BackendManager] Port ${service.port} (${service.name}) is occupied but unresponsive to /health. Skipping spawn to avoid conflict.`,
+                `[BackendManager] Port ${service.port} (${service.name}) is occupied but unresponsive to /runtime/health. Skipping spawn to avoid conflict.`,
             );
             service.ready = false;
             return;
@@ -191,7 +191,7 @@ export class BackendService {
         try {
             const basePort = this.ports.memory_port || 8010;
             const response = await axios.get(
-                `http://${this.host}:${basePort}/network`,
+                `http://${this.host}:${basePort}/runtime/network`,
                 { timeout: 3000 },
             );
 

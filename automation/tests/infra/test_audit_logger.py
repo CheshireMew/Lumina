@@ -29,7 +29,7 @@ async def test_audit_logger_uses_lifecycle_bus_pool_contract():
     bus = BusStub()
     with patch("services.infra.bus_factory.get_lifecycle_bus", return_value=bus):
         await AuditLogger.log_event(
-            actor_id="plugin.test",
+            actor_id="module.test",
             action="permission_request",
             target="filesystem.read_assets",
         )
@@ -45,7 +45,7 @@ async def test_audit_logger_reliable_write_propagates_failure():
     with patch("services.infra.bus_factory.get_lifecycle_bus", return_value=bus):
         with pytest.raises(RuntimeError, match="audit db failed"):
             await AuditLogger.log_event(
-                actor_id="plugin.test",
+                actor_id="module.test",
                 action="permission_request",
                 target="filesystem.read_assets",
             )
@@ -59,7 +59,7 @@ async def test_audit_logger_schedule_event_is_best_effort():
         AsyncMock(side_effect=RuntimeError("audit db failed")),
     ) as log_event:
         AuditLogger.schedule_event(
-            actor_id="plugin.test",
+            actor_id="module.test",
             action="permission_request",
             target="filesystem.read_assets",
         )

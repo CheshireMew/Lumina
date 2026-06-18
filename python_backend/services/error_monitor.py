@@ -8,7 +8,7 @@ Usage:
     from services.error_monitor import error_monitor, track_error
     
     # Track an error
-    track_error(exception, context={"plugin_id": "my_plugin"})
+    track_error(exception, context={"module_id": "my_capability"})
     
     # Get stats
     stats = error_monitor.get_stats()
@@ -86,7 +86,7 @@ class ErrorMonitor:
         
         Args:
             exception: The exception that occurred
-            context: Additional context (plugin_id, service, etc.)
+            context: Additional context (module_id, service, etc.)
             include_traceback: Whether to store traceback string
         """
         now = time.time()

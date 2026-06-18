@@ -87,21 +87,16 @@ class CapabilityModuleFactory:
 
     @staticmethod
     def create_manifest(
-        plugin_id: str = "test.capability",
+        module_id: str = "test.capability",
         version: str = "1.0.0",
-        permissions: List[str] = None
     ) -> Dict:
         """Create a capability manifest"""
-        if permissions is None:
-            permissions = ["event.subscribe"]
-
         return {
-            "id": plugin_id,
+            "id": module_id,
             "name": "Test Capability",
             "version": version,
             "description": "A test capability module",
             "author": "Test Author",
-            "permissions": permissions,
             "entry_point": "module.py",
             "min_lumina_version": "0.1.0"
         }

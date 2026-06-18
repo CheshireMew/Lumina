@@ -3,9 +3,6 @@ api_version: "1.0"
 kind: processor
 capability: chat.post_processor
 runtime_target: main
-permissions:
-  - event.subscribe
-  - event.emit
 config_schema:
   tag_pattern: "\\[(joy|happy|sad|angry|surprised|neutral|thinking|embarrassed)\\]"
   strip_tags: false

@@ -128,6 +128,7 @@ class CapabilitiesConfig(BaseModel):
     desired_state: Dict[str, bool] = Field(default_factory=dict)
     selected_providers: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_SELECTED_PROVIDERS))
     prewarm_core: bool = Field(default=True)
+    supervise_workers: bool = Field(default=False)
     settings: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
     def is_enabled(self, provider_id: str) -> bool:

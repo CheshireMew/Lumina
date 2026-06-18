@@ -222,7 +222,6 @@ class WorkerControlClient:
                         capability=p.get("capability") or p.get("group_id"),
                         capabilities=p.get("capabilities", []),
                         runtime_target=p.get("runtime_target"),
-                        permissions=p.get("permissions", []),
                         config_schema=p.get("config_schema"),
                         current_config=p.get("current_config"),
                         error=p.get("error"),

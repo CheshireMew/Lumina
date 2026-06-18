@@ -89,7 +89,7 @@ class WorkerRuntimeHost:
             ],
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-Plugin-ID"],
+            allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-Provider-ID"],
         )
 
     async def startup(self, app: FastAPI):
@@ -97,7 +97,7 @@ class WorkerRuntimeHost:
         self.logger.info("Loaded capability: %s", self.current_capability.name)
 
         await self._initialize_capability(app)
-        await self._start_worker_plugin_kernel()
+        await self._start_worker_capability_kernel()
 
         runtime_state_provider = self._start_status_reporter(app)
         await self._start_config_watcher(app)
@@ -137,16 +137,16 @@ class WorkerRuntimeHost:
         await self.current_capability.on_startup(app)
 
     def _initialize_container_services(self):
-        from core.capability_packages import CapabilityPackageRegistry
+        from core.worker_runtimes import WorkerRuntimeRegistry
         from core.events import init_event_bus
         from services.capability_registry import CapabilityRegistry
 
         self.container.set_config(app_settings)
         self.container.set_event_bus(init_event_bus())
         self.container.set_capability_registry(CapabilityRegistry())
-        self.container.set_capability_package_registry(CapabilityPackageRegistry())
+        self.container.set_worker_runtime_registry(WorkerRuntimeRegistry())
 
-    async def _start_worker_plugin_kernel(self):
+    async def _start_worker_capability_kernel(self):
         from services.capability_module_manager import CapabilityModuleManager
 
         worker_module_manager = CapabilityModuleManager(

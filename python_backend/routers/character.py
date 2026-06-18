@@ -1,7 +1,7 @@
 """Single character router."""
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from routers.deps import get_character_service
 from schemas.character import CharacterConfig
@@ -12,10 +12,13 @@ router = APIRouter(prefix="/character", tags=["Character"])
 
 
 @router.get("/config", response_model=CharacterConfig)
-async def get_character_config(character_service=Depends(get_character_service)):
+async def get_character_config(
+    request: Request,
+    character_service=Depends(get_character_service),
+):
     """Get the single active character config."""
     try:
-        return character_service.load_config()
+        return character_service.load_config(base_url=str(request.base_url))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

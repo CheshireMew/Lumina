@@ -29,20 +29,3 @@ class ChatTurnEventAdapterBootstrapper(Bootstrapper):
         logger.info("✅ Chat turn event adapter initialized")
 
 
-class MCPHostBootstrapper(Bootstrapper):
-    """
-    Initialize MCP (Model Context Protocol) Host.
-    Provides tool execution and context management.
-    """
-    
-    @property
-    def name(self) -> str:
-        return "MCPHost"
-    
-    async def bootstrap(self, container: Any):
-        from services.mcp_host import MCPHost
-
-        # [Architecture 5.0] Inject ProcessManager for Governance
-        pm = container.get_process_manager()
-        container.set_mcp_host(MCPHost(container.get_soul(), process_manager=pm))
-        logger.info("🔌 MCP Host Initialized (Start Disabled)")

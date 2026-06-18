@@ -22,21 +22,21 @@ logger = logging.getLogger("VoiceprintRouter")
 router = APIRouter(prefix="/capabilities/voiceprint", tags=["Voiceprint"])
 
 
-def _voiceprint_package_status():
+def _voiceprint_runtime_status():
     from services.container import services
 
-    registry = services.get_capability_package_registry()
+    registry = services.get_worker_runtime_registry()
     return registry.resolve("voiceprint-runtime")
 
 
 def _ensure_voiceprint_available():
-    snapshot = _voiceprint_package_status()
+    snapshot = _voiceprint_runtime_status()
     if snapshot is not None and snapshot.status != "ready":
         raise HTTPException(
             status_code=503,
             detail={
                 "state": snapshot.status,
-                "packageId": "voiceprint-runtime",
+                "runtimeId": "voiceprint-runtime",
                 "message": "声纹能力未安装，可在需要时安装",
             },
         )

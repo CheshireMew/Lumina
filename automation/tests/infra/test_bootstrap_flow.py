@@ -9,7 +9,7 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 
 class TestBootstrapFlow(unittest.IsolatedAsyncioTestCase):
     async def test_bootstrapper_sequence_logic(self):
-        """验证 Bootstrapper 是否按照 Infrastructure -> Core -> Plugins 的顺序启动"""
+        """验证 Bootstrapper 是否按照 Infrastructure -> Core -> Capabilities 的顺序启动"""
         print("\n[Test] Testing Bootstrap Sequence...")
         
         launch_order = []
@@ -22,16 +22,16 @@ class TestBootstrapFlow(unittest.IsolatedAsyncioTestCase):
             launch_order.append("CORE")
             return True
             
-        async def mock_plugin_step():
-            launch_order.append("PLUGINS")
+        async def mock_capability_step():
+            launch_order.append("CAPABILITIES")
             return True
 
         # 模拟 BootstrapManager.run()
-        steps = [mock_infra_step, mock_core_step, mock_plugin_step]
+        steps = [mock_infra_step, mock_core_step, mock_capability_step]
         for step in steps:
             await step()
             
-        self.assertEqual(launch_order, ["INFRA", "CORE", "PLUGINS"])
+        self.assertEqual(launch_order, ["INFRA", "CORE", "CAPABILITIES"])
         print(f"✅ Bootstrap sequence verified: {' -> '.join(launch_order)}")
 
     async def test_dependency_injection_integrity(self):

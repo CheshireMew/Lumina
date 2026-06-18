@@ -3,9 +3,7 @@ api_version: "1.0"
 kind: processor
 capability: stt
 runtime_target: worker:stt
-package: voiceprint-runtime
-permissions:
-  - filesystem.read_assets
+runtime: voiceprint-runtime
 config_schema:
   voiceprint_threshold: 0.6
 provides:

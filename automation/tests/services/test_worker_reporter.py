@@ -30,7 +30,7 @@ async def test_force_report_uses_lifecycle_bus_connection_contract():
     ):
         reporter = WorkerStatusReporter(
             worker_id="worker:test",
-            state_provider=lambda: [{"id": "plugin.test", "name": "Plugin Test"}],
+            state_provider=lambda: [{"id": "module.test", "name": "Module Test"}],
             port=8001,
         )
 

@@ -19,7 +19,7 @@ SERVICES = {
 async def test_memory_leak_detection():
     """使用 tracemalloc 监控连续请求下的内存增长"""
     # 注意：tracemalloc 主要监控当前进程，但我们要监控的是远程服务。
-    # 所以这个测试主要监控客户端内存泄露，如果要监控服务端，需要服务端暴露 /debug/memory 接口。
+    # 所以这个测试主要监控客户端内存泄露；服务端内存监控应走明确的 runtime/metrics 接口。
     # 鉴于无法修改服务端，我们将重点放在服务端对压力请求的响应稳定性和耗时增长上。
     
     url = f"{SERVICES['memory']}/companion/message"

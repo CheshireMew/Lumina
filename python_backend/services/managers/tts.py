@@ -2,47 +2,19 @@
 import logging
 import inspect
 import gc
-from pathlib import Path
+from capability_modules.tts_edge.drivers.tts.edge_tts_driver import EdgeTTSDriver
 from core.interfaces.driver import BaseTTSDriver
-from core.runtime import runtime_target_for_capability
 
-from .driver_loader import DriverLoader, allow_extension_driver
 from .provider_host import ProviderHostManager
 
 logger = logging.getLogger("TTSManager")
 
-class TTSPluginManager(ProviderHostManager):
+class TTSProviderManager(ProviderHostManager):
     def __init__(self, config):
         super().__init__(config=config, capability="tts")
 
     async def load_drivers(self):
-        # Dynamic loading via DriverLoader.
-        try:
-            base_dir = Path(__file__).resolve().parents[2]
-
-            modules_root = base_dir / "capability_modules"
-
-            if modules_root.exists():
-                logger.info(f"Scanning capability modules for TTS drivers in: {modules_root}")
-                for ext_path in modules_root.iterdir():
-                    if ext_path.is_dir():
-                         ext_drivers_dir = ext_path / "drivers" / "tts"
-                         if ext_drivers_dir.exists():
-                             allowed, manifest = allow_extension_driver(
-                                 ext_path / "manifest.yaml",
-                                 capability="tts",
-                                 runtime_target=runtime_target_for_capability("tts"),
-                             )
-                             if not allowed:
-                                 continue
-                             logger.info(f"Scanning Extension Drivers: {ext_drivers_dir}")
-                             ext_loaded = DriverLoader.load_plugins(str(ext_drivers_dir), BaseTTSDriver)
-                             for d in ext_loaded:
-                                 logger.info(f"📦 Loaded Extension Driver from {ext_path.name}: {d.id} ({d.name})")
-                                 self.register_driver(d)
-            
-        except Exception as e:
-            logger.error(f"Failed to load dynamic TTS drivers: {e}")
+        self.register_driver(EdgeTTSDriver())
 
     async def activate_startup_driver(self):
         target_provider = self.resolve_startup_driver_id()

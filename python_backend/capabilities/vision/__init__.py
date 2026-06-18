@@ -3,7 +3,7 @@ import logging
 from typing import Callable, List, Dict, Any
 from fastapi import FastAPI
 from core.interfaces.capability import IWorkerCapability
-from .manager import VisionPluginManager
+from .manager import VisionProviderManager
 
 logger = logging.getLogger("VisionCapability")
 
@@ -32,7 +32,7 @@ class Capability(IWorkerCapability):
         def resolve_model_name(feature: str) -> str:
             return container.get_llm_manager().get_model_name(feature)
 
-        manager = VisionPluginManager(
+        manager = VisionProviderManager(
             config=container.get_config(),
             model_name_resolver=resolve_model_name,
         )

@@ -122,7 +122,6 @@ class ProviderHostManager:
             "active_status": active_status,
             "active_in_group": is_active,
             "group_policy": "exclusive",
-            "permissions": list(driver.permissions or []),
             "config_schema": driver.config_schema,
             "current_config": self.config.get_provider_settings(provider_id),
             "is_driver": True,

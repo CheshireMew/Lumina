@@ -11,7 +11,7 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 
 @pytest.mark.anyio
 async def test_provider_config_service_bootstrap_failure_propagates(monkeypatch):
-    from core.bootstrap.services import ProviderConfigServicesBootstrapper
+    from core.bootstrap.services import ProviderConfigBootstrapper
     from services.provider_config_service import ProviderConfigService
 
     class Container:
@@ -22,13 +22,13 @@ async def test_provider_config_service_bootstrap_failure_propagates(monkeypatch)
             self.provider_config_service = provider_config_service
 
     def fail_init(self, container):
-        raise RuntimeError("plugin service init failed")
+        raise RuntimeError("provider config service init failed")
 
     monkeypatch.setattr(ProviderConfigService, "__init__", fail_init)
 
     container = Container()
-    with pytest.raises(RuntimeError, match="plugin service init failed"):
-        await ProviderConfigServicesBootstrapper().bootstrap(container)
+    with pytest.raises(RuntimeError, match="provider config service init failed"):
+        await ProviderConfigBootstrapper().bootstrap(container)
 
     assert container.provider_config_service is None
 
@@ -48,7 +48,7 @@ async def test_memory_bootstrap_connection_failure_propagates(monkeypatch):
                 memory=SimpleNamespace(model_dump=lambda: {}),
             )
 
-        def get_capability_package_registry(self):
+        def get_worker_runtime_registry(self):
             registry = MagicMock()
             registry.resolve.return_value = None
             return registry

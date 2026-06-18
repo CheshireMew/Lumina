@@ -6,8 +6,8 @@ from core.runtime import resolve_runtime_port, runtime_target_for_capability
 logger = logging.getLogger("Bootstrap.Services")
 
 
-def _register_worker_service(pm, config, package_registry, package_id: str, capability: str):
-    snapshot = package_registry.resolve(package_id)
+def _register_worker_service(pm, config, runtime_registry, runtime_id: str, capability: str):
+    snapshot = runtime_registry.resolve(runtime_id)
     if not snapshot or snapshot.status != "ready" or not snapshot.entry_arguments:
         return
 
@@ -31,22 +31,21 @@ class CoreServicesBootstrapper(Bootstrapper):
     def name(self) -> str: return "Core Services"
 
     async def bootstrap(self, container):
-        from core.capability_packages import CapabilityPackageRegistry
         from services.process_manager import ProcessManager
         from services.capability_registry import CapabilityRegistry
         from services.character_service import CharacterService
         # from app_config import config # Global import removed
-        package_registry = CapabilityPackageRegistry()
-        pm = ProcessManager(package_registry)
+        runtime_registry = container.get_worker_runtime_registry()
+        pm = ProcessManager(runtime_registry)
         
         # [Architecture 5.0] Register Core Services
         config = container.get_config()
-        _register_worker_service(pm, config, package_registry, "stt-runtime", "stt")
-        _register_worker_service(pm, config, package_registry, "tts-runtime", "tts")
-        _register_worker_service(pm, config, package_registry, "vision-runtime", "vision")
+        _register_worker_service(pm, config, runtime_registry, "stt-runtime", "stt")
+        _register_worker_service(pm, config, runtime_registry, "tts-runtime", "tts")
+        _register_worker_service(pm, config, runtime_registry, "vision-runtime", "vision")
         
         container.set_process_manager(pm)
-        container.set_capability_package_registry(package_registry)
+        container.set_worker_runtime_registry(runtime_registry)
         container.set_capability_registry(CapabilityRegistry())
         # 1. LLM
         from llm.manager import LLMManager
@@ -66,7 +65,6 @@ class CoreServicesBootstrapper(Bootstrapper):
 
         container.set_character_service(CharacterService(
             soul_service=container.get_soul(),
-            package_registry=package_registry,
         ))
         
         # 3. Session

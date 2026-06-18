@@ -36,7 +36,6 @@ async def test_voiceprint_chain():
             kind="processor",
             capability="stt",
             runtime_target="worker:stt",
-            permissions=[],
             config_schema={},
             provides=[],
         )

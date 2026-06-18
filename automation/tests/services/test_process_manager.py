@@ -16,8 +16,8 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
 
 
-class EmptyCapabilityPackageRegistry:
-    def package_for_capability(self, capability: str):
+class EmptyWorkerRuntimeRegistry:
+    def runtime_for_capability(self, capability: str):
         return None
 
     def should_auto_start(self, capability: str) -> bool:
@@ -27,7 +27,7 @@ class EmptyCapabilityPackageRegistry:
 def build_process_manager():
     from services.process_manager import ProcessManager
 
-    return ProcessManager(EmptyCapabilityPackageRegistry())
+    return ProcessManager(EmptyWorkerRuntimeRegistry())
 
 
 class TestProcessManager(unittest.TestCase):
@@ -49,13 +49,13 @@ class TestProcessManager(unittest.TestCase):
         self.assertIsInstance(manager.registry, dict)
         print("✅ ProcessManager initialization verified")
 
-    def test_process_manager_requires_package_registry(self):
+    def test_process_manager_requires_runtime_registry(self):
         """Test ProcessManager refuses half-initialized runtime dependencies"""
         from services.process_manager import ProcessManager
 
         with self.assertRaises(ValueError):
             ProcessManager(None)
-        print("✅ ProcessManager package registry requirement verified")
+        print("✅ ProcessManager runtime registry requirement verified")
 
     def test_process_manager_register_service_def(self):
         """Test registering a service definition"""
@@ -76,21 +76,6 @@ class TestProcessManager(unittest.TestCase):
 
         self.assertEqual(manager.registry["test_service"]["health_path"], "/custom/health")
         print("✅ ProcessManager set health path verified")
-
-    def test_process_manager_register_mcp_client(self):
-        """Test registering an MCP client"""
-        manager = build_process_manager()
-
-        # Mock MCP client
-        mock_client = MagicMock()
-        mock_client.name = "test_mcp"
-        mock_client.pid = 12345
-
-        manager.register_mcp_client(mock_client)
-
-        self.assertIn("test_mcp", manager.workers)
-        self.assertEqual(manager.workers["test_mcp"], mock_client)
-        print("✅ ProcessManager register MCP client verified")
 
     def test_process_manager_check_port_open(self):
         """Test port availability check"""

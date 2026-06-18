@@ -76,7 +76,7 @@ def test_service_container_uninitialized_error():
         container.get_process_manager()
 
     with pytest.raises(ServiceNotInitializedError):
-        container.get_capability_package_registry()
+        container.get_worker_runtime_registry()
 
     with pytest.raises(ServiceNotInitializedError):
         container.get_capability_registry()

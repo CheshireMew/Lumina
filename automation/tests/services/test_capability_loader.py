@@ -19,7 +19,6 @@ def make_manifest(module_dir: Path, module_id: str = "test.module") -> Capabilit
         kind="extension",
         capability="chat.post_processor",
         runtime_target="main",
-        permissions=[],
         path=str(module_dir),
     )
 
@@ -42,16 +41,16 @@ class Capability(CapabilityModule):
 
 
 def test_capability_loader_supports_relative_imports(tmp_path):
-    (tmp_path / "helper.py").write_text('PLUGIN_NAME = "Relative Plugin"\n', encoding="utf-8")
+    (tmp_path / "helper.py").write_text('MODULE_NAME = "Relative Module"\n', encoding="utf-8")
     (tmp_path / "module.py").write_text(
         """
 from core.interfaces.module import CapabilityModule
-from .helper import PLUGIN_NAME
+from .helper import MODULE_NAME
 
 class Capability(CapabilityModule):
     def get_metadata(self):
         data = super().get_metadata()
-        data["name"] = PLUGIN_NAME
+        data["name"] = MODULE_NAME
         return data
 """,
         encoding="utf-8",
@@ -59,7 +58,7 @@ class Capability(CapabilityModule):
 
     capability = CapabilityModuleLoader().instantiate(make_manifest(tmp_path, "test.relative"))
 
-    assert capability.get_metadata()["name"] == "Relative Plugin"
+    assert capability.get_metadata()["name"] == "Relative Module"
 
 
 def test_capability_loader_requires_module_file(tmp_path):

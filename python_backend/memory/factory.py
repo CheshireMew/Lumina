@@ -1,10 +1,9 @@
 
-import os
 import logging
 from typing import Any
 
 from core.interfaces.driver import BaseMemoryDriver
-from services.managers.driver_loader import DriverLoader
+from capability_modules.memory_postgres.drivers.memory.postgres_driver import PostgresDriver
 
 logger = logging.getLogger("memory.factory")
 
@@ -12,8 +11,11 @@ logger = logging.getLogger("memory.factory")
 class MemoryDriverFactory:
     """
     Factory to create and verify Memory Drivers.
-    Encapsulates dynamic loading logic to separate it from Business Logic.
     """
+
+    _drivers = {
+        "driver.memory.postgres": PostgresDriver,
+    }
     
     @staticmethod
     def create_driver(provider_id: str, driver_config: dict[str, Any] | None = None) -> BaseMemoryDriver:
@@ -33,39 +35,21 @@ class MemoryDriverFactory:
         try:
             if not provider_id:
                 raise ValueError("Memory provider id is required.")
-            target_provider = provider_id
-            
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            modules_dir = os.path.abspath(os.path.join(current_dir, "..", "capability_modules"))
+            factory = MemoryDriverFactory._drivers.get(provider_id)
+            if factory is None:
+                available = ", ".join(sorted(MemoryDriverFactory._drivers))
+                raise ImportError(
+                    f"Configured memory provider '{provider_id}' is not available. "
+                    f"Available providers: {available}"
+                )
 
-            drivers_dirs = []
-
-            if os.path.exists(modules_dir):
-                for module_name in os.listdir(modules_dir):
-                    mem_driver_path = os.path.join(modules_dir, module_name, "drivers", "memory")
-                    if os.path.isdir(mem_driver_path):
-                        drivers_dirs.append(mem_driver_path)
-
-            loaded_drivers = []
-            for d_dir in drivers_dirs:
-                loaded_drivers.extend(DriverLoader.load_plugins(d_dir, BaseMemoryDriver))
-            
-            if not loaded_drivers:
-                logger.error("No valid memory drivers found in capability modules.")
-                raise ImportError("No memory drivers available.")
-
-            for d in loaded_drivers:
-                if d.id == target_provider:
-                    if driver_config is not None:
-                        d.load_config(driver_config)
-                    logger.info(f"[MemoryFactory] Selected Driver: {d.name} ({d.id})")
-                    return d
-
-            available = ", ".join(sorted(d.id for d in loaded_drivers))
-            raise ImportError(
-                f"Configured memory provider '{target_provider}' is not available. "
-                f"Available providers: {available}"
-            )
+            driver = factory()
+            if not isinstance(driver, BaseMemoryDriver):
+                raise TypeError(f"Memory driver '{provider_id}' is not a BaseMemoryDriver")
+            if driver_config is not None:
+                driver.load_config(driver_config)
+            logger.info(f"[MemoryFactory] Selected Driver: {driver.name} ({driver.id})")
+            return driver
 
         except Exception as e:
             logger.critical(f"[MemoryFactory] Driver Creation Failed: {e}")

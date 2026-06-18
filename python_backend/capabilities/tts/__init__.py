@@ -5,7 +5,7 @@ from typing import Callable, List, Dict, Any
 from fastapi import FastAPI
 from core.interfaces.capability import IWorkerCapability
 from core.runtime import resolve_contract_url, runtime_target_for_capability
-from services.managers.tts import TTSPluginManager
+from services.managers.tts import TTSProviderManager
 from .routes import router as tts_router
 from . import globals as tts_globals
 from app_config import config as app_settings
@@ -29,7 +29,7 @@ class Capability(IWorkerCapability):
         tts_globals.http_client = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
         
         # 2. Initialize Manager
-        manager = TTSPluginManager(config=app_settings)
+        manager = TTSProviderManager(config=app_settings)
         await manager.register_drivers()
         
         # 3. Register to Container

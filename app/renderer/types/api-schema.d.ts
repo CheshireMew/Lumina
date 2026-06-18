@@ -4,7 +4,42 @@
  */
 
 export interface paths {
-    "/llm-mgmt/providers": {
+    "/companion/message": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Companion Message */
+        post: operations["send_companion_message_companion_message_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Llm Runtime Settings */
+        get: operations["get_llm_runtime_settings_settings_llm_runtime_get"];
+        /** Update Llm Runtime Settings */
+        put: operations["update_llm_runtime_settings_settings_llm_runtime_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/providers": {
         parameters: {
             query?: never;
             header?: never;
@@ -12,7 +47,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Providers */
-        get: operations["get_providers_llm_mgmt_providers_get"];
+        get: operations["get_providers_settings_llm_providers_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,7 +56,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/llm-mgmt/providers/{provider_id}": {
+    "/settings/llm/providers/{provider_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -31,14 +66,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Update Provider Config */
-        post: operations["update_provider_config_llm_mgmt_providers__provider_id__post"];
+        post: operations["update_provider_config_settings_llm_providers__provider_id__post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/llm-mgmt/routes": {
+    "/settings/llm/routes": {
         parameters: {
             query?: never;
             header?: never;
@@ -46,7 +81,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Routes */
-        get: operations["get_routes_llm_mgmt_routes_get"];
+        get: operations["get_routes_settings_llm_routes_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -55,7 +90,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/llm-mgmt/routes/{feature}": {
+    "/settings/llm/routes/{feature}": {
         parameters: {
             query?: never;
             header?: never;
@@ -68,14 +103,14 @@ export interface paths {
          * Update Route
          * @description Payload: { "provider_id": "...", "model": "...", "temperature": ..., "top_p": ..., "presence_penalty": ..., "frequency_penalty": ... }
          */
-        post: operations["update_route_llm_mgmt_routes__feature__post"];
+        post: operations["update_route_settings_llm_routes__feature__post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/llm-mgmt/params/{feature}": {
+    "/settings/llm/params/{feature}": {
         parameters: {
             query?: never;
             header?: never;
@@ -86,7 +121,7 @@ export interface paths {
          * Get Feature Params
          * @description Fetch all generation parameters for a specific feature, with dynamic soul-based adjustments
          */
-        get: operations["get_feature_params_llm_mgmt_params__feature__get"];
+        get: operations["get_feature_params_settings_llm_params__feature__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -95,7 +130,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/models/list": {
+    "/settings/llm/models/list": {
         parameters: {
             query?: never;
             header?: never;
@@ -106,310 +141,7 @@ export interface paths {
          * List Models
          * @description List available LLM models for frontend configuration
          */
-        get: operations["list_models_models_list_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/chat/completions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Chat Completions
-         * @description Unified Chat Endpoint (Phase 19).
-         *     Delegates to UnifiedChatProcessor for RAG, Tools, and LLM.
-         */
-        post: operations["chat_completions_v1_chat_completions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/tables": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Tables
-         * @description List allowed tables for inspection.
-         */
-        get: operations["get_tables_admin_tables_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/table/{table_name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Table Data
-         * @description Get data from a table (Safe Read via QueryBuilder).
-         */
-        get: operations["get_table_data_admin_table__table_name__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/query": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Safe Query
-         * @description Execute a Safe SELECT Query.
-         */
-        post: operations["safe_query_admin_query_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/record/{table_name}/{record_safe_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Record
-         * @description Safe Update (Merge).
-         */
-        put: operations["update_record_admin_record__table_name___record_safe_id__put"];
-        post?: never;
-        /**
-         * Delete Record
-         * @description Safe Delete Record.
-         */
-        delete: operations["delete_record_admin_record__table_name___record_safe_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/record/{table_name}/new": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Record
-         * @description Create New Record.
-         */
-        post: operations["create_record_admin_record__table_name__new_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/debug/errors": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Error Stats
-         * @description Get error monitoring statistics.
-         */
-        get: operations["get_error_stats_admin_debug_errors_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/debug/errors/{error_type}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Errors By Type
-         * @description Get recent errors of a specific type.
-         */
-        get: operations["get_errors_by_type_admin_debug_errors__error_type__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/debug/system": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get System Stats
-         * @description Get system-wide statistics.
-         */
-        get: operations["get_system_stats_admin_debug_system_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/debug/brain_dump": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Brain Dump
-         * @description Return memory data used by local inspection panels.
-         */
-        get: operations["brain_dump_debug_brain_dump_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/debug/processing_status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Processing Status
-         * @description Return lightweight memory processing counters for inspection panels.
-         */
-        get: operations["processing_status_debug_processing_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/config/llm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Llm Runtime Settings */
-        get: operations["get_llm_runtime_settings_config_llm_get"];
-        /** Update Llm Runtime Settings */
-        put: operations["update_llm_runtime_settings_config_llm_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Health Check
-         * @description Health Check
-         */
-        get: operations["health_check_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/network": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Network Config
-         * @description Returns network port configuration for frontend sync
-         */
-        get: operations["get_network_config_network_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/soul/{character_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Soul Data
-         * @description Get character personality data without switching the active runtime.
-         */
-        get: operations["get_soul_data_soul__character_id__get"];
+        get: operations["list_models_settings_llm_models_list_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -467,10 +199,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Add Memory
-         * @description Add memory to the active memory store
-         */
+        /** Add Memory */
         post: operations["add_memory_memory_add_post"];
         delete?: never;
         options?: never;
@@ -487,10 +216,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Search Memory
-         * @description Search memory
-         */
+        /** Search Memory */
         post: operations["search_memory_memory_search_post"];
         delete?: never;
         options?: never;
@@ -507,10 +233,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Search Memory Hybrid
-         * @description Hybrid memory search (vector + fulltext)
-         */
+        /** Search Memory Hybrid */
         post: operations["search_memory_hybrid_memory_search_hybrid_post"];
         delete?: never;
         options?: never;
@@ -527,10 +250,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Clear Context
-         * @description Clear Short-Term Context (Session History)
-         */
+        /** Clear Context */
         post: operations["clear_context_memory_context_clear_post"];
         delete?: never;
         options?: never;
@@ -545,10 +265,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get All Memories
-         * @description Get all memories
-         */
+        /** Get All Memories */
         get: operations["get_all_memories_memory_all_get"];
         put?: never;
         post?: never;
@@ -565,11 +282,162 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Inspiration
-         * @description Get random memories for inspiration
-         */
+        /** Get Inspiration */
         get: operations["get_inspiration_memory_inspiration_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memory/inspection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect Memory */
+        get: operations["inspect_memory_memory_inspection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memory/inspection/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect Processing Status */
+        get: operations["inspect_processing_status_memory_inspection_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memory/inspection/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect Tables */
+        get: operations["inspect_tables_memory_inspection_tables_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memory/inspection/table/{table_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect Table */
+        get: operations["inspect_table_memory_inspection_table__table_name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memory/inspection/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inspect Query */
+        post: operations["inspect_query_memory_inspection_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memory/inspection/record/{table_name}/{record_safe_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Inspection Record */
+        put: operations["update_inspection_record_memory_inspection_record__table_name___record_safe_id__put"];
+        post?: never;
+        /** Delete Inspection Record */
+        delete: operations["delete_inspection_record_memory_inspection_record__table_name___record_safe_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memory/inspection/record/{table_name}/new": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Inspection Record */
+        post: operations["create_inspection_record_memory_inspection_record__table_name__new_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runtime/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Health Check */
+        get: operations["health_check_runtime_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runtime/network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Network Config */
+        get: operations["get_network_config_runtime_network_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -623,6 +491,87 @@ export interface paths {
         get: operations["get_runtime_capability_runtime_capabilities__capability__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/capabilities/voiceprint/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Profiles
+         * @description List all voiceprint profiles.
+         */
+        get: operations["list_profiles_capabilities_voiceprint_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/capabilities/voiceprint/toggle/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Toggle Profile
+         * @description Toggle a voiceprint profile's enabled status.
+         */
+        post: operations["toggle_profile_capabilities_voiceprint_toggle__name__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/capabilities/voiceprint/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Profile
+         * @description Delete a voiceprint profile.
+         */
+        delete: operations["delete_profile_capabilities_voiceprint__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/capabilities/voiceprint/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Voiceprint
+         * @description Upload audio to register a new voiceprint.
+         *     Proxies to STT Worker for embedding generation.
+         */
+        post: operations["upload_voiceprint_capabilities_voiceprint_upload_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -713,7 +662,7 @@ export interface paths {
         };
         /**
          * List Models
-         * @description List available Live2D models via Avatar Server
+         * @description List available avatar models.
          */
         get: operations["list_models_character_models_get"];
         put?: never;
@@ -724,81 +673,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/capabilities/voiceprint/list": {
+    "/stt/health": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Profiles
-         * @description List all voiceprint profiles.
-         */
-        get: operations["list_profiles_capabilities_voiceprint_list_get"];
+        /** Health */
+        get: operations["health_stt_health_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/capabilities/voiceprint/toggle/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Toggle Profile
-         * @description Toggle a voiceprint profile's enabled status.
-         */
-        post: operations["toggle_profile_capabilities_voiceprint_toggle__name__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/capabilities/voiceprint/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Profile
-         * @description Delete a voiceprint profile.
-         */
-        delete: operations["delete_profile_capabilities_voiceprint__name__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/capabilities/voiceprint/upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Upload Voiceprint
-         * @description Upload audio to register a new voiceprint.
-         *     Proxies to STT Worker for embedding generation.
-         */
-        post: operations["upload_voiceprint_capabilities_voiceprint_upload_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1098,11 +983,36 @@ export interface components {
         };
         /** Body_upload_voiceprint_capabilities_voiceprint_upload_post */
         Body_upload_voiceprint_capabilities_voiceprint_upload_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
+        };
+        /** CharacterAvatarConfig */
+        CharacterAvatarConfig: {
+            /**
+             * Type
+             * @default live2d
+             */
+            type: string;
+            /**
+             * Model
+             * @default Hiyori
+             */
+            model: string;
+            /**
+             * Modelurl
+             * @default
+             */
+            modelUrl: string;
+            /**
+             * Cubismcoreurl
+             * @default
+             */
+            cubismCoreUrl: string;
+            /**
+             * Rendererruntimeurl
+             * @default
+             */
+            rendererRuntimeUrl: string;
         };
         /** CharacterConfig */
         CharacterConfig: {
@@ -1122,11 +1032,7 @@ export interface components {
              * @default
              */
             systemPrompt: string;
-            /**
-             * Modelpath
-             * @default
-             */
-            modelPath: string;
+            avatar?: components["schemas"]["CharacterAvatarConfig"];
             voiceConfig?: components["schemas"]["CharacterVoiceConfig"];
             /**
              * Heartbeatenabled
@@ -1176,49 +1082,6 @@ export interface components {
              */
             pitch: string;
         };
-        /** ChatCompletionRequest */
-        ChatCompletionRequest: {
-            /**
-             * Model
-             * @default gpt-4o-mini
-             */
-            model: string;
-            /** Messages */
-            messages: components["schemas"]["ChatMessage"][];
-            /**
-             * Stream
-             * @default false
-             */
-            stream: boolean;
-            /** Max Tokens */
-            max_tokens?: number | null;
-            /**
-             * Temperature
-             * @default 0.7
-             */
-            temperature: number | null;
-            /** Top P */
-            top_p?: number | null;
-            /** Presence Penalty */
-            presence_penalty?: number | null;
-            /** Frequency Penalty */
-            frequency_penalty?: number | null;
-        };
-        /** ChatMessage */
-        ChatMessage: {
-            /** Role */
-            role: string;
-            /** Content */
-            content: string;
-            /** Name */
-            name?: string | null;
-            /** Tool Calls */
-            tool_calls?: {
-                [key: string]: unknown;
-            }[] | null;
-            /** Tool Call Id */
-            tool_call_id?: string | null;
-        };
         /** ClearContextRequest */
         ClearContextRequest: {
             /** User Id */
@@ -1226,10 +1089,40 @@ export interface components {
             /** Character Id */
             character_id?: string | null;
         };
+        /** CompanionMessageRequest */
+        CompanionMessageRequest: {
+            /** Text */
+            text: string;
+            /**
+             * Session Id
+             * @default 0
+             */
+            session_id: number;
+            /** User Id */
+            user_id?: string | null;
+            /** Character Id */
+            character_id?: string | null;
+            /** User Name */
+            user_name?: string | null;
+            /** Model */
+            model?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** InspectionQueryRequest */
+        InspectionQueryRequest: {
+            /** Query */
+            query: string;
+        };
+        /** InspectionRecordRequest */
+        InspectionRecordRequest: {
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
         };
         /**
          * MessageModel
@@ -1245,163 +1138,22 @@ export interface components {
             /** Name */
             name?: string | null;
         };
-        /**
-         * PluginState
-         * @description [Architecture 6.1] Shared provider state contract.
-         *     Represents the live status of an internal capability provider.
-         */
-        PluginState: {
-            /**
-             * Id
-             * @description Unique provider ID (e.g. system.voiceprint)
-             */
-            id: string;
-            /**
-             * Name
-             * @description Human-readable name
-             */
-            name: string;
-            /**
-             * Description
-             * @description Human-readable description
-             * @default
-             */
-            description: string;
-            /**
-             * Kind
-             * @description Provider kind
-             * @default system
-             */
-            kind: string;
-            /**
-             * Category
-             * @description Capability category (stt, tts, system, tool)
-             * @default other
-             */
-            category: string;
-            /**
-             * Active Status
-             * @description Current runtime lifecycle status
-             * @default unknown
-             * @enum {string}
-             */
-            active_status: "starting" | "ready" | "idle" | "running" | "healthy" | "offline" | "error" | "stopped" | "transitioning" | "unknown";
-            /**
-             * Desired Enabled
-             * @description Controller Intent (True=Enable, False=Disable, None=No Change)
-             */
-            desired_enabled?: boolean | null;
-            /**
-             * Enabled
-             * @description Effective enabled state
-             * @default false
-             */
-            enabled: boolean;
-            /**
-             * Active
-             * @description True when runtime is active
-             * @default false
-             */
-            active: boolean;
-            /**
-             * Active In Group
-             * @description True when selected within an exclusive group
-             * @default false
-             */
-            active_in_group: boolean;
-            /**
-             * Computed Status
-             * @description Aggregated runtime status
-             * @default unknown
-             */
-            computed_status: string;
-            /**
-             * Worker Id
-             * @description ID of the worker process hosting this provider
-             * @default main
-             */
-            worker_id: string;
-            /**
-             * Runtime Target
-             * @description Target Runtime (main, worker:stt, worker:tts, ...)
-             * @default main
-             */
-            runtime_target: string;
-            /**
-             * Endpoint Url
-             * @description Direct provider URL, when applicable
-             */
-            endpoint_url?: string | null;
-            /**
-             * Capabilities
-             * @description List of provided capability strings
-             */
-            capabilities?: string[];
-            /**
-             * Permissions
-             * @description Requested Permissions
-             */
-            permissions?: string[];
-            /**
-             * Current Config
-             * @description Current persisted config
-             */
-            current_config?: {
-                [key: string]: unknown;
-            };
-            /**
-             * Group Id
-             * @description Exclusive grouping ID
-             */
-            group_id?: string | null;
-            /**
-             * Group Policy
-             * @default independent
-             * @enum {string}
-             */
-            group_policy: "exclusive" | "independent";
-            /**
-             * Group Exclusive
-             * @description Exclusive-group flag
-             * @default false
-             */
-            group_exclusive: boolean;
-            /**
-             * Func Tag
-             * @description Display grouping for frontend
-             * @default General
-             */
-            func_tag: string;
-            /**
-             * Tags
-             * @description Display and behavior tags
-             */
-            tags?: string[];
-            /**
-             * Error
-             * @description Last load or runtime error
-             */
-            error?: string | null;
-            /**
-             * Last Updated
-             * Format: date-time
-             */
-            last_updated?: string;
-        };
         /** RuntimeLlmSettings */
         RuntimeLlmSettings: {
             /**
-             * Providertype
-             * @default custom
-             * @enum {string}
+             * Providerid
+             * @default custom_provider
              */
-            providerId?: string;
+            providerId: string;
             /**
              * Apikey
              * @default
              */
             apiKey: string;
-            /** Baseurl */
+            /**
+             * Baseurl
+             * @default
+             */
             baseUrl: string;
             /** Model */
             model: string;
@@ -1435,11 +1187,6 @@ export interface components {
              * @default slide
              */
             overflowStrategy: string;
-        };
-        /** SafeQueryRequest */
-        SafeQueryRequest: {
-            /** Query */
-            query: string;
         };
         /**
          * SearchRequest
@@ -1488,7 +1235,7 @@ export interface components {
             emotion?: string | null;
             /**
              * Engine
-             * @default edge-tts
+             * @default driver.tts.edge
              */
             engine: string;
             /**
@@ -1501,13 +1248,6 @@ export interface components {
              * @default +0Hz
              */
             pitch: string;
-        };
-        /** ToggleRequest */
-        ToggleRequest: {
-            /** Id */
-            id: string;
-            /** Enabled */
-            enabled?: boolean | null;
         };
         /** UnifiedAudioConfig */
         UnifiedAudioConfig: {
@@ -1526,13 +1266,6 @@ export interface components {
             /** Min Speech Frames */
             min_speech_frames?: number | null;
         };
-        /** UpdateRecordRequest */
-        UpdateRecordRequest: {
-            /** Data */
-            data: {
-                [key: string]: unknown;
-            };
-        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1541,6 +1274,10 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -1551,7 +1288,93 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get_providers_llm_mgmt_providers_get: {
+    send_companion_message_companion_message_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanionMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_llm_runtime_settings_settings_llm_runtime_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeLlmSettings"];
+                };
+            };
+        };
+    };
+    update_llm_runtime_settings_settings_llm_runtime_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuntimeLlmSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeLlmSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_providers_settings_llm_providers_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1571,7 +1394,7 @@ export interface operations {
             };
         };
     };
-    update_provider_config_llm_mgmt_providers__provider_id__post: {
+    update_provider_config_settings_llm_providers__provider_id__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1608,7 +1431,7 @@ export interface operations {
             };
         };
     };
-    get_routes_llm_mgmt_routes_get: {
+    get_routes_settings_llm_routes_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1628,7 +1451,7 @@ export interface operations {
             };
         };
     };
-    update_route_llm_mgmt_routes__feature__post: {
+    update_route_settings_llm_routes__feature__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1665,7 +1488,7 @@ export interface operations {
             };
         };
     };
-    get_feature_params_llm_mgmt_params__feature__get: {
+    get_feature_params_settings_llm_params__feature__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1696,7 +1519,7 @@ export interface operations {
             };
         };
     };
-    list_models_models_list_get: {
+    list_models_settings_llm_models_list_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1712,488 +1535,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    chat_completions_v1_chat_completions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatCompletionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_tables_admin_tables_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_table_data_admin_table__table_name__get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                character_id?: string | null;
-            };
-            header?: never;
-            path: {
-                table_name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    safe_query_admin_query_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SafeQueryRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_record_admin_record__table_name___record_safe_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table_name: string;
-                record_safe_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_record_admin_record__table_name___record_safe_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table_name: string;
-                record_safe_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_record_admin_record__table_name__new_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table_name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_error_stats_admin_debug_errors_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_errors_by_type_admin_debug_errors__error_type__get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                error_type: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_system_stats_admin_debug_system_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    brain_dump_debug_brain_dump_get: {
-        parameters: {
-            query?: {
-                character_id?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    processing_status_debug_processing_status_get: {
-        parameters: {
-            query?: {
-                character_id?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_llm_runtime_settings_config_llm_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RuntimeLlmSettings"];
-                };
-            };
-        };
-    };
-    update_llm_runtime_settings_config_llm_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RuntimeLlmSettings"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RuntimeLlmSettings"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    health_check_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_network_config_network_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_soul_data_soul__character_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                character_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2373,7 +1714,7 @@ export interface operations {
     get_all_memories_memory_all_get: {
         parameters: {
             query?: {
-                character_id?: string;
+                character_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -2404,7 +1745,7 @@ export interface operations {
     get_inspiration_memory_inspiration_get: {
         parameters: {
             query?: {
-                character_id?: string;
+                character_id?: string | null;
                 limit?: number;
             };
             header?: never;
@@ -2429,6 +1770,298 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_memory_memory_inspection_get: {
+        parameters: {
+            query?: {
+                character_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_processing_status_memory_inspection_status_get: {
+        parameters: {
+            query?: {
+                character_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_tables_memory_inspection_tables_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    inspect_table_memory_inspection_table__table_name__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                character_id?: string | null;
+            };
+            header?: never;
+            path: {
+                table_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_query_memory_inspection_query_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_inspection_record_memory_inspection_record__table_name___record_safe_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_name: string;
+                record_safe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_inspection_record_memory_inspection_record__table_name___record_safe_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_name: string;
+                record_safe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_inspection_record_memory_inspection_record__table_name__new_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    health_check_runtime_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_network_config_runtime_network_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -2483,6 +2116,125 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_profiles_capabilities_voiceprint_list_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    toggle_profile_capabilities_voiceprint_toggle__name__post: {
+        parameters: {
+            query: {
+                enabled: boolean;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_profile_capabilities_voiceprint__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_voiceprint_capabilities_voiceprint_upload_post: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_voiceprint_capabilities_voiceprint_upload_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -2650,7 +2402,7 @@ export interface operations {
             };
         };
     };
-    list_profiles_capabilities_voiceprint_list_get: {
+    health_stt_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2666,105 +2418,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    toggle_profile_capabilities_voiceprint_toggle__name__post: {
-        parameters: {
-            query: {
-                enabled: boolean;
-            };
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_profile_capabilities_voiceprint__name__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_voiceprint_capabilities_voiceprint_upload_post: {
-        parameters: {
-            query: {
-                name: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_voiceprint_capabilities_voiceprint_upload_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -28,17 +28,14 @@ async def test_lifecycle_subscription():
     mock_container.get_event_bus.return_value = bus
     mock_container.get_capability_registry.return_value = CapabilityRegistry()
     mock_container.get_config.return_value = MagicMock()
-    mock_container.get_capability_package_registry.return_value = MagicMock()
+    mock_container.get_worker_runtime_registry.return_value = MagicMock()
     
     # Instantiate
     manager = CapabilityModuleManager(container=mock_container)
     
     # 2. Mock Heavy Methods to isolate Event Logic
-    manager._load_plugins = MagicMock() # Don't scan disk
-    manager._distribute_plugins = AsyncMock() # Don't network
-    manager._rebuild_index = MagicMock()
-    manager.lifecycle_bus = MagicMock()
-    manager.audit_logger = MagicMock()
+    manager.refresh_manifests = MagicMock() # Don't scan disk
+    manager._emit_all_states = AsyncMock()
     
     # 3. Mock the Target Action
     # We want to verify _on_enable_request calls enable_module
