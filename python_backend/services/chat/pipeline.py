@@ -53,7 +53,7 @@ class ContextBuilderStep(PipelineStep):
 
     async def execute(self, ctx: PipelineContext):
         pack = ctx.context_pack
-        ctx.rag_context = pack.relevant_episodic_memories
+        ctx.rag_context = pack.relevant_memories
         ctx.system_prompt = pack.system_prompt
         sections = pack.prompt_sections()
         if sections:

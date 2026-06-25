@@ -14,9 +14,9 @@
         "rate": "+0%",
         "pitch": "+0Hz"
     },
-    "heartbeat_enabled": true,
+    "heartbeat_enabled": false,
     "proactive_chat_enabled": false,
-    "soul_evolution_enabled": true,
+    "soul_evolution_enabled": false,
     "proactive_threshold_minutes": 5,
     "metadata": {
         "last_update_id": 19,

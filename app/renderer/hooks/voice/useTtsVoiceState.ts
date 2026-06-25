@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { listTtsModels, listTtsVoices } from "../../api/voiceApi";
 import { VoiceOption } from "./types";
 import { normalizeVoices } from "./utils";
 
@@ -12,12 +13,9 @@ export const useTtsVoiceState = (isActive: boolean, ttsBaseUrl: string) => {
 
     const refreshStatus = useCallback(async () => {
         try {
-            const response = await fetch(`${ttsBaseUrl}/models/list`);
-            if (response.ok) {
-                const data = await response.json();
-                setActiveTtsEngines(data.active ? [data.active] : []);
-                hasWarnedTts.current = false;
-            }
+            const data = await listTtsModels(ttsBaseUrl);
+            setActiveTtsEngines(data.active ? [data.active] : []);
+            hasWarnedTts.current = false;
 
         } catch (error) {
             if (!hasWarnedTts.current) {
@@ -32,12 +30,7 @@ export const useTtsVoiceState = (isActive: boolean, ttsBaseUrl: string) => {
         await refreshStatus();
 
         try {
-            const response = await fetch(`${ttsBaseUrl}/voices`);
-            if (!response.ok) {
-                return;
-            }
-
-            const data = await response.json();
+            const data = await listTtsVoices(ttsBaseUrl);
             const voices = normalizeVoices(data);
             setEdgeVoices(voices);
             setGptVoices(voices);

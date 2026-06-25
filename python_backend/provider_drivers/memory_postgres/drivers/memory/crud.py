@@ -4,9 +4,11 @@ from typing import Any, Dict, Optional
 
 import asyncpg
 
-from .sql_utils import sanitize_column_name, sanitize_table_name
+from .query_builder import PostgresQueryBuilder
 
 logger = logging.getLogger("PostgresDriver.Crud")
+
+query_builder = PostgresQueryBuilder()
 
 
 def _normalize_query(sql: str, params: Optional[Dict[str, Any]]):
@@ -32,24 +34,11 @@ def _normalize_query(sql: str, params: Optional[Dict[str, Any]]):
 
 
 async def create(pool: asyncpg.Pool, table: str, data: Dict[str, Any]) -> str:
-    table = sanitize_table_name(table)
-
-    columns = []
-    placeholders = []
-    values = []
-
-    idx = 1
-    for key, value in data.items():
-        sanitize_column_name(key)
-        columns.append(key)
-        placeholders.append(f"${idx}")
-        values.append(value)
-        idx += 1
-
-    query = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join(placeholders)}) RETURNING id"
+    query, params = query_builder.create(table, data)
+    normalized_query, values = _normalize_query(query, params)
     async with pool.acquire() as conn:
         try:
-            result = await conn.fetchval(query, *values)
+            result = await conn.fetchval(normalized_query, *values)
             return str(result)
         except Exception as exc:
             logger.error("Postgres create failed for %s: %s", table, exc)
@@ -57,23 +46,12 @@ async def create(pool: asyncpg.Pool, table: str, data: Dict[str, Any]) -> str:
 
 
 async def update(pool: asyncpg.Pool, table: str, record_id: str, data: Dict[str, Any]) -> bool:
-    table = sanitize_table_name(table)
-
-    sets = []
-    values = []
-    idx = 1
-    for key, value in data.items():
-        sanitize_column_name(key)
-        sets.append(f"{key} = ${idx}")
-        values.append(value)
-        idx += 1
-
-    values.append(record_id)
-    query = f"UPDATE {table} SET {', '.join(sets)} WHERE id = ${idx}"
+    query, params = query_builder.update(table, record_id, data)
+    normalized_query, values = _normalize_query(query, params)
 
     async with pool.acquire() as conn:
         try:
-            await conn.execute(query, *values)
+            await conn.execute(normalized_query, *values)
             return True
         except Exception as exc:
             logger.error("Postgres update failed for %s: %s", record_id, exc)
@@ -81,11 +59,12 @@ async def update(pool: asyncpg.Pool, table: str, record_id: str, data: Dict[str,
 
 
 async def delete(pool: asyncpg.Pool, table: str, record_id: str) -> bool:
-    table = sanitize_table_name(table)
+    query, params = query_builder.delete(table, record_id)
+    normalized_query, values = _normalize_query(query, params)
 
     async with pool.acquire() as conn:
         try:
-            await conn.execute(f"DELETE FROM {table} WHERE id = $1", record_id)
+            await conn.execute(normalized_query, *values)
             return True
         except Exception as exc:
             logger.error("Postgres delete failed for %s: %s", record_id, exc)
@@ -107,9 +86,9 @@ async def mark_memories_hit(pool: asyncpg.Pool, memory_ids: list):
         try:
             await conn.execute(
                 """
-                UPDATE episodic_memory
+                UPDATE memory_items
                 SET hit_count = hit_count + 1,
-                    last_hit_at = NOW()
+                    last_used_at = NOW()
                 WHERE id = ANY($1::uuid[])
                 """,
                 [item for item in memory_ids],

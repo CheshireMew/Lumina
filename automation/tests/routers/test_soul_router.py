@@ -12,7 +12,7 @@ pytestmark = pytest.mark.anyio
 async def test_register_companion_activity_uses_companion_recorder_activity():
     soul = SimpleNamespace(update_last_interaction=MagicMock())
     recorder = CompanionInteractionRecorder(
-        memory_service=SimpleNamespace(log_conversation=AsyncMock()),
+        memory_service=SimpleNamespace(record_turn=AsyncMock()),
         session_manager=SimpleNamespace(add_turn=AsyncMock()),
         soul_service=soul,
     )

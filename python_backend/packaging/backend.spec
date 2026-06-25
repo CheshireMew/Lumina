@@ -51,6 +51,13 @@ def _drop_cuda_runtime(entries):
     return filtered
 
 
+def _keep_cuda_runtime():
+    return (
+        build_target == 'stt-runtime'
+        and os.environ.get('LUMINA_STT_ENABLE_CUDA', '1').lower() not in {'0', 'false', 'no'}
+    )
+
+
 hiddenimports = [
     'uvicorn.logging',
     'uvicorn.loops',
@@ -71,6 +78,9 @@ hiddenimports = [
     'main',
     'model_manager',
     'httpx',
+    'h2',
+    'hpack',
+    'hyperframe',
     'pgvector.asyncpg',
     'pythonosc.udp_client',
 ]
@@ -105,7 +115,7 @@ for pkg in target_worker_runtimes:
     hiddenimports += tmp_ret[2]
 
 target_python_packages = {
-    'stt-runtime': ['faster_whisper', 'webrtcvad', 'sounddevice', 'soundfile', 'sherpa_onnx'],
+    'stt-runtime': ['faster_whisper', 'sounddevice', 'soundfile', 'sherpa_onnx'],
     'tts-runtime': ['edge_tts'],
 }.get(build_target, [])
 for pkg in target_python_packages:
@@ -113,6 +123,9 @@ for pkg in target_python_packages:
     datas += tmp_ret[0]
     binaries += tmp_ret[1]
     hiddenimports += tmp_ret[2]
+
+if build_target == 'stt-runtime':
+    hiddenimports += ['webrtcvad', '_webrtcvad']
 
 target_excludes = {
     'core': [
@@ -147,7 +160,8 @@ target_excludes = {
     ],
 }.get(build_target, [])
 
-binaries = _drop_cuda_runtime(binaries)
+if not _keep_cuda_runtime():
+    binaries = _drop_cuda_runtime(binaries)
 
 if build_target == 'core':
     core_forbidden_fragments = [
@@ -213,7 +227,7 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
+    hookspath=['../hooks'],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
@@ -245,7 +259,8 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
-a.binaries = _drop_cuda_runtime(a.binaries)
+if not _keep_cuda_runtime():
+    a.binaries = _drop_cuda_runtime(a.binaries)
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(

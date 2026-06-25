@@ -6,7 +6,7 @@ import { useAudioPipeline } from "../../hooks/useAudioPipeline";
 import { useCharacterProfile } from "../../hooks/useCharacterProfile";
 import { useChatStream } from "../../hooks/useChatStream";
 import { useGateway } from "../../hooks/useGateway";
-import { GeneralSettingsInput, useSettings } from "../../hooks/useSettings";
+import { GeneralSettingsPatch, useSettings } from "../../hooks/useSettings";
 import { useChatStore } from "../../store/useChatStore";
 import { companionClient } from "./companionClient";
 
@@ -25,7 +25,7 @@ interface CompanionRuntimeContextValue {
     resetSession: () => void;
     saveCharacter: ReturnType<typeof useCharacterProfile>["saveCharacter"];
     updateLLMSettings: ReturnType<typeof useSettings>["updateLLMSettings"];
-    saveGeneralSettings: (next: GeneralSettingsInput) => Promise<void>;
+    saveGeneralSettings: (next: GeneralSettingsPatch) => Promise<void>;
 }
 
 const CompanionRuntimeContext = createContext<CompanionRuntimeContextValue | null>(null);
@@ -148,12 +148,33 @@ export function CompanionRuntimeProvider({
         useChatStore.getState().clearHistory();
     }, [resetStream, setProcessing, setStreaming]);
 
+    const handleSystemStatus = useCallback(
+        (status: string, details: string) => {
+            if (status !== "error") {
+                return;
+            }
+
+            const content = details || "AI response failed.";
+            console.error("[CompanionRuntime] System error:", content);
+            setProcessing(false);
+            setStreaming(false);
+            resetStream();
+            addMessage({
+                role: "system",
+                content,
+                timestamp: Date.now(),
+            });
+        },
+        [addMessage, resetStream, setProcessing, setStreaming],
+    );
+
     const transport = useGateway({
         onChatStart: handleChatStart,
         onChatStream: handleChatStream,
         onChatEnd: handleChatEnd,
         onEmotion: handleEmotion,
         onSessionReset: handleSessionReset,
+        onSystemStatus: handleSystemStatus,
         baseUrl,
         enabled: backendReady,
     });

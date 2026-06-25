@@ -55,5 +55,6 @@ class SenseVoiceDriver(BaseSTTDriver):
             "text": full_text,
             "language": info.language,
             "emotion": getattr(info, 'emotion', None),
+            "provider": getattr(info, 'provider', None),
             "confidence": 1.0 # SenseVoice doesn't give confidence yet?
         }

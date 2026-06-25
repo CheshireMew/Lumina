@@ -1,21 +1,27 @@
 import React, { useEffect, useState } from "react";
-import { Mic, Save, Settings, X } from "lucide-react";
+import { CharacterProfile } from "@core/llm/types";
+import { Fingerprint, Mic, Settings, UserRound, X } from "lucide-react";
 
 import { VoiceManagerData } from "../hooks/useVoiceManager";
-import { GeneralSettingsInput } from "../hooks/useSettings";
+import { GeneralSettingsInput, GeneralSettingsPatch } from "../hooks/useSettings";
+import { CharacterTab } from "./Settings/CharacterTab";
 import { GeneralSettingsPanel } from "./Settings/GeneralSettingsPanel";
 import { VoiceTab } from "./Settings/VoiceTab";
+import { VoiceprintTab } from "./Settings/VoiceprintTab";
 import { useSettingsModalState } from "./Settings/useSettingsModalState";
 
-export type SettingsTab = "general" | "voice";
+export type SettingsTab = "general" | "character" | "voice" | "voiceprint";
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     initialTab?: SettingsTab;
     voiceManagerData: VoiceManagerData;
+    activeCharacter?: CharacterProfile;
     currentSettings: GeneralSettingsInput;
-    onSave: (settings: GeneralSettingsInput) => Promise<void>;
+    apiBaseUrl: string;
+    onSaveCharacter: (character: CharacterProfile) => Promise<boolean>;
+    onChange: (settings: GeneralSettingsPatch) => Promise<void>;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -23,8 +29,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose,
     initialTab = "general",
     voiceManagerData,
+    activeCharacter,
     currentSettings,
-    onSave,
+    apiBaseUrl,
+    onSaveCharacter,
+    onChange,
 }) => {
     const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
     const {
@@ -34,15 +43,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         setHighDpiEnabled,
         backgroundImage,
         setBackgroundImage,
-        isSaving,
         fileInputRef,
         handleBackgroundFileSelect,
-        handleSave,
     } = useSettingsModalState({
-        isOpen,
         currentSettings,
-        onSave,
-        onClose,
+        onChange,
     });
 
     useEffect(() => {
@@ -145,10 +150,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <Settings size={18} /> <span>General</span>
                         </div>
                         <div
+                            onClick={() => setActiveTab("character")}
+                            style={tabStyle(activeTab === "character")}
+                        >
+                            <UserRound size={18} /> <span>Character</span>
+                        </div>
+                        <div
                             onClick={() => setActiveTab("voice")}
                             style={tabStyle(activeTab === "voice")}
                         >
                             <Mic size={18} /> <span>Voice</span>
+                        </div>
+                        <div
+                            onClick={() => setActiveTab("voiceprint")}
+                            style={tabStyle(activeTab === "voiceprint")}
+                        >
+                            <Fingerprint size={18} /> <span>Voiceprint</span>
                         </div>
                     </div>
 
@@ -171,30 +188,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         }}
                     >
                         <X size={18} /> Close
-                    </button>
-                    <button
-                        onClick={() => {
-                            void handleSave();
-                        }}
-                        disabled={isSaving}
-                        style={{
-                            marginTop: "10px",
-                            padding: "12px",
-                            borderRadius: "16px",
-                            background: "linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)",
-                            color: "white",
-                            border: "none",
-                            cursor: "pointer",
-                            fontWeight: 600,
-                            boxShadow: "0 4px 12px rgba(79, 70, 229, 0.3)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: "8px",
-                        }}
-                    >
-                        {isSaving ? <span className="spinner">...</span> : <Save size={18} />}
-                        {isSaving ? "Saving..." : "Save Changes"}
                     </button>
                 </div>
 
@@ -224,7 +217,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             onBackgroundFileSelect={handleBackgroundFileSelect}
                         />
                     )}
+                    {activeTab === "character" && (
+                        <CharacterTab
+                            apiBaseUrl={apiBaseUrl}
+                            activeCharacter={activeCharacter}
+                            onSaveCharacter={onSaveCharacter}
+                            voiceData={voiceManagerData}
+                        />
+                    )}
                     {activeTab === "voice" && <VoiceTab {...voiceManagerData} />}
+                    {activeTab === "voiceprint" && <VoiceprintTab {...voiceManagerData} />}
                 </div>
             </div>
 

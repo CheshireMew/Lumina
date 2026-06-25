@@ -17,7 +17,7 @@ const providerModes: Array<{
     icon: typeof Wand2;
     label: string;
 }> = [
-    { id: FREE_LLM_PROVIDER_ID, icon: Wand2, label: "Free (Magic)" },
+    { id: FREE_LLM_PROVIDER_ID, icon: Wand2, label: "Pollinations" },
     { id: CUSTOM_LLM_PROVIDER_ID, icon: Cpu, label: "Custom (Pro)" },
 ];
 

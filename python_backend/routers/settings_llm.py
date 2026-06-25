@@ -122,10 +122,14 @@ models_router = APIRouter(
 )
 
 @models_router.get("/list")
-async def list_models(llm_manager=Depends(get_llm_service)):
+async def list_models(provider_id: str | None = None, llm_manager=Depends(get_llm_service)):
     """List available LLM models for frontend configuration"""
     try:
-        driver = await llm_manager.get_driver("chat") 
+        driver = (
+            await llm_manager.get_driver_for_provider(provider_id)
+            if provider_id
+            else await llm_manager.get_driver("chat")
+        )
         if driver and hasattr(driver, "list_models"):
             return {"models": await driver.list_models()}
 

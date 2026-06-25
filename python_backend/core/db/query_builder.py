@@ -35,3 +35,17 @@ class QueryBuilder(ABC):
         Build a DELETE query and its bound parameters.
         """
         pass
+
+    @abstractmethod
+    def create(self, table: str, data: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+        """
+        Build an INSERT query and its bound parameters.
+        """
+        pass
+
+    @abstractmethod
+    def update(self, table: str, record_id: str, data: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+        """
+        Build an UPDATE query and its bound parameters.
+        """
+        pass

@@ -46,6 +46,8 @@ export interface GeneralSettingsInput {
     backgroundImage: string;
 }
 
+export type GeneralSettingsPatch = Partial<GeneralSettingsInput>;
+
 const DEFAULT_SETTINGS: AppSettings = {
     llm: {
         providerId: FREE_LLM_PROVIDER_ID,
@@ -182,16 +184,34 @@ export function useSettings(backendReady: boolean, baseUrl: string) {
                 return;
             }
 
-            await Promise.all(
-                entries.map(([key, value]) =>
-                    electronSettings.set(LOCAL_SETTING_STORE_KEYS[key], value),
-                ),
-            );
+            let previousValues: Partial<Pick<AppSettings, LocalSettingKey>> = {};
+            setSettings((prev) => {
+                previousValues = entries.reduce(
+                    (acc, [key]) => ({
+                        ...acc,
+                        [key]: prev[key],
+                    }),
+                    {},
+                );
+                return {
+                    ...prev,
+                    ...partial,
+                };
+            });
 
-            setSettings((prev) => ({
-                ...prev,
-                ...partial,
-            }));
+            try {
+                await Promise.all(
+                    entries.map(([key, value]) =>
+                        electronSettings.set(LOCAL_SETTING_STORE_KEYS[key], value),
+                    ),
+                );
+            } catch (error) {
+                setSettings((prev) => ({
+                    ...prev,
+                    ...previousValues,
+                }));
+                throw error;
+            }
         },
         [],
     );
@@ -283,12 +303,19 @@ export function useSettings(backendReady: boolean, baseUrl: string) {
     );
 
     const saveGeneralSettings = useCallback(
-        async (next: GeneralSettingsInput) => {
-            await persistLocalSettings({
-                userName: next.userName,
-                live2dHighDpi: next.live2dHighDpi,
-                backgroundImage: next.backgroundImage,
-            });
+        async (next: GeneralSettingsPatch) => {
+            const partial: Partial<Pick<AppSettings, LocalSettingKey>> = {};
+            if (next.userName !== undefined) {
+                partial.userName = next.userName;
+            }
+            if (next.live2dHighDpi !== undefined) {
+                partial.live2dHighDpi = next.live2dHighDpi;
+            }
+            if (next.backgroundImage !== undefined) {
+                partial.backgroundImage = next.backgroundImage;
+            }
+
+            await persistLocalSettings(partial);
         },
         [persistLocalSettings],
     );

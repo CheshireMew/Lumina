@@ -13,7 +13,9 @@ class EdgeTTSDriver(BaseTTSDriver):
         )
 
     async def load(self):
-        # Edge TTS is stateless, nothing to load
+        import edge_tts  # noqa: F401
+
+        # Edge TTS is stateless, but the runtime dependency must be present.
         logger.info("EdgeTTS Driver loaded (Stateless)")
 
     async def list_voices(self):

@@ -231,7 +231,7 @@ python_backend/services/companion/runtime.py
 CompanionContextPack
   identity
   recent_session_history
-  relevant_episodic_memories
+  relevant_memories
   stable_profile_facts
   current_soul_state
   runtime_capabilities
@@ -381,27 +381,27 @@ Zustand 只保存 UI 临时态：
 session_history
   当前会话短期上下文。
 
-conversation_log
-  原始交互流水。只记录事实，不直接代表长期记忆。
+conversation_turns
+  原始交互流水。只追加，只记录发生过什么，不直接代表长期记忆。
 
-episodic_memory
-  从 conversation_log 提炼出的事件记忆。
+memory_items
+  唯一长期记忆真源。用 memory_type 区分 episode、fact、preference、profile、relationship、instruction。
 
-profile_memory
-  稳定用户画像、偏好、称呼、禁忌、长期项目、关系事实。
+memory_consolidation_jobs
+  后台提炼任务状态。负责把 turn 中真正重要的信息沉淀为 memory_items。
 ```
 
 读取规则：
 
 - chat 不直接读多张表。
-- memory 不直接决定 prompt。
-- 由 `CompanionContextPackBuilder` 统一读取、筛选、压缩、排序。
+- memory 不替 AI 决策，只提供长期事实。
+- 由 `MemoryService` 构建长期事实上下文，`CompanionContextPackBuilder` 只消费结果。
 
 写入规则：
 
 - 每轮对话先写 session history。
-- 原始对话写 conversation log。
-- 后台或轻量任务提炼 episodic/profile memory。
+- 原始对话写 conversation_turns。
+- 后台或轻量任务提炼 memory_items。
 - 记忆写入失败默认不打断对话，但初始化阶段 memory backend 不可用可以阻断启动。
 
 ## 10. Worker 重构目标
@@ -562,7 +562,7 @@ memory:
 目标：
 
 - 建立 `CompanionContextPackBuilder`。
-- session、conversation_log、episodic_memory、profile_memory 分层。
+- session、conversation_turns、memory_items、memory_consolidation_jobs 分层。
 - prompt 只读 context pack。
 
 删除：

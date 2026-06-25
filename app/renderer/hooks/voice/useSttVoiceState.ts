@@ -1,12 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+    listAudioDevices,
+    listSttModels,
+    switchSttModel,
+    updateSttAudioConfig,
+} from "../../api/voiceApi";
 import { AudioDevice, WhisperModelInfo } from "./types";
+
+const normalizeModel = (model: Partial<WhisperModelInfo> & { desc?: string }) => {
+    const id = String(model.id || model.name || "");
+    return {
+        id,
+        name: String(model.name || id),
+        description: model.description || model.desc || model.type || "",
+        type: model.type,
+        active: Boolean(model.active),
+        download_status: model.download_status,
+    } satisfies WhisperModelInfo;
+};
 
 export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
     const [whisperModels, setWhisperModels] = useState<WhisperModelInfo[]>([]);
-    const [currentWhisperModel, setCurrentWhisperModel] = useState("base");
+    const [currentWhisperModel, setCurrentWhisperModel] = useState("");
     const [loadingStatus, setLoadingStatus] = useState("idle");
-    const [sttEngineType, setSttEngineType] = useState("faster_whisper");
     const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
     const [currentAudioDevice, setCurrentAudioDevice] = useState<string | null>(null);
 
@@ -14,15 +31,19 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
 
     const refreshModels = useCallback(async () => {
         try {
-            const response = await fetch(`${sttBaseUrl}/models/list`);
-            if (!response.ok) {
-                return;
-            }
-
-            const data = await response.json();
-            setWhisperModels(data.models || []);
-            setCurrentWhisperModel(data.current_model || data.active_model || "base");
-            setSttEngineType(data.engine_type || "faster_whisper");
+            const data = await listSttModels(sttBaseUrl);
+            const models: WhisperModelInfo[] = Array.isArray(data.models)
+                ? data.models
+                    .map((model: Partial<WhisperModelInfo> & { desc?: string }) =>
+                        normalizeModel(model),
+                    )
+                    .filter((model: WhisperModelInfo) => model.id)
+                : [];
+            const activeModel = models.find((model) => model.active);
+            setWhisperModels(models);
+            setCurrentWhisperModel(
+                activeModel?.id || data.active_model || data.current_model || "",
+            );
             setLoadingStatus(data.loading_status || "idle");
         } catch (error) {
             console.error("Failed to fetch STT models", error);
@@ -31,12 +52,7 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
 
     const refreshAudioDevices = useCallback(async () => {
         try {
-            const response = await fetch(`${sttBaseUrl}/audio/devices`);
-            if (!response.ok) {
-                return;
-            }
-
-            const data = await response.json();
+            const data = await listAudioDevices(sttBaseUrl);
             setAudioDevices(data.devices || []);
             setCurrentAudioDevice(data.current || null);
             hasWarnedStt.current = false;
@@ -51,54 +67,32 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
     const handleSttModelChange = useCallback(
         async (newModel: string) => {
             try {
-                await fetch(`${sttBaseUrl}/models/switch`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ model_name: newModel }),
-                });
+                const data = await switchSttModel(sttBaseUrl, newModel);
+                if (data.status && data.status !== "ok") {
+                    throw new Error(data.detail || "Model switch failed");
+                }
+                setCurrentWhisperModel(newModel);
                 setLoadingStatus("loading");
                 await refreshModels();
             } catch (error) {
+                console.error("[VoiceManager] Failed to switch STT model", error);
                 alert("Failed to confirm model switch");
+                await refreshModels();
             }
         },
         [refreshModels, sttBaseUrl],
     );
 
-    const handleEngineChange = useCallback(
-        async (newEngine: string) => {
-            setSttEngineType(newEngine);
-
-            let targetModel = "base";
-            if (newEngine === "sense_voice") {
-                targetModel = "sense-voice";
-            } else if (newEngine === "paraformer_zh") {
-                targetModel = "paraformer-zh";
-            } else if (newEngine === "paraformer_en") {
-                targetModel = "paraformer-en";
-            }
-
-            await handleSttModelChange(targetModel);
-        },
-        [handleSttModelChange],
-    );
-
     const handleAudioDeviceChange = useCallback(async (deviceName: string) => {
         try {
-            const response = await fetch(`${sttBaseUrl}/audio/config`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ device_name: deviceName }),
-            });
-            if (!response.ok) {
-                alert("Failed to switch audio device");
-                return;
-            }
+            await updateSttAudioConfig(sttBaseUrl, { device_name: deviceName });
             setCurrentAudioDevice(deviceName);
+            await refreshAudioDevices();
         } catch (error) {
+            console.error("[VoiceManager] Failed to switch audio device", error);
             alert("Failed to connect to STT server");
         }
-    }, [sttBaseUrl]);
+    }, [refreshAudioDevices, sttBaseUrl]);
 
     useEffect(() => {
         if (!isActive) {
@@ -118,11 +112,9 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
         whisperModels,
         currentWhisperModel,
         loadingStatus,
-        sttEngineType,
         audioDevices,
         currentAudioDevice,
         handleSttModelChange,
-        handleEngineChange,
         handleAudioDeviceChange,
         refreshModels,
         refreshAudioDevices,

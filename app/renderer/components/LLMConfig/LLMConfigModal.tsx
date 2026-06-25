@@ -32,7 +32,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
     activeCharacterId,
     apiBaseUrl,
 }) => {
-    const { form, updateField, selectPlatform, setDeepSeekThinking, save } =
+    const { form, isSaving, updateField, selectPlatform, setDeepSeekThinking, save } =
         useLlmConfigForm({
             isOpen,
             currentLlmSettings,
@@ -40,7 +40,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
             onClose,
         });
 
-    const { availableModels, isLoadingModels } = useAvailableLlmModels(
+    const { availableModels, isLoadingModels, modelLoadError } = useAvailableLlmModels(
         isOpen,
         form.providerId,
         apiBaseUrl,
@@ -64,7 +64,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
     }
 
     return (
-        <ModalFrame onClose={onClose} onSave={save}>
+        <ModalFrame onClose={onClose} onSave={save} isSaving={isSaving}>
             <ProviderModeToggle
                 providerId={form.providerId}
                 onChange={(providerId) =>
@@ -78,6 +78,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
                         modelName={form.modelName}
                         availableModels={availableModels}
                         isLoadingModels={isLoadingModels}
+                        modelLoadError={modelLoadError}
                         onModelNameChange={(modelName) =>
                             updateField("modelName", modelName)
                         }

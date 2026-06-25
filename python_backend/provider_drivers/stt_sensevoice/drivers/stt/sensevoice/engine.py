@@ -1,6 +1,7 @@
 import os
 import logging
 import numpy as np
+import subprocess
 import shutil
 try:
     import sherpa_onnx
@@ -27,6 +28,8 @@ class TranscriptionInfo:
 class SenseVoiceEngine:
     def __init__(self):
         self.recognizer = None
+        self.active_provider = None
+        self.cuda_unavailable_reason = None
         # Default SenseVoiceSmall model from Sherpa-ONNX releases
         self.model_subdir = "sense-voice" 
         self.models_root = os.environ.get("LUMINA_STT_MODELS_DIR") or model_manager.base_dir
@@ -58,22 +61,112 @@ class SenseVoiceEngine:
             os.path.join(self.model_dir, "rule.fst")
             os.path.join(self.model_dir, "rule.far")
             
-            # Use the correct sherpa-onnx factory method for SenseVoice
-            # Note: rule parameter enables emotion/event tag output
-            self.recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
-                model=model_path,
-                tokens=tokens_path,
-                num_threads=2,
-                use_itn=True,
-                debug=False,
-                provider="cpu"
-            )
+            provider = self._select_provider()
+            try:
+                self.recognizer = self._create_recognizer(model_path, tokens_path, provider)
+                self.active_provider = provider
+            except Exception as exc:
+                if provider != "cuda":
+                    raise
+                logger.warning("CUDA STT initialization failed; falling back to CPU: %s", exc)
+                self.recognizer = self._create_recognizer(model_path, tokens_path, "cpu")
+                self.active_provider = "cpu"
             
-            logger.info("SenseVoice engine initialized successfully.")
+            logger.info("SenseVoice engine initialized successfully with provider=%s.", self.active_provider)
             
         except Exception as e:
             logger.error(f"Failed to initialize SenseVoice: {e}")
             raise e
+
+    def _create_recognizer(self, model_path: str, tokens_path: str, provider: str):
+        # Use the correct sherpa-onnx factory method for SenseVoice.
+        return sherpa_onnx.OfflineRecognizer.from_sense_voice(
+            model=model_path,
+            tokens=tokens_path,
+            num_threads=2,
+            use_itn=True,
+            debug=False,
+            provider=provider,
+        )
+
+    def _select_provider(self) -> str:
+        requested = self._resolve_requested_provider()
+        if requested == "cpu":
+            return "cpu"
+
+        if self._cuda_runtime_available():
+            return "cuda"
+
+        message = self.cuda_unavailable_reason or "CUDA is not available"
+        if requested == "cuda":
+            logger.warning("Configured STT provider is CUDA, but %s; falling back to CPU.", message)
+        else:
+            logger.info("CUDA STT provider unavailable (%s); using CPU.", message)
+        return "cpu"
+
+    def _resolve_requested_provider(self) -> str:
+        raw = os.environ.get("LUMINA_STT_PROVIDER") or os.environ.get("LUMINA_STT_DEVICE")
+        if raw is None:
+            try:
+                from app_config import config as app_settings
+                raw = getattr(app_settings.stt, "device", None)
+            except Exception:
+                raw = None
+
+        value = str(raw or "auto").strip().lower()
+        if value in {"gpu", "cuda:0"}:
+            return "cuda"
+        if value in {"cpu", "cuda", "auto"}:
+            return value
+
+        logger.warning("Unknown STT device/provider '%s'; using auto detection.", raw)
+        return "auto"
+
+    def _cuda_runtime_available(self) -> bool:
+        self.cuda_unavailable_reason = None
+        if sherpa_onnx is None:
+            self.cuda_unavailable_reason = "sherpa-onnx is not installed"
+            return False
+
+        version = str(getattr(sherpa_onnx, "__version__", ""))
+        package_dir = os.path.dirname(getattr(sherpa_onnx, "__file__", ""))
+        cuda_provider_dll = os.path.join(package_dir, "lib", "onnxruntime_providers_cuda.dll")
+        if "+cuda" not in version and not os.path.exists(cuda_provider_dll):
+            self.cuda_unavailable_reason = f"sherpa-onnx {version or 'unknown'} is not a CUDA build"
+            return False
+
+        visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if visible_devices is not None and visible_devices.strip() in {"", "-1"}:
+            self.cuda_unavailable_reason = "CUDA_VISIBLE_DEVICES disables all GPUs"
+            return False
+
+        nvidia_smi = shutil.which("nvidia-smi")
+        if not nvidia_smi:
+            self.cuda_unavailable_reason = "nvidia-smi was not found"
+            return False
+
+        try:
+            result = subprocess.run(
+                [nvidia_smi, "-L"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+        except Exception as exc:
+            self.cuda_unavailable_reason = f"nvidia-smi check failed: {exc}"
+            return False
+
+        if result.returncode != 0:
+            reason = (result.stderr or result.stdout or "no NVIDIA GPU reported").strip()
+            self.cuda_unavailable_reason = reason
+            return False
+
+        if not result.stdout.strip():
+            self.cuda_unavailable_reason = "nvidia-smi did not report any GPU"
+            return False
+
+        return True
 
     def ensure_model_exists(self):
         """Use model_manager to download the model if missing"""
@@ -183,5 +276,6 @@ class SenseVoiceEngine:
         # Add emotion info if available
         if emotion:
             info.emotion = emotion
+        info.provider = self.active_provider
         
         return segments, info

@@ -17,6 +17,7 @@ export interface GatewaySubscriber {
     onChatEnd?: () => void;
     onEmotion?: (emotion: string) => void;
     onSessionReset?: (sessionId: number) => void;
+    onSystemStatus?: (status: string, details: string) => void;
 }
 
 const EVENT_TYPE = {
@@ -213,9 +214,19 @@ class GatewayClient {
             this.lastSequence = packet.sequence_number;
 
             if (
-                packet.type === EVENT_TYPE.SYSTEM_STATUS ||
-                packet.type === EVENT_TYPE.CONTROL_SESSION
+                packet.type === EVENT_TYPE.SYSTEM_STATUS
             ) {
+                this.notify((subscriber) =>
+                    subscriber.onSystemStatus?.(
+                        String(packet.payload?.status || ""),
+                        String(packet.payload?.details || ""),
+                    ),
+                );
+                this.handleSessionPacket(packet);
+                return;
+            }
+
+            if (packet.type === EVENT_TYPE.CONTROL_SESSION) {
                 this.handleSessionPacket(packet);
                 return;
             }

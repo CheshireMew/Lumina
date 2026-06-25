@@ -50,27 +50,5 @@ class TestMemoryGardener(unittest.TestCase):
         self.assertEqual(deleted_count, 2)
         print(f"✅ Pruning logic verified: Deleted {deleted_count} weak memories.")
 
-    def test_entity_resolution_logic(self):
-        """验证同义实体合并的简化逻辑"""
-        print("\n[Test] Testing Entity Resolution (Synonym Merging)...")
-        
-        # 模拟已知实体库
-        kg_entities = {"Gemini", "OpenAI", "Lumina"}
-        
-        # 输入一个新观察到的实体
-        new_alias = "lumina_ai"
-        
-        def resolve_entity(alias):
-            # 简化逻辑：不分大小写且包含即可
-            alias_lower = alias.lower()
-            for entity in kg_entities:
-                if entity.lower() in alias_lower or alias_lower in entity.lower():
-                    return entity
-            return alias
-            
-        resolved = resolve_entity(new_alias)
-        self.assertEqual(resolved, "Lumina")
-        print(f"✅ Entity '{new_alias}' resolved to '{resolved}' successfully.")
-
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,7 @@ interface LaunchSpec {
     args: string[];
     cwd: string;
     appRoot: string;
+    resourcesDir: string;
     assetsDir: string;
 }
 
@@ -32,6 +33,7 @@ export class BackendServiceLauncher {
                 ...process.env,
                 LITE_MODE: app.isPackaged ? "true" : "false",
                 LUMINA_APP_ROOT: spec.appRoot,
+                LUMINA_RESOURCES_DIR: spec.resourcesDir,
                 LUMINA_DATA_PATH: app.isPackaged
                     ? app.getPath("userData")
                     : path.join(process.cwd(), "Lumina_Data"),
@@ -102,6 +104,7 @@ export class BackendServiceLauncher {
             args: [service.name],
             cwd: path.dirname(executable),
             appRoot: process.cwd(),
+            resourcesDir: path.join(process.cwd(), "dist_backend"),
             assetsDir: path.join(path.dirname(executable), "_internal", "assets"),
         };
     }
@@ -119,6 +122,7 @@ export class BackendServiceLauncher {
             args: [service.name],
             cwd: path.join(process.resourcesPath, "bin", "lumina_backend"),
             appRoot: process.resourcesPath,
+            resourcesDir: process.resourcesPath,
             assetsDir: path.join(process.resourcesPath, "bin", "lumina_backend", "_internal", "assets"),
         };
     }
@@ -145,6 +149,7 @@ export class BackendServiceLauncher {
             args,
             cwd,
             appRoot: projectRoot,
+            resourcesDir: projectRoot,
             assetsDir: path.join(projectRoot, "public"),
         };
     }

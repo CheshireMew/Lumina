@@ -1,17 +1,15 @@
 
 import logging
-import asyncio
-import queue
-from typing import Any, Optional, List
+from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, BackgroundTasks, Request, File, UploadFile
 from pydantic import BaseModel
-from starlette.websockets import WebSocketDisconnect
 
 from routers.deps import get_stt_service
-from . import globals as stt_globals
-from .globals import audio_manager, active_websockets, message_queue
 from app_config import config as app_settings
 from core.protocols.lipp import LippProtocol, LippLifecycleRequest, LippConfigRequest
+from .runtime_state import get_stt_runtime_state
+from .voiceprint_embedding import VoiceprintEmbeddingService
+from .websocket_hub import SttWebSocketHub
 
 logger = logging.getLogger("STTRouter")
 
@@ -27,6 +25,7 @@ class UnifiedAudioConfig(BaseModel):
     enable_voiceprint_filter: Optional[bool] = None
     voiceprint_threshold: Optional[float] = None
     voiceprint_profile: Optional[str] = None
+    vad_aggressiveness: Optional[int] = None
     speech_start_threshold: Optional[float] = None
     speech_end_threshold: Optional[float] = None
     min_speech_frames: Optional[int] = None
@@ -35,7 +34,8 @@ class UnifiedAudioConfig(BaseModel):
 
 async def stt_lifecycle_handler(payload: LippLifecycleRequest):
     """LIPP Lifecycle Implementation"""
-    stt_manager = stt_globals.stt_manager
+    state = get_stt_runtime_state()
+    stt_manager = state.stt_manager
     if not stt_manager: return
 
     logger.info(f"📢 [LIPP] Lifecycle: {payload.action} -> {payload.target_id}")
@@ -53,7 +53,8 @@ async def stt_lifecycle_handler(payload: LippLifecycleRequest):
 
 async def stt_config_handler(payload: LippConfigRequest):
     """LIPP Config Implementation"""
-    stt_manager = stt_globals.stt_manager
+    state = get_stt_runtime_state()
+    stt_manager = state.stt_manager
     
     logger.info(f"⚙️ [LIPP] Config: {payload.target_id} -> {payload.key}={payload.value}")
     
@@ -67,10 +68,11 @@ async def stt_config_handler(payload: LippConfigRequest):
 
 async def stt_health_check():
     from core.protocols.lipp import LippHealthResponse
+    state = get_stt_runtime_state()
     status = "ok"
     details = {}
-    if audio_manager:
-        if not audio_manager.is_running and len(active_websockets) > 0:
+    if state.audio_manager:
+        if not state.audio_manager.is_running and len(state.active_websockets) > 0:
             status = "degraded"
             details["audio"] = "stalled"
     return LippHealthResponse(status=status, details=details)
@@ -127,7 +129,9 @@ async def get_models(stt_manager: Any = Depends(get_stt_service)):
         "engine": stt_manager.engine_type,
         "loading_status": stt_manager.loading_status,
         "models": models,
-        "vad_status": "active" if audio_manager and audio_manager.is_running else "idle"
+        "vad_status": "active"
+        if get_stt_runtime_state().audio_manager and get_stt_runtime_state().audio_manager.is_running
+        else "idle"
     }
 
 @router.post("/models/switch")
@@ -146,15 +150,16 @@ async def switch_model(
         
     if not valid: raise HTTPException(status_code=400, detail=f"Unknown model/driver: {target}")
 
-    if audio_manager and audio_manager.is_running:
-        audio_manager.stop()
+    state = get_stt_runtime_state()
+    if state.audio_manager and state.audio_manager.is_running:
+        state.audio_manager.stop()
         
     await stt_manager.switch_model_background(target)
     # [Config] Local Update for runtime consistency
     app_settings.set_selected_provider("stt", stt_manager.active_driver_id)
 
-    if audio_manager:
-        background_tasks.add_task(audio_manager.start)
+    if state.audio_manager:
+        background_tasks.add_task(state.audio_manager.start)
 
     # [Scheme D] Active Notification to Main
     # Main process will handle persistence if needed via its own controller logic
@@ -167,13 +172,13 @@ async def switch_model(
 
 @router.get("/audio/devices")
 async def list_audio_devices():
-    from . import globals as stt_globals
     from services.managers.audio_devices import AudioDeviceSelector
 
     try:
+        state = get_stt_runtime_state()
         selector = (
-            stt_globals.audio_manager.device_selector
-            if stt_globals.audio_manager
+            state.audio_manager.device_selector
+            if state.audio_manager
             else AudioDeviceSelector(sample_rate=16000, frame_size=480)
         )
         devices = selector.list_input_devices(check_available=False)
@@ -185,8 +190,8 @@ async def list_audio_devices():
                 "host_api": device["host_api"]
             })
         current_device = None
-        if stt_globals.audio_manager:
-            current_device = stt_globals.audio_manager.device_name
+        if state.audio_manager:
+            current_device = state.audio_manager.device_name
 
         return {
             "devices": input_devices,
@@ -198,24 +203,27 @@ async def list_audio_devices():
 
 @router.post("/audio/config")
 async def update_audio_config(request: UnifiedAudioConfig):
-    if not audio_manager:
+    state = get_stt_runtime_state()
+    if not state.audio_manager:
          raise HTTPException(status_code=503, detail="Audio System not initialized")
 
     audio_config = app_settings.audio
     changed_audio_config = False
 
     if request.device_name:
-        audio_manager.switch_device(request.device_name)
+        state.audio_manager.switch_device(request.device_name)
 
     if (
-        request.speech_start_threshold is not None
+        request.vad_aggressiveness is not None
+        or request.speech_start_threshold is not None
         or request.speech_end_threshold is not None
         or request.min_speech_frames is not None
     ):
-        audio_manager.update_params(
+        state.audio_manager.update_params(
             start_threshold=request.speech_start_threshold,
             end_threshold=request.speech_end_threshold,
             min_frames=request.min_speech_frames,
+            aggressiveness=request.vad_aggressiveness,
         )
 
     for key in (
@@ -230,21 +238,21 @@ async def update_audio_config(request: UnifiedAudioConfig):
 
     if changed_audio_config:
         app_settings.save()
-        voiceprint_filter = stt_globals.voiceprint_manager
+        voiceprint_filter = state.voiceprint_manager
         if voiceprint_filter:
             await voiceprint_filter.refresh_profiles(force=True)
 
     return {
         "status": "updated",
-        "current": audio_manager.device_name,
+        "current": state.audio_manager.device_name,
         "config": request.dict(exclude_none=True),
     }
 
 @router.get("/voiceprint/status")
 async def get_voiceprint_status():
-    from . import globals as stt_globals
+    state = get_stt_runtime_state()
     audio_config = app_settings.audio
-    if not stt_globals.voiceprint_manager:
+    if not state.voiceprint_manager:
         return {
             "enabled": audio_config.enable_voiceprint_filter,
             "loaded": False,
@@ -257,17 +265,19 @@ async def get_voiceprint_status():
         "loaded": True,
         "threshold": audio_config.voiceprint_threshold,
         "profile": audio_config.voiceprint_profile,
-        "profile_loaded": audio_config.voiceprint_profile in stt_globals.voiceprint_manager.profiles,
+        "profile_loaded": audio_config.voiceprint_profile in state.voiceprint_manager.profiles,
     }
 
 @router.get("/audio/status")
 async def get_audio_status():
-    if not audio_manager: return {"status": "uninitialized"}
-    status = audio_manager.get_status()
+    state = get_stt_runtime_state()
+    if not state.audio_manager: return {"status": "uninitialized"}
+    status = state.audio_manager.get_status()
     status.update({
-        "speech_start_threshold": audio_manager.speech_start_threshold,
-        "speech_end_threshold": audio_manager.speech_end_threshold,
-        "min_speech_frames": audio_manager.min_speech_frames
+        "speech_start_threshold": state.audio_manager.speech_start_threshold,
+        "speech_end_threshold": state.audio_manager.speech_end_threshold,
+        "vad_aggressiveness": state.audio_manager.vad_aggressiveness,
+        "min_speech_frames": state.audio_manager.min_speech_frames
     })
     return status
 
@@ -275,66 +285,7 @@ async def get_audio_status():
 
 @router.websocket("/ws/stt")
 async def websocket_endpoint(websocket: WebSocket):
-    token = websocket.query_params.get("token")
-    if not token:
-        await websocket.close(code=1008, reason="Missing stream token")
-        return
-
-    try:
-        from security.tokens import TokenManager
-
-        payload = TokenManager.verify_token(token, expected_scope="worker_access")
-        worker_id = getattr(websocket.app.state, "worker_id", None)
-        if not payload or (worker_id and payload.get("sub") != worker_id):
-            await websocket.close(code=1008, reason="Invalid stream token")
-            return
-    except Exception:
-        await websocket.close(code=1008, reason="Invalid stream token")
-        return
-
-    await websocket.accept()
-    import uuid
-    connection_id = str(uuid.uuid4())
-    active_websockets[connection_id] = websocket
-    
-    if len(active_websockets) == 1 and audio_manager:
-        if not audio_manager.is_running:
-            audio_manager.start()
-            while not message_queue.empty():
-                try: message_queue.get_nowait()
-                except queue.Empty: break
-                except Exception as e: 
-                    logger.debug(f"Queue drain error (ignorable): {e}")
-                    break
-
-    async def sender_task():
-        try:
-            while True:
-                if not message_queue.empty():
-                    msg = message_queue.get_nowait()
-                    await websocket.send_json(msg)
-                await asyncio.sleep(0.02)
-        except WebSocketDisconnect: pass
-        except Exception as e: logger.error(f"WS Sender Error: {e}")
-
-    async def receiver_task():
-        try:
-            while True:
-                try: await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                except asyncio.TimeoutError:
-                    if websocket.client_state == 3: raise WebSocketDisconnect()
-                    continue
-        except WebSocketDisconnect: pass
-
-    try:
-        sender = asyncio.create_task(sender_task())
-        receiver = asyncio.create_task(receiver_task())
-        done, pending = await asyncio.wait([sender, receiver], return_when=asyncio.FIRST_COMPLETED)
-        for task in pending: task.cancel()
-    finally:
-        if connection_id in active_websockets: del active_websockets[connection_id]
-        if len(active_websockets) == 0 and audio_manager and audio_manager.is_running:
-             audio_manager.stop()
+    await SttWebSocketHub(get_stt_runtime_state()).handle(websocket)
 
 # ========== [Scheme C] Internal Endpoints for Main Process Proxy ==========
 
@@ -344,39 +295,10 @@ async def generate_voiceprint_embedding(audio: UploadFile = File(...), request: 
     if request and request.client and request.client.host not in ["127.0.0.1", "::1", "localhost"]:
         raise HTTPException(status_code=403, detail="Internal endpoint: localhost only")
     
-    from . import globals as stt_globals
-    import soundfile as sf
-    import tempfile
-    import os
-    import base64
-    import asyncio
-    
-    vp_manager = stt_globals.voiceprint_manager
-    if not vp_manager:
-        raise HTTPException(status_code=503, detail="Voiceprint driver not loaded")
-    await vp_manager.ensure_driver_loaded()
-    
-    tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-            content = await audio.read()
-            tmp.write(content)
-            tmp_path = tmp.name
-        
-        audio_data, sr = sf.read(tmp_path)
-        if audio_data.ndim > 1: audio_data = audio_data[:, 0]
-        
-        loop = asyncio.get_running_loop()
-        embedding = await loop.run_in_executor(None, vp_manager.driver.extract_embedding, audio_data, sr)
-        
-        if embedding is None or embedding.size == 0: raise HTTPException(500, "Failed to extract embedding")
-        
-        import numpy as np
-        embedding_b64 = base64.b64encode(embedding.astype(np.float32).tobytes()).decode('utf-8')
-        return {"embedding": embedding_b64, "dims": len(embedding)}
-        
+        return await VoiceprintEmbeddingService(get_stt_runtime_state()).generate(audio)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Embedding generation failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if tmp_path and os.path.exists(tmp_path): os.remove(tmp_path)

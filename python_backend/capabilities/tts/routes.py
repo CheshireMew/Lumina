@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from routers.deps import get_tts_service
 from app_config import config as app_settings
 from core.protocols.lipp import LippProtocol, LippLifecycleRequest, LippConfigRequest
-from . import globals as tts_globals
+from .runtime_state import get_tts_runtime_state
 
 logger = logging.getLogger("TTS_API")
 router = APIRouter()
@@ -31,7 +31,7 @@ class SwitchRequest(BaseModel):
 
 async def tts_lifecycle_handler(payload: LippLifecycleRequest):
     """LIPP Lifecycle Implementation"""
-    manager = tts_globals.tts_manager
+    manager = get_tts_runtime_state().tts_manager
     if not manager: return
     
     logger.info(f"📢 [LIPP] Lifecycle: {payload.action} -> {payload.target_id}")
@@ -51,7 +51,7 @@ async def tts_lifecycle_handler(payload: LippLifecycleRequest):
 
 async def tts_config_handler(payload: LippConfigRequest):
     """LIPP Config Implementation"""
-    manager = tts_globals.tts_manager
+    manager = get_tts_runtime_state().tts_manager
     
     logger.info(f"⚙️ [LIPP] Config: {payload.target_id} -> {payload.key}={payload.value}")
     
@@ -170,9 +170,3 @@ async def list_voices(engine: Optional[str] = None, manager: Any = Depends(get_t
     except Exception as e:
         logger.error(f"Error fetching voices from {target_driver.id}: {e}")
         return []
-
-@router.get("/health/reset_pool")
-async def reset_connection_pool():
-    # If we need to reset http_client
-    # if tts_globals.http_client: ...
-    return {"status": "ok"}

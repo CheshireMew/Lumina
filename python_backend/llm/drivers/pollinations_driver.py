@@ -1,227 +1,221 @@
+import json
 import logging
-import asyncio
-from typing import List, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, List
+
+import httpx
+
+from config.models import (
+    POLLINATIONS_ANONYMOUS_CHAT_URL,
+    POLLINATIONS_ANONYMOUS_MODELS_URL,
+    POLLINATIONS_BASE_URL,
+)
 from core.interfaces.driver import BaseLLMDriver
+from services.http_client import get_http_client
 
 logger = logging.getLogger("PollinationsDriver")
 
-class PollinationsDriver(BaseLLMDriver):
-    def __init__(self, id: str = "pollinations", name: str = "Free Tier (Pollinations)", description: str = "Free AI via Pollinations.ai"):
-        super().__init__(id, name, description)
-        
-    async def load(self):
-        pass
 
-    async def chat_completion(self, 
-                            messages: list, 
-                            model: str, 
-                            temperature: float = 0.7, 
-                            stream: bool = False,
-                            **kwargs):
-        
-        # ... (Model Mapping - Simplified for brevity in this patch, assuming same logic) ...
-        # [Fix] Use Root Endpoint. 
-        target_model = "openai" 
-        if "mistral" in model.lower() or "mixtral" in model.lower(): target_model = "mistral"
-        if "llama" in model.lower(): target_model = "llama"
-        if "claude" in model.lower(): target_model = "openai" # Fallback
-        if "gemini" in model.lower(): target_model = "gemini"
-        if "deepseek" in model.lower(): target_model = "deepseek"
-        if "qwen" in model.lower(): target_model = "qwen"
-        if "unity" in model.lower(): target_model = "unity"
-        if "midijourney" in model.lower(): target_model = "midijourney"
-        if "rtist" in model.lower(): target_model = "rtist"
-        if "searchgpt" in model.lower(): target_model = "searchgpt"
-        if "evil" in model.lower(): target_model = "evil"
-        
-        url = "https://text.pollinations.ai/" 
-        headers = {"Content-Type": "application/json"}
-        
-        payload = {
-            "messages": messages,
-            "seed": 42,
-            "model": target_model,
-            "jsonMode": False
-        }
+class PollinationsDriver(BaseLLMDriver):
+    def __init__(
+        self,
+        id: str = "pollinations",
+        name: str = "Pollinations",
+        description: str = "Pollinations OpenAI-compatible generation API",
+    ):
+        super().__init__(id, name, description)
+
+    async def load(self):
+        return None
+
+    async def chat_completion(
+        self,
+        messages: list,
+        model: str,
+        temperature: float = 0.7,
+        stream: bool = False,
+        **kwargs,
+    ) -> Any:
+        url = self._chat_completion_url()
+        headers = self._auth_headers()
+        payload = self._completion_payload(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            stream=stream,
+            kwargs=kwargs,
+        )
 
         if stream:
-            return self._stream_generator(url, payload, model)
-        else:
-            # Return Coroutine that results in String
-            return await self._fetch_non_stream(url, payload, headers)
+            return self._stream_generator(url, payload, headers)
+        return await self._fetch_non_stream(url, payload, headers)
 
-    async def _fetch_non_stream(self, url, payload, headers):
-        # [Optimization] Use shared HTTP client pool
-        from services.http_client import get_http_client
+    async def _fetch_non_stream(
+        self,
+        url: str,
+        payload: Dict[str, Any],
+        headers: Dict[str, str],
+    ) -> str:
+        client = await get_http_client()
         try:
-            client = await get_http_client()
-            resp = await client.post(url, json=payload, headers=headers, timeout=120.0)
-            if resp.status_code != 200:
-                raise Exception(f"Pollinations Error {resp.status_code}: {resp.text}")
-            
-            try:
-                data = resp.json()
-                if isinstance(data, str): return data
-                if 'choices' in data: return data['choices'][0]['message']['content']
-                return str(data)
-            except Exception as parse_e:
-                logger.warning(f"Pollinations non-stream parse failed: {parse_e}")
-                return resp.text
-        except Exception as e:
-            logger.error(f"Pollinations Req Failed: {e}")
+            response = await client.post(url, json=payload, headers=headers, timeout=120.0)
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"].get("content") or ""
+        except httpx.HTTPStatusError as exc:
+            detail = self._response_error_detail(exc.response)
+            logger.error("Pollinations request failed: %s", detail)
+            raise RuntimeError(detail) from exc
+        except Exception as exc:
+            logger.error("Pollinations request failed: %s", exc)
             raise
 
-    async def _stream_generator(self, url: str, payload: dict, model: str) -> AsyncGenerator[str, None]:
-        """Pollinations is non-streaming native, so we simulate stream"""
-        # [Optimization] Use shared HTTP client pool
-        from services.http_client import get_http_client
+    async def _stream_generator(
+        self,
+        url: str,
+        payload: Dict[str, Any],
+        headers: Dict[str, str],
+    ) -> AsyncGenerator[Dict[str, str], None]:
+        client = await get_http_client()
         try:
-            client = await get_http_client()
-            # 1. Fetch Full Content (with Retries)
-            max_retries = 3
-            retry_count = 0
-            resp = None
-            headers = {"Content-Type": "application/json"}
-            
-            while retry_count < max_retries:
-                try:
-                    resp = await client.post(url, json=payload, headers=headers, timeout=30.0 + (retry_count * 10))
-                    
-                    if resp.status_code == 429:
-                        logger.warning(f"Pollinations 429 Queue Full. Retrying {retry_count+1}/{max_retries}...")
-                        await asyncio.sleep(2 + (retry_count * 2))  # Backoff: 2s, 4s, 6s...
-                        retry_count += 1
+            async with client.stream(
+                "POST",
+                url,
+                json=payload,
+                headers=headers,
+                timeout=120.0,
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
                         continue
-                    
-                    # If success or other error, break loop
-                    break
-                except Exception as e:
-                    logger.warning(f"Pollinations Network Error (Retry {retry_count}): {e}")
-                    retry_count += 1
-                    await asyncio.sleep(2)
-            
-            # If still failed or no response
-            if not resp or resp.status_code != 200:
-                status = resp.status_code if resp else "timeout"
-                logger.error(f"Pollinations Request Failed after retries. Status: {status}")
-                return
 
-            # Attempt to parse as JSON (Direct or Mixed Content)
-            import json
-            import re
-            
-            content = ""
-            data = None
+                    event = line.removeprefix("data:").strip()
+                    if not event or event == "[DONE]":
+                        continue
 
-            try:
-                data = resp.json()
-            except Exception as parse_e:
-                # Try to extract JSON from text if parsing failed
-                try:
-                    text = resp.text
-                    json_match = re.search(r'(\{.*"choices".*\})$', text, re.DOTALL)
-                    if json_match:
-                        try:
-                            data = json.loads(json_match.group(1))
-                        except Exception:
-                            data = None
-                    else:
-                        data = None
-                        
-                    if data is None:
-                        content = text
-                except Exception as fallback_e:
-                    logger.warning(f"Failed to recover JSON from text: {fallback_e}")
-                    content = resp.text
-            
-            # Process Data if we have it (Direct or Recovered)
-            if data and isinstance(data, dict):
-                if "choices" in data and len(data["choices"]) > 0:
-                    msg = data["choices"][0].get("message", {})
-                    content = msg.get("content", "")
-                    # reasoning = msg.get("reasoning_content", "") # [Debug] Disabled
-                elif "error" in data:
-                    logger.error(f"Pollinations API Error: {data['error']}")
-                    yield f"Error: {data['error']}"
-                    return
-                else:
-                    if "content" in data:
-                        content = data["content"]
-                    elif not content: 
-                         content = resp.text
+                    try:
+                        data = json.loads(event)
+                    except json.JSONDecodeError:
+                        logger.debug("Skipping malformed Pollinations SSE event: %s", event)
+                        continue
 
-                    # reasoning remains "" 
-
-            # Fallback: If content is still empty, dump the data so we see what happened
-            if not content: 
-                 content = str(data) if data else resp.text
-
-            # [Fix] Removed early return to allow deduplication logic to run
-            
-            # ========== Robust Deduplication ==========
-            # Pollinations API sometimes returns content doubled (e.g., "ABCABC")
-            # or with line-based prefixes duplicated (e.g., "[happy]\nText\n[happy]\nText").
-            
-            original_len = len(content)
-            
-            # Strategy 1: Half-String Comparison
-            # If the content is "TEXTTEXT", splitting in half and comparing should reveal a match.
-            if original_len > 20:
-                half = original_len // 2
-                first_half = content[:half]
-                second_half = content[half:half + len(first_half)]  # Handle odd length
-                
-                if first_half == second_half:
-                    logger.warning(f"🔁 Detected doubled content (half-match). Deduplicating.")
-                    content = first_half
-            
-            # Strategy 2: Line-Based Prefix Detection
-            # If the first few lines repeat later, take only the first occurrence.
-            if len(content) > 50:
-                lines = content.split('\n')
-                if len(lines) > 2:
-                    first_line = lines[0].strip()
-                    if first_line:
-                        # Count occurrences of the first line
-                        occurrences = [i for i, l in enumerate(lines) if l.strip() == first_line]
-                        if len(occurrences) > 1 and occurrences[1] < len(lines) - 1:
-                            logger.warning(f"🔁 Detected line prefix duplication at line {occurrences[1]}. Truncating.")
-                            content = '\n'.join(lines[:occurrences[1]])
-            
-            # Strategy 3: Original "Period Detection" (Fallback for non-half patterns like "ABCABCABC")
-            if len(content) > 10:
-                for period in range(1, len(content) // 2 + 1):
-                    if len(content) % period == 0:
-                        unit = content[:period]
-                        if unit * (len(content) // period) == content:
-                            logger.warning(f"🔁 Detected repeating unit (period: {period}). Deduplicating.")
-                            content = unit
-                            break
-            # ==========================================
-            
-            logger.info(f"Pollinations Final Content ({len(content)} chars, Original: {original_len})")
-            
-            chunk_size = 10 
-            for i in range(0, len(content), chunk_size):
-                chunk = content[i:i+chunk_size]
-                yield chunk
-                await asyncio.sleep(0.05)
-
-        except Exception as e:
-            yield f"Stream Failed: {e}"
+                    for choice in data.get("choices", []):
+                        delta = choice.get("delta") or {}
+                        content = delta.get("content") or ""
+                        reasoning = delta.get("reasoning_content") or ""
+                        if content or reasoning:
+                            yield {"content": content, "reasoning": reasoning}
+        except httpx.HTTPStatusError as exc:
+            detail = self._response_error_detail(exc.response)
+            logger.error("Pollinations stream failed: %s", detail)
+            raise RuntimeError(detail) from exc
+        except Exception as exc:
+            logger.error("Pollinations stream failed: %s", exc)
+            raise
 
     async def list_models(self) -> List[str]:
-        return [
-            "openai", # GPT-4o-mini
-            "mistral", # Mistral Small
-            "claude-3-haiku", # [Mapped to OpenAI Fallback]
-            "gemini", # Gemini Flash
-            # "searchgpt", # [404]
-            # "deepseek", # [404] 
-            # "qwen-coder", # [404]
-            # "llama-3-70b", # [404]
-            "midijourney", # Music/Lyrics
-            # "evil", # [404]
-            # "unity", # [Unverified]
-            # "rtist", # [Unverified]
-        ]
+        client = await get_http_client()
+        if not self._api_key():
+            return await self._list_anonymous_models(client)
+
+        url = f"{self._base_url()}/models"
+        try:
+            response = await client.get(url, headers=self._optional_auth_headers(), timeout=30.0)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Failed to list Pollinations models: %s", exc)
+            return list(self.config.get("models") or [])
+
+        models = []
+        for item in data.get("data", []):
+            model_id = item.get("id")
+            if not model_id:
+                continue
+
+            endpoints = item.get("supported_endpoints") or []
+            output_modalities = item.get("output_modalities") or []
+            if "/v1/chat/completions" not in endpoints:
+                continue
+            if "text" not in output_modalities:
+                continue
+
+            models.append(model_id)
+
+        return models
+
+    async def _list_anonymous_models(self, client: httpx.AsyncClient) -> List[str]:
+        try:
+            response = await client.get(POLLINATIONS_ANONYMOUS_MODELS_URL, timeout=30.0)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Failed to list anonymous Pollinations models: %s", exc)
+            return list(self.config.get("models") or [])
+
+        models = []
+        for item in data:
+            model_name = item.get("name") if isinstance(item, dict) else None
+            if not model_name:
+                continue
+            if item.get("tier") != "anonymous":
+                continue
+            if "text" not in (item.get("input_modalities") or []):
+                continue
+            if "text" not in (item.get("output_modalities") or []):
+                continue
+            if item.get("audio"):
+                continue
+
+            models.append(model_name)
+
+        return models or list(self.config.get("models") or [])
+
+    def _completion_payload(
+        self,
+        *,
+        messages: list,
+        model: str,
+        temperature: float,
+        stream: bool,
+        kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": stream,
+        }
+        payload.update({key: value for key, value in kwargs.items() if value is not None})
+        return payload
+
+    def _base_url(self) -> str:
+        return (self.config.get("base_url") or POLLINATIONS_BASE_URL).rstrip("/")
+
+    def _chat_completion_url(self) -> str:
+        if not self._api_key():
+            return POLLINATIONS_ANONYMOUS_CHAT_URL
+        return f"{self._base_url()}/chat/completions"
+
+    def _auth_headers(self) -> Dict[str, str]:
+        api_key = self._api_key()
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        return headers
+
+    def _optional_auth_headers(self) -> Dict[str, str]:
+        api_key = self._api_key()
+        return {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+    def _api_key(self) -> str:
+        api_key = str(self.config.get("api_key") or "").strip()
+        return "" if api_key.lower() in {"none", "null"} else api_key
+
+    def _response_error_detail(self, response: httpx.Response) -> str:
+        try:
+            payload = response.json()
+            detail = payload.get("error") or payload.get("detail") or payload
+        except Exception:
+            detail = response.text
+        return f"Pollinations Error {response.status_code}: {detail}"

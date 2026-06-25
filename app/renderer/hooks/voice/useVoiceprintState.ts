@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+    getAudioStatus,
+    getVoiceprintStatus,
+    updateSttAudioConfig,
+} from "../../api/voiceApi";
 
 export const useVoiceprintState = (
     isActive: boolean,
@@ -10,36 +15,30 @@ export const useVoiceprintState = (
     const [voiceprintProfile, setVoiceprintProfile] = useState("");
     const [voiceprintStatus, setVoiceprintStatus] = useState("");
     const [voiceprintLoaded, setVoiceprintLoaded] = useState(false);
+    const [vadAggressiveness, setVadAggressiveness] = useState(3);
     const [vadStartThreshold, setVadStartThreshold] = useState(0);
     const [vadEndThreshold, setVadEndThreshold] = useState(0);
 
     const refreshVoiceprintConfig = useCallback(async () => {
         try {
-            const voiceprintResponse = await fetch(
-                `${sttBaseUrl}/voiceprint/status`,
+            const voiceprint = await getVoiceprintStatus(sttBaseUrl);
+            setVoiceprintEnabled(voiceprint.enabled ?? false);
+            setVoiceprintThreshold(voiceprint.threshold ?? 0);
+            setVoiceprintProfile(voiceprint.profile ?? "");
+            setVoiceprintLoaded(voiceprint.profile_loaded ?? false);
+            setVoiceprintStatus(
+                voiceprint.profile_loaded ? "Loaded voiceprint" : "Voiceprint not registered",
             );
-            if (voiceprintResponse.ok) {
-                const data = await voiceprintResponse.json();
-                setVoiceprintEnabled(data.enabled ?? false);
-                setVoiceprintThreshold(data.threshold ?? 0);
-                setVoiceprintProfile(data.profile ?? "");
-                setVoiceprintLoaded(data.profile_loaded ?? false);
-                setVoiceprintStatus(
-                    data.profile_loaded ? "Loaded voiceprint" : "Voiceprint not registered",
-                );
-            }
 
-            const audioStatusResponse = await fetch(
-                `${sttBaseUrl}/audio/status`,
-            );
-            if (audioStatusResponse.ok) {
-                const data = await audioStatusResponse.json();
-                if (data.speech_start_threshold !== undefined) {
-                    setVadStartThreshold(data.speech_start_threshold);
-                }
-                if (data.speech_end_threshold !== undefined) {
-                    setVadEndThreshold(data.speech_end_threshold);
-                }
+            const audioStatus = await getAudioStatus(sttBaseUrl);
+            if (audioStatus.vad_aggressiveness !== undefined) {
+                setVadAggressiveness(audioStatus.vad_aggressiveness);
+            }
+            if (audioStatus.speech_start_threshold !== undefined) {
+                setVadStartThreshold(audioStatus.speech_start_threshold);
+            }
+            if (audioStatus.speech_end_threshold !== undefined) {
+                setVadEndThreshold(audioStatus.speech_end_threshold);
             }
         } catch (error) {
             console.warn("Failed to fetch voiceprint config", error);
@@ -48,11 +47,7 @@ export const useVoiceprintState = (
 
     const pushAudioConfig = useCallback(
         async (payload: Record<string, unknown>) => {
-            await fetch(`${sttBaseUrl}/audio/config`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
+            await updateSttAudioConfig(sttBaseUrl, payload);
         },
         [sttBaseUrl],
     );
@@ -67,11 +62,20 @@ export const useVoiceprintState = (
                     voiceprint_profile: voiceprintProfile,
                 });
                 setVoiceprintEnabled(enabled);
+                await refreshVoiceprintConfig();
             } catch (error) {
+                console.error("[VoiceManager] Failed to update voiceprint toggle", error);
                 alert("Unable to connect to the STT server");
+                await refreshVoiceprintConfig();
             }
         },
-        [currentAudioDevice, pushAudioConfig, voiceprintProfile, voiceprintThreshold],
+        [
+            currentAudioDevice,
+            pushAudioConfig,
+            refreshVoiceprintConfig,
+            voiceprintProfile,
+            voiceprintThreshold,
+        ],
     );
 
     const handleVoiceprintThresholdChange = useCallback(
@@ -84,16 +88,56 @@ export const useVoiceprintState = (
                     voiceprint_threshold: value,
                     voiceprint_profile: voiceprintProfile,
                 });
-            } catch (error) {}
+                await refreshVoiceprintConfig();
+            } catch (error) {
+                console.error("[VoiceManager] Failed to update voiceprint threshold", error);
+                alert("Unable to update voiceprint threshold");
+                await refreshVoiceprintConfig();
+            }
         },
-        [currentAudioDevice, pushAudioConfig, voiceprintEnabled, voiceprintProfile],
+        [
+            currentAudioDevice,
+            pushAudioConfig,
+            refreshVoiceprintConfig,
+            voiceprintEnabled,
+            voiceprintProfile,
+        ],
+    );
+
+    const handleVoiceprintProfileChange = useCallback(
+        async (profile: string) => {
+            setVoiceprintProfile(profile);
+            try {
+                await pushAudioConfig({
+                    device_name: currentAudioDevice,
+                    enable_voiceprint_filter: voiceprintEnabled,
+                    voiceprint_threshold: voiceprintThreshold,
+                    voiceprint_profile: profile,
+                });
+                await refreshVoiceprintConfig();
+            } catch (error) {
+                console.error("[VoiceManager] Failed to update voiceprint profile", error);
+                alert("Unable to update voiceprint profile");
+                await refreshVoiceprintConfig();
+            }
+        },
+        [
+            currentAudioDevice,
+            pushAudioConfig,
+            refreshVoiceprintConfig,
+            voiceprintEnabled,
+            voiceprintThreshold,
+        ],
     );
 
     const handleVadChange = useCallback(
         async (
-            key: "speech_start_threshold" | "speech_end_threshold",
+            key: "vad_aggressiveness" | "speech_start_threshold" | "speech_end_threshold",
             value: number,
         ) => {
+            if (key === "vad_aggressiveness") {
+                setVadAggressiveness(value);
+            }
             if (key === "speech_start_threshold") {
                 setVadStartThreshold(value);
             }
@@ -103,9 +147,14 @@ export const useVoiceprintState = (
 
             try {
                 await pushAudioConfig({ [key]: value });
-            } catch (error) {}
+                await refreshVoiceprintConfig();
+            } catch (error) {
+                console.error("[VoiceManager] Failed to update VAD setting", error);
+                alert("Unable to update VAD setting");
+                await refreshVoiceprintConfig();
+            }
         },
-        [pushAudioConfig],
+        [pushAudioConfig, refreshVoiceprintConfig],
     );
 
     useEffect(() => {
@@ -122,9 +171,10 @@ export const useVoiceprintState = (
         voiceprintProfile,
         voiceprintStatus,
         voiceprintLoaded,
+        vadAggressiveness,
         vadStartThreshold,
         vadEndThreshold,
-        setVoiceprintProfile,
+        handleVoiceprintProfileChange,
         handleVoiceprintToggle,
         handleVoiceprintThresholdChange,
         handleVadChange,

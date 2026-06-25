@@ -3,10 +3,14 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np
+
 try:
     import webrtcvad
 except ModuleNotFoundError:
     webrtcvad = None
+
+
+DEFAULT_SPEECH_END_THRESHOLD = 0.15
 
 
 @dataclass
@@ -23,7 +27,7 @@ class VADProcessor:
         aggressiveness: int = 3,
         window_size: int = 15,
         speech_start_threshold: float = 0.8,
-        speech_end_threshold: float = 0.05,
+        speech_end_threshold: float = DEFAULT_SPEECH_END_THRESHOLD,
         min_speech_frames: int = 15,
     ):
         self.sample_rate = sample_rate
@@ -32,12 +36,13 @@ class VADProcessor:
         self.aggressiveness = aggressiveness
         self.window_size = window_size
         self.speech_start_threshold = speech_start_threshold
-        self.speech_end_threshold = speech_end_threshold
+        self.speech_end_threshold = self._normalize_end_threshold(speech_end_threshold)
         self.min_speech_frames = min_speech_frames
 
         self.vad = webrtcvad.Vad(aggressiveness) if webrtcvad else None
         self.speech_buffer = deque(maxlen=self.window_size)
         pre_buffer_frames = int(0.5 * 1000 / frame_duration_ms)
+        self.max_speech_frames = int(20 * 1000 / frame_duration_ms)
         self.pre_buffer = deque(maxlen=pre_buffer_frames)
         self.audio_frames: List[np.ndarray] = []
         self.is_speaking = False
@@ -47,13 +52,25 @@ class VADProcessor:
         start_threshold: Optional[float] = None,
         end_threshold: Optional[float] = None,
         min_frames: Optional[int] = None,
+        aggressiveness: Optional[int] = None,
     ) -> None:
+        if aggressiveness is not None:
+            self.update_aggressiveness(aggressiveness)
         if start_threshold is not None:
             self.speech_start_threshold = max(0.1, min(1.0, start_threshold))
         if end_threshold is not None:
-            self.speech_end_threshold = max(0.01, min(1.0, end_threshold))
+            self.speech_end_threshold = self._normalize_end_threshold(end_threshold)
         if min_frames is not None:
             self.min_speech_frames = max(5, min(100, min_frames))
+
+    def update_aggressiveness(self, aggressiveness: int) -> None:
+        self.aggressiveness = max(0, min(3, int(aggressiveness)))
+        if self.vad is not None:
+            self.vad.set_mode(self.aggressiveness)
+
+    def _normalize_end_threshold(self, value: float) -> float:
+        min_threshold = (1 / self.window_size) + 0.001
+        return max(min_threshold, min(1.0, value))
 
     def process_frame(self, frame: np.ndarray) -> VADResult:
         rms = np.sqrt(np.mean(frame**2))
@@ -100,6 +117,11 @@ class VADProcessor:
 
         if self.is_speaking:
             self.audio_frames.append(frame)
+            if len(self.audio_frames) >= self.max_speech_frames:
+                self.is_speaking = False
+                audio_data = np.concatenate(self.audio_frames)
+                self.audio_frames.clear()
+                return VADResult("speech_end", audio_data)
             return VADResult("speech_continue")
 
         self.pre_buffer.append(frame)

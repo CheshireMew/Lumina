@@ -46,6 +46,40 @@ function Wait-TcpPort {
     throw "$Name did not become ready on $Address`:$Port within $TimeoutSeconds seconds."
 }
 
+function Test-BuiltFilesFresh {
+    param(
+        [string]$DistIndex,
+        [string]$MainBundle
+    )
+
+    if (-not ((Test-Path $DistIndex) -and (Test-Path $MainBundle))) {
+        return $false
+    }
+
+    $sourceFiles = @()
+    foreach ($root in @("app", "core")) {
+        $sourceRoot = Join-Path $PSScriptRoot $root
+        if (Test-Path $sourceRoot) {
+            $sourceFiles += Get-ChildItem -Path $sourceRoot -Recurse -File -Include *.ts,*.tsx,*.mts
+        }
+    }
+    foreach ($file in @("vite.config.mts", "package.json")) {
+        $sourceFile = Join-Path $PSScriptRoot $file
+        if (Test-Path $sourceFile) {
+            $sourceFiles += Get-Item $sourceFile
+        }
+    }
+
+    if (-not $sourceFiles) {
+        return $true
+    }
+
+    $latestSource = ($sourceFiles | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).LastWriteTimeUtc
+    $oldestBuild = (@(Get-Item $DistIndex, $MainBundle) | Sort-Object LastWriteTimeUtc | Select-Object -First 1).LastWriteTimeUtc
+
+    return $oldestBuild -ge $latestSource
+}
+
 function Get-LuminaRuntimeConfig {
     $rootPath = $PSScriptRoot.Replace('\', '\\')
     $script = @"
@@ -116,14 +150,14 @@ function Start-LuminaDesktop {
     $mainBundle = Join-Path $PSScriptRoot "dist-electron\main.js"
     $electronCmd = Join-Path $PSScriptRoot "node_modules\.bin\electron.cmd"
 
-    if ((Test-Path $distIndex) -and (Test-Path $mainBundle) -and (Test-Path $electronCmd)) {
+    if ((Test-BuiltFilesFresh -DistIndex $distIndex -MainBundle $mainBundle) -and (Test-Path $electronCmd)) {
         Write-Host "🖥️ Starting Electron from built files..." -ForegroundColor Cyan
         & $electronCmd .
         return
     }
 
-    Write-Host "⚠️ Built files not found. Falling back to dev mode." -ForegroundColor Yellow
-    Write-Host "   Run npm run build once to enable faster normal startup." -ForegroundColor Yellow
+    Write-Host "⚠️ Built files are missing or older than source. Falling back to dev mode." -ForegroundColor Yellow
+    Write-Host "   Run npm run build after closing old backend processes to enable faster normal startup." -ForegroundColor Yellow
     npm run dev
 }
 

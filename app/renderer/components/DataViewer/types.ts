@@ -3,12 +3,6 @@ export interface TableInfo {
     info: string;
 }
 
-export interface QueryResult {
-    status: string;
-    result?: any[];
-    error?: string;
-}
-
 export interface TableRow {
     id: any;
     [key: string]: any;

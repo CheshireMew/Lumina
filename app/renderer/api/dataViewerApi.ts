@@ -1,31 +1,10 @@
-import type { QueryResult } from "./types";
+import { jsonRequestOptions, requestJson } from "./client";
 
-const parseJsonResponse = async (response: Response): Promise<any> => {
-    const text = await response.text();
-    if (!text) {
-        return {};
-    }
-
-    try {
-        return JSON.parse(text);
-    } catch {
-        return { detail: text || response.statusText };
-    }
-};
-
-const requestJson = async <T>(
-    url: string,
-    options?: RequestInit,
-): Promise<T> => {
-    const response = await fetch(url, options);
-    const data = await parseJsonResponse(response);
-
-    if (!response.ok) {
-        throw new Error(data.detail || response.statusText || "Request failed");
-    }
-
-    return data as T;
-};
+export interface QueryResult {
+    status: string;
+    result?: any[];
+    error?: string;
+}
 
 export const loadTables = async (apiBaseUrl: string, signal?: AbortSignal) => {
     const data = await requestJson<{ tables?: Array<{ name: string; info: string }> }>(
@@ -44,7 +23,7 @@ export const loadTableRows = async (
     let url = `${apiBaseUrl}/memory/inspection/table/${tableName}?limit=50`;
     if (
         activeCharacterId &&
-        (tableName === "conversation_log" || tableName === "episodic_memory")
+        (tableName === "conversation_turns" || tableName === "memory_items")
     ) {
         url += `&character_id=${activeCharacterId}`;
     }
@@ -53,37 +32,13 @@ export const loadTableRows = async (
     return data.data || [];
 };
 
-export const loadGraphData = async (
-    apiBaseUrl: string,
-    activeCharacterId: string | null | undefined,
-    signal?: AbortSignal,
-) => {
-    const characterParam = activeCharacterId
-        ? `?character_id=${encodeURIComponent(activeCharacterId)}`
-        : "";
-
-    const data = await requestJson<{
-        status?: string;
-        graph?: { nodes: any[]; edges: any[] };
-    }>(
-        `${apiBaseUrl}/memory/inspection${characterParam}`,
-        { signal },
-    );
-
-    return data.status === "success" ? data.graph || null : null;
-};
-
 export const executeQuery = async (
     apiBaseUrl: string,
     query: string,
 ): Promise<QueryResult> => {
     const data = await requestJson<{ result?: any[]; detail?: string }>(
         `${apiBaseUrl}/memory/inspection/query`,
-        {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query }),
-        },
+        jsonRequestOptions("POST", { query }),
     );
 
     return {
@@ -99,9 +54,7 @@ export const deleteRecord = async (
 ) => {
     return requestJson<{ status?: string; detail?: string }>(
         `${apiBaseUrl}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
-        {
-            method: "DELETE",
-        },
+        jsonRequestOptions("DELETE"),
     );
 };
 
@@ -113,11 +66,7 @@ export const updateRecord = async (
 ) => {
     return requestJson<{ status?: string; detail?: string }>(
         `${apiBaseUrl}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
-        {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ data }),
-        },
+        jsonRequestOptions("PUT", { data }),
     );
 };
 
@@ -128,11 +77,7 @@ export const createRecord = async (
 ) => {
     return requestJson<{ status?: string; detail?: string }>(
         `${apiBaseUrl}/memory/inspection/record/${tableName}/new`,
-        {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ data }),
-        },
+        jsonRequestOptions("POST", { data }),
     );
 };
 
@@ -144,4 +89,3 @@ export const normalizeRecordId = (value: any): string => {
     const text = String(value);
     return text.includes(":") ? text.split(":")[1] : text;
 };
-

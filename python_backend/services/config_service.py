@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from config.models import CUSTOM_LLM_PROVIDER_ID, FREE_LLM_PROVIDER_ID
+from config.models import CUSTOM_LLM_PROVIDER_ID, FREE_LLM_PROVIDER_ID, POLLINATIONS_BASE_URL
 from core.services.service_registry import get_service_registry
 from schemas.runtime_settings import RuntimeLlmSettings
 
@@ -34,8 +34,8 @@ class ConfigService:
 
         return RuntimeLlmSettings(
             providerId=provider_id,
-            apiKey=(provider.api_key if provider_id == CUSTOM_LLM_PROVIDER_ID else "") or "",
-            baseUrl=(provider.base_url if provider_id == CUSTOM_LLM_PROVIDER_ID else "") or "",
+            apiKey=provider.api_key or "",
+            baseUrl=provider.base_url or "",
             model=route.model or "",
             temperature=route.temperature,
             topP=route.top_p,
@@ -83,6 +83,16 @@ class ConfigService:
                 provider_updates["models"] = [model]
 
             llm_manager.update_provider(CUSTOM_LLM_PROVIDER_ID, provider_updates)
+        elif target_provider_id == FREE_LLM_PROVIDER_ID:
+            provider_updates = {
+                "type": "pollinations",
+                "base_url": base_url or POLLINATIONS_BASE_URL,
+                "api_key": api_key or "",
+            }
+            if model:
+                provider_updates["models"] = [model]
+
+            llm_manager.update_provider(FREE_LLM_PROVIDER_ID, provider_updates)
 
         for route in llm_manager.list_routes():
             route_updates = {"provider_id": target_provider_id}

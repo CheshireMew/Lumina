@@ -25,10 +25,10 @@ class MemoryServiceStub:
 
     def __init__(self):
         self.encoder = MagicMock(return_value=[0.1, 0.2])
-        self.search_episodic = AsyncMock(return_value=[])
-        self.search_episodic_hybrid = AsyncMock(return_value=[])
-        self.log_conversation = AsyncMock(return_value="log-1")
-        self.get_all_conversations = AsyncMock(return_value=[])
+        self.search_memory_items = AsyncMock(return_value=[])
+        self.search_memory_items_hybrid = AsyncMock(return_value=[])
+        self.record_turn = AsyncMock(return_value="turn-1")
+        self.get_all_turns = AsyncMock(return_value=[])
         self.get_inspiration = AsyncMock(return_value=[])
 
 
@@ -42,28 +42,28 @@ class SoulServiceStub:
         return self.character_id
 
 
-async def test_memory_search_always_targets_episodic_memory():
+async def test_memory_search_targets_memory_items():
     memory_service = MemoryServiceStub()
     context_resolver = CompanionContextResolver(SoulServiceStub("sakura"))
     request = SearchRequest(user_id="user", query="hello", limit=7)
 
     await search_memory(request, memory_service=memory_service, context_resolver=context_resolver)
 
-    memory_service.search_episodic.assert_awaited_once()
-    args, kwargs = memory_service.search_episodic.call_args
+    memory_service.search_memory_items.assert_awaited_once()
+    args, kwargs = memory_service.search_memory_items.call_args
     assert args[1] == CompanionContext(session_id=0, user_id="user", character_id="sakura")
     assert kwargs["limit"] == 7
 
 
-async def test_memory_hybrid_search_always_targets_episodic_memory():
+async def test_memory_hybrid_search_targets_memory_items():
     memory_service = MemoryServiceStub()
     context_resolver = CompanionContextResolver(SoulServiceStub("sakura"))
     request = SearchRequest(user_id="user", query="hello", limit=7)
 
     await search_memory_hybrid(request, memory_service=memory_service, context_resolver=context_resolver)
 
-    memory_service.search_episodic_hybrid.assert_awaited_once()
-    _, kwargs = memory_service.search_episodic_hybrid.call_args
+    memory_service.search_memory_items_hybrid.assert_awaited_once()
+    _, kwargs = memory_service.search_memory_items_hybrid.call_args
     assert kwargs["context"] == CompanionContext(session_id=0, user_id="user", character_id="sakura")
     assert kwargs["limit"] == 7
 
@@ -93,10 +93,13 @@ async def test_add_memory_uses_soul_character_and_updates_interaction():
         interaction_recorder=interaction_recorder,
     )
 
-    assert response == {"status": "success", "id": "log-1", "storage": "test-memory"}
-    memory_service.log_conversation.assert_awaited_once_with(
+    assert response == {"status": "success", "id": "turn-1", "storage": "test-memory"}
+    memory_service.record_turn.assert_awaited_once_with(
         CompanionContext(session_id=0, user_id=DEFAULT_USER_ID, character_id="sakura"),
-        "Ada: hello\nLumina: hi",
+        user_message="hello",
+        assistant_message="hi",
+        user_name="Ada",
+        companion_name="Lumina",
     )
     soul_service.update_last_interaction.assert_called_once_with()
     soul_service.on_interaction.assert_not_awaited()
@@ -108,7 +111,7 @@ async def test_get_all_memories_uses_soul_character_when_query_omits_character()
 
     await get_all_memories(memory_service=memory_service, context_resolver=context_resolver)
 
-    memory_service.get_all_conversations.assert_awaited_once_with(
+    memory_service.get_all_turns.assert_awaited_once_with(
         CompanionContext(session_id=0, user_id=DEFAULT_USER_ID, character_id="sakura")
     )
 

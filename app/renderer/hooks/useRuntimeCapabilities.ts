@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fetchRuntimeCapabilities } from "../api/runtimeApi";
 
 export type RuntimeCapabilityState = "ready" | "offline" | "unavailable" | "failed";
 
@@ -22,37 +23,35 @@ export const useRuntimeCapabilities = (enabled: boolean, baseUrl: string) => {
 
         const abortController = new AbortController();
 
-        void fetch(`${baseUrl}/runtime/capabilities`, {
-            signal: abortController.signal,
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                return response.json();
-            })
-            .then((payload) => {
-                if (abortController.signal.aborted || !Array.isArray(payload.capabilities)) {
-                    return;
-                }
+        const refreshCapabilities = () => {
+            void fetchRuntimeCapabilities(baseUrl, abortController.signal)
+                .then((payload) => {
+                    if (abortController.signal.aborted || !Array.isArray(payload.capabilities)) {
+                        return;
+                    }
 
-                const next = payload.capabilities.reduce(
-                    (acc: Record<string, RuntimeCapabilitySnapshot>, item: RuntimeCapabilitySnapshot) => {
-                        acc[item.capability] = item;
-                        return acc;
-                    },
-                    {},
-                );
-                setCapabilities(next);
-            })
-            .catch((error) => {
-                if (abortController.signal.aborted) {
-                    return;
-                }
-                console.error("[useRuntimeCapabilities] Failed to fetch runtime capabilities:", error);
-            });
+                    const next = payload.capabilities.reduce(
+                        (acc: Record<string, RuntimeCapabilitySnapshot>, item) => {
+                            acc[item.capability] = item as RuntimeCapabilitySnapshot;
+                            return acc;
+                        },
+                        {},
+                    );
+                    setCapabilities(next);
+                })
+                .catch((error) => {
+                    if (abortController.signal.aborted) {
+                        return;
+                    }
+                    console.error("[useRuntimeCapabilities] Failed to fetch runtime capabilities:", error);
+                });
+        };
+
+        refreshCapabilities();
+        const interval = window.setInterval(refreshCapabilities, 3000);
 
         return () => {
+            window.clearInterval(interval);
             abortController.abort();
         };
     }, [enabled, baseUrl]);

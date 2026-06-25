@@ -10,6 +10,7 @@ interface FreeProviderSectionProps {
     modelName: string;
     availableModels: string[];
     isLoadingModels: boolean;
+    modelLoadError: string | null;
     onModelNameChange: (modelName: string) => void;
 }
 
@@ -17,6 +18,7 @@ const FreeProviderSection: FC<FreeProviderSectionProps> = ({
     modelName,
     availableModels,
     isLoadingModels,
+    modelLoadError,
     onModelNameChange,
 }) => {
     const models = availableModels.includes(modelName) || !modelName
@@ -26,14 +28,13 @@ const FreeProviderSection: FC<FreeProviderSectionProps> = ({
     return (
         <div style={providerSectionStyles.freeCard}>
             <div style={providerSectionStyles.freeTitle}>
-                <Sparkles size={16} /> Pollinations Magic
+                <Sparkles size={16} /> Pollinations
             </div>
             <div style={providerSectionStyles.freeDescription}>
-                Privacy-focused proxy for OpenAI, Claude, and Llama. <br />
-                <strong>No API Key required. Unlimited usage.</strong>
+                Anonymous Pollinations text API. No API key required.
             </div>
 
-            <label style={labelStyle}>Select Persona</label>
+            <label style={labelStyle}>Model</label>
             <select
                 style={inputStyle}
                 value={modelName}
@@ -45,13 +46,18 @@ const FreeProviderSection: FC<FreeProviderSectionProps> = ({
                 ) : models.length > 0 ? (
                     models.map((model) => (
                         <option key={model} value={model}>
-                            {model.toUpperCase()}
+                            {model}
                         </option>
                     ))
                 ) : (
                     <option value="">No models reported by runtime</option>
                 )}
             </select>
+            {modelLoadError && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "#fca5a5" }}>
+                    {modelLoadError}
+                </div>
+            )}
         </div>
     );
 };

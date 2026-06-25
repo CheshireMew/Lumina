@@ -12,8 +12,6 @@ from .crud import delete as crud_delete
 from .crud import mark_memories_hit as crud_mark_memories_hit
 from .crud import query as crud_query
 from .crud import update as crud_update
-from .graph import get_neighbors as graph_get_neighbors
-from .graph import relate as graph_relate
 from .notifications import publish as notifications_publish
 from .notifications import listen as notifications_listen
 from .query_builder import PostgresQueryBuilder
@@ -147,20 +145,6 @@ class PostgresDriver(BaseMemoryDriver):
             vector_weight,
             filter_criteria,
         )
-
-    async def relate(
-        self,
-        subject: str,
-        predicate: str,
-        object: str,
-        data: Optional[Dict] = None,
-    ) -> bool:
-        return await graph_relate(
-            self._require_pool(), subject, predicate, object, data
-        )
-
-    async def get_neighbors(self, node_id: str, depth: int = 1) -> list:
-        return await graph_get_neighbors(self._require_pool(), node_id, depth)
 
     async def publish(self, channel: str, message: Dict[str, Any]):
         return await notifications_publish(self._require_pool(), channel, message)

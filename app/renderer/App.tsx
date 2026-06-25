@@ -8,7 +8,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import ChatBubble from './components/ChatBubble'
 import InputBox from './components/InputBox'
 import { events } from './core/events';
-import { GeneralSettingsInput } from './hooks/useSettings';
+import { GeneralSettingsPatch } from './hooks/useSettings';
 import { CUSTOM_LLM_PROVIDER_ID, LlmProviderId } from './components/LLMConfig/types';
 
 // Core Hooks
@@ -88,7 +88,7 @@ function CompanionAppShell({
 }: CompanionAppShellProps) {
     const {
         activeCharacter, activeCharacterId,
-        settings, isSettingsLoaded, updateLLMSettings, saveGeneralSettings,
+        settings, isSettingsLoaded, saveCharacter, updateLLMSettings, saveGeneralSettings,
         isProcessing, isStreaming, displayMessage, reasoningContent,
         sendMessage, interrupt
     } = useCompanionRuntime();
@@ -101,7 +101,7 @@ function CompanionAppShell({
     const [isMotionTesterOpen, setIsMotionTesterOpen] = useState(false);
     const [isMemoryInspectorOpen, setIsMemoryInspectorOpen] = useState(false);
     const [isLLMConfigOpen, setIsLLMConfigOpen] = useState(false);
-    const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'voice'>('general');
+    const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'character' | 'voice' | 'voiceprint'>('general');
     const [visibleBackgroundImage, setVisibleBackgroundImage] = useState('');
     
     // Other Refs
@@ -115,11 +115,11 @@ function CompanionAppShell({
         interrupt();
     }, [interrupt]);
 
-    const handleLLMSettingsChange = useCallback((apiKey: string, baseUrl: string, model: string, temperature: number, thinkingEnabled: boolean, historyLimit: number, overflowStrategy: 'slide' | 'reset', topP?: number, presencePenalty?: number, frequencyPenalty?: number, providerId: LlmProviderId = CUSTOM_LLM_PROVIDER_ID) => {
-        updateLLMSettings({ providerId, apiKey, baseUrl, model, temperature, thinkingEnabled, historyLimit, overflowStrategy, topP, presencePenalty, frequencyPenalty });
+    const handleLLMSettingsChange = useCallback(async (apiKey: string, baseUrl: string, model: string, temperature: number, thinkingEnabled: boolean, historyLimit: number, overflowStrategy: 'slide' | 'reset', topP?: number, presencePenalty?: number, frequencyPenalty?: number, providerId: LlmProviderId = CUSTOM_LLM_PROVIDER_ID) => {
+        await updateLLMSettings({ providerId, apiKey, baseUrl, model, temperature, thinkingEnabled, historyLimit, overflowStrategy, topP, presencePenalty, frequencyPenalty });
     }, [updateLLMSettings]);
 
-    const handleSaveGeneralSettings = useCallback(async (next: GeneralSettingsInput) => {
+    const handleSaveGeneralSettings = useCallback(async (next: GeneralSettingsPatch) => {
         await saveGeneralSettings(next);
     }, [saveGeneralSettings]);
     
@@ -307,12 +307,14 @@ function CompanionAppShell({
                             isOpen: isSettingsOpen,
                             onClose: () => setIsSettingsOpen(false),
                             initialTab: settingsInitialTab,
+                            activeCharacter,
                             currentSettings: {
                                 userName: settings.userName,
                                 backgroundImage: settings.backgroundImage,
                                 live2dHighDpi: settings.live2dHighDpi,
                             },
-                            onSave: handleSaveGeneralSettings,
+                            onSaveCharacter: saveCharacter,
+                            onChange: handleSaveGeneralSettings,
                         }}
                         motionTester={{
                             isOpen: isMotionTesterOpen,

@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Loader2, Mic, Keyboard, Send, X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Camera, Loader2, Mic, Keyboard, Send } from 'lucide-react';
 import { events } from '../core/events';
-import { getSttWebSocketUrl } from '../platform/electron';
+import { useVisionUpload } from '../hooks/useVisionUpload';
+import { useVoiceInputSession } from '../hooks/useVoiceInputSession';
 
 interface InputBoxProps {
     onSend: (message: string) => void;
@@ -28,98 +29,15 @@ const InputBox: React.FC<InputBoxProps> = ({
 }) => {
     // --- Text State ---
     const [value, setValue] = useState('');
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const { isAnalyzing, analyze } = useVisionUpload(visionBaseUrl, visionCapabilityState);
 
-    // --- Voice State ---
-    const [vadStatus, setVadStatus] = useState<'idle' | 'listening' | 'thinking'>('idle');
-    const [voiceError, setVoiceError] = useState<string>('');
-    const [transcript, setTranscript] = useState<string>('');
-    const wsRef = useRef<WebSocket | null>(null);
-    const onSendRef = useRef(onSend);
-    const onSpeechStartRef = useRef(onSpeechStart);
-
-    // Sync Refs
-    useEffect(() => {
-        onSendRef.current = onSend;
-        onSpeechStartRef.current = onSpeechStart;
-    }, [onSend, onSpeechStart]);
-
-    // --- Voice Logic ---
-    useEffect(() => {
-        if (chatMode !== 'voice') {
-            if (wsRef.current) {
-                wsRef.current.close();
-                wsRef.current = null;
-            }
-            return;
-        }
-
-        if (voiceCapabilityState !== 'ready') {
-            setVoiceError('语音能力未安装');
-            setVadStatus('idle');
-            return;
-        }
-
-        let ws: WebSocket | null = null;
-        const connectWS = async () => {
-            try {
-                const wsUrl = await getSttWebSocketUrl();
-                ws = new WebSocket(wsUrl);
-                wsRef.current = ws;
-
-                ws.onopen = () => setVoiceError('');
-                ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        if (data.type === 'vad_status') {
-                            setVadStatus(data.status);
-                            if (data.status === 'listening') {
-                                 events.emit('audio:vad.start', undefined);
-                                 if (onSpeechStartRef.current) onSpeechStartRef.current();
-                            }
-                        } else if (data.type === 'partial') {
-                            setTranscript(data.text);
-                        } else if (data.type === 'transcript' || data.type === 'transcription') {
-                            if (data.text.trim()) {
-                                let finalText = data.text;
-                                // Clean tags
-                                const displayText = data.text.replace(/<\|[A-Z]+\|>/g, '').trim();
-                                setTranscript(displayText);
-                                
-                                // Emotion handling
-                                if (data.emotion) {
-                                    const emotionMap: Record<string, string> = {
-                                        '<|HAPPY|>': 'Happy', '<|SAD|>': 'Sad', '<|ANGRY|>': 'Angry',
-                                        '<|NEUTRAL|>': 'Neutral', '<|FEAR|>': 'Fear', '<|SURPRISE|>': 'Surprise'
-                                    };
-                                    const readableEmotion = emotionMap[data.emotion] || data.emotion;
-                                    finalText = `(User emotion: ${readableEmotion}) ${displayText}`;
-                                }
-    
-                                setTimeout(() => {
-                                    onSendRef.current(finalText);
-                                    setTranscript('');
-                                }, 500);
-                            }
-                        } else if (data.type === 'error') {
-                            setVoiceError(data.message);
-                            setVadStatus('idle');
-                        }
-                    } catch (err) {
-                        console.warn('WebSocket message parse error:', err);
-                    }
-                };
-                ws.onerror = () => setVoiceError('Connection Failed');
-            } catch (e) {
-                console.error(e);
-                setVoiceError('Init Failed');
-            }
-        };
-
-        connectWS();
-        return () => { if (ws) ws.close(); };
-    }, [chatMode, voiceCapabilityState]);
+    const { vadStatus, voiceError, transcript, setVoiceError } = useVoiceInputSession({
+        chatMode,
+        voiceCapabilityState,
+        onFinalText: onSend,
+        onSpeechStart,
+    });
 
     // --- Handlers ---
     const handleSend = () => {
@@ -145,22 +63,13 @@ const InputBox: React.FC<InputBoxProps> = ({
             if (fileInputRef.current) fileInputRef.current.value = '';
             return;
         }
-        setIsAnalyzing(true);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('prompt', 'Describe this image in detail.');
-            const res = await fetch(`${visionBaseUrl}/analyze`, { method: 'POST', body: formData });
-            if (res.ok) {
-                const data = await res.json();
-                setValue(prev => (prev ? prev + '\n' + `[Image Context]: ${data.description}` : `[Image Context]: ${data.description}`));
-            } else {
-                alert('Vision analysis failed.');
-            }
+            const description = await analyze(file);
+            setValue(prev => (prev ? prev + '\n' + `[Image Context]: ${description}` : `[Image Context]: ${description}`));
         } catch (err) {
-            alert('Failed to connect to Vision Service.');
+            console.error('[InputBox] Vision analysis failed', err);
+            alert(err instanceof Error ? err.message : 'Failed to connect to Vision Service.');
         } finally {
-            setIsAnalyzing(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
@@ -247,6 +156,7 @@ const InputBox: React.FC<InputBoxProps> = ({
                     onClick={() => {
                         if (chatMode === 'text' && voiceCapabilityState !== 'ready') {
                             setVoiceError('语音能力未安装');
+                            return;
                         }
                         onToggleChatMode();
                     }}
