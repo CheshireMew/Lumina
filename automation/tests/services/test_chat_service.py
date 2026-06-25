@@ -157,9 +157,9 @@ async def test_stream_text_turn_emits_started_delta_and_ended_events():
 
 
 @pytest.mark.anyio
-async def test_stream_response_logs_turn_to_memory():
+async def test_stream_response_records_turn_to_memory():
     pipeline = FakePipeline(tokens=["ok"])
-    memory = SimpleNamespace(log_conversation=AsyncMock())
+    memory = SimpleNamespace(record_turn=AsyncMock())
     session_manager = SimpleNamespace(add_turn=AsyncMock())
     soul = SimpleNamespace(
         update_last_interaction=MagicMock(),
@@ -194,9 +194,12 @@ async def test_stream_response_logs_turn_to_memory():
     session_manager.add_turn.assert_awaited_once()
     soul.update_last_interaction.assert_called_once_with()
     soul.on_interaction.assert_awaited_once()
-    memory.log_conversation.assert_awaited_once_with(
+    memory.record_turn.assert_awaited_once_with(
         companion_context(user_id="u", character_id="hiyori"),
-        "Ada: ping\nhiyori: ok",
+        user_message="ping",
+        assistant_message="ok",
+        user_name="Ada",
+        companion_name=None,
     )
 
 

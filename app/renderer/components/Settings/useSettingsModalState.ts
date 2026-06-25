@@ -1,37 +1,30 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef } from "react";
 
-import { GeneralSettingsInput } from "../../hooks/useSettings";
+import { GeneralSettingsInput, GeneralSettingsPatch } from "../../hooks/useSettings";
 import { uploadBackground } from "../../platform/electron";
 
 interface UseSettingsModalStateOptions {
-    isOpen: boolean;
     currentSettings: GeneralSettingsInput;
-    onSave: (settings: GeneralSettingsInput) => Promise<void>;
-    onClose: () => void;
+    onChange: (settings: GeneralSettingsPatch) => Promise<void>;
 }
 
 export const useSettingsModalState = ({
-    isOpen,
     currentSettings,
-    onSave,
-    onClose,
+    onChange,
 }: UseSettingsModalStateOptions) => {
-    const [userName, setUserName] = useState("Master");
-    const [highDpiEnabled, setHighDpiEnabled] = useState(false);
-    const [backgroundImage, setBackgroundImage] = useState("");
-    const [isSaving, setIsSaving] = useState(false);
-
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        if (!isOpen) {
-            return;
-        }
-
-        setUserName(currentSettings.userName);
-        setHighDpiEnabled(currentSettings.live2dHighDpi);
-        setBackgroundImage(currentSettings.backgroundImage);
-    }, [currentSettings.backgroundImage, currentSettings.live2dHighDpi, currentSettings.userName, isOpen]);
+    const applySettings = useCallback(
+        async (patch: GeneralSettingsPatch) => {
+            try {
+                await onChange(patch);
+            } catch (error) {
+                console.error("[Settings] Failed to save general setting", error);
+                alert("Failed to save setting.");
+            }
+        },
+        [onChange],
+    );
 
     const handleBackgroundFileSelect = async (
         event: React.ChangeEvent<HTMLInputElement>,
@@ -43,7 +36,7 @@ export const useSettingsModalState = ({
 
         try {
             const safeUrl = await uploadBackground((file as any).path);
-            setBackgroundImage(safeUrl);
+            await applySettings({ backgroundImage: safeUrl });
         } catch (error) {
             console.error("Upload failed", error);
             alert("Failed to save background image.");
@@ -52,31 +45,20 @@ export const useSettingsModalState = ({
         }
     };
 
-    const handleSave = async () => {
-        setIsSaving(true);
-
-        try {
-            await onSave({
-                userName,
-                live2dHighDpi: highDpiEnabled,
-                backgroundImage,
-            });
-            onClose();
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
     return {
-        userName,
-        setUserName,
-        highDpiEnabled,
-        setHighDpiEnabled,
-        backgroundImage,
-        setBackgroundImage,
-        isSaving,
+        userName: currentSettings.userName,
+        setUserName: (userName: string) => {
+            void applySettings({ userName });
+        },
+        highDpiEnabled: currentSettings.live2dHighDpi,
+        setHighDpiEnabled: (live2dHighDpi: boolean) => {
+            void applySettings({ live2dHighDpi });
+        },
+        backgroundImage: currentSettings.backgroundImage,
+        setBackgroundImage: (backgroundImage: string) => {
+            void applySettings({ backgroundImage });
+        },
         fileInputRef,
         handleBackgroundFileSelect,
-        handleSave,
     };
 };

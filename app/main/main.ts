@@ -67,6 +67,11 @@ function getBootstrapState(): BootstrapState {
 }
 
 function registerIpcHandlers() {
+    ipcMain.removeHandler("settings:get");
+    ipcMain.handle("settings:get", async (_event, key) => {
+        return store.get(key);
+    });
+
     ipcMain.removeHandler("settings:set");
     ipcMain.handle("settings:set", async (_event, key, value) => {
         store.set(key, value);

@@ -235,22 +235,6 @@ class BaseMemoryDriver(BaseDriver):
          """Hybrid search."""
          pass
 
-    # --- 馃枼锔?Knowledge Graph Extensions ---
-    
-    async def relate(self, 
-                     subject: str, 
-                     predicate: str, 
-                     object: str, 
-                     data: Optional[Dict] = None) -> bool:
-        """
-        Create a directed relationship (Subject)-[Predicate]->(Object).
-        """
-        raise NotImplementedError("Graph 'relate' not implemented for this driver.")
-
-    async def get_neighbors(self, node_id: str, depth: int = 1) -> list:
-        """Retrieve related entities."""
-        raise NotImplementedError("Graph 'get_neighbors' not implemented for this driver.")
-
     # --- 馃搼 Realtime / Control Plane Extensions ---
 
     async def publish(self, channel: str, message: Dict[str, Any]):

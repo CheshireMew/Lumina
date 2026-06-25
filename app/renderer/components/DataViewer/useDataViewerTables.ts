@@ -6,23 +6,21 @@ import {
     loadTableRows,
     normalizeRecordId,
     updateRecord,
-} from "./dataViewerApi";
+} from "../../api/dataViewerApi";
 
 interface UseDataViewerTablesArgs {
     isOpen: boolean;
     activeCharacterId?: string | null;
     apiBaseUrl: string;
-    refreshGraph: () => Promise<void> | void;
 }
 
 export const useDataViewerTables = ({
     isOpen,
     activeCharacterId,
     apiBaseUrl,
-    refreshGraph,
 }: UseDataViewerTablesArgs) => {
     const [selectedTable, setSelectedTable] = useState<string | null>(
-        "conversation_log",
+        "conversation_turns",
     );
     const [tableData, setTableData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
@@ -31,10 +29,11 @@ export const useDataViewerTables = ({
     const [editingRecord, setEditingRecord] = useState<any>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [editorForm, setEditorForm] = useState<any>({});
+    const [editorSaving, setEditorSaving] = useState(false);
 
     const loadTableAbortRef = useRef<AbortController | null>(null);
     const isMountedRef = useRef(false);
-    const selectedTableRef = useRef<string | null>("conversation_log");
+    const selectedTableRef = useRef<string | null>("conversation_turns");
     const tableCacheRef = useRef<Record<string, any[]>>({});
 
     useEffect(() => {
@@ -62,13 +61,6 @@ export const useDataViewerTables = ({
 
             selectedTableRef.current = tableName;
             setSelectedTable(tableName);
-
-            if (tableName === "knowledge_facts") {
-                setLoading(false);
-                setTableData([]);
-                await refreshGraph();
-                return;
-            }
 
             const cachedRows = tableCacheRef.current[tableName];
             if (!forceRefresh && cachedRows) {
@@ -110,12 +102,12 @@ export const useDataViewerTables = ({
                 }
             }
         },
-        [activeCharacterId, apiBaseUrl, refreshGraph],
+        [activeCharacterId, apiBaseUrl],
     );
 
     useEffect(() => {
         if (isOpen) {
-            void loadTableData(selectedTableRef.current || "conversation_log");
+            void loadTableData(selectedTableRef.current || "conversation_turns");
         }
     }, [isOpen, loadTableData]);
 
@@ -148,9 +140,18 @@ export const useDataViewerTables = ({
         setIsCreating(true);
 
         const nextForm: Record<string, any> = {};
+        const hiddenCreateColumns = new Set([
+            "id",
+            "created_at",
+            "updated_at",
+            "embedding",
+            "vector",
+            "metadata",
+        ]);
+
         if (tableData.length > 0) {
             Object.keys(tableData[0]).forEach((column) => {
-                if (column !== "id" && column !== "created_at") {
+                if (!hiddenCreateColumns.has(column)) {
                     nextForm[column] = "";
                 }
             });
@@ -175,14 +176,23 @@ export const useDataViewerTables = ({
 
             try {
                 await deleteRecord(apiBaseUrl, selectedTable, rawId);
-                setTableData((previous) =>
-                    previous.filter((row) => normalizeRecordId(row.id) !== rawId),
-                );
+                const removeDeleted = (rows: any[]) =>
+                    rows.filter((row) => normalizeRecordId(row.id) !== rawId);
+                setTableData(removeDeleted);
+                setTableCache((previous) => {
+                    const cachedRows = previous[selectedTable] || tableData;
+                    const next = {
+                        ...previous,
+                        [selectedTable]: removeDeleted(cachedRows),
+                    };
+                    tableCacheRef.current = next;
+                    return next;
+                });
             } catch (error) {
                 alert(`Delete failed: ${error}`);
             }
         },
-        [apiBaseUrl, selectedTable],
+        [apiBaseUrl, selectedTable, tableData],
     );
 
     const handleSaveRecord = useCallback(async () => {
@@ -190,19 +200,29 @@ export const useDataViewerTables = ({
             return;
         }
 
+        setEditorSaving(true);
         try {
             if (!isCreating) {
                 const recordId = normalizeRecordId(editingRecord?.id);
                 const { id: _, ...updateData } = editorForm;
                 await updateRecord(apiBaseUrl, selectedTable, recordId, updateData);
                 setEditingRecord(null);
-                setTableData((previous) =>
-                    previous.map((row) =>
+                const applyUpdate = (rows: any[]) =>
+                    rows.map((row) =>
                         normalizeRecordId(row.id) === recordId
                             ? { ...row, ...updateData }
                             : row,
-                    ),
-                );
+                    );
+                setTableData(applyUpdate);
+                setTableCache((previous) => {
+                    const cachedRows = previous[selectedTable] || tableData;
+                    const next = {
+                        ...previous,
+                        [selectedTable]: applyUpdate(cachedRows),
+                    };
+                    tableCacheRef.current = next;
+                    return next;
+                });
                 return;
             }
 
@@ -211,8 +231,10 @@ export const useDataViewerTables = ({
             void loadTableData(selectedTable, true);
         } catch (error) {
             alert(`Error saving: ${error}`);
+        } finally {
+            setEditorSaving(false);
         }
-    }, [apiBaseUrl, editorForm, editingRecord, isCreating, loadTableData, selectedTable]);
+    }, [apiBaseUrl, editorForm, editingRecord, isCreating, loadTableData, selectedTable, tableData]);
 
     const closeEditor = useCallback(() => {
         setEditingRecord(null);
@@ -231,6 +253,7 @@ export const useDataViewerTables = ({
         editingRecord,
         isCreating,
         editorForm,
+        editorSaving,
         setEditorForm,
         handleSaveRecord,
         closeEditor,

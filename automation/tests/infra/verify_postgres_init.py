@@ -51,17 +51,19 @@ async def verify_postgres():
         # 4. Test CRUD
         test_data = {
             "character_id": "test_bot",
+            "scope": "relationship",
+            "memory_type": "episode",
             "content": "Hello, this is a test memory from Lumina!",
             "embedding": [0.1] * 384, # 384 dimensions
             "status": "active"
         }
-        mem_id = await driver.create("episodic_memory", test_data)
+        mem_id = await driver.create("memory_items", test_data)
         logger.info(f"鉁?Memory Created. ID: {mem_id}")
         
         # 5. Test Vector Search
         logger.info("馃攧 Testing Vector Search...")
         query_vec = [0.1] * 384
-        results = await driver.search_vector("episodic_memory", query_vec, limit=5, threshold=0.1)
+        results = await driver.search_vector("memory_items", query_vec, limit=5, threshold=0.1)
         
         if results:
             logger.info(f"鉁?Vector Search Success! Hits: {len(results)}")

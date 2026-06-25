@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CharacterProfile } from "@core/llm/types";
+import { fetchCharacterConfig, updateCharacterConfig } from "../api/characterApi";
 
 export const useCharacterProfile = (backendReady: boolean, baseUrl: string) => {
     const [activeCharacter, setActiveCharacter] = useState<CharacterProfile>();
@@ -14,11 +15,7 @@ export const useCharacterProfile = (backendReady: boolean, baseUrl: string) => {
 
         setIsLoading(true);
         try {
-            const response = await fetch(`${baseUrl}/settings/character/config`);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch character config: ${response.status}`);
-            }
-            setActiveCharacter(await response.json());
+            setActiveCharacter(await fetchCharacterConfig(baseUrl));
         } catch (error) {
             console.error("[useCharacterProfile] Error fetching character config:", error);
         } finally {
@@ -27,18 +24,8 @@ export const useCharacterProfile = (backendReady: boolean, baseUrl: string) => {
     }, [backendReady, baseUrl]);
 
     const saveCharacter = useCallback(async (character: CharacterProfile) => {
-        const response = await fetch(`${baseUrl}/settings/character/config`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(character),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to save character config: ${response.status}`);
-        }
-
-        const saved = await response.json();
-        setActiveCharacter(saved.character ?? character);
+        await updateCharacterConfig(baseUrl, character);
+        setActiveCharacter(await fetchCharacterConfig(baseUrl));
         return true;
     }, [baseUrl]);
 

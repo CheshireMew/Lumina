@@ -9,10 +9,13 @@ from typing import Any, Dict, Optional
 from .models import (
     AudioConfig,
     CapabilitiesConfig,
+    FREE_LLM_PROVIDER_ID,
     LLMConfig,
     MemoryConfig,
     ModelsConfig,
     NetworkConfig,
+    POLLINATIONS_BASE_URL,
+    POLLINATIONS_DEFAULT_MODEL,
     SearchConfig,
     STTConfig,
     TTSConfig,
@@ -160,6 +163,36 @@ def normalize_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
         if "selected_providers" in capabilities_data:
             capabilities_data["selected_providers"] = dict(capabilities_data.get("selected_providers") or {})
         normalized["capabilities"] = capabilities_data
+
+    if "llm" in normalized:
+        llm_data = dict(normalized.get("llm") or {})
+        providers = dict(llm_data.get("providers") or {})
+        free_provider = dict(providers.get(FREE_LLM_PROVIDER_ID) or {})
+        if free_provider.get("type") == "pollinations":
+            free_provider["base_url"] = free_provider.get("base_url") or POLLINATIONS_BASE_URL
+            if str(free_provider.get("api_key", "")).strip().lower() == "none":
+                free_provider["api_key"] = ""
+            legacy_pollinations_models = {"gpt-4o-mini", "gpt-4o", "claude-3-haiku", "openai"}
+            provider_models = free_provider.get("models") or []
+            if any(model in legacy_pollinations_models for model in provider_models):
+                free_provider["models"] = [POLLINATIONS_DEFAULT_MODEL]
+            providers[FREE_LLM_PROVIDER_ID] = free_provider
+            llm_data["providers"] = providers
+
+        legacy_pollinations_models = {"gpt-4o-mini", "gpt-4o", "claude-3-haiku", "openai"}
+        routes = dict(llm_data.get("routes") or {})
+        for route_id, route_data in list(routes.items()):
+            route = dict(route_data or {})
+            if (
+                route.get("provider_id") == FREE_LLM_PROVIDER_ID
+                and route.get("model") in legacy_pollinations_models
+            ):
+                route["model"] = POLLINATIONS_DEFAULT_MODEL
+                routes[route_id] = route
+        if routes:
+            llm_data["routes"] = routes
+
+        normalized["llm"] = llm_data
 
     return normalized
 

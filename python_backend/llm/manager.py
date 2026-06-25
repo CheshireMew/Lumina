@@ -160,6 +160,20 @@ class LLMManager:
     async def get_driver(self, feature: str = "chat") -> BaseLLMDriver:
         return self._require_active_driver(feature)
 
+    async def get_driver_for_provider(self, provider_id: str) -> BaseLLMDriver:
+        self._ensure_drivers_initialized()
+        self._require_provider_config(provider_id)
+
+        driver = self.drivers.get(provider_id)
+        if driver is None:
+            self._initialize_drivers()
+            driver = self.drivers.get(provider_id)
+
+        if driver is None:
+            raise ValueError(f"LLM provider '{provider_id}' is not active.")
+
+        return driver
+
     def get_client(self, feature: str = "chat") -> Any:
         provider_id = self._resolve_provider_id(feature)
         driver = self._require_active_driver(feature)

@@ -1,7 +1,7 @@
 import pytest
 
 from config.loader import ConfigBundle
-from config.models import LLMConfig, LLMFeatureRoute, LLMProviderConfig
+from config.models import LLMConfig, LLMFeatureRoute, LLMProviderConfig, POLLINATIONS_DEFAULT_MODEL
 from core.interfaces.driver import BaseLLMDriver
 from llm.manager import LLMManager
 
@@ -78,8 +78,8 @@ def test_llm_manager_creates_default_routes(llm_manager: LLMManager):
     assert set(["chat", "memory", "dreaming", "evolution", "proactive", "vision"]).issubset(
         llm_manager.config.routes
     )
-    assert llm_manager.get_model_name("chat") == "gpt-4o-mini"
-    assert llm_manager.get_model_name("vision") == "gpt-4o"
+    assert llm_manager.get_model_name("chat") == POLLINATIONS_DEFAULT_MODEL
+    assert llm_manager.get_model_name("vision") == POLLINATIONS_DEFAULT_MODEL
 
 
 def test_driver_type_registration_controls_provider_loading(llm_manager: LLMManager):
@@ -96,8 +96,8 @@ def test_llm_manager_does_not_backfill_missing_routes():
                 "free_tier": LLMProviderConfig(
                     id="free_tier",
                     type="pollinations",
-                    api_key="none",
-                    models=["gpt-4o-mini"],
+                    api_key="",
+                    models=[POLLINATIONS_DEFAULT_MODEL],
                     enabled=True,
                 )
             },
@@ -105,7 +105,7 @@ def test_llm_manager_does_not_backfill_missing_routes():
                 "chat": LLMFeatureRoute(
                     feature="chat",
                     provider_id="free_tier",
-                    model="gpt-4o-mini",
+                    model=POLLINATIONS_DEFAULT_MODEL,
                 )
             },
         )
@@ -250,8 +250,8 @@ async def test_driver_chat_completion_uses_route_model(llm_manager: LLMManager):
         temperature=llm_manager.get_parameters("chat")["temperature"],
     )
 
-    assert response == "gpt-4o-mini:hello"
-    assert driver.calls[0]["model"] == "gpt-4o-mini"
+    assert response == f"{POLLINATIONS_DEFAULT_MODEL}:hello"
+    assert driver.calls[0]["model"] == POLLINATIONS_DEFAULT_MODEL
 
 
 @pytest.mark.anyio

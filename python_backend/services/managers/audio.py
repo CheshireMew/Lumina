@@ -64,7 +64,7 @@ class AudioManager:
 
     @speech_end_threshold.setter
     def speech_end_threshold(self, value: float) -> None:
-        self.vad_processor.speech_end_threshold = value
+        self.vad_processor.update_params(end_threshold=value)
 
     @property
     def min_speech_frames(self) -> int:
@@ -74,15 +74,25 @@ class AudioManager:
     def min_speech_frames(self, value: int) -> None:
         self.vad_processor.min_speech_frames = value
 
+    @property
+    def vad_aggressiveness(self) -> int:
+        return self.vad_processor.aggressiveness
+
+    @vad_aggressiveness.setter
+    def vad_aggressiveness(self, value: int) -> None:
+        self.vad_processor.update_aggressiveness(value)
+
     def _load_config(self) -> None:
         audio_config = app_config.audio
         self.device_name = audio_config.device_name
+        self.vad_aggressiveness = audio_config.vad_aggressiveness
         self.speech_start_threshold = audio_config.speech_start_threshold
         self.speech_end_threshold = audio_config.speech_end_threshold
         self.min_speech_frames = audio_config.min_speech_frames
         logger.info(
             "Loaded audio config: "
             f"Device={self.device_name}, "
+            f"Aggressiveness={self.vad_aggressiveness}, "
             f"Start={self.speech_start_threshold}, "
             f"End={self.speech_end_threshold}"
         )
@@ -90,6 +100,7 @@ class AudioManager:
     def save_config(self) -> None:
         audio_config = app_config.audio
         audio_config.device_name = self.device_name
+        audio_config.vad_aggressiveness = self.vad_aggressiveness
         audio_config.speech_start_threshold = self.speech_start_threshold
         audio_config.speech_end_threshold = self.speech_end_threshold
         audio_config.min_speech_frames = self.min_speech_frames
@@ -100,11 +111,18 @@ class AudioManager:
         start_threshold: Optional[float] = None,
         end_threshold: Optional[float] = None,
         min_frames: Optional[int] = None,
+        aggressiveness: Optional[int] = None,
     ) -> None:
-        self.vad_processor.update_params(start_threshold, end_threshold, min_frames)
+        self.vad_processor.update_params(
+            start_threshold=start_threshold,
+            end_threshold=end_threshold,
+            min_frames=min_frames,
+            aggressiveness=aggressiveness,
+        )
         self.save_config()
         logger.info(
-            f"VAD params updated: Start={self.speech_start_threshold}, "
+            f"VAD params updated: Aggressiveness={self.vad_aggressiveness}, "
+            f"Start={self.speech_start_threshold}, "
             f"End={self.speech_end_threshold}"
         )
 
@@ -265,4 +283,5 @@ class AudioManager:
             "device_name": self.device_name,
             "device_index": self.device_index,
             "sample_rate": self.sample_rate,
+            "vad_aggressiveness": self.vad_aggressiveness,
         }

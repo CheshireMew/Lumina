@@ -19,13 +19,13 @@ describe('DataViewer Component', () => {
     vi.clearAllMocks()
     ;(global.fetch as any).mockResolvedValue({
       ok: true,
-      json: async () => ({ tables: [] }),
+      text: async () => JSON.stringify({ tables: [] }),
     })
   })
 
   it('renders correctly when open', async () => {
     render(<DataViewer {...defaultProps} />)
-    expect(screen.getByText('Memory Core')).toBeDefined()
+    expect(screen.getByText('Memory Architecture')).toBeDefined()
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
   })
 

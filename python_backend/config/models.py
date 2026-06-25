@@ -43,6 +43,10 @@ DEFAULT_SELECTED_PROVIDERS: Dict[str, str] = {
 
 FREE_LLM_PROVIDER_ID = "free_tier"
 CUSTOM_LLM_PROVIDER_ID = "custom_provider"
+POLLINATIONS_BASE_URL = "https://gen.pollinations.ai/v1"
+POLLINATIONS_ANONYMOUS_CHAT_URL = "https://text.pollinations.ai/openai"
+POLLINATIONS_ANONYMOUS_MODELS_URL = "https://text.pollinations.ai/models"
+POLLINATIONS_DEFAULT_MODEL = "openai-fast"
 
 
 class PostgresConfig(BaseModel):
@@ -85,9 +89,9 @@ DEFAULT_LLM_PROVIDER_DATA: Dict[str, Dict[str, Any]] = {
     FREE_LLM_PROVIDER_ID: {
         "id": FREE_LLM_PROVIDER_ID,
         "type": "pollinations",
-        "base_url": "",
-        "api_key": "none",
-        "models": ["gpt-4o-mini", "claude-3-haiku"],
+        "base_url": POLLINATIONS_BASE_URL,
+        "api_key": "",
+        "models": [POLLINATIONS_DEFAULT_MODEL],
         "enabled": True,
     },
     CUSTOM_LLM_PROVIDER_ID: {
@@ -102,12 +106,12 @@ DEFAULT_LLM_PROVIDER_DATA: Dict[str, Dict[str, Any]] = {
 
 
 DEFAULT_LLM_ROUTE_DATA: Dict[str, Dict[str, Any]] = {
-    "chat": {"feature": "chat", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
-    "memory": {"feature": "memory", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
-    "dreaming": {"feature": "dreaming", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
-    "evolution": {"feature": "evolution", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
-    "proactive": {"feature": "proactive", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o-mini"},
-    "vision": {"feature": "vision", "provider_id": FREE_LLM_PROVIDER_ID, "model": "gpt-4o"},
+    "chat": {"feature": "chat", "provider_id": FREE_LLM_PROVIDER_ID, "model": POLLINATIONS_DEFAULT_MODEL},
+    "memory": {"feature": "memory", "provider_id": FREE_LLM_PROVIDER_ID, "model": POLLINATIONS_DEFAULT_MODEL},
+    "dreaming": {"feature": "dreaming", "provider_id": FREE_LLM_PROVIDER_ID, "model": POLLINATIONS_DEFAULT_MODEL},
+    "evolution": {"feature": "evolution", "provider_id": FREE_LLM_PROVIDER_ID, "model": POLLINATIONS_DEFAULT_MODEL},
+    "proactive": {"feature": "proactive", "provider_id": FREE_LLM_PROVIDER_ID, "model": POLLINATIONS_DEFAULT_MODEL},
+    "vision": {"feature": "vision", "provider_id": FREE_LLM_PROVIDER_ID, "model": POLLINATIONS_DEFAULT_MODEL},
 }
 
 
@@ -143,8 +147,9 @@ class TTSConfig(BaseModel):
 
 class AudioConfig(BaseModel):
     device_name: Optional[str] = None
+    vad_aggressiveness: int = Field(default=3, ge=0, le=3)
     speech_start_threshold: float = 0.6
-    speech_end_threshold: float = 0.05
+    speech_end_threshold: float = 0.15
     min_speech_frames: int = 15
     enable_voiceprint_filter: bool = True
     voiceprint_threshold: float = 0.45

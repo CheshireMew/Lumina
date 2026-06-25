@@ -41,6 +41,7 @@ export const useLlmConfigForm = ({
     onClose,
 }: UseLlmConfigFormArgs) => {
     const [form, setForm] = useState<LlmConfigFormState>(initialFormState);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (!isOpen) {
@@ -104,30 +105,39 @@ export const useLlmConfigForm = ({
         }));
     };
 
-    const save = () => {
+    const save = async () => {
         const finalModel = normalizeModelForSave(
             form.providerId,
             form.modelName,
         );
 
-        onSettingsChange(
-            form.apiKey,
-            form.baseUrl,
-            finalModel,
-            form.temperature,
-            form.thinkingEnabled,
-            form.historyLimit,
-            form.overflowStrategy,
-            form.topP,
-            form.presencePenalty,
-            form.frequencyPenalty,
-            form.providerId,
-        );
-        onClose();
+        setIsSaving(true);
+        try {
+            await onSettingsChange(
+                form.providerId === FREE_LLM_PROVIDER_ID ? "" : form.apiKey,
+                form.baseUrl,
+                finalModel,
+                form.temperature,
+                form.thinkingEnabled,
+                form.historyLimit,
+                form.overflowStrategy,
+                form.topP,
+                form.presencePenalty,
+                form.frequencyPenalty,
+                form.providerId,
+            );
+            onClose();
+        } catch (error) {
+            console.error("[LLMConfig] Failed to save settings", error);
+            alert("Failed to save LLM settings.");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return {
         form,
+        isSaving,
         updateField,
         selectPlatform,
         setDeepSeekThinking,

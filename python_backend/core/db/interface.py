@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 class VectorDBInterface(ABC):
     """
     Abstract Interface for Vector Database Operations.
-    Decouples business logic (VectorStore) from specific database implementations.
+    Decouples memory business logic from specific database implementations.
     """
 
     @abstractmethod

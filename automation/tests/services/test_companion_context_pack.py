@@ -61,7 +61,7 @@ async def test_context_pack_builder_collects_session_memory_soul_and_runtime_sta
 
     assert pack.system_prompt == "You are Hiyori."
     assert pack.recent_session_history[0]["content"] == "old"
-    assert pack.relevant_episodic_memories == "remembered fact"
+    assert pack.relevant_memories == "remembered fact"
     assert pack.current_soul_state == {"active_character_id": "hiyori"}
     assert pack.runtime_capabilities == {
         "selected_providers": {"memory": "driver.memory.postgres"}
@@ -92,7 +92,7 @@ async def test_context_pack_builder_skips_memory_for_fresh_session():
         history_limit=10,
     )
 
-    assert pack.relevant_episodic_memories == ""
+    assert pack.relevant_memories == ""
     memory_service.retrieve_context.assert_not_awaited()
 
 

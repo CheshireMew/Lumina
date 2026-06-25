@@ -5,6 +5,7 @@ interface UserSettings {
     contextWindow?: number;
     isTTSEnabled?: boolean;
     live2d_high_dpi?: boolean;
+    live2d_view_state?: Record<string, unknown>;
     thinking_enabled?: boolean;
     userName?: string;
 }
@@ -25,6 +26,13 @@ const schema = {
     live2d_high_dpi: {
         type: 'boolean',
         default: false,
+    },
+    live2d_view_state: {
+        type: 'object',
+        default: {},
+        additionalProperties: {
+            type: 'object',
+        },
     },
     thinking_enabled: {
         type: 'boolean',

@@ -21,6 +21,12 @@ const exposePixiGlobal = () => {
 exposePixiGlobal();
 
 const MOTION_PRELOAD_NONE = 'NONE';
+const VIEW_STATE_STORAGE_PREFIX = 'lumina.live2d.viewState.v2';
+const VIEW_STATE_STORE_KEY = 'live2d_view_state';
+const MIN_SCALE_RATIO = 0.2;
+const MAX_SCALE_RATIO = 5;
+const MIN_ABSOLUTE_SCALE = 0.1;
+const MAX_ABSOLUTE_SCALE = 5.0;
 
 interface Live2DRendererProps {
     modelPath: string;
@@ -29,11 +35,108 @@ interface Live2DRendererProps {
     rendererRuntimeSrc: string;
 }
 
+interface Live2DViewState {
+    xRatio: number;
+    yRatio: number;
+    scaleRatio: number;
+}
+
 const formatLive2DError = (error: unknown) => {
     if (error instanceof Error) {
         return error.message;
     }
     return String(error);
+};
+
+const getStableModelKey = (modelPath: string) => {
+    try {
+        const url = new URL(modelPath);
+        return decodeURIComponent(url.pathname).replace(/\\/g, '/');
+    } catch {
+        return modelPath.split(/[?#]/, 1)[0].replace(/\\/g, '/');
+    }
+};
+
+const getViewStateStorageKey = (modelPath: string) => {
+    return `${VIEW_STATE_STORAGE_PREFIX}:${getStableModelKey(modelPath)}`;
+};
+
+const isFiniteNumber = (value: unknown): value is number => {
+    return typeof value === 'number' && Number.isFinite(value);
+};
+
+const normalizeViewState = (value: unknown): Live2DViewState | null => {
+    if (!value || typeof value !== 'object') {
+        return null;
+    }
+
+    const state = value as Partial<Live2DViewState>;
+    if (
+        !isFiniteNumber(state.xRatio) ||
+        !isFiniteNumber(state.yRatio) ||
+        !isFiniteNumber(state.scaleRatio)
+    ) {
+        return null;
+    }
+
+    return {
+        xRatio: state.xRatio,
+        yRatio: state.yRatio,
+        scaleRatio: Math.min(Math.max(state.scaleRatio, MIN_SCALE_RATIO), MAX_SCALE_RATIO),
+    };
+};
+
+const loadViewState = async (modelPath: string): Promise<Live2DViewState | null> => {
+    const modelKey = getStableModelKey(modelPath);
+
+    try {
+        const storedStates = await window.settings?.get?.(VIEW_STATE_STORE_KEY);
+        if (storedStates && typeof storedStates === 'object') {
+            return normalizeViewState(storedStates[modelKey]);
+        }
+    } catch (error) {
+        console.warn('[Live2DRenderer] Failed to load view state from settings:', error);
+    }
+
+    try {
+        const raw = window.localStorage.getItem(getViewStateStorageKey(modelPath));
+        return raw ? normalizeViewState(JSON.parse(raw)) : null;
+    } catch (error) {
+        console.warn('[Live2DRenderer] Failed to load saved view state:', error);
+        return null;
+    }
+};
+
+const saveViewState = async (
+    modelPath: string,
+    state: Live2DViewState,
+) => {
+    const modelKey = getStableModelKey(modelPath);
+
+    try {
+        const storedStates = await window.settings?.get?.(VIEW_STATE_STORE_KEY);
+        const nextStates = {
+            ...(
+                storedStates && typeof storedStates === 'object'
+                    ? storedStates
+                    : {}
+            ),
+            [modelKey]: state,
+        };
+        await window.settings?.set?.(VIEW_STATE_STORE_KEY, nextStates);
+        return;
+    } catch (error) {
+        console.warn('[Live2DRenderer] Failed to save view state to settings:', error);
+    }
+
+    try {
+        window.localStorage.setItem(
+            getViewStateStorageKey(modelPath),
+            JSON.stringify(state),
+        );
+    } catch (error) {
+        console.warn('[Live2DRenderer] Failed to save view state:', error);
+    }
 };
 
 const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ modelPath, highDpi = false, cubismCoreSrc, rendererRuntimeSrc }, ref) => {
@@ -125,6 +228,7 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
         let app: PIXI.Application | null = null;
         let wheelTarget: HTMLCanvasElement | null = null;
         let resizeHandler: (() => void) | null = null;
+        let removeInteractionHandlers: (() => void) | null = null;
 
         const fail = (stage: string, error: unknown) => {
             const message = formatLive2DError(error);
@@ -192,6 +296,36 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
 
                 const modelBaseWidth = model.width;
                 const modelBaseHeight = model.height;
+                model.anchor?.set?.(0.5, 0.5);
+                let savedViewState = await loadViewState(modelPath);
+                let defaultScale = 1;
+                let lastPersistAt = 0;
+
+                const captureViewState = (): Live2DViewState | null => {
+                    if (!app || !defaultScale) return null;
+
+                    const screenWidth = app.renderer.screen.width;
+                    const screenHeight = app.renderer.screen.height;
+                    if (!screenWidth || !screenHeight) return null;
+
+                    return {
+                        xRatio: model.x / screenWidth,
+                        yRatio: model.y / screenHeight,
+                        scaleRatio: Math.min(
+                            Math.max(model.scale.x / defaultScale, MIN_SCALE_RATIO),
+                            MAX_SCALE_RATIO,
+                        ),
+                    };
+                };
+
+                const persistViewState = () => {
+                    const nextState = captureViewState();
+                    if (!nextState) return;
+
+                    savedViewState = nextState;
+                    void saveViewState(modelPath, nextState);
+                };
+
                 const fitModel = () => {
                     if (!app) return;
 
@@ -200,11 +334,20 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
                     const scaleX = screenWidth / modelBaseWidth;
                     const scaleY = screenHeight / modelBaseHeight;
                     const scale = Math.min(scaleX, scaleY) * 0.6;
-                    const bounds = model.getLocalBounds();
+
+                    defaultScale = scale;
+
+                    if (savedViewState) {
+                        const restoredScale = scale * savedViewState.scaleRatio;
+                        model.scale.set(restoredScale);
+                        model.x = savedViewState.xRatio * screenWidth;
+                        model.y = savedViewState.yRatio * screenHeight;
+                        return;
+                    }
 
                     model.scale.set(scale);
-                    model.x = screenWidth / 2 - (bounds.x + bounds.width / 2) * scale;
-                    model.y = screenHeight * 0.6 - (bounds.y + bounds.height / 2) * scale;
+                    model.x = screenWidth / 2;
+                    model.y = screenHeight * 0.6;
                 };
 
                 fitModel();
@@ -217,51 +360,66 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
                 model.buttonMode = true;
 
                 let dragging = false;
-                let dragData: PIXI.InteractionData | null = null;
-                let dragOffset = { x: 0, y: 0 };
-
-                model.on('pointerdown', (event: PIXI.InteractionEvent) => {
-                    dragging = true;
-                    dragData = event.data;
-                    const newPosition = dragData.getLocalPosition(model.parent);
-                    dragOffset.x = newPosition.x - model.x;
-                    dragOffset.y = newPosition.y - model.y;
-                    model.alpha = 0.8; 
-                });
-
-                model.on('pointerup', () => {
-                    dragging = false;
-                    dragData = null;
-                    model.alpha = 1.0;
-                });
-                
-                model.on('pointerupoutside', () => {
-                    dragging = false;
-                    dragData = null;
-                    model.alpha = 1.0;
-                });
-
-                model.on('pointermove', () => {
-                    if (dragging && dragData) {
-                        const newPosition = dragData.getLocalPosition(model.parent);
-                        model.x = newPosition.x - dragOffset.x;
-                        model.y = newPosition.y - dragOffset.y;
-                    }
-                });
-
-                // Zoom logic
+                let dragStart = { x: 0, y: 0 };
+                let modelStart = { x: 0, y: 0 };
                 wheelTarget = app.view as HTMLCanvasElement;
-                wheelTarget.onwheel = (e) => {
-                    e.preventDefault();
+
+                const handlePointerDown = (event: PointerEvent) => {
+                    if (event.button !== 0) return;
+                    dragging = true;
+                    dragStart = { x: event.clientX, y: event.clientY };
+                    modelStart = { x: model.x, y: model.y };
+                    model.alpha = 0.8;
+                };
+
+                const handlePointerMove = (event: PointerEvent) => {
+                    if (!dragging) return;
+
+                    model.x = modelStart.x + event.clientX - dragStart.x;
+                    model.y = modelStart.y + event.clientY - dragStart.y;
+                    const now = Date.now();
+                    if (now - lastPersistAt > 250) {
+                        lastPersistAt = now;
+                        persistViewState();
+                    }
+                };
+
+                const handlePointerUp = () => {
+                    if (dragging) {
+                        persistViewState();
+                    }
+                    dragging = false;
+                    model.alpha = 1.0;
+                };
+
+                const handleWheel = (event: WheelEvent) => {
+                    event.preventDefault();
                     const scaleFactor = 1.1;
                     let newScale = model.scale.x;
-                    if (e.deltaY < 0) {
+                    if (event.deltaY < 0) {
                         newScale *= scaleFactor;
                     } else {
                         newScale /= scaleFactor;
                     }
-                    newScale = Math.min(Math.max(newScale, 0.1), 3.0);
+                    newScale = Math.min(Math.max(newScale, MIN_ABSOLUTE_SCALE), MAX_ABSOLUTE_SCALE);
                     model.scale.set(newScale);
+                    persistViewState();
+                };
+
+                wheelTarget.addEventListener('wheel', handleWheel, { passive: false });
+                wheelTarget.addEventListener('pointerdown', handlePointerDown);
+                window.addEventListener('pointermove', handlePointerMove);
+                window.addEventListener('pointerup', handlePointerUp);
+                window.addEventListener('pointercancel', handlePointerUp);
+                window.addEventListener('blur', handlePointerUp);
+                removeInteractionHandlers = () => {
+                    persistViewState();
+                    wheelTarget?.removeEventListener('wheel', handleWheel);
+                    wheelTarget?.removeEventListener('pointerdown', handlePointerDown);
+                    window.removeEventListener('pointermove', handlePointerMove);
+                    window.removeEventListener('pointerup', handlePointerUp);
+                    window.removeEventListener('pointercancel', handlePointerUp);
+                    window.removeEventListener('blur', handlePointerUp);
                 };
 
                 // Hit Events
@@ -285,8 +443,8 @@ const Live2DRenderer = forwardRef<IAvatarRenderer, Live2DRendererProps>(({ model
             isMounted = false;
             if (idleTimerRef.current) clearInterval(idleTimerRef.current);
             idleTimerRef.current = null;
-            if (wheelTarget) {
-                wheelTarget.onwheel = null;
+            if (removeInteractionHandlers) {
+                removeInteractionHandlers();
             }
             if (resizeHandler) {
                 window.removeEventListener('resize', resizeHandler);

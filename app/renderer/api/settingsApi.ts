@@ -1,3 +1,5 @@
+import { jsonRequestOptions, requestJson } from "./client";
+
 export interface RuntimeLlmSettingsDto {
     providerId: string;
     apiKey: string;
@@ -14,28 +16,15 @@ export interface RuntimeLlmSettingsDto {
 export const fetchRuntimeLlmSettings = async (
     baseUrl: string,
 ): Promise<RuntimeLlmSettingsDto> => {
-    const response = await fetch(`${baseUrl}/settings/llm/runtime`);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch LLM settings: ${response.status}`);
-    }
-    return response.json();
+    return requestJson<RuntimeLlmSettingsDto>(`${baseUrl}/settings/llm/runtime`);
 };
 
 export const updateRuntimeLlmSettings = async (
     baseUrl: string,
     payload: RuntimeLlmSettingsDto,
 ): Promise<RuntimeLlmSettingsDto> => {
-    const response = await fetch(`${baseUrl}/settings/llm/runtime`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-        throw new Error(`Failed to update LLM settings: ${response.status}`);
-    }
-
-    return response.json();
+    return requestJson<RuntimeLlmSettingsDto>(
+        `${baseUrl}/settings/llm/runtime`,
+        jsonRequestOptions("PUT", payload),
+    );
 };

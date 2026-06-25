@@ -15,7 +15,7 @@ class CompanionContextPack:
     identity: CompanionContext
     user_message: str
     recent_session_history: List[Dict[str, Any]] = field(default_factory=list)
-    relevant_episodic_memories: str = ""
+    relevant_memories: str = ""
     stable_profile_facts: str = ""
     current_soul_state: Dict[str, Any] = field(default_factory=dict)
     runtime_capabilities: Dict[str, Any] = field(default_factory=dict)
@@ -24,10 +24,10 @@ class CompanionContextPack:
 
     def prompt_sections(self) -> List[str]:
         sections: List[str] = []
-        if self.relevant_episodic_memories:
+        if self.relevant_memories:
             sections.append(
                 "## Relevant Memories\n"
-                f"{self.relevant_episodic_memories}"
+                f"{self.relevant_memories}"
             )
         if self.stable_profile_facts:
             sections.append(
@@ -102,7 +102,7 @@ class CompanionContextPackBuilder:
             identity=companion_context,
             user_message=user_message,
             recent_session_history=history,
-            relevant_episodic_memories=memories,
+            relevant_memories=memories,
             current_soul_state=self._soul_state(),
             runtime_capabilities=self._runtime_capabilities(),
             current_time=datetime.now(timezone.utc).isoformat(),

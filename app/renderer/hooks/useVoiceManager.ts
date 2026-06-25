@@ -1,4 +1,4 @@
-import { WhisperModelInfo } from "./voice/types";
+import { AudioDevice, WhisperModelInfo } from "./voice/types";
 import { useSttVoiceState } from "./voice/useSttVoiceState";
 import { useTtsVoiceState } from "./voice/useTtsVoiceState";
 import { useVoiceprintState } from "./voice/useVoiceprintState";
@@ -7,11 +7,11 @@ import { RuntimeConfig } from "../runtime/runtimeConfig";
 export type { WhisperModelInfo } from "./voice/types";
 
 export interface VoiceManagerData {
+    apiBaseUrl: string;
     whisperModels: WhisperModelInfo[];
     currentWhisperModel: string;
     loadingStatus: string;
-    sttEngineType: string;
-    audioDevices: { index: number; name: string; channels: number }[];
+    audioDevices: AudioDevice[];
     currentAudioDevice: string | null;
     edgeVoices: { name: string; gender: string }[];
     gptVoices: { name: string; gender: string }[];
@@ -21,18 +21,18 @@ export interface VoiceManagerData {
     voiceprintProfile: string;
     voiceprintStatus: string;
     voiceprintLoaded: boolean;
+    vadAggressiveness: number;
     vadStartThreshold: number;
     vadEndThreshold: number;
     handleSttModelChange: (newModel: string) => Promise<void>;
-    handleEngineChange: (newEngine: string) => Promise<void>;
     handleAudioDeviceChange: (deviceName: string) => Promise<void>;
     handleVoiceprintToggle: (enabled: boolean) => Promise<void>;
     handleVoiceprintThresholdChange: (val: number) => Promise<void>;
     handleVadChange: (
-        key: "speech_start_threshold" | "speech_end_threshold",
+        key: "vad_aggressiveness" | "speech_start_threshold" | "speech_end_threshold",
         value: number,
     ) => Promise<void>;
-    setVoiceprintProfile: (val: string) => void;
+    handleVoiceprintProfileChange: (val: string) => Promise<void>;
     refreshVoiceData: () => Promise<void>;
 }
 
@@ -58,10 +58,10 @@ export const useVoiceManager = (
     };
 
     return {
+        apiBaseUrl: runtimeConfig.apiBaseUrl,
         whisperModels: stt.whisperModels,
         currentWhisperModel: stt.currentWhisperModel,
         loadingStatus: stt.loadingStatus,
-        sttEngineType: stt.sttEngineType,
         audioDevices: stt.audioDevices,
         currentAudioDevice: stt.currentAudioDevice,
         edgeVoices: tts.edgeVoices,
@@ -72,15 +72,15 @@ export const useVoiceManager = (
         voiceprintProfile: voiceprint.voiceprintProfile,
         voiceprintStatus: voiceprint.voiceprintStatus,
         voiceprintLoaded: voiceprint.voiceprintLoaded,
+        vadAggressiveness: voiceprint.vadAggressiveness,
         vadStartThreshold: voiceprint.vadStartThreshold,
         vadEndThreshold: voiceprint.vadEndThreshold,
         handleSttModelChange: stt.handleSttModelChange,
-        handleEngineChange: stt.handleEngineChange,
         handleAudioDeviceChange: stt.handleAudioDeviceChange,
         handleVoiceprintToggle: voiceprint.handleVoiceprintToggle,
         handleVoiceprintThresholdChange: voiceprint.handleVoiceprintThresholdChange,
         handleVadChange: voiceprint.handleVadChange,
-        setVoiceprintProfile: voiceprint.setVoiceprintProfile,
+        handleVoiceprintProfileChange: voiceprint.handleVoiceprintProfileChange,
         refreshVoiceData,
     };
 };

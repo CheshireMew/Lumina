@@ -9,22 +9,35 @@ export const useAvailableLlmModels = (
 ) => {
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [isLoadingModels, setIsLoadingModels] = useState(false);
+    const [modelLoadError, setModelLoadError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isOpen || providerId !== FREE_LLM_PROVIDER_ID) {
+            setModelLoadError(null);
             return;
         }
 
         let isMounted = true;
         setIsLoadingModels(true);
+        setModelLoadError(null);
 
-        listAvailableLlmModels(apiBaseUrl)
+        listAvailableLlmModels(apiBaseUrl, providerId)
             .then((models) => {
                 if (isMounted) {
                     setAvailableModels(models);
                 }
             })
-            .catch((err) => console.warn("Failed to fetch models:", err))
+            .catch((error) => {
+                console.warn("Failed to fetch models:", error);
+                if (isMounted) {
+                    setAvailableModels([]);
+                    setModelLoadError(
+                        error instanceof Error
+                            ? error.message
+                            : "Failed to fetch models",
+                    );
+                }
+            })
             .finally(() => {
                 if (isMounted) {
                     setIsLoadingModels(false);
@@ -39,5 +52,6 @@ export const useAvailableLlmModels = (
     return {
         availableModels,
         isLoadingModels,
+        modelLoadError,
     };
 };

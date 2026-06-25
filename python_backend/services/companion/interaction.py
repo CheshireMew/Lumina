@@ -23,7 +23,7 @@ class CompanionInteraction:
 
 @dataclass(frozen=True)
 class CompanionInteractionResult:
-    memory_log_id: Optional[str] = None
+    turn_id: Optional[str] = None
 
 
 class CompanionInteractionRecorder:
@@ -56,11 +56,11 @@ class CompanionInteractionRecorder:
 
         await self._record_soul_interaction(interaction)
 
-        memory_log_id = None
+        turn_id = None
         if interaction.log_memory:
-            memory_log_id = await self._log_turn_to_memory(interaction)
+            turn_id = await self._record_turn(interaction)
 
-        return CompanionInteractionResult(memory_log_id=memory_log_id)
+        return CompanionInteractionResult(turn_id=turn_id)
 
     async def record_activity(self, *, strict: bool = False) -> None:
         soul_service = self.soul_service
@@ -110,22 +110,22 @@ class CompanionInteractionRecorder:
             if interaction.strict:
                 raise
 
-    async def _log_turn_to_memory(self, interaction: CompanionInteraction) -> Optional[str]:
+    async def _record_turn(self, interaction: CompanionInteraction) -> Optional[str]:
         memory_service = self.memory_service
 
         context = interaction.companion_context
-        label = interaction.user_name or context.user_id
-        companion_label = interaction.companion_name or context.character_id
-        narrative = (
-            f"{label}: {interaction.user_message or '(Silence)'}\n"
-            f"{companion_label}: {interaction.assistant_message}"
-        )
         try:
-            log_id = await memory_service.log_conversation(context, narrative)
-            logger.info("Conversation logged to memory")
-            return str(log_id)
+            turn_id = await memory_service.record_turn(
+                context,
+                user_message=interaction.user_message,
+                assistant_message=interaction.assistant_message,
+                user_name=interaction.user_name,
+                companion_name=interaction.companion_name,
+            )
+            logger.info("Conversation turn recorded")
+            return str(turn_id)
         except Exception as exc:
-            logger.error("Failed to log conversation: %s", exc)
+            logger.error("Failed to record conversation turn: %s", exc)
             if interaction.strict:
                 raise
             return None

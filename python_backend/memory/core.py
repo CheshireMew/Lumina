@@ -1,30 +1,25 @@
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
-from datetime import datetime
-from memory.vector_store import VectorStore
-from core.interfaces.driver import BaseMemoryDriver
-from services.companion.context import CompanionContext
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
+from core.interfaces.driver import BaseMemoryDriver
+from memory.store import MemoryItemStore
+from services.companion.context import CompanionContext
 
 logger = logging.getLogger("memory.core")
 
 
 class MemoryService:
-    """
-    Service for Memory System.
-    Delegates to VectorStore and the configured Postgres-backed driver.
-    """
-    
-    def __init__(self, driver: BaseMemoryDriver):
-         if driver is None:
-             raise ValueError("MemoryService requires an explicit memory driver.")
+    """Single business boundary for conversation turns and long-term memories."""
 
-         self._driver = driver
-         
-         self.vector_store = VectorStore(self._driver)
-         
-         self.encoder = None
+    def __init__(self, driver: BaseMemoryDriver):
+        if driver is None:
+            raise ValueError("MemoryService requires an explicit memory driver.")
+
+        self._driver = driver
+        self.memory_items = MemoryItemStore(self._driver)
+        self.encoder = None
 
     def set_encoder(self, encoder_fn):
         self.encoder = encoder_fn
@@ -50,26 +45,21 @@ class MemoryService:
             await current.close()
 
         self._driver = driver
-        self.vector_store.replace_driver(driver)
+        self.memory_items.replace_driver(driver)
 
     async def connect(self):
-        """Connect to underlying driver."""
         if self._driver:
             await self._driver.connect()
 
     async def close(self):
-        """Close connection."""
         if self._driver:
             await self._driver.close()
 
     @property
     def db(self):
-        """Expose the underlying connection handle for diagnostics and admin tools."""
         if not self._driver:
             return None
         return getattr(self._driver, "_db", None) or getattr(self._driver, "_pool", None)
-
-    # ================= LOGGING & OPERATIONS =================
 
     def _character_id(self, context: CompanionContext) -> str:
         if not isinstance(context, CompanionContext):
@@ -98,181 +88,232 @@ class MemoryService:
                 try:
                     parsed.append(dict(row))
                 except (TypeError, ValueError):
-                    logger.warning("Skipping unparseable memory query row: %r", row)
+                    logger.warning("Skipping unparseable memory row: %r", row)
         return parsed
 
-    async def log_conversation(self, context: CompanionContext, narrative: str) -> str:
-        try:
-            data = {
-                "character_id": self._character_id(context),
-                "narrative": narrative,
-                "created_at": datetime.now(),  # [Fix] asyncpg expects datetime object, not string
-                "is_processed": False
-            }
-            
-            # [Free Tier Opt] Generate embedding for log (Semantic Search Fallback)
-            if self.encoder:
-                try:
-                    # Embed the narrative for search
-                    vec = self.encoder(narrative)
-                    # [Fix] Convert numpy array to list for JSON/CBOR serialization
-                    if hasattr(vec, "tolist"):
-                        vec = vec.tolist()
-                    data["embedding"] = vec
-                except Exception as ex:
-                    logger.warning(f"Failed to embed log: {ex}")
+    async def record_turn(
+        self,
+        context: CompanionContext,
+        *,
+        user_message: str,
+        assistant_message: str,
+        user_name: Optional[str] = None,
+        companion_name: Optional[str] = None,
+    ) -> str:
+        """Append one raw interaction event. This is not long-term memory."""
+        label = user_name or context.user_id
+        companion_label = companion_name or context.character_id
+        narrative = (
+            f"{label}: {user_message or '(Silence)'}\n"
+            f"{companion_label}: {assistant_message}"
+        )
+        data = {
+            "session_id": context.session_id,
+            "user_id": context.user_id,
+            "character_id": self._character_id(context),
+            "user_message": user_message,
+            "assistant_message": assistant_message,
+            "narrative": narrative,
+            "created_at": datetime.now(timezone.utc),
+            "metadata": {},
+        }
 
-            results = await self.driver.create("conversation_log", data)
-            if not results: raise ValueError("Empty result")
-            return str(results) # Driver returns ID string already
-        except Exception as e:
-            logger.error(f"Error logging conversation: {e}")
-            # Do NOT raise, just log error so chat flow continues even if memory fails?
-            # Or raise if critical?
-            # User saw 500 Error. Raising is consistent.
+        if self.encoder:
+            try:
+                vec = self.encoder(narrative)
+                if hasattr(vec, "tolist"):
+                    vec = vec.tolist()
+                data["embedding"] = vec
+            except Exception as exc:
+                logger.warning("Failed to embed conversation turn: %s", exc)
+
+        try:
+            turn_id = await self.driver.create("conversation_turns", data)
+            return str(turn_id)
+        except Exception as exc:
+            logger.error("Error recording conversation turn: %s", exc)
             raise
 
-    async def search_episodic(
+    async def create_memory_item(
+        self,
+        context: CompanionContext,
+        *,
+        content: str,
+        scope: str = "relationship",
+        memory_type: str = "episode",
+        subject_id: Optional[str] = None,
+        summary: Optional[str] = None,
+        source_turn_ids: Optional[list[str]] = None,
+        confidence: float = 1.0,
+        importance: float = 1.0,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        embedding = None
+        if self.encoder:
+            vec = self.encoder(content)
+            embedding = vec.tolist() if hasattr(vec, "tolist") else vec
+
+        return await self.memory_items.create_memory_item(
+            character_id=self._character_id(context),
+            content=content,
+            embedding=embedding,
+            scope=scope,
+            memory_type=memory_type,
+            subject_id=subject_id or context.user_id,
+            summary=summary,
+            source_turn_ids=source_turn_ids,
+            confidence=confidence,
+            importance=importance,
+            metadata=metadata,
+        )
+
+    async def search_memory_items(
         self,
         query_vector: list[float],
         context: CompanionContext,
         *,
         limit: int = 10,
+        memory_types: Optional[list[str]] = None,
     ) -> List[Dict]:
-        return await self.vector_store.search(
-            query_vector,
-            self._character_id(context),
+        return await self.memory_items.search_vector(
+            query_vector=query_vector,
+            character_id=self._character_id(context),
             limit=limit,
-            target_table="episodic_memory",
+            memory_types=memory_types,
         )
 
-    async def _search_episodic_fulltext(
+    async def _search_memory_items_fulltext(
         self,
         *,
         query: str,
         context: CompanionContext,
         limit: int = 10,
+        memory_types: Optional[list[str]] = None,
     ) -> List[Dict]:
-        return await self.vector_store.search_fulltext(
+        return await self.memory_items.search_fulltext(
             query=query,
             character_id=self._character_id(context),
             limit=limit,
-            target_table="episodic_memory",
+            memory_types=memory_types,
         )
 
-    async def search_episodic_hybrid(
+    async def search_memory_items_hybrid(
         self,
         *,
         query: str,
         query_vector: list[float],
         context: CompanionContext,
         limit: int = 10,
+        memory_types: Optional[list[str]] = None,
     ) -> List[Dict]:
-        return await self.vector_store.search_hybrid(
+        return await self.memory_items.search_hybrid(
             query=query,
             query_vector=query_vector,
             character_id=self._character_id(context),
             limit=limit,
-            target_table="episodic_memory",
+            memory_types=memory_types,
         )
-
-    # ================= UTILITIES =================
-    
-    async def execute_raw_query(self, sql: str, params: Optional[Dict] = None) -> Any:
-        """
-        Execute raw SQL query.
-        WARNING: Use only for debugging or admin tools.
-        """
-        if not self.db:
-            await self.connect()
-        return await self.driver.query(sql, params)
 
     async def get_stats(self, context: CompanionContext) -> Dict:
-        """Get memory statistics for one companion context."""
         character_id = self._character_id(context)
-        mem_sql = "SELECT count(*) as count FROM episodic_memory WHERE character_id = $cid;"
-        log_sql = "SELECT count(*) as count FROM conversation_log WHERE character_id = $cid;"
+        memory_sql = "SELECT count(*) as count FROM memory_items WHERE character_id = $cid;"
+        turn_sql = "SELECT count(*) as count FROM conversation_turns WHERE character_id = $cid;"
         params = {"cid": character_id}
 
-        mem_result, log_result = await asyncio.gather(
-            self.driver.query(mem_sql, params),
-            self.driver.query(log_sql, params),
+        memory_result, turn_result = await asyncio.gather(
+            self.driver.query(memory_sql, params),
+            self.driver.query(turn_sql, params),
         )
 
-        def get_cnt(res):
+        def get_count(res):
             if res and isinstance(res, list) and len(res) > 0:
-                if hasattr(res[0], 'get'):
-                    return res[0].get('count', 0)
+                if hasattr(res[0], "get"):
+                    return res[0].get("count", 0)
                 if isinstance(res[0], dict):
-                    return res[0].get('count', 0)
+                    return res[0].get("count", 0)
             return 0
 
-        return {"entities": get_cnt(mem_result), "conversations": get_cnt(log_result)}
+        return {"memories": get_count(memory_result), "turns": get_count(turn_result)}
 
-    async def get_unprocessed_conversations(
+    async def get_unprocessed_turns(
         self,
         context: CompanionContext,
         limit: int = 20,
     ) -> List[Dict]:
-        sql = "SELECT * FROM conversation_log WHERE is_processed = false AND character_id = $cid LIMIT $limit;"
+        sql = """
+            SELECT *
+            FROM conversation_turns
+            WHERE processed_at IS NULL AND character_id = $cid
+            ORDER BY created_at ASC
+            LIMIT $limit;
+        """
         res = await self.driver.query(
             sql,
             {"cid": self._character_id(context), "limit": limit},
         )
-        return self._parse_query_result(res)
+        return self._parse_query_result(res)[:limit]
 
-    async def mark_conversations_processed(self, conversation_ids: List[str]):
-        """Mark multiple conversations as processed in a single batch query."""
-        if not conversation_ids:
+    async def mark_turns_processed(self, turn_ids: List[str]):
+        if not turn_ids:
             return
-            
+
         await self.driver.query(
             """
-            UPDATE conversation_log
-            SET is_processed = true
+            UPDATE conversation_turns
+            SET processed_at = NOW()
             WHERE id = ANY($ids::uuid[])
             """,
-            {"ids": conversation_ids},
+            {"ids": turn_ids},
         )
-        logger.debug(f"Batch marked {len(conversation_ids)} conversations as processed")
+        logger.debug("Marked %s conversation turns as processed", len(turn_ids))
 
-    async def get_all_conversations(self, context: CompanionContext) -> List[Dict]:
-        sql = "SELECT * FROM conversation_log"
-        params = {"cid": self._character_id(context)}
-        sql += " WHERE character_id = $cid"
-        sql += " ORDER BY created_at DESC LIMIT 1000;"
-        res = await self.driver.query(sql, params)
+    async def get_all_turns(self, context: CompanionContext) -> List[Dict]:
+        sql = """
+            SELECT *
+            FROM conversation_turns
+            WHERE character_id = $cid
+            ORDER BY created_at DESC
+            LIMIT 1000;
+        """
+        res = await self.driver.query(sql, {"cid": self._character_id(context)})
         return self._parse_query_result(res)
-            
-    async def get_recent_conversations(self, context: CompanionContext, limit: int = 20) -> List[Dict]:
-        sql = "SELECT * FROM conversation_log WHERE character_id = $cid ORDER BY created_at DESC LIMIT $limit;"
-        res = await self.driver.query(sql, {"cid": self._character_id(context), "limit": limit})
-        return self._parse_query_result(res)
+
+    async def get_recent_turns(self, context: CompanionContext, limit: int = 20) -> List[Dict]:
+        sql = """
+            SELECT *
+            FROM conversation_turns
+            WHERE character_id = $cid
+            ORDER BY created_at DESC
+            LIMIT $limit;
+        """
+        res = await self.driver.query(
+            sql,
+            {"cid": self._character_id(context), "limit": limit},
+        )
+        return self._parse_query_result(res)[:limit]
 
     async def get_inspiration(self, context: CompanionContext, limit: int = 3) -> List[Dict]:
-        # Random Inspiration
-        # We just fetch recent or random active memories RAG-style without query?
-        # Old code fetched result and shuffled python side.
-        sql = "SELECT * FROM episodic_memory WHERE character_id = $cid AND status = 'active' LIMIT 50;"
-        res = await self.driver.query(sql, {"cid": self._character_id(context)})
-        items = self._parse_query_result(res)
-        import random
-        random.shuffle(items)
-        return items[:limit]
+        sql = """
+            SELECT *
+            FROM memory_items
+            WHERE character_id = $cid AND status = 'active'
+            ORDER BY random()
+            LIMIT $limit;
+        """
+        res = await self.driver.query(
+            sql,
+            {"cid": self._character_id(context), "limit": limit},
+        )
+        return self._parse_query_result(res)[:limit]
 
     async def retrieve_context(self, query: str, context: CompanionContext, limit: int = 3) -> str:
-        """
-        High-Level RAG Retrieval.
-        Handles embedding generation and hybrid search internally.
-        """
-        import asyncio
-
+        """Retrieve long-term facts for the model without prescribing behavior."""
         vector = None
         if self.encoder:
             try:
                 from services.embedding_cache import get_embedding_cache
-                cache = get_embedding_cache()
 
+                cache = get_embedding_cache()
                 cached = cache.get(query, model_name="memory_encoder")
                 if cached is not None:
                     vector = cached
@@ -285,26 +326,27 @@ class MemoryService:
 
                     vector = await asyncio.to_thread(_encode)
                     cache.put(query, vector, model_name="memory_encoder")
-
-            except Exception as ex:
-                logger.warning(f"Failed to generate embedding for retrieval: {ex}")
+            except Exception as exc:
+                logger.warning("Failed to generate memory query embedding: %s", exc)
 
         if vector:
-            results = await self.search_episodic_hybrid(
+            results = await self.search_memory_items_hybrid(
                 query=query,
                 query_vector=vector,
                 context=context,
                 limit=limit,
             )
         else:
-            logger.warning("Retrieving context without vector (Full-Text fallback)")
-            results = await self._search_episodic_fulltext(
+            logger.warning("Retrieving memory context without vector")
+            results = await self._search_memory_items_fulltext(
                 query=query,
                 context=context,
                 limit=limit,
+                memory_types=None,
             )
 
-        if results:
-            return "\n".join([r.get('content', '') for r in results])
-
-        return ""
+        return "\n".join(
+            item.get("content") or item.get("summary") or ""
+            for item in results
+            if item.get("content") or item.get("summary")
+        )

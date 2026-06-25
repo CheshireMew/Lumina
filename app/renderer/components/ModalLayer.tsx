@@ -1,12 +1,13 @@
 import React from "react";
+import { CharacterProfile } from "@core/llm/types";
 
 import { AvatarRendererRef } from "../core/avatar/types";
 import { useVoiceManager } from "../hooks/useVoiceManager";
-import { GeneralSettingsInput } from "../hooks/useSettings";
+import { GeneralSettingsInput, GeneralSettingsPatch } from "../hooks/useSettings";
 import { RuntimeConfig } from "../runtime/runtimeConfig";
 import DataViewer from "./DataViewer";
 import LLMConfigModal from "./LLMConfig/LLMConfigModal";
-import type { LlmProviderId } from "./LLMConfig/types";
+import type { LlmProviderId, LlmSettingsChangeHandler } from "./LLMConfig/types";
 import MotionTester from "./MotionTester";
 import SettingsModal, { SettingsTab } from "./SettingsModal";
 
@@ -14,8 +15,10 @@ interface SettingsLayerConfig {
     isOpen: boolean;
     onClose: () => void;
     initialTab?: SettingsTab;
+    activeCharacter?: CharacterProfile;
     currentSettings: GeneralSettingsInput;
-    onSave: (settings: GeneralSettingsInput) => Promise<void>;
+    onSaveCharacter: (character: CharacterProfile) => Promise<boolean>;
+    onChange: (settings: GeneralSettingsPatch) => Promise<void>;
 }
 
 interface MotionTesterLayerConfig {
@@ -45,19 +48,7 @@ interface LlmConfigLayerConfig {
         presencePenalty?: number;
         frequencyPenalty?: number;
     };
-    onSettingsChange: (
-        apiKey: string,
-        baseUrl: string,
-        model: string,
-        temperature: number,
-        thinkingEnabled: boolean,
-        historyLimit: number,
-        overflowStrategy: "slide" | "reset",
-        topP?: number,
-        presencePenalty?: number,
-        frequencyPenalty?: number,
-        providerId?: LlmProviderId,
-    ) => void;
+    onSettingsChange: LlmSettingsChangeHandler;
     activeCharacterId: string | null;
 }
 
@@ -89,8 +80,11 @@ export const ModalLayer: React.FC<ModalLayerProps> = ({
                 isOpen={settings.isOpen}
                 onClose={settings.onClose}
                 initialTab={settings.initialTab}
+                activeCharacter={settings.activeCharacter}
                 currentSettings={settings.currentSettings}
-                onSave={settings.onSave}
+                apiBaseUrl={runtimeConfig.apiBaseUrl}
+                onSaveCharacter={settings.onSaveCharacter}
+                onChange={settings.onChange}
                 voiceManagerData={voiceManagerData}
             />
 

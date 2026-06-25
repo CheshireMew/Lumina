@@ -33,7 +33,7 @@ async def test_records_complete_companion_interaction():
         update_last_interaction=MagicMock(),
         on_interaction=AsyncMock(),
     )
-    memory = SimpleNamespace(log_conversation=AsyncMock(return_value="log-1"))
+    memory = SimpleNamespace(record_turn=AsyncMock(return_value="turn-1"))
     recorder = CompanionInteractionRecorder(
         session_manager=session_manager,
         soul_service=soul,
@@ -57,8 +57,14 @@ async def test_records_complete_companion_interaction():
         "ok",
         {"session_id": 7, "user_id": "u", "character_id": "hiyori"},
     )
-    memory.log_conversation.assert_awaited_once_with(context, "Ada: ping\nhiyori: ok")
-    assert result == CompanionInteractionResult(memory_log_id="log-1")
+    memory.record_turn.assert_awaited_once_with(
+        context,
+        user_message="ping",
+        assistant_message="ok",
+        user_name="Ada",
+        companion_name=None,
+    )
+    assert result == CompanionInteractionResult(turn_id="turn-1")
 
 
 @pytest.mark.anyio
@@ -68,7 +74,7 @@ async def test_respects_history_and_memory_flags():
         update_last_interaction=MagicMock(),
         on_interaction=AsyncMock(),
     )
-    memory = SimpleNamespace(log_conversation=AsyncMock())
+    memory = SimpleNamespace(record_turn=AsyncMock())
     recorder = CompanionInteractionRecorder(
         session_manager=session_manager,
         soul_service=soul,
@@ -88,7 +94,7 @@ async def test_respects_history_and_memory_flags():
     session_manager.add_turn.assert_not_awaited()
     soul.update_last_interaction.assert_called_once_with()
     soul.on_interaction.assert_awaited_once()
-    memory.log_conversation.assert_not_awaited()
+    memory.record_turn.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -98,7 +104,7 @@ async def test_manual_memory_recording_can_skip_soul_driver_notification():
         update_last_interaction=MagicMock(),
         on_interaction=AsyncMock(),
     )
-    memory = SimpleNamespace(log_conversation=AsyncMock(return_value="log-2"))
+    memory = SimpleNamespace(record_turn=AsyncMock(return_value="turn-2"))
     recorder = CompanionInteractionRecorder(
         session_manager=session_manager,
         soul_service=soul,
@@ -119,18 +125,21 @@ async def test_manual_memory_recording_can_skip_soul_driver_notification():
         )
     )
 
-    assert result == CompanionInteractionResult(memory_log_id="log-2")
+    assert result == CompanionInteractionResult(turn_id="turn-2")
     session_manager.add_turn.assert_not_awaited()
     soul.update_last_interaction.assert_called_once_with()
     soul.on_interaction.assert_not_awaited()
-    memory.log_conversation.assert_awaited_once_with(
+    memory.record_turn.assert_awaited_once_with(
         context,
-        "Ada: (Silence)\nLumina: noticed something",
+        user_message="",
+        assistant_message="noticed something",
+        user_name="Ada",
+        companion_name="Lumina",
     )
 
 
 def test_recorder_requires_all_side_effect_dependencies():
-    memory = SimpleNamespace(log_conversation=AsyncMock())
+    memory = SimpleNamespace(record_turn=AsyncMock())
     session_manager = SimpleNamespace(add_turn=AsyncMock())
     soul = SimpleNamespace(
         update_last_interaction=MagicMock(),

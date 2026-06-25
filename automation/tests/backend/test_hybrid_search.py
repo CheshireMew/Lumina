@@ -14,7 +14,7 @@ CHAR_ID = "hiyori"
 
 def add_memory(content: str):
     """Add a memory via API"""
-    url = f"{BASE_URL}/add"
+    url = f"{BASE_URL}/memory/add"
     payload = {
         "character_id": CHAR_ID,
         "user_name": "Tester",
@@ -37,7 +37,7 @@ def add_memory(content: str):
 
 def search_hybrid(query: str):
     """Perform hybrid search"""
-    url = f"{BASE_URL}/search/hybrid"
+    url = f"{BASE_URL}/memory/search/hybrid"
     payload = {
         "query": query,
         "character_id": CHAR_ID,
@@ -76,21 +76,20 @@ def main():
     #     add_memory(f"Filler memory {i}: The weather is nice today.")
     #     time.sleep(0.1)
     
-    # The /memory/add endpoint writes to conversation_log immediately.
-    # Hybrid search targets episodic_memory, so force digest/consolidation before searching.
+    # The /memory/add endpoint records raw turns. Hybrid search targets memory_items.
     
     # Wait for async processing
     time.sleep(10)
 
     # Check counts
     try:
-        r1 = requests.get(f"{BASE_URL}/memory/inspection/table/conversation_log?limit=1&character_id={CHAR_ID}")
+        r1 = requests.get(f"{BASE_URL}/memory/inspection/table/conversation_turns?limit=1&character_id={CHAR_ID}")
         c1 = r1.json().get('count', 0)
-        logger.info(f"📊 Conversation Logs: {c1}")
+        logger.info(f"📊 Conversation Turns: {c1}")
         
-        r2 = requests.get(f"{BASE_URL}/memory/inspection/table/episodic_memory?limit=1&character_id={CHAR_ID}")
+        r2 = requests.get(f"{BASE_URL}/memory/inspection/table/memory_items?limit=1&character_id={CHAR_ID}")
         c2 = r2.json().get('count', 0)
-        logger.info(f"📊 Episodic Memories: {c2}")
+        logger.info(f"📊 Memory Items: {c2}")
     except Exception as e:
         logger.warning(f"Failed to check counts: {e}")
 
@@ -102,7 +101,7 @@ def main():
     url_sql = f"{BASE_URL}/memory/inspection/query"
     try:
         # Check what the character_id actually looks like
-        sql = f"SELECT character_id, type::string(character_id) as str_id FROM episodic_memory LIMIT 3;"
+        sql = f"SELECT character_id FROM memory_items LIMIT 3;"
         resp = requests.post(url_sql, json={"query": sql})
         data = resp.json()
         logger.info(f"🆔 Character ID Check: {json.dumps(data, ensure_ascii=False, indent=2)}")

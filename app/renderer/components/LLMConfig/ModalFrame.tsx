@@ -5,10 +5,11 @@ import { modalCss, modalStyles, primaryColor } from "./styles";
 interface ModalFrameProps {
     children: ReactNode;
     onClose: () => void;
-    onSave: () => void;
+    onSave: () => void | Promise<void>;
+    isSaving?: boolean;
 }
 
-const ModalFrame: FC<ModalFrameProps> = ({ children, onClose, onSave }) => (
+const ModalFrame: FC<ModalFrameProps> = ({ children, onClose, onSave, isSaving = false }) => (
     <div style={modalStyles.overlay}>
         <div style={modalStyles.container}>
             <div style={modalStyles.header}>
@@ -40,8 +41,18 @@ const ModalFrame: FC<ModalFrameProps> = ({ children, onClose, onSave }) => (
                 <button onClick={onClose} style={modalStyles.cancelButton}>
                     Cancel
                 </button>
-                <button onClick={onSave} style={modalStyles.saveButton}>
-                    <SettingsIcon size={16} /> Save System
+                <button
+                    onClick={() => {
+                        void onSave();
+                    }}
+                    disabled={isSaving}
+                    style={{
+                        ...modalStyles.saveButton,
+                        opacity: isSaving ? 0.72 : 1,
+                        cursor: isSaving ? "wait" : "pointer",
+                    }}
+                >
+                    <SettingsIcon size={16} /> {isSaving ? "Saving..." : "Save System"}
                 </button>
             </div>
         </div>

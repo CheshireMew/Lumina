@@ -30,7 +30,7 @@ def context_pack(**kwargs) -> CompanionContextPack:
         identity=kwargs.get("identity") or companion_context(),
         user_message=kwargs.get("user_message", "Hello"),
         recent_session_history=kwargs.get("recent_session_history", []),
-        relevant_episodic_memories=kwargs.get("relevant_episodic_memories", ""),
+        relevant_memories=kwargs.get("relevant_memories", ""),
         stable_profile_facts=kwargs.get("stable_profile_facts", ""),
         current_soul_state=kwargs.get("current_soul_state", {}),
         runtime_capabilities=kwargs.get("runtime_capabilities", {}),
@@ -85,7 +85,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
                 {"role": "user", "content": "Earlier"},
                 {"role": "assistant", "content": "Reply"},
             ],
-            relevant_episodic_memories="User likes quiet mornings.",
+            relevant_memories="User likes quiet mornings.",
             current_soul_state={"active_character_id": "hiyori"},
             current_time="2026-06-18T00:00:00+00:00",
         )

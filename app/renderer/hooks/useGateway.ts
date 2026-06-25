@@ -8,6 +8,7 @@ interface GatewayProps {
     onChatEnd?: () => void;
     onEmotion?: (emotion: string) => void;
     onSessionReset?: (sessionId: number) => void;
+    onSystemStatus?: (status: string, details: string) => void;
     baseUrl: string;
     enabled?: boolean;
 }
@@ -18,6 +19,7 @@ export const useGateway = ({
     onChatEnd,
     onEmotion,
     onSessionReset,
+    onSystemStatus,
     baseUrl,
     enabled = true,
 }: GatewayProps) => {
@@ -29,6 +31,7 @@ export const useGateway = ({
         onChatEnd,
         onEmotion,
         onSessionReset,
+        onSystemStatus,
     });
 
     useEffect(() => {
@@ -38,8 +41,9 @@ export const useGateway = ({
             onChatEnd,
             onEmotion,
             onSessionReset,
+            onSystemStatus,
         };
-    }, [onChatStart, onChatStream, onChatEnd, onEmotion, onSessionReset]);
+    }, [onChatStart, onChatStream, onChatEnd, onEmotion, onSessionReset, onSystemStatus]);
 
     useEffect(() => {
         if (!enabled) {
@@ -56,6 +60,8 @@ export const useGateway = ({
             onEmotion: (emotion) => callbacksRef.current.onEmotion?.(emotion),
             onSessionReset: (sessionId) =>
                 callbacksRef.current.onSessionReset?.(sessionId),
+            onSystemStatus: (status, details) =>
+                callbacksRef.current.onSystemStatus?.(status, details),
         } satisfies GatewaySubscriber);
 
         return () => {

@@ -1,9 +1,10 @@
 export interface WhisperModelInfo {
+    id: string;
     name: string;
-    desc?: string;
-    size?: string;
-    engine?: string;
-    download_status: "idle" | "downloading" | "completed" | "failed";
+    description?: string;
+    type?: string;
+    active?: boolean;
+    download_status?: "idle" | "downloading" | "completed" | "failed";
 }
 
 export interface VoiceOption {
@@ -14,5 +15,6 @@ export interface VoiceOption {
 export interface AudioDevice {
     index: number;
     name: string;
-    channels: number;
+    channels?: number;
+    host_api?: string;
 }

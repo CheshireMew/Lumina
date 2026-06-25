@@ -2,15 +2,12 @@
  * DataViewer - 通用数据可视化组件 (Refactored)
  * 包含：表浏览、数据查看、查询控制台
  */
-import React, { useState } from "react";
-import { Database, X, RefreshCw, Network } from "lucide-react";
+import React from "react";
+import { Database, X } from "lucide-react";
 
 import { Sidebar } from "./Sidebar";
 import { TableSection } from "./TableSection";
-import { SimpleGraph } from "./SimpleGraph";
 import { RecordEditor } from "./RecordEditor";
-import { EdgeDetailModal } from "./EdgeDetailModal";
-import { useDataViewerGraph } from "./useDataViewerGraph";
 import { useDataViewerTables } from "./useDataViewerTables";
 import type { DataViewerProps } from "./types";
 
@@ -20,22 +17,10 @@ const DataViewer: React.FC<DataViewerProps> = ({
     activeCharacterId,
     apiBaseUrl,
 }) => {
-    const [activeTab, setActiveTab] = useState<
-        "tables" | "query" | "stats" | "graph"
-    >("tables");
-
-    const graph = useDataViewerGraph({
-        isOpen,
-        activeTab,
-        activeCharacterId,
-        apiBaseUrl,
-    });
-
     const tables = useDataViewerTables({
         isOpen,
         activeCharacterId,
         apiBaseUrl,
-        refreshGraph: graph.loadGraph,
     });
 
     if (!isOpen) return null;
@@ -106,8 +91,17 @@ const DataViewer: React.FC<DataViewerProps> = ({
                                     color: "#fff",
                                 }}
                             >
-                                Memory Core
+                                Memory Architecture
                             </span>
+                            <div
+                                style={{
+                                    color: "rgba(255,255,255,0.5)",
+                                    fontSize: "12px",
+                                    marginTop: "2px",
+                                }}
+                            >
+                                History &gt; Long-term Memory
+                            </div>
                         </div>
                     </div>
                     <button
@@ -125,9 +119,7 @@ const DataViewer: React.FC<DataViewerProps> = ({
 
                 <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
                     <Sidebar
-                        activeTab={activeTab}
                         selectedTable={tables.selectedTable}
-                        onTabChange={setActiveTab}
                         onTableSelect={tables.loadTableData}
                     />
 
@@ -140,168 +132,29 @@ const DataViewer: React.FC<DataViewerProps> = ({
                             backgroundColor: "rgba(0,0,0,0.2)",
                         }}
                     >
-                        {activeTab === "tables" && (
-                            <TableSection
-                                selectedTable={tables.selectedTable}
-                                tableData={tables.tableData}
-                                loading={tables.loading || graph.loading}
-                                graphData={graph.graphData}
-                                onRefreshTable={tables.refreshTable}
-                                onRefreshGraph={() => {
-                                    void graph.loadGraph();
-                                }}
-                                onCreateRecord={tables.handleCreateRecord}
-                                onEditRecord={tables.handleEditRecord}
-                                onDeleteRecord={tables.handleDeleteRecord}
-                                onEdgeClick={graph.setDetailEdge}
-                            />
-                        )}
-
-                        {activeTab === "graph" && (
-                            <div
-                                style={{
-                                    height: "100%",
-                                    display: "flex",
-                                    position: "relative",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        flex: 1,
-                                        display: "flex",
-                                        flexDirection: "column",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            padding: "15px 25px",
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            background: "rgba(0,0,0,0.1)",
-                                        }}
-                                    >
-                                        <h3
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "10px",
-                                                margin: 0,
-                                                color: "#c084fc",
-                                            }}
-                                        >
-                                            <Network size={20} /> Knowledge Graph
-                                        </h3>
-                                        <div style={{ display: "flex", gap: "15px" }}>
-                                            <button
-                                                onClick={() => {
-                                                    void graph.loadGraph();
-                                                }}
-                                                style={{
-                                                    padding: "6px 14px",
-                                                    backgroundColor:
-                                                        "rgba(139, 92, 246, 0.2)",
-                                                    color: "#ddd6fe",
-                                                    border:
-                                                        "1px solid rgba(139, 92, 246, 0.4)",
-                                                    borderRadius: "6px",
-                                                    cursor: "pointer",
-                                                }}
-                                            >
-                                                <RefreshCw size={12} /> Refresh
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div
-                                        style={{
-                                            flex: 1,
-                                            position: "relative",
-                                            overflow: "hidden",
-                                            backgroundColor: "rgba(15, 23, 42, 0.4)",
-                                        }}
-                                    >
-                                        <SimpleGraph
-                                            nodes={graph.graphData?.nodes || []}
-                                            edges={graph.graphData?.edges || []}
-                                            onNodeSelect={graph.setSelectedNode}
-                                        />
-                                    </div>
-                                </div>
-                                {graph.selectedNode && (
-                                    <div
-                                        style={{
-                                            width: "280px",
-                                            borderLeft:
-                                                "1px solid rgba(255, 105, 180, 0.1)",
-                                            backgroundColor:
-                                                "rgba(20, 10, 30, 0.6)",
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            padding: "20px",
-                                            backdropFilter: "blur(15px)",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                marginBottom: "20px",
-                                            }}
-                                        >
-                                            <h3 style={{ margin: 0, color: "#fff" }}>
-                                                {graph.selectedNode.label}
-                                            </h3>
-                                            <button
-                                                onClick={() => graph.setSelectedNode(null)}
-                                                style={{
-                                                    background: "none",
-                                                    border: "none",
-                                                    color: "rgba(255,255,255,0.5)",
-                                                    cursor: "pointer",
-                                                }}
-                                            >
-                                                <X size={18} />
-                                            </button>
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "11px",
-                                                color: "rgba(255,255,255,0.4)",
-                                            }}
-                                        >
-                                            ID: {graph.selectedNode.id}
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                color: "#f472b6",
-                                                fontWeight: "600",
-                                            }}
-                                        >
-                                            Type: {graph.selectedNode.group}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                        <TableSection
+                            selectedTable={tables.selectedTable}
+                            tableData={tables.tableData}
+                            loading={tables.loading}
+                            onRefreshTable={tables.refreshTable}
+                            onCreateRecord={tables.handleCreateRecord}
+                            onEditRecord={tables.handleEditRecord}
+                            onDeleteRecord={tables.handleDeleteRecord}
+                        />
                     </div>
                 </div>
 
                 <RecordEditor
+                    selectedTable={tables.selectedTable}
                     editingRecord={tables.editingRecord}
                     isCreating={tables.isCreating}
                     editorForm={tables.editorForm}
                     setEditorForm={tables.setEditorForm}
                     onCancel={tables.closeEditor}
-                    onSave={() => {
-                        void tables.handleSaveRecord();
-                    }}
+                    onSave={tables.handleSaveRecord}
+                    isSaving={tables.editorSaving}
                 />
 
-                <EdgeDetailModal
-                    detailEdge={graph.detailEdge}
-                    onClose={() => graph.setDetailEdge(null)}
-                />
             </div>
         </div>
     );

@@ -30,7 +30,7 @@ export type LlmSettingsChangeHandler = (
     presencePenalty?: number,
     frequencyPenalty?: number,
     providerId?: LlmProviderId,
-) => void;
+) => Promise<void>;
 
 export interface LlmConfigFormState {
     providerId: LlmProviderId;
