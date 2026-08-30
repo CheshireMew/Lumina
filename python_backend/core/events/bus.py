@@ -13,18 +13,26 @@ from typing import Any, Callable, Dict, List, Optional, Type
 from dataclasses import dataclass, field
 from collections import defaultdict
 import fnmatch
+import time
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger("EventBus")
 
 
 def _safe_timestamp():
-    import time
-    try:
-        loop = asyncio.get_running_loop()
-        return loop.time()
-    except RuntimeError:
-        return time.time()
+    return time.time()
+
+
+class EventBusError(RuntimeError):
+    pass
+
+
+class EventValidationError(EventBusError):
+    pass
+
+
+class EventDispatchError(EventBusError):
+    pass
 
 @dataclass
 class Event:
@@ -151,16 +159,20 @@ class EventBus:
                     else:
                         raise ValueError(f"Invalid payload type: {type(payload)}")
             except ValidationError as ve:
-                logger.error(f"❌ Event Validation Failed for '{event_type}': {ve}")
-                # [Hardening] Log the faulty data for easier debugging
-                logger.debug(f"Faulty Data: {payload}")
-                return 0
+                payload_shape = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
+                raise EventValidationError(
+                    f"Invalid payload for '{event_type}' shape={payload_shape}: {ve}"
+                ) from ve
             except Exception as e:
-                logger.error(f"❌ Schema Validation Error for '{event_type}': {e}")
-                return 0
+                if isinstance(e, EventValidationError):
+                    raise
+                raise EventValidationError(
+                    f"Schema validation failed for '{event_type}': {e}"
+                ) from e
 
         event = Event(type=event_type, data=data, source=source)
         handlers_called = 0
+        dispatch_errors: list[Exception] = []
         
         # Direct subscriptions
         for callback in self._subscriptions.get(event_type, []):
@@ -172,6 +184,7 @@ class EventBus:
                 handlers_called += 1
             except Exception as e:
                 logger.error(f"Event handler error for '{event_type}': {e}")
+                dispatch_errors.append(e)
         
         # Wildcard subscriptions
         for pattern, callback in self._wildcard_subscriptions:
@@ -184,11 +197,17 @@ class EventBus:
                     handlers_called += 1
                 except Exception as e:
                     logger.error(f"Wildcard handler error for '{pattern}' on '{event_type}': {e}")
+                    dispatch_errors.append(e)
+
+        if dispatch_errors:
+            raise EventDispatchError(
+                f"{len(dispatch_errors)} handler(s) failed for '{event_type}': "
+                f"{dispatch_errors[0]}"
+            ) from dispatch_errors[0]
         
         if handlers_called > 0:
-            # [DEBUG] Log handler count for BRAIN_RESPONSE to check for duplicates
             if event_type == "brain_response":
-                logger.info(f"🔔 Emitted '{event_type}' to {handlers_called} handlers")
+                logger.debug(f"Emitted '{event_type}' to {handlers_called} handlers")
             else:
                 logger.debug(f"Emitted '{event_type}' to {handlers_called} handlers")
         
@@ -341,27 +360,3 @@ class EventBus:
         warnings = self.check_for_leaks()
         for w in warnings:
             logger.warning(w)
-
-
-# Global singleton (initialized in main.py)
-_bus_instance: Optional[EventBus] = None
-
-
-def get_event_bus() -> EventBus:
-    """Get the global EventBus instance."""
-    global _bus_instance
-    if _bus_instance is None:
-        _bus_instance = EventBus()
-    return _bus_instance
-
-
-def init_event_bus() -> EventBus:
-    """Initialize and return the global EventBus."""
-    global _bus_instance
-    if _bus_instance is None:
-        _bus_instance = EventBus()
-        logger.info("⚡ EventBus Initialized")
-    return _bus_instance
-
-# Export Singleton
-bus = get_event_bus()

@@ -9,6 +9,7 @@ import {
     LlmProviderId,
 } from "../components/LLMConfig/types";
 import { electronSettings, loadBootstrapState } from "../platform/electron";
+import { DEFAULT_USER_NAME } from "../../shared/productDefaults";
 
 export interface LLMSettings {
     providerId: LlmProviderId;
@@ -27,7 +28,6 @@ export interface LLMSettings {
 export interface AppSettings {
     llm: LLMSettings;
     userName: string;
-    contextWindow: number;
     live2dHighDpi: boolean;
     isTTSEnabled: boolean;
     backgroundImage: string;
@@ -35,7 +35,6 @@ export interface AppSettings {
 
 type LocalSettingKey =
     | "userName"
-    | "contextWindow"
     | "live2dHighDpi"
     | "isTTSEnabled"
     | "backgroundImage";
@@ -43,6 +42,7 @@ type LocalSettingKey =
 export interface GeneralSettingsInput {
     userName: string;
     live2dHighDpi: boolean;
+    isTTSEnabled: boolean;
     backgroundImage: string;
 }
 
@@ -59,11 +59,10 @@ const DEFAULT_SETTINGS: AppSettings = {
         presencePenalty: 0.0,
         frequencyPenalty: 0.0,
         thinkingEnabled: false,
-        historyLimit: 20,
+        historyLimit: 5,
         overflowStrategy: "slide",
     },
-    userName: "Master",
-    contextWindow: 50,
+    userName: DEFAULT_USER_NAME,
     live2dHighDpi: false,
     isTTSEnabled: true,
     backgroundImage: "",
@@ -71,7 +70,6 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const LOCAL_SETTING_STORE_KEYS: Record<LocalSettingKey, string> = {
     userName: "userName",
-    contextWindow: "contextWindow",
     live2dHighDpi: "live2d_high_dpi",
     isTTSEnabled: "isTTSEnabled",
     backgroundImage: "backgroundImage",
@@ -103,14 +101,9 @@ export function useSettings(backendReady: boolean, baseUrl: string) {
                 const loaded: AppSettings = {
                     llm: {
                         ...DEFAULT_SETTINGS.llm,
-                        thinkingEnabled:
-                            localSettings.thinkingEnabled ??
-                            DEFAULT_SETTINGS.llm.thinkingEnabled,
+                        thinkingEnabled: DEFAULT_SETTINGS.llm.thinkingEnabled,
                     },
                     userName: localSettings.userName || DEFAULT_SETTINGS.userName,
-                    contextWindow:
-                        localSettings.contextWindow ||
-                        DEFAULT_SETTINGS.contextWindow,
                     live2dHighDpi: localSettings.live2dHighDpi ?? false,
                     isTTSEnabled:
                         localSettings.isTTSEnabled ??
@@ -151,7 +144,8 @@ export function useSettings(backendReady: boolean, baseUrl: string) {
                         llm.presencePenalty ?? prev.llm.presencePenalty,
                     frequencyPenalty:
                         llm.frequencyPenalty ?? prev.llm.frequencyPenalty,
-                    thinkingEnabled: prev.llm.thinkingEnabled,
+                    thinkingEnabled:
+                        llm.thinkingEnabled ?? prev.llm.thinkingEnabled,
                     historyLimit: llm.historyLimit ?? prev.llm.historyLimit,
                     overflowStrategy:
                         llm.overflowStrategy ?? prev.llm.overflowStrategy,
@@ -253,17 +247,16 @@ export function useSettings(backendReady: boolean, baseUrl: string) {
 
         if (!changed) return;
 
-        await electronSettings.set("thinking_enabled", llm.thinkingEnabled);
-
         const persisted = await updateRuntimeLlmSettings(baseUrl, {
             apiKey: llm.apiKey,
             providerId: llm.providerId,
             baseUrl: llm.baseUrl,
             model: llm.model,
             temperature: llm.temperature,
-            topP: llm.topP,
-            presencePenalty: llm.presencePenalty,
-            frequencyPenalty: llm.frequencyPenalty,
+            topP: llm.topP ?? 1,
+            presencePenalty: llm.presencePenalty ?? 0,
+            frequencyPenalty: llm.frequencyPenalty ?? 0,
+            thinkingEnabled: llm.thinkingEnabled,
             historyLimit: llm.historyLimit,
             overflowStrategy: llm.overflowStrategy,
         });
@@ -278,6 +271,7 @@ export function useSettings(backendReady: boolean, baseUrl: string) {
             topP: persisted.topP,
             presencePenalty: persisted.presencePenalty,
             frequencyPenalty: persisted.frequencyPenalty,
+            thinkingEnabled: persisted.thinkingEnabled,
             historyLimit: persisted.historyLimit,
             overflowStrategy: persisted.overflowStrategy,
         };
@@ -311,11 +305,21 @@ export function useSettings(backendReady: boolean, baseUrl: string) {
             if (next.live2dHighDpi !== undefined) {
                 partial.live2dHighDpi = next.live2dHighDpi;
             }
+            if (next.isTTSEnabled !== undefined) {
+                partial.isTTSEnabled = next.isTTSEnabled;
+            }
             if (next.backgroundImage !== undefined) {
                 partial.backgroundImage = next.backgroundImage;
             }
 
             await persistLocalSettings(partial);
+        },
+        [persistLocalSettings],
+    );
+
+    const setTtsEnabled = useCallback(
+        async (enabled: boolean) => {
+            await persistLocalSettings({ isTTSEnabled: enabled });
         },
         [persistLocalSettings],
     );
@@ -327,5 +331,6 @@ export function useSettings(backendReady: boolean, baseUrl: string) {
         updateLLMSettings,
         saveSetting,
         saveGeneralSettings,
+        setTtsEnabled,
     };
 }

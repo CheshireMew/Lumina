@@ -33,10 +33,10 @@ class WorkerControlClient:
         self,
         worker_id: str,
         worker_type: str,
+        main_port: int,
+        worker_port: int,
         runtime_target: str | None = None,
         main_host: str = "127.0.0.1",
-        main_port: int = 8000,
-        worker_port: int = 8001,
         heartbeat_interval: int = 15,
         status_provider: Callable[[], List[Dict[str, Any]]] = None
     ):
@@ -92,18 +92,29 @@ class WorkerControlClient:
     async def stop(self):
         """Stop the WebSocket client gracefully."""
         self._running = False
-        
-        for task in [self._heartbeat_task, self._receive_task, self._connection_task]:
-            if task:
+
+        websocket = self._ws
+        self._ws = None
+        if websocket:
+            try:
+                await websocket.close()
+            except ConnectionClosed:
+                pass
+
+        tasks = [
+            task
+            for task in (self._heartbeat_task, self._receive_task, self._connection_task)
+            if task is not None
+        ]
+        for task in tasks:
+            if not task.done():
                 task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-        
-        if self._ws:
-            await self._ws.close()
-            self._ws = None
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        self._heartbeat_task = None
+        self._receive_task = None
+        self._connection_task = None
         
         self._connected = False
         logger.info("🛑 WorkerControlClient stopped")
@@ -171,6 +182,8 @@ class WorkerControlClient:
             # Cancel remaining tasks
             for task in pending:
                 task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
     
     # --- Heartbeat & Status ---
     
@@ -285,7 +298,9 @@ class WorkerControlClient:
             except ValidationError as e:
                 logger.warning(f"Invalid message: {e}")
             except ConnectionClosed:
-                raise
+                if self._running:
+                    raise
+                break
             except Exception as e:
                 logger.error(f"Receive error: {e}")
 
@@ -322,7 +337,8 @@ class WorkerControlClient:
                         logger.error(f"Lifecycle handler error: {e}")
             
             elif msg.type == WsMessageType.ERROR:
-                logger.warning(f"Error from Main: {msg.payload}")
+                payload_keys = sorted(msg.payload) if isinstance(msg.payload, dict) else []
+                logger.warning("Error response received from Main (fields=%s)", payload_keys)
         finally:
             if tokens:
                 reset_log_context(tokens)

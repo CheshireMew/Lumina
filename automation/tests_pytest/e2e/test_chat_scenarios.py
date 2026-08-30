@@ -17,14 +17,14 @@ PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
 SERVICES = {
-    "memory": "http://127.0.0.1:8010",
+    "core": "http://127.0.0.1:8010",
     "stt": "http://127.0.0.1:8010",
     "tts": "http://127.0.0.1:8766",
 }
 
 
 def companion_url() -> str:
-    return f"{SERVICES['memory']}/companion/message"
+    return f"{SERVICES['core']}/companion/message"
 
 
 def companion_payload(
@@ -187,15 +187,15 @@ async def test_service_health_endpoints():
             except Exception:
                 health_checks[service_name] = False
 
-        assert health_checks.get("memory", False), "Memory service must be available"
+        assert health_checks.get("core", False), "Core service must be available"
 
 
 @pytest.fixture(scope="session", autouse=True)
 async def verify_services():
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
-            response = await client.get(f"{SERVICES['memory']}/health")
+            response = await client.get(f"{SERVICES['core']}/health")
             if response.status_code != 200:
-                pytest.skip("Memory service not available. Run: npm run dev")
+                pytest.skip("Core service not available. Run: npm run dev")
         except Exception:
             pytest.skip("Cannot connect to services. Run: npm run dev")

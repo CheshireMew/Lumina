@@ -26,7 +26,7 @@ class Capability(IWorkerCapability):
     async def on_startup(self, app: FastAPI):
         state = get_stt_runtime_state()
         state.reset()
-        container = app.state.container
+        container = app.state.services
         # 1. Initialize Manager
         manager = STTProviderManager(config=app_settings)
         await manager.register_drivers()

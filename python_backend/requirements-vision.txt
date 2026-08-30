@@ -1,4 +1,2 @@
-transformers>=4.36.0
-torch>=2.1.0 --index-url https://download.pytorch.org/whl/pkgs/pypi/cpu
-torchvision>=0.16.0 --index-url https://download.pytorch.org/whl/pkgs/pypi/cpu
-sentence-transformers>=2.2.2
+Pillow>=10.0.0
+mss>=9.0.0

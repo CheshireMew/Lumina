@@ -6,7 +6,25 @@
     "system_prompt": "",
     "avatar": {
         "type": "live2d",
-        "model": "Hiyori"
+        "model": "Hiyori",
+        "behavior": {
+            "idleMotionGroup": "Idle",
+            "tapMotionGroup": "TapBody",
+            "tapHitArea": "Body",
+            "idleThresholdMs": 15000,
+            "fitScale": 0.6,
+            "verticalPositionRatio": 0.6,
+            "timeScale": 0.8,
+            "parameters": {
+                "eyeBlinkLeft": "ParamEyeLOpen",
+                "eyeBlinkRight": "ParamEyeROpen",
+                "mouthOpen": "ParamMouthOpenY",
+                "headPan": "ParamAngleX",
+                "headTilt": "ParamAngleY",
+                "headRoll": "ParamAngleZ",
+                "bodyPan": "ParamBodyAngleX"
+            }
+        }
     },
     "voice_config": {
         "service": "edge-tts",

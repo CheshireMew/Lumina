@@ -38,8 +38,8 @@ async def check_service_health(client, name, url):
         print(f"[{RED}FAIL{RESET}] {name} Connection Failed: {e}")
         return False
 
-async def check_memory_chat(client):
-    """Test the Core Memory/Chat Flow"""
+async def check_core_chat(client):
+    """Test the Core Chat Flow"""
     url = SERVICES["main"]
     print(f"\n--- Testing Main Application Flow ({url}) ---")
     resp = await client.get(f"{url}/health")
@@ -54,7 +54,7 @@ async def main():
     async with httpx.AsyncClient(timeout=5.0) as client:
         # 1. Health Checks
         results = await asyncio.gather(
-            check_service_health(client, "Memory Service", SERVICES["main"]),
+            check_service_health(client, "Core Service", SERVICES["main"]),
             check_service_health(client, "STT Service", SERVICES["stt"]),
             check_service_health(client, "TTS Service", SERVICES["tts"])
         )
@@ -64,7 +64,7 @@ async def main():
             raise RuntimeError("Some services are down")
             
         # 2. Functional Tests
-        await check_memory_chat(client)
+        await check_core_chat(client)
         
     print(f"\n[{GREEN}SUCCESS{RESET}] All basic checks passed.")
 

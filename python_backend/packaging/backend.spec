@@ -12,12 +12,13 @@ datas = []
 binaries = []
 build_target = os.environ.get('LUMINA_BUILD_TARGET', 'core')
 main_provider_driver_modules = [
-    'memory_postgres',
+    'memory_sqlite',
 ]
 target_provider_driver_modules = {
     'core': main_provider_driver_modules,
     'stt-runtime': ['stt_sensevoice'],
     'tts-runtime': ['tts_edge'],
+    'vision-runtime': ['vision_llm'],
 }.get(build_target, main_provider_driver_modules)
 cuda_binary_prefixes = (
     'cublas',
@@ -81,7 +82,6 @@ hiddenimports = [
     'h2',
     'hpack',
     'hyperframe',
-    'pgvector.asyncpg',
     'pythonosc.udp_client',
 ]
 
@@ -107,6 +107,7 @@ for pkg in [
 target_worker_runtimes = {
     'stt-runtime': ['capabilities.stt'],
     'tts-runtime': ['capabilities.tts'],
+    'vision-runtime': ['capabilities.vision'],
 }.get(build_target, [])
 for pkg in target_worker_runtimes:
     tmp_ret = collect_all(pkg)
@@ -117,6 +118,7 @@ for pkg in target_worker_runtimes:
 target_python_packages = {
     'stt-runtime': ['faster_whisper', 'sounddevice', 'soundfile', 'sherpa_onnx'],
     'tts-runtime': ['edge_tts'],
+    'vision-runtime': ['PIL', 'mss'],
 }.get(build_target, [])
 for pkg in target_python_packages:
     tmp_ret = collect_all(pkg)
@@ -137,6 +139,9 @@ target_excludes = {
         'edge_tts',
         'provider_drivers.stt_sensevoice',
         'provider_drivers.tts_edge',
+        'provider_drivers.memory_postgres',
+        'asyncpg',
+        'pgvector',
         'capabilities.stt',
         'capabilities.tts',
         'capabilities.vision',

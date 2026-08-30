@@ -192,12 +192,21 @@ async def test_unprocessed_turn_query_failure_propagates(memory_service):
 @pytest.mark.anyio
 async def test_mark_turns_processed_failure_propagates(memory_service):
     svc, driver = memory_service
-    driver.query = AsyncMock(side_effect=RuntimeError("mark processed failed"))
+    driver.update = AsyncMock(side_effect=RuntimeError("mark processed failed"))
 
     with pytest.raises(RuntimeError, match="mark processed failed"):
         await svc.mark_turns_processed(["log-1", "log-2"])
 
-    driver.query.assert_awaited_once()
+    driver.update.assert_awaited()
+
+
+@pytest.mark.anyio
+async def test_mark_turns_processed_rejects_missing_turn(memory_service):
+    svc, driver = memory_service
+    driver.update = AsyncMock(return_value=False)
+
+    with pytest.raises(RuntimeError, match="could not be marked processed"):
+        await svc.mark_turns_processed(["missing-turn"])
 
 
 @pytest.mark.anyio

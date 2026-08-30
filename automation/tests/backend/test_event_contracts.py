@@ -9,7 +9,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "python_backend"))
 os.environ["LUMINA_ENV"] = "dev"
 
-from core.events.bus import Event
 from core.protocol import EventPacket, EventType, InputTextPayload
 from services.chat.emotion_broker import EmotionBroker
 from services.chat.event_adapter import ChatTurnEventAdapter
@@ -81,8 +80,12 @@ async def test_chat_turn_event_adapter_emits_schema_valid_system_status_on_failu
         ),
         interaction_recorder=SimpleNamespace(record=AsyncMock()),
     )
-    adapter = ChatTurnEventAdapter(CompanionRuntime(chat_turn_service=chat_service))
-    adapter.bus = FakeBus()
+    bus = FakeBus()
+    adapter = ChatTurnEventAdapter(
+        CompanionRuntime(chat_turn_service=chat_service),
+        bus,
+        SimpleNamespace(publish_session_reset=AsyncMock()),
+    )
 
     packet = EventPacket(
         session_id=3,
@@ -91,7 +94,7 @@ async def test_chat_turn_event_adapter_emits_schema_valid_system_status_on_failu
         payload={"text": "hello", "character_id": "hiyori"},
     )
 
-    await adapter._process_input_text(Event(type=EventType.INPUT_TEXT, data=packet, source="frontend"))
+    await adapter._process_input_text(packet)
 
     status_events = [
         emitted
@@ -111,3 +114,59 @@ def test_input_text_payload_does_not_default_identity():
 
     assert payload.user_id is None
     assert payload.character_id is None
+
+
+@pytest.mark.anyio
+async def test_chat_dedupe_uses_request_identity_not_message_text():
+    adapter = ChatTurnEventAdapter(SimpleNamespace(), FakeBus(), SimpleNamespace())
+    first = EventPacket(
+        trace_id="request-one",
+        session_id=1,
+        type=EventType.INPUT_TEXT,
+        source="frontend",
+        payload={"text": "same text"},
+    )
+    second = first.model_copy(update={"trace_id": "request-two"})
+
+    assert await adapter._is_duplicate(first) is False
+    assert await adapter._is_duplicate(second) is False
+    assert await adapter._is_duplicate(first) is True
+
+
+@pytest.mark.anyio
+async def test_gateway_reset_advances_only_the_target_client_generation():
+    from routers.gateway import GatewayConnection, GatewayService
+
+    bus = FakeBus()
+    gateway = GatewayService(bus)
+    target_socket = SimpleNamespace(send_json=AsyncMock())
+    other_socket = SimpleNamespace(send_json=AsyncMock())
+    gateway._connections = {
+        "client-a": GatewayConnection(target_socket, "client-a", 4, 7, 9),
+        "client-b": GatewayConnection(other_socket, "client-b", 12, 3, 2),
+    }
+
+    session_id = await gateway.publish_session_reset(
+        "client-a",
+        source="rest.companion",
+        turn_id="turn-1",
+    )
+
+    assert session_id == 5
+    assert gateway._connections["client-a"].generation == 8
+    assert gateway._connections["client-a"].sequence_number == 1
+    assert gateway._connections["client-b"].session_id == 12
+    other_socket.send_json.assert_not_awaited()
+    packet = EventPacket.model_validate(target_socket.send_json.await_args.args[0])
+    assert packet.type == EventType.CONTROL_SESSION
+    assert packet.client_id == "client-a"
+    assert packet.turn_id == "turn-1"
+    assert packet.generation == 8
+    assert packet.source == "core.gateway"
+    assert packet.payload == {
+        "session_id": 5,
+        "generation": 8,
+        "client_id": "client-a",
+        "action": "reset",
+        "requested_by": "rest.companion",
+    }

@@ -1,12 +1,9 @@
-from abc import ABC, abstractmethod
+from typing import Protocol
 
-class SearchProvider(ABC):
-    @property
-    @abstractmethod
-    def id(self) -> str:
-        pass
+class SearchProvider(Protocol):
+    id: str
+    name: str
+    description: str
 
-    @abstractmethod
     async def search(self, query: str) -> str:
-        """Execute search and return markdown summary."""
-        pass
+        ...

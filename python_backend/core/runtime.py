@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -12,107 +15,64 @@ WORKER_RUNTIME_PREFIX = "worker:"
 class CapabilityContractDefinition:
     capability: str
     version: str
+    runtime_id: str | None
     worker_runtime_target: str
+    port_key: str
+    control_base_path: str
+    provider_backed: bool
     worker_routes: dict[str, str] = field(default_factory=dict)
     stream_routes: dict[str, str] = field(default_factory=dict)
     supported_operations: tuple[str, ...] = ()
 
 
-CAPABILITY_CONTRACTS: dict[str, CapabilityContractDefinition] = {
-    "stt": CapabilityContractDefinition(
-        capability="stt",
-        version="1.0",
-        worker_runtime_target="worker:stt",
-        worker_routes={
-            "models": "/models/list",
-            "switch": "/models/switch",
-            "audio_config": "/audio/config",
-            "audio_devices": "/audio/devices",
-            "voiceprint_status": "/voiceprint/status",
-            "audio_status": "/audio/status",
-            "health": "/health",
-        },
-        stream_routes={
-            "audio": "/ws/stt",
-        },
-        supported_operations=(
-            "models.list",
-            "models.switch",
-            "transcription.transcribe",
-            "audio.config",
-            "health.check",
-        ),
-    ),
-    "tts": CapabilityContractDefinition(
-        capability="tts",
-        version="1.0",
-        worker_runtime_target="worker:tts",
-        worker_routes={
-            "voices": "/voices",
-            "synthesize": "/synthesize",
-            "switch": "/models/switch",
-            "models": "/models/list",
-            "health": "/health",
-        },
-        supported_operations=(
-            "voices.list",
-            "speech.synthesize",
-            "models.switch",
-            "config.update",
-            "health.check",
-        ),
-    ),
-    "llm": CapabilityContractDefinition(
-        capability="llm",
-        version="1.0",
-        worker_runtime_target="main",
-        worker_routes={
-            "chat": "/companion/message",
-            "models": "/settings/llm/models/list",
-            "health": "/health",
-        },
-        supported_operations=(
-            "chat.generate",
-            "tools.call",
-            "models.list",
-            "health.check",
-        ),
-    ),
-    "memory": CapabilityContractDefinition(
-        capability="memory",
-        version="1.0",
-        worker_runtime_target="main",
-        worker_routes={
-            "search": "/memory/search",
-            "write": "/memory/add",
-            "cleanup": "/memory/context/clear",
-            "health": "/health",
-        },
-        supported_operations=(
-            "memory.search",
-            "memory.write",
-            "memory.cleanup",
-            "health.check",
-        ),
-    ),
-    "vision": CapabilityContractDefinition(
-        capability="vision",
-        version="1.0",
-        worker_runtime_target="worker:vision",
-        worker_routes={
-            "analyze": "/analyze",
-            "load": "/load",
-            "unload": "/unload",
-            "health": "/health",
-        },
-        supported_operations=(
-            "image.analyze",
-            "models.load",
-            "models.unload",
-            "health.check",
-        ),
-    ),
-}
+def _runtime_catalog_path() -> Path:
+    candidates: list[Path] = []
+    app_root = os.environ.get("LUMINA_APP_ROOT")
+    if app_root:
+        candidates.append(Path(app_root) / "config" / "worker-runtimes.json")
+    candidates.append(Path(__file__).resolve().parents[2] / "config" / "worker-runtimes.json")
+    candidates.append(Path(__file__).resolve().parents[1] / "config" / "worker-runtimes.json")
+    path = next((candidate for candidate in candidates if candidate.exists()), None)
+    if path is None:
+        searched = ", ".join(str(candidate) for candidate in candidates)
+        raise FileNotFoundError(f"config/worker-runtimes.json not found. Searched: {searched}")
+    return path
+
+
+def _load_capability_contracts() -> dict[str, CapabilityContractDefinition]:
+    raw = json.loads(_runtime_catalog_path().read_text(encoding="utf-8-sig"))
+    contracts: dict[str, CapabilityContractDefinition] = {}
+    runtime_port_keys: dict[str, str] = {}
+    for item in raw.get("capabilityContracts", []):
+        capability = str(item["capability"])
+        if capability in contracts:
+            raise ValueError(f"Duplicate capability contract: {capability}")
+        runtime_target = str(item["runtimeTarget"])
+        port_key = str(item["portKey"])
+        existing_port_key = runtime_port_keys.setdefault(runtime_target, port_key)
+        if existing_port_key != port_key:
+            raise ValueError(
+                f"Runtime target '{runtime_target}' has conflicting port keys: "
+                f"{existing_port_key}, {port_key}"
+            )
+        contracts[capability] = CapabilityContractDefinition(
+            capability=capability,
+            version=str(item["version"]),
+            runtime_id=item.get("runtimeId"),
+            worker_runtime_target=runtime_target,
+            port_key=port_key,
+            control_base_path=str(item["controlBasePath"]),
+            provider_backed=bool(item.get("providerBacked", True)),
+            worker_routes=dict(item.get("workerRoutes") or {}),
+            stream_routes=dict(item.get("streamRoutes") or {}),
+            supported_operations=tuple(item.get("supportedOperations") or []),
+        )
+    if not contracts:
+        raise ValueError("Runtime catalog defines no capability contracts")
+    return contracts
+
+
+CAPABILITY_CONTRACTS = _load_capability_contracts()
 
 
 def normalize_runtime_target(value: str | None) -> str:
@@ -161,6 +121,10 @@ def get_capability_contract(capability: str) -> CapabilityContractDefinition | N
     return CAPABILITY_CONTRACTS.get(capability)
 
 
+def list_capability_names() -> tuple[str, ...]:
+    return tuple(CAPABILITY_CONTRACTS)
+
+
 def list_capability_contracts() -> list[dict[str, Any]]:
     payload: list[dict[str, Any]] = []
     for contract in CAPABILITY_CONTRACTS.values():
@@ -168,13 +132,29 @@ def list_capability_contracts() -> list[dict[str, Any]]:
             {
                 "capability": contract.capability,
                 "version": contract.version,
+                "runtime_id": contract.runtime_id,
                 "runtime_target": contract.worker_runtime_target,
+                "port_key": contract.port_key,
+                "control_base_path": contract.control_base_path,
+                "provider_backed": contract.provider_backed,
                 "worker_routes": dict(contract.worker_routes),
                 "stream_routes": dict(contract.stream_routes),
                 "supported_operations": list(contract.supported_operations),
             }
         )
     return payload
+
+
+def port_key_for_runtime_target(runtime_target: str) -> str | None:
+    normalized = normalize_runtime_target(runtime_target)
+    port_keys = {
+        contract.port_key
+        for contract in CAPABILITY_CONTRACTS.values()
+        if normalize_runtime_target(contract.worker_runtime_target) == normalized
+    }
+    if len(port_keys) > 1:
+        raise ValueError(f"Runtime target '{normalized}' has multiple configured port keys")
+    return next(iter(port_keys), None)
 
 
 def resolve_runtime_host(config: Any, runtime_target: str) -> str | None:

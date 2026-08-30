@@ -1,6 +1,7 @@
 """Public configuration entrypoint for the Lumina backend."""
 
 import logging
+import copy
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -37,22 +38,11 @@ class ConfigMode(Enum):
 
 
 class ConfigManager:
-    _instance = None
-    _mode: ConfigMode = ConfigMode.MUTABLE
-    _is_initialized: bool = False
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(ConfigManager, cls).__new__(cls)
-        return cls._instance
-
     def __init__(self):
-        if self._is_initialized:
-            return
+        self._mode = ConfigMode.MUTABLE
         self._bundle = ConfigBundle()
         self._bind_bundle(self._bundle)
         self.load_configs()
-        self._is_initialized = True
 
     @property
     def is_dev(self) -> bool:
@@ -109,13 +99,35 @@ class ConfigManager:
 
     def save(self):
         if self.is_read_only:
-            logger.warning("Attempted to save config in Read-Only mode. Ignoring.")
-            return
+            raise PermissionError("Configuration is read-only")
 
         try:
             save_config(self._bundle, CONFIG_ROOT, logger)
         except Exception as exc:
             logger.error(f"Failed to save configuration: {exc}")
+            raise
+
+    def replace_sections(self, *, persist: bool = True, **sections: Any) -> None:
+        """Validate and replace complete config sections as one transaction."""
+        if self.is_read_only:
+            raise PermissionError("Configuration is read-only")
+        known_sections = self._bundle.section_map()
+        unknown = set(sections).difference(known_sections)
+        if unknown:
+            raise KeyError(f"Unknown configuration sections: {sorted(unknown)}")
+
+        candidate = copy.deepcopy(self._bundle)
+        for name, value in sections.items():
+            expected_type = type(known_sections[name])
+            if not isinstance(value, expected_type):
+                raise TypeError(
+                    f"Configuration section '{name}' must be {expected_type.__name__}"
+                )
+            setattr(candidate, name, copy.deepcopy(value))
+
+        if persist:
+            save_config(candidate, CONFIG_ROOT, logger)
+        self._bind_bundle(candidate)
 
     def _bind_bundle(self, bundle: ConfigBundle) -> None:
         self._bundle = bundle

@@ -28,6 +28,9 @@ class FakeChatTurnService:
 
     def build_text_turn_request(self, packet: EventPacket) -> TextTurnRequest:
         return TextTurnRequest(
+            turn_id=str(packet.turn_id),
+            client_id=packet.client_id,
+            generation=packet.generation,
             text=packet.payload["text"],
             companion_context=context(),
             user_name="Ada",
@@ -47,7 +50,10 @@ async def test_runtime_streams_text_packet_through_chat_turn_boundary():
     chat_service = FakeChatTurnService()
     runtime = CompanionRuntime(chat_turn_service=chat_service)
     packet = EventPacket(
+        client_id="client-7",
+        turn_id="turn-7",
         session_id=7,
+        generation=2,
         type=EventType.INPUT_TEXT,
         source="frontend",
         payload={"text": "ping", "model": "m"},
@@ -58,6 +64,9 @@ async def test_runtime_streams_text_packet_through_chat_turn_boundary():
     assert [event.kind for event in events] == ["started", "delta", "delta", "ended"]
     assert chat_service.requests == [
         TextTurnRequest(
+            turn_id="turn-7",
+            client_id="client-7",
+            generation=2,
             text="ping",
             companion_context=context(),
             user_name="Ada",
@@ -69,7 +78,13 @@ async def test_runtime_streams_text_packet_through_chat_turn_boundary():
 @pytest.mark.anyio
 async def test_runtime_collects_text_turn_delta_content_only():
     runtime = CompanionRuntime(chat_turn_service=FakeChatTurnService())
-    request = TextTurnRequest(text="ping", companion_context=context())
+    request = TextTurnRequest(
+        turn_id="turn-7",
+        client_id="client-7",
+        generation=2,
+        text="ping",
+        companion_context=context(),
+    )
 
     assert await runtime.collect_text_turn(request) == "hello world"
 

@@ -2,7 +2,7 @@ import { jsonRequestOptions, requestJson } from "./client";
 
 export interface QueryResult {
     status: string;
-    result?: any[];
+    result?: Array<Record<string, unknown>>;
     error?: string;
 }
 
@@ -28,7 +28,7 @@ export const loadTableRows = async (
         url += `&character_id=${activeCharacterId}`;
     }
 
-    const data = await requestJson<{ data?: any[] }>(url, { signal });
+    const data = await requestJson<{ data?: Array<Record<string, unknown>> }>(url, { signal });
     return data.data || [];
 };
 
@@ -36,7 +36,7 @@ export const executeQuery = async (
     apiBaseUrl: string,
     query: string,
 ): Promise<QueryResult> => {
-    const data = await requestJson<{ result?: any[]; detail?: string }>(
+    const data = await requestJson<{ result?: Array<Record<string, unknown>>; detail?: string }>(
         `${apiBaseUrl}/memory/inspection/query`,
         jsonRequestOptions("POST", { query }),
     );
@@ -45,47 +45,4 @@ export const executeQuery = async (
         status: "success",
         result: data.result || [],
     };
-};
-
-export const deleteRecord = async (
-    apiBaseUrl: string,
-    tableName: string,
-    recordId: string,
-) => {
-    return requestJson<{ status?: string; detail?: string }>(
-        `${apiBaseUrl}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
-        jsonRequestOptions("DELETE"),
-    );
-};
-
-export const updateRecord = async (
-    apiBaseUrl: string,
-    tableName: string,
-    recordId: string,
-    data: Record<string, any>,
-) => {
-    return requestJson<{ status?: string; detail?: string }>(
-        `${apiBaseUrl}/memory/inspection/record/${tableName}/${encodeURIComponent(recordId)}`,
-        jsonRequestOptions("PUT", { data }),
-    );
-};
-
-export const createRecord = async (
-    apiBaseUrl: string,
-    tableName: string,
-    data: Record<string, any>,
-) => {
-    return requestJson<{ status?: string; detail?: string }>(
-        `${apiBaseUrl}/memory/inspection/record/${tableName}/new`,
-        jsonRequestOptions("POST", { data }),
-    );
-};
-
-export const normalizeRecordId = (value: any): string => {
-    if (value && typeof value === "object" && value.id) {
-        return normalizeRecordId(value.id);
-    }
-
-    const text = String(value);
-    return text.includes(":") ? text.split(":")[1] : text;
 };

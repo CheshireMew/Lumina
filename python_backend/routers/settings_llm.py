@@ -33,27 +33,44 @@ async def update_llm_runtime_settings(
             top_p=payload.topP,
             presence_penalty=payload.presencePenalty,
             frequency_penalty=payload.frequencyPenalty,
+            thinking_enabled=payload.thinkingEnabled,
             history_limit=payload.historyLimit,
             overflow_strategy=payload.overflowStrategy,
             provider_id=payload.providerId,
         )
         return config_service.get_llm_runtime_settings()
+    except (KeyError, ValueError) as exc:
+        logger.warning("Rejected invalid LLM runtime settings: %s", exc)
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_llm_settings", "message": str(exc)},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to update LLM runtime settings: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "llm_settings_update_failed", "message": "模型设置保存失败。"},
+        ) from exc
 
 @router.get("/providers")
 async def get_providers(llm_manager=Depends(get_llm_service)):
     return {"providers": llm_manager.list_providers()}
 
 @router.post("/providers/{provider_id}")
-async def update_provider_config(provider_id: str, config: Dict[str, Any], llm_manager=Depends(get_llm_service)):
+async def update_provider_config(
+    provider_id: str,
+    config: Dict[str, Any],
+    config_service=Depends(get_config_controller),
+):
     try:
         # Filter allowed keys
         allowed = {"base_url", "api_key", "models", "type", "enabled"}
         updates = {k: v for k, v in config.items() if k in allowed}
-        llm_manager.update_provider(provider_id, updates)
-        return {"status": "ok", "provider": llm_manager.config.providers[provider_id]}
+        config_service.update_llm_provider(provider_id, updates)
+        return {
+            "status": "ok",
+            "provider": config_service.config.llm.providers[provider_id],
+        }
     except KeyError:
         raise HTTPException(status_code=404, detail="Provider not found")
     except Exception as e:
@@ -66,7 +83,11 @@ async def get_routes(llm_manager=Depends(get_llm_service)):
     return {"routes": routes}
 
 @router.post("/routes/{feature}")
-async def update_route(feature: str, payload: Dict[str, Any], llm_manager=Depends(get_llm_service)):
+async def update_route(
+    feature: str,
+    payload: Dict[str, Any],
+    config_service=Depends(get_config_controller),
+):
     """
     Payload: { "provider_id": "...", "model": "...", "temperature": ..., "top_p": ..., "presence_penalty": ..., "frequency_penalty": ... }
     """
@@ -92,7 +113,7 @@ async def update_route(feature: str, payload: Dict[str, Any], llm_manager=Depend
         # Filter out None values to allow partial updates (and prevent Pydantic validation errors)
         clean_updates = {k: v for k, v in updates.items() if v is not None}
             
-        llm_manager.update_route(feature, **clean_updates)
+        config_service.update_llm_route(feature, clean_updates)
         return {"status": "ok"}
     except ValueError as e:
          raise HTTPException(status_code=400, detail=str(e))

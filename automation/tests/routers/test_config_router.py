@@ -19,4 +19,9 @@ class FakeSoulService:
 async def test_health_check_reports_active_soul_character():
     response = await health_check(context_resolver=CompanionContextResolver(FakeSoulService()))
 
-    assert response == {"status": "healthy", "active_character_id": "sakura"}
+    assert response["status"] == "healthy"
+    assert response["active_character_id"] == "sakura"
+    assert response["runtime"]["product"] == "lumina"
+    assert response["runtime"]["protocolVersion"] == 1
+    assert response["runtime"]["target"] == "core"
+    assert isinstance(response["runtime"]["processId"], int)

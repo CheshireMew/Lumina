@@ -1,10 +1,11 @@
 
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 from core.interfaces.tool import ToolProvider
 
 class WebSearchTool(ToolProvider):
-    def __init__(self, services_container):
-        self.services = services_container
+    def __init__(self, config, get_search_provider: Callable[[str], Any]):
+        self.config = config
+        self.get_search_provider = get_search_provider
 
     @property
     def name(self) -> str:
@@ -31,11 +32,11 @@ class WebSearchTool(ToolProvider):
         if not query:
             raise ValueError("web_search requires query")
 
-        provider_id = self.services.get_config().get_selected_provider("tool.search")
+        provider_id = self.config.get_selected_provider("tool.search")
         if not provider_id:
             raise ValueError("tool.search provider must be configured")
 
-        provider = self.services.get_search_provider(provider_id)
+        provider = self.get_search_provider(provider_id)
         if not provider or not hasattr(provider, "search"):
             raise RuntimeError(f"Search provider '{provider_id}' is not active")
 

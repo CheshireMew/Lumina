@@ -1,5 +1,5 @@
 {
-  "memory_port": 8010,
+  "core_port": 8010,
   "stt_port": 8765,
   "tts_port": 8766,
   "vision_port": 8005

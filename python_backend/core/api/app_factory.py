@@ -19,20 +19,20 @@ from routers import stt_routes
 from routers import tts_routes
 from routers import metrics as metrics_router
 from routers.voiceprint import router as voiceprint_router
-from services.infra.worker_control_hub import get_worker_control_hub
 from services.lifecycle import lifespan
 from services.middleware.metrics_middleware import MetricsMiddleware
 from core.api.assets import mount_builtin_assets
 
 logger = logging.getLogger("AppFactory")
 
-def create_app(logger, request_id_ctx) -> FastAPI:
+def create_app(logger, request_id_ctx, container) -> FastAPI:
     app = FastAPI(
         title="Lumina Backend API",
         description="Lumina desktop backend",
         version="2.0.0",
         lifespan=lifespan,
     )
+    app.state.services = container
 
     _configure_middleware(app, logger, request_id_ctx)
     _configure_exception_handlers(app, logger)
@@ -137,7 +137,7 @@ def _configure_routes(app: FastAPI) -> None:
 
     @app.websocket("/ws/worker-control")
     async def worker_control_websocket(websocket: WebSocket):
-        hub = get_worker_control_hub()
+        hub = websocket.app.state.services.get_worker_control_hub()
         await hub.handle_connection(websocket)
 
 

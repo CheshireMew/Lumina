@@ -10,7 +10,7 @@ class SenseVoiceDriver(BaseSTTDriver):
         super().__init__(
             id="driver.stt.sensevoice",
             name="SenseVoice (Sherpa-ONNX)",
-            description="Ultra-fast, high-accuracy model from Alibaba. Optimized for CPU."
+            description="阿里巴巴 SenseVoice，高速高精度，并针对 CPU 运行优化。"
         )
         self.engine = None
 

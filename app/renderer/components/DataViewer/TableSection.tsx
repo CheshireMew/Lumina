@@ -1,5 +1,5 @@
 import React from "react";
-import { Edit, Plus, RefreshCw, Table as TableIcon, Trash2 } from "lucide-react";
+import { RefreshCw, Table as TableIcon } from "lucide-react";
 
 import {
     formatCellValue,
@@ -13,9 +13,6 @@ interface TableSectionProps {
     tableData: any[];
     loading: boolean;
     onRefreshTable: () => void;
-    onCreateRecord: () => void;
-    onEditRecord: (row: any) => void;
-    onDeleteRecord: (id: any) => void;
 }
 
 export const TableSection: React.FC<TableSectionProps> = ({
@@ -23,9 +20,6 @@ export const TableSection: React.FC<TableSectionProps> = ({
     tableData,
     loading,
     onRefreshTable,
-    onCreateRecord,
-    onEditRecord,
-    onDeleteRecord,
 }) => {
     const meta = getTableViewMeta(selectedTable);
     const columns = getOrderedColumns(tableData, selectedTable);
@@ -104,27 +98,10 @@ export const TableSection: React.FC<TableSectionProps> = ({
                             border: "none",
                             color: "#f472b6",
                         }}
-                        title="Refresh"
+                        title="刷新"
+                        aria-label="刷新当前数据"
                     >
                         <RefreshCw size={18} />
-                    </button>
-                    <button
-                        onClick={onCreateRecord}
-                        style={{
-                            cursor: "pointer",
-                            background: "linear-gradient(135deg, #ec4899, #8b5cf6)",
-                            border: "none",
-                            color: "white",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            fontSize: "12px",
-                                    fontWeight: "600",
-                        }}
-                    >
-                        <Plus size={14} /> New
                     </button>
                 </div>
             </div>
@@ -140,7 +117,7 @@ export const TableSection: React.FC<TableSectionProps> = ({
                             fontSize: "14px",
                         }}
                     >
-                        <RefreshCw className="spin" size={20} /> Loading data from Core...
+                        <RefreshCw className="spin" size={20} /> 正在读取数据…
                     </div>
                 ) : (
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -159,7 +136,6 @@ export const TableSection: React.FC<TableSectionProps> = ({
                                 <th style={{ padding: "12px 15px", width: "40px", textAlign: "center" }}>
                                     #
                                 </th>
-                                <th style={{ padding: "12px 15px", width: "90px" }}>Action</th>
                                 {columns.map((col) => (
                                     <th
                                         key={col}
@@ -195,50 +171,6 @@ export const TableSection: React.FC<TableSectionProps> = ({
                                         }}
                                     >
                                         {i + 1}
-                                    </td>
-                                    <td
-                                        style={{
-                                            padding: "12px 15px",
-                                            verticalAlign: "top",
-                                            width: "90px",
-                                            display: "flex",
-                                            gap: "5px",
-                                        }}
-                                    >
-                                        <button
-                                            onClick={() => onEditRecord(row)}
-                                            style={{
-                                                background: "rgba(255, 255, 255, 0.1)",
-                                                border: "1px solid rgba(255, 255, 255, 0.2)",
-                                                color: "#f472b6",
-                                                borderRadius: "6px",
-                                                padding: "6px",
-                                                cursor: "pointer",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                            }}
-                                            title="Edit Record"
-                                        >
-                                            <Edit size={14} />
-                                        </button>
-                                        <button
-                                            onClick={() => onDeleteRecord(row.id)}
-                                            style={{
-                                                background: "rgba(239, 68, 68, 0.1)",
-                                                border: "1px solid rgba(239, 68, 68, 0.2)",
-                                                color: "#f87171",
-                                                borderRadius: "6px",
-                                                padding: "6px",
-                                                cursor: "pointer",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                            }}
-                                            title="Delete Record"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
                                     </td>
                                     {columns.map((col) => (
                                         <td

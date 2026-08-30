@@ -4,20 +4,23 @@
   "version": "0.1.0",
   "description": "AI Virtual Companion with Live2D and LLM integration",
   "author": "CheshireMew",
+  "license": "GPL-3.0-or-later",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build:backend": "python python_backend/packaging/build_all.py",
     "verify-runtimes": "python scripts/verify_worker_runtimes.py",
+    "verify-runtime-contract": "python scripts/verify_worker_runtimes.py --contract-only",
+    "verify-build": "python scripts/verify_build.py",
+    "test": "vitest run --no-file-parallelism",
+    "test:performance": "vitest run --no-file-parallelism app/renderer/companion/runtime/messageUpdateBatcher.test.ts app/renderer/core/voice/sentenceSplitter.test.ts app/renderer/core/voice/audioPlaybackPolicy.test.ts app/renderer/core/avatar/live2d/live2dPerformancePolicy.test.ts app/renderer/hooks/useRuntimeCapabilities.test.ts",
+    "test:python": "python -m pytest -q -p no:cacheprovider",
     "gen-types": "powershell scripts/generate_api_client.ps1",
-    "build": "npm run build:backend && tsc && vite build && electron-builder",
+    "build": "npm run build:backend && npm run verify-runtimes && tsc && vite build && electron-builder",
     "preview": "vite preview",
     "lint": "eslint --config eslint.config.mjs \"app/**/*.{ts,tsx}\" \"core/**/*.{ts,tsx}\" \"vite.config.mts\""
   },
   "dependencies": {
-    "@langchain/community": "^1.1.1",
-    "@langchain/core": "^1.1.8",
-    "@langchain/openai": "^1.2.0",
     "axios": "^1.13.2",
     "electron-store": "^8.2.0",
     "eventemitter3": "^5.0.1",
@@ -43,6 +46,7 @@
     "eslint": "^10.2.0",
     "globals": "^17.4.0",
     "jsdom": "^27.4.0",
+    "openapi-typescript": "^7.9.1",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.2.2",
@@ -61,6 +65,19 @@
       "dist-electron/**/*",
       "!dist/live2d/**/*",
       "!dist/libs/live2dcubismcore.min.js",
+      "!dist/ort-*.wasm",
+      "!dist/silero_vad*.onnx",
+      "!dist/*vad*.js",
+      "!dist/frame-processor.js",
+      "!dist/resampler.js",
+      "!dist/worklet.js",
+      "!dist/default-model-fetcher.js",
+      "!dist/asset-path.js",
+      "!dist/messages.js",
+      "!dist/logging.js",
+      "!dist/bundle*.js",
+      "!dist/utils.js",
+      "!dist/index.js",
       "!python_backend/**/*",
       "!models/**/*",
       "!GPT-SoVITS/**/*",
@@ -88,7 +105,7 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": true
+      "deleteAppDataOnUninstall": false
     },
     "extraResources": [
       {
@@ -114,6 +131,18 @@
       {
         "from": "config/ports.json",
         "to": "config/ports.json"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "LICENSING.md",
+        "to": "LICENSING.md"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
       }
     ]
   }

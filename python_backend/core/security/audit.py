@@ -1,7 +1,5 @@
 import logging
 import asyncio
-import json
-from datetime import datetime
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("AuditLogger")
@@ -10,7 +8,7 @@ logger = logging.getLogger("AuditLogger")
 class AuditLogger:
     """
     Asynchronous Security Audit Logger.
-    Writes events to PostgreSQL 'security_audit' table.
+    Writes events to Lumina's managed local database.
     """
     
     @staticmethod
@@ -28,31 +26,14 @@ class AuditLogger:
         target: e.g. "system.filesystem", "/etc/passwd"
         status: "granted" or "blocked"
         """
-        from services.infra.bus_factory import get_lifecycle_bus
+        from services.infra.local_state_store import get_local_state_store
 
-        bus = get_lifecycle_bus()
-        pool = await bus.get_pool()
-
-        data = {
-            "timestamp": datetime.now(),
-            "actor_id": actor_id,
-            "action": action,
-            "target": target,
-            "status": status,
-            "metadata": json.dumps(metadata or {}),
-        }
-
-        await pool.execute(
-            """
-            INSERT INTO security_audit (timestamp, actor_id, action, target, status, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            """,
-            data["timestamp"],
-            data["actor_id"],
-            data["action"],
-            data["target"],
-            data["status"],
-            data["metadata"],
+        await get_local_state_store().write_audit_event(
+            actor_id=actor_id,
+            action=action,
+            target=target,
+            status=status,
+            metadata=metadata,
         )
 
     @staticmethod

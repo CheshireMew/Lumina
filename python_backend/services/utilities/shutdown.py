@@ -18,8 +18,8 @@ class ShutdownManager:
     1. Config Watcher (monitoring)
     2. Built-in middleware services
     3. Ticker (background tasks)
-    4. Worker Control Hub (IPC)
-    5. Process Manager (child processes)
+    4. Process Manager (child processes)
+    5. Worker Control Hub (IPC)
     6. Database (persistence)
     """
     
@@ -38,6 +38,10 @@ class ShutdownManager:
         
         # 2. Built-in middleware services
         await self._stop_emotion_broker(container)
+        await self._stop_chat_adapter(container)
+        await self._drain_post_turn(container)
+        await self._stop_memory_consolidation(container)
+        await self._stop_gateway(container)
         
         # 3. Ticker
         self._stop_ticker(container)
@@ -45,14 +49,15 @@ class ShutdownManager:
         # 4. Pending startup tasks
         await self._stop_prewarm_task(container)
         
-        # 5. Worker Control Hub
-        await self._stop_worker_control_hub()
-        
-        # 6. Process Manager
+        # 5. Stop child processes while their control channel is still available.
         await self._stop_process_manager(container)
+
+        # 6. Worker Control Hub
+        await self._stop_worker_control_hub(container)
         
         # 7. Database
         await self._stop_database(container)
+        await self._stop_http_client()
         
         logger.info("✅ Shutdown complete")
     
@@ -72,6 +77,34 @@ class ShutdownManager:
             await emotion_broker.stop()
         except Exception as e:
             logger.error(f"Error stopping EmotionBroker: {e}")
+
+    async def _stop_chat_adapter(self, container: Any):
+        adapter = container.get_chat_turn_event_adapter()
+        if adapter:
+            await adapter.stop()
+
+    async def _drain_post_turn(self, container: Any):
+        if not container.has_service("companion_interaction_recorder"):
+            return
+        recorder = container.get_companion_interaction_recorder()
+        if recorder:
+            logger.info("Finishing accepted post-turn operations...")
+            await recorder.close()
+
+    async def _stop_memory_consolidation(self, container: Any):
+        service = container.get_memory_consolidation_service()
+        if service:
+            await service.close()
+
+    async def _stop_gateway(self, container: Any):
+        if not container.has_service("gateway"):
+            return
+        await container.get_gateway().close()
+
+    async def _stop_http_client(self):
+        from services.http_client import close_http_client
+
+        await close_http_client()
     
     def _stop_ticker(self, container: Any):
         ticker = container.get_ticker()
@@ -96,16 +129,18 @@ class ShutdownManager:
         except Exception as e:
             logger.debug(f"Worker prewarm task shutdown: {e}")
     
-    async def _stop_worker_control_hub(self):
+    async def _stop_worker_control_hub(self, container):
+        if not container.has_service("worker_control_hub"):
+            return
         try:
-            from services.infra.worker_control_hub import get_worker_control_hub
-            hub = get_worker_control_hub()
-            await hub.shutdown()
+            await container.get_worker_control_hub().shutdown()
         except Exception as e:
             logger.debug(f"WorkerControlHub shutdown: {e}")
     
     async def _stop_process_manager(self, container: Any):
         import asyncio
+        if not container.has_service("process_manager"):
+            return
         pm = container.get_process_manager()
         if pm:
             logger.info("Stopping Process Manager...")

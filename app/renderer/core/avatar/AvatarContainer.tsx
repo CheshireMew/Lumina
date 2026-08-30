@@ -1,5 +1,6 @@
 import React, { Component, Suspense, forwardRef } from 'react';
 import { AvatarRendererRef } from './types';
+import type { Live2DBehavior } from '@core/llm/types';
 
 const Live2DRenderer = React.lazy(() => import('./live2d/Live2DRenderer'));
 
@@ -8,6 +9,7 @@ interface AvatarContainerProps {
     highDpi?: boolean;
     cubismCoreSrc: string;
     rendererRuntimeSrc: string;
+    behavior: Live2DBehavior;
 }
 
 class AvatarErrorBoundary extends Component<
@@ -55,8 +57,8 @@ class AvatarErrorBoundary extends Component<
     }
 }
 
-const AvatarContainer = forwardRef<AvatarRendererRef, AvatarContainerProps>(({ modelPath, highDpi, cubismCoreSrc, rendererRuntimeSrc }, ref) => {
-    const resetKey = `${modelPath}|${cubismCoreSrc || ''}|${rendererRuntimeSrc || ''}|${highDpi ? 'hdpi' : 'sdpi'}`;
+const AvatarContainer = forwardRef<AvatarRendererRef, AvatarContainerProps>(({ modelPath, highDpi, cubismCoreSrc, rendererRuntimeSrc, behavior }, ref) => {
+    const resetKey = `${modelPath}|${cubismCoreSrc || ''}|${rendererRuntimeSrc || ''}|${highDpi ? 'hdpi' : 'sdpi'}|${JSON.stringify(behavior)}`;
     const LoadingFallback = (
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#888' }}>
             Initializing Live2D Engine...
@@ -72,6 +74,7 @@ const AvatarContainer = forwardRef<AvatarRendererRef, AvatarContainerProps>(({ m
                     highDpi={highDpi}
                     cubismCoreSrc={cubismCoreSrc}
                     rendererRuntimeSrc={rendererRuntimeSrc}
+                    behavior={behavior}
                 />
             </Suspense>
         </AvatarErrorBoundary>

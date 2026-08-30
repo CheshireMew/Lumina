@@ -159,9 +159,15 @@ Lumina_Data/
 # Agentic Workspace
 .agent/
 .agent
+.claude/
+.codex_tools/
 
 # Project Archives
 archive/
+!docs/archive/
+!docs/archive/backend/
+!docs/archive/backend/**
+docs/archive/backend/**/__pycache__/
 openspec/
 
 # Local Config Overrides (Safety Net)
@@ -173,7 +179,26 @@ secrets.json
 lumina.secret
 secrets.encrypted
 
-Data
+# Local generated data and models
+/Data/
+/data/
+/brain/
+/python_backend/data/models/
+/python_backend/data/modules/
+/python_backend/data/sessions/
+/python_backend/lumina.db/
+/python_backend/characters/*/data/
+/python_backend/test_lite_memory_db/
+/python_backend/test_lite_memory_db_consol/
+/test_memory.db
+/automation/tests_pytest/data/
+
+# Local Live2D production workspace
+/live2d-workbench/
+/docs/live2d_nyxie/
+/live2d-pipeline/
+/tools/
+/tools/nyxie_live2d/
 
 # Debug and temporary files
 *_debug*.txt

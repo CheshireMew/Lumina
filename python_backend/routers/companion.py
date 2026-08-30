@@ -1,4 +1,5 @@
 from typing import Optional
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -9,6 +10,7 @@ from routers.deps import (
     get_companion_runtime,
     get_soul_service,
 )
+from schemas.api_contracts import CompanionHistoryResponse
 
 
 router = APIRouter(prefix="/companion", tags=["Companion"])
@@ -16,7 +18,10 @@ router = APIRouter(prefix="/companion", tags=["Companion"])
 
 class CompanionMessageRequest(BaseModel):
     text: str
-    session_id: int = 0
+    session_id: int = 1
+    generation: int = 1
+    client_id: Optional[str] = None
+    turn_id: Optional[str] = None
     user_id: Optional[str] = None
     character_id: Optional[str] = None
     user_name: Optional[str] = None
@@ -24,7 +29,10 @@ class CompanionMessageRequest(BaseModel):
 
 
 class CompanionControlRequest(BaseModel):
-    session_id: int = 0
+    session_id: int = 1
+    generation: int = 1
+    client_id: Optional[str] = None
+    turn_id: Optional[str] = None
     user_id: Optional[str] = None
     character_id: Optional[str] = None
     user_name: Optional[str] = None
@@ -39,8 +47,14 @@ async def send_companion_message(
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
 
+    session_id = request.session_id or 1
+    client_id = request.client_id or f"rest:{uuid.uuid4()}"
+    turn_id = request.turn_id or str(uuid.uuid4())
     packet = EventPacket(
-        session_id=request.session_id,
+        client_id=client_id,
+        turn_id=turn_id,
+        session_id=session_id,
+        generation=request.generation,
         type=EventType.INPUT_TEXT,
         source="rest.companion",
         payload={
@@ -52,22 +66,38 @@ async def send_companion_message(
         },
     )
 
-    content = await companion_runtime.collect_text_turn(
-        companion_runtime.build_text_turn_request(packet)
-    )
+    content = ""
+    reasoning = ""
+    status = "completed"
+    async for turn_event in companion_runtime.stream_text_packet(packet):
+        if turn_event.kind == "delta":
+            content += str(turn_event.payload.get("content") or "")
+        elif turn_event.kind == "reasoning":
+            reasoning += str(turn_event.payload.get("content") or "")
+        elif turn_event.kind == "ended":
+            status = str(turn_event.payload.get("status") or status)
 
     return {
-        "session_id": request.session_id,
+        "turn_id": turn_id,
+        "session_id": session_id,
+        "generation": request.generation,
+        "status": status,
         "content": content,
+        "reasoning": reasoning,
     }
 
 
 @router.post("/interrupt")
 async def interrupt_companion(
+    request: CompanionControlRequest,
     companion_runtime=Depends(get_companion_runtime),
 ):
-    await companion_runtime.interrupt()
-    return {"success": True}
+    interrupted = await companion_runtime.interrupt(
+        client_id=request.client_id or "rest",
+        session_id=request.session_id,
+        turn_id=request.turn_id,
+    )
+    return {"success": True, "turn_ids": interrupted}
 
 
 @router.post("/session/reset")
@@ -76,7 +106,10 @@ async def reset_companion_session(
     companion_runtime=Depends(get_companion_runtime),
 ):
     packet = EventPacket(
+        client_id=request.client_id or "rest",
+        turn_id=request.turn_id,
         session_id=request.session_id,
+        generation=request.generation,
         type=EventType.CONTROL_SESSION,
         source="rest.companion",
         payload={
@@ -86,8 +119,35 @@ async def reset_companion_session(
             "user_name": request.user_name,
         },
     )
-    session_id = await companion_runtime.reset_session(packet)
-    return {"success": True, "session_id": session_id}
+    await companion_runtime.reset_session(packet)
+    return {
+        "success": True,
+        "session_id": request.session_id + 1,
+        "generation": request.generation + 1,
+    }
+
+
+@router.get("/history", response_model=CompanionHistoryResponse)
+async def get_companion_history(
+    user_id: Optional[str] = None,
+    character_id: Optional[str] = None,
+    user_name: Optional[str] = None,
+    session_id: int = 1,
+    companion_runtime=Depends(get_companion_runtime),
+):
+    if companion_runtime.context_resolver is None or companion_runtime.session_manager is None:
+        raise HTTPException(status_code=503, detail="Companion history is unavailable")
+    context = companion_runtime.context_resolver.resolve(
+        session_id=session_id,
+        user_id=user_id,
+        character_id=character_id,
+        user_name=user_name,
+    )
+    messages = await companion_runtime.session_manager.get_history(context)
+    return {
+        "session_id": session_id,
+        "messages": messages,
+    }
 
 
 @router.get("/state")

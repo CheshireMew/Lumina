@@ -70,11 +70,13 @@ async def test_context_pack_builder_collects_session_memory_soul_and_runtime_sta
 
 
 @pytest.mark.anyio
-async def test_context_pack_builder_skips_memory_for_fresh_session():
+async def test_context_pack_builder_retrieves_memory_for_fresh_session():
     session_manager = SimpleNamespace(
         load_session=AsyncMock(return_value=SimpleNamespace(short_term_history=[]))
     )
-    memory_service = SimpleNamespace(retrieve_context=AsyncMock())
+    memory_service = SimpleNamespace(
+        retrieve_context=AsyncMock(return_value="fresh remembered fact")
+    )
     soul_service = SimpleNamespace(
         get_system_prompt=AsyncMock(return_value="System"),
         get_active_character_id=MagicMock(return_value="hiyori"),
@@ -92,8 +94,8 @@ async def test_context_pack_builder_skips_memory_for_fresh_session():
         history_limit=10,
     )
 
-    assert pack.relevant_memories == ""
-    memory_service.retrieve_context.assert_not_awaited()
+    assert pack.relevant_memories == "fresh remembered fact"
+    memory_service.retrieve_context.assert_awaited_once()
 
 
 def test_context_pack_builder_requires_dependencies():

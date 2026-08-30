@@ -1,30 +1,23 @@
 
 import logging
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
-from pydantic import BaseModel
 
 from app_config import config as app_settings
 from routers.deps import get_config_controller, get_container, get_runtime_service_dep
 from .worker_proxy import proxy_json_request
+from schemas.api_contracts import (
+    AudioDeviceListResponse,
+    AudioStatusResponse,
+    OperationStatusResponse,
+    SttSwitchModelRequest,
+    SttModelListResponse,
+    UnifiedAudioConfig,
+    VoiceprintStatusResponse,
+)
 
 logger = logging.getLogger("STTProxy")
 
 router = APIRouter(prefix="/capabilities/stt", tags=["STT"])
-
-# --- Data Models ---
-
-class SwitchModelRequest(BaseModel):
-    model_name: str
-
-class UnifiedAudioConfig(BaseModel):
-    device_name: Optional[str] = None
-    enable_voiceprint_filter: Optional[bool] = None
-    voiceprint_threshold: Optional[float] = None
-    voiceprint_profile: Optional[str] = None
-    speech_start_threshold: Optional[float] = None
-    speech_end_threshold: Optional[float] = None
-    min_speech_frames: Optional[int] = None
 
 # --- Endpoints ---
 
@@ -33,17 +26,17 @@ async def health(container=Depends(get_container)):
     response = await proxy_json_request("stt", "GET", "/health", container=container)
     return response.json()
 
-@router.get("/models/list")
+@router.get("/models/list", response_model=SttModelListResponse)
 async def get_models(container=Depends(get_container)):
     """Proxy: List available STT models"""
     response = await proxy_json_request("stt", "GET", "/models/list", container=container)
     return response.json()
 
-@router.post("/models/switch")
-async def switch_model(payload: SwitchModelRequest, config_service=Depends(get_config_controller), container=Depends(get_container)):
+@router.post("/models/switch", response_model=OperationStatusResponse)
+async def switch_model(payload: SttSwitchModelRequest, config_service=Depends(get_config_controller), container=Depends(get_container)):
     """Proxy: Switch STT Model (and persist in Main)"""
     # 1. Forward to Worker
-    response = await proxy_json_request("stt", "POST", "/models/switch", payload.dict(), container=container)
+    response = await proxy_json_request("stt", "POST", "/models/switch", payload.model_dump(), container=container)
     resp = response.json()
     
     # 2. If success, persist in Main (Single Source of Truth)
@@ -54,25 +47,23 @@ async def switch_model(payload: SwitchModelRequest, config_service=Depends(get_c
 
 # --- Audio Config ---
 
-@router.get("/audio/devices")
+@router.get("/audio/devices", response_model=AudioDeviceListResponse)
 async def list_audio_devices(container=Depends(get_container)):
     response = await proxy_json_request("stt", "GET", "/audio/devices", container=container)
     return response.json()
 
-@router.post("/audio/config")
-async def update_audio_config(request: UnifiedAudioConfig, container=Depends(get_container)):
-    payload = request.dict(exclude_none=True)
-    audio_config = app_settings.audio
-
-    for key, value in payload.items():
-        if hasattr(audio_config, key):
-            setattr(audio_config, key, value)
-    app_settings.save()
-
+@router.post("/audio/config", response_model=OperationStatusResponse)
+async def update_audio_config(
+    request: UnifiedAudioConfig,
+    container=Depends(get_container),
+    config_service=Depends(get_config_controller),
+):
+    payload = request.model_dump(exclude_none=True)
     response = await proxy_json_request("stt", "POST", "/audio/config", payload, container=container)
+    config_service.update_audio_runtime(**payload)
     return response.json()
 
-@router.get("/voiceprint/status")
+@router.get("/voiceprint/status", response_model=VoiceprintStatusResponse)
 async def get_voiceprint_status(container=Depends(get_container)):
     audio_config = app_settings.audio
     worker_status = {}
@@ -90,7 +81,7 @@ async def get_voiceprint_status(container=Depends(get_container)):
         "profile_loaded": bool(worker_status.get("profile_loaded")),
     }
 
-@router.get("/audio/status")
+@router.get("/audio/status", response_model=AudioStatusResponse)
 async def get_audio_status(container=Depends(get_container)):
     audio_config = app_settings.audio
     worker_status = {}
@@ -113,11 +104,11 @@ async def get_audio_status(container=Depends(get_container)):
 @router.websocket("/ws/stt")
 async def websocket_stub(websocket: WebSocket, runtime=Depends(get_runtime_service_dep)):
     """
-    STT WebSockets must connect directly to the Worker Port (default 8001).
+    STT WebSockets must use the signed stream URL returned by the runtime endpoint.
     We cannot easily proxy WebSockets in FastAPI without performance loss.
     """
     await websocket.accept()
-    snapshot = runtime.get_capability_runtime("stt", app_settings.network.memory_url)
+    snapshot = runtime.get_capability_runtime("stt", app_settings.network.core_url)
     await websocket.send_json({
         "error": "Connect to the signed STT stream URL from /runtime/capabilities/stt",
         "url": snapshot.get("stream_url"),

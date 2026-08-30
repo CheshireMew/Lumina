@@ -1,9 +1,9 @@
+import { DEFAULT_USER_NAME } from "../../shared/productDefaults";
+
 interface ElectronSettingsStore {
     backgroundImage: string;
-    contextWindow: number;
     isTTSEnabled: boolean;
     live2d_high_dpi: boolean;
-    thinking_enabled: boolean;
     userName: string;
 }
 
@@ -20,24 +20,6 @@ export const electronSettings = {
     set: setSetting,
 };
 
-export interface BackendState {
-    status: "starting" | "ready" | "error";
-    ports: Record<string, number>;
-    errorMessage?: string;
-}
-
-export interface BootstrapState {
-    backend: BackendState;
-    localSettings: {
-        backgroundImage: string;
-        contextWindow: number;
-        isTTSEnabled: boolean;
-        live2dHighDpi: boolean;
-        thinkingEnabled: boolean;
-        userName: string;
-    };
-}
-
 const DEFAULT_BOOTSTRAP_STATE: BootstrapState = {
     backend: {
         status: "starting",
@@ -45,11 +27,9 @@ const DEFAULT_BOOTSTRAP_STATE: BootstrapState = {
     },
     localSettings: {
         backgroundImage: "",
-        contextWindow: 50,
         isTTSEnabled: true,
         live2dHighDpi: false,
-        thinkingEnabled: false,
-        userName: "Master",
+        userName: DEFAULT_USER_NAME,
     },
 };
 
@@ -78,6 +58,14 @@ export async function uploadBackground(filePath: string): Promise<string> {
     return window.app.uploadBackground(filePath);
 }
 
+export async function retryBackend(): Promise<BackendState> {
+    return window.app.retryBackend();
+}
+
+export async function openLogs(): Promise<string> {
+    return window.app.openLogs();
+}
+
 export function onBackendStateChange(
     callback: (state: BackendState) => void,
 ): () => void {
@@ -87,3 +75,9 @@ export function onBackendStateChange(
 
     return window.app.onBackendStateChange(callback);
 }
+import type {
+    BackendState,
+    BootstrapState,
+} from "../../shared/electronBridge";
+
+export type { BackendState, BootstrapState } from "../../shared/electronBridge";

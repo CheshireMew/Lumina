@@ -113,7 +113,7 @@ class LuminaRunner:
 
         # [Refactor] Static Port Definition (Uniform Config)
         self.ports = {
-            'memory_port': 8010,
+            'core_port': 8010,
             'stt_port': 8765,
             'tts_port': 8766
         }
@@ -141,7 +141,7 @@ class LuminaRunner:
         """Polls health endpoints until services are up"""
         self.log("⏳ Waiting for Services to come online...")
         services_to_check = [
-            ("Memory", self.ports['memory_port']),
+            ("Core", self.ports['core_port']),
             ("STT", self.ports['stt_port']),
             ("TTS", self.ports['tts_port'])
         ]
@@ -183,7 +183,7 @@ class LuminaRunner:
         failed = 0
         
         # T1: Health Checks
-        for service, port in [("Memory", self.ports['memory_port']), ("STT", self.ports['stt_port']), ("TTS", self.ports['tts_port'])]:
+        for service, port in [("Core", self.ports['core_port']), ("STT", self.ports['stt_port']), ("TTS", self.ports['tts_port'])]:
             url = f"http://127.0.0.1:{port}/health"
             try:
                 r = requests.get(url, timeout=2)
@@ -200,7 +200,7 @@ class LuminaRunner:
         max_retries = 5
         for attempt in range(max_retries):
             try:
-                url = f"http://127.0.0.1:{self.ports['memory_port']}/runtime/capabilities"
+                url = f"http://127.0.0.1:{self.ports['core_port']}/runtime/capabilities"
                 r = requests.get(url, timeout=2)
                 data = r.json()
 

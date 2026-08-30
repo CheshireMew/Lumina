@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -27,6 +27,27 @@ def test_worker_runtime_container_services_are_reset_for_worker_process():
     container.set_event_bus.assert_called_once()
     container.set_worker_runtime_registry.assert_called_once()
     container.has_service.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_worker_runtime_publishes_the_formal_services_dependency():
+    from fastapi import FastAPI
+    from services.worker_runtime import WorkerRuntimeHost, WorkerRuntimeOptions
+
+    container = MagicMock()
+    capability = MagicMock()
+    capability.on_startup = AsyncMock()
+    host = WorkerRuntimeHost(
+        WorkerRuntimeOptions(capability="stt", port=8765, runtime_target="worker:stt"),
+        container,
+    )
+    host.current_capability = capability
+    app = FastAPI()
+
+    await host._initialize_capability(app)
+
+    assert app.state.services is container
+    capability.on_startup.assert_awaited_once_with(app)
 
 
 @pytest.mark.anyio

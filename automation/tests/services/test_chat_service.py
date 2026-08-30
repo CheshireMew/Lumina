@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +15,7 @@ from services.chat.service import ChatTurnService, TextTurnRequest
 from services.companion.context import CompanionContext, CompanionContextResolver
 from services.companion.context_pack import CompanionContextPack
 from services.companion.interaction import CompanionInteraction, CompanionInteractionRecorder
+from services.companion.post_turn_journal import PostTurnJournal
 
 
 def companion_context(
@@ -49,7 +51,7 @@ def fake_context_resolver(character_id: str = "lillian") -> CompanionContextReso
 
 
 def fake_recorder() -> SimpleNamespace:
-    return SimpleNamespace(record=AsyncMock())
+    return SimpleNamespace(record=AsyncMock(), schedule=AsyncMock())
 
 
 def fake_context_pack_builder() -> SimpleNamespace:
@@ -83,7 +85,10 @@ async def test_build_text_turn_request_uses_packet_payload_and_active_character(
     )
 
     packet = EventPacket(
+        client_id="client-42",
+        turn_id="turn-42",
         session_id=42,
+        generation=3,
         type=EventType.INPUT_TEXT,
         source="frontend",
         payload={"text": "hi", "user_id": "u1", "user_name": "Ada", "model": "m"},
@@ -92,6 +97,9 @@ async def test_build_text_turn_request_uses_packet_payload_and_active_character(
     request = service.build_text_turn_request(packet)
 
     assert request == TextTurnRequest(
+        turn_id="turn-42",
+        client_id="client-42",
+        generation=3,
         text="hi",
         companion_context=companion_context(
             session_id=42,
@@ -144,6 +152,9 @@ async def test_stream_text_turn_emits_started_delta_and_ended_events():
         event
         async for event in service.stream_text_turn(
             TextTurnRequest(
+                turn_id="turn-1",
+                client_id="client-1",
+                generation=1,
                 text=" hello ",
                 companion_context=companion_context(session_id=1, user_id="u", character_id="c"),
             )
@@ -151,9 +162,54 @@ async def test_stream_text_turn_emits_started_delta_and_ended_events():
     ]
 
     assert [event.kind for event in events] == ["started", "delta", "delta", "ended"]
-    assert events[0].payload == {"mode": "chat", "text": "hello"}
+    assert events[0].payload == {"mode": "chat"}
     assert [event.payload.get("content") for event in events[1:3]] == ["A", "B"]
     assert pipeline.calls[0]["kwargs"]["context_pack"].user_message == "hello"
+
+
+@pytest.mark.anyio
+async def test_stream_text_turn_ends_after_durable_acceptance_not_post_turn_work(tmp_path):
+    release_history = asyncio.Event()
+
+    async def save_history(*_args, **_kwargs):
+        await release_history.wait()
+
+    recorder = CompanionInteractionRecorder(
+        memory_service=SimpleNamespace(record_turn=AsyncMock(return_value="turn-tail")),
+        session_manager=SimpleNamespace(add_turn=save_history),
+        soul_service=SimpleNamespace(
+            update_last_interaction=MagicMock(),
+            on_interaction=AsyncMock(),
+        ),
+        journal=PostTurnJournal(tmp_path / "post-turn"),
+    )
+    service = ChatTurnService(
+        pipeline=FakePipeline(tokens=["ok"]),
+        session_manager=fake_session_manager(),
+        context_resolver=fake_context_resolver(),
+        context_pack_builder=fake_context_pack_builder(),
+        interaction_recorder=recorder,
+    )
+    stream = service.stream_text_turn(
+        TextTurnRequest(
+            turn_id="turn-tail",
+            client_id="client-tail",
+            generation=1,
+            text="hello",
+            companion_context=companion_context(),
+        )
+    ).__aiter__()
+
+    assert (await anext(stream)).kind == "started"
+    assert (await anext(stream)).kind == "delta"
+    ended = await asyncio.wait_for(anext(stream), timeout=0.5)
+
+    assert ended.kind == "ended"
+    assert release_history.is_set() is False
+    pending = await recorder.journal.pending()
+    assert [record["turn_id"] for record in pending] == ["turn-tail"]
+    release_history.set()
+    await recorder.close()
 
 
 @pytest.mark.anyio
@@ -187,10 +243,11 @@ async def test_stream_response_records_turn_to_memory():
                 system_prompt="System",
             ),
             user_name="Ada",
+            turn_id="turn-memory",
         )
     ]
 
-    assert response == ["ok"]
+    assert response == [{"content": "ok", "reasoning": ""}]
     session_manager.add_turn.assert_awaited_once()
     soul.update_last_interaction.assert_called_once_with()
     soul.on_interaction.assert_awaited_once()
@@ -200,6 +257,7 @@ async def test_stream_response_records_turn_to_memory():
         assistant_message="ok",
         user_name="Ada",
         companion_name=None,
+        turn_id="turn-memory",
     )
 
 
@@ -226,15 +284,18 @@ async def test_stream_response_records_companion_interaction():
                 system_prompt="System",
             ),
             log_memory=False,
+            turn_id="turn-7",
         )
     ]
 
-    assert response == ["ok"]
+    assert response == [{"content": "ok", "reasoning": ""}]
     recorder.record.assert_awaited_once_with(
         CompanionInteraction(
             companion_context=context,
             user_message="ping",
             assistant_message="ok",
+            turn_id="turn-7",
+            assistant_reasoning="",
             save_history=True,
             log_memory=False,
         )

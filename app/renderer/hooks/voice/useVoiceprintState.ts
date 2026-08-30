@@ -22,16 +22,32 @@ export const useVoiceprintState = (
     const refreshVoiceprintConfig = useCallback(async () => {
         try {
             const voiceprint = await getVoiceprintStatus(sttBaseUrl);
-            setVoiceprintEnabled(voiceprint.enabled ?? false);
+            const profileLoaded = voiceprint.profile_loaded ?? false;
+            let effectiveEnabled = (voiceprint.enabled ?? false) && profileLoaded;
+            if (voiceprint.enabled && !profileLoaded) {
+                try {
+                    await updateSttAudioConfig(sttBaseUrl, {
+                        enable_voiceprint_filter: false,
+                    });
+                } catch (error) {
+                    console.warn("Failed to repair invalid voiceprint setting", error);
+                }
+                effectiveEnabled = false;
+            }
+            setVoiceprintEnabled(effectiveEnabled);
             setVoiceprintThreshold(voiceprint.threshold ?? 0);
             setVoiceprintProfile(voiceprint.profile ?? "");
-            setVoiceprintLoaded(voiceprint.profile_loaded ?? false);
+            setVoiceprintLoaded(profileLoaded);
             setVoiceprintStatus(
-                voiceprint.profile_loaded ? "Loaded voiceprint" : "Voiceprint not registered",
+                voiceprint.profile_loaded
+                    ? `声纹“${voiceprint.profile}”已就绪`
+                    : voiceprint.profile
+                        ? `声纹“${voiceprint.profile}”尚未注册或未启用`
+                        : "请先注册并选择一个已启用声纹",
             );
 
             const audioStatus = await getAudioStatus(sttBaseUrl);
-            if (audioStatus.vad_aggressiveness !== undefined) {
+            if (audioStatus.vad_aggressiveness != null) {
                 setVadAggressiveness(audioStatus.vad_aggressiveness);
             }
             if (audioStatus.speech_start_threshold !== undefined) {
@@ -42,6 +58,8 @@ export const useVoiceprintState = (
             }
         } catch (error) {
             console.warn("Failed to fetch voiceprint config", error);
+            setVoiceprintStatus(error instanceof Error ? error.message : "声纹状态读取失败。 ");
+            setVoiceprintLoaded(false);
         }
     }, [sttBaseUrl]);
 
@@ -65,7 +83,7 @@ export const useVoiceprintState = (
                 await refreshVoiceprintConfig();
             } catch (error) {
                 console.error("[VoiceManager] Failed to update voiceprint toggle", error);
-                alert("Unable to connect to the STT server");
+                setVoiceprintStatus(error instanceof Error ? error.message : "声纹过滤设置失败。 ");
                 await refreshVoiceprintConfig();
             }
         },
@@ -91,7 +109,7 @@ export const useVoiceprintState = (
                 await refreshVoiceprintConfig();
             } catch (error) {
                 console.error("[VoiceManager] Failed to update voiceprint threshold", error);
-                alert("Unable to update voiceprint threshold");
+                setVoiceprintStatus(error instanceof Error ? error.message : "声纹阈值保存失败。 ");
                 await refreshVoiceprintConfig();
             }
         },
@@ -117,7 +135,7 @@ export const useVoiceprintState = (
                 await refreshVoiceprintConfig();
             } catch (error) {
                 console.error("[VoiceManager] Failed to update voiceprint profile", error);
-                alert("Unable to update voiceprint profile");
+                setVoiceprintStatus(error instanceof Error ? error.message : "当前声纹保存失败。 ");
                 await refreshVoiceprintConfig();
             }
         },
@@ -150,7 +168,7 @@ export const useVoiceprintState = (
                 await refreshVoiceprintConfig();
             } catch (error) {
                 console.error("[VoiceManager] Failed to update VAD setting", error);
-                alert("Unable to update VAD setting");
+                setVoiceprintStatus(error instanceof Error ? error.message : "语音检测设置保存失败。 ");
                 await refreshVoiceprintConfig();
             }
         },

@@ -2,11 +2,16 @@
 import logging
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, BackgroundTasks, Request, File, UploadFile
-from pydantic import BaseModel
 
 from routers.deps import get_stt_service
 from app_config import config as app_settings
 from core.protocols.lipp import LippProtocol, LippLifecycleRequest, LippConfigRequest
+from schemas.api_contracts import (
+    AudioDeviceListResponse,
+    SttModelListResponse,
+    SttSwitchModelRequest,
+    UnifiedAudioConfig,
+)
 from .runtime_state import get_stt_runtime_state
 from .voiceprint_embedding import VoiceprintEmbeddingService
 from .websocket_hub import SttWebSocketHub
@@ -14,21 +19,6 @@ from .websocket_hub import SttWebSocketHub
 logger = logging.getLogger("STTRouter")
 
 router = APIRouter()
-
-# --- Data Models (Domain Specific) ---
-
-class SwitchModelRequest(BaseModel):
-    model_name: str
-
-class UnifiedAudioConfig(BaseModel):
-    device_name: Optional[str] = None
-    enable_voiceprint_filter: Optional[bool] = None
-    voiceprint_threshold: Optional[float] = None
-    voiceprint_profile: Optional[str] = None
-    vad_aggressiveness: Optional[int] = None
-    speech_start_threshold: Optional[float] = None
-    speech_end_threshold: Optional[float] = None
-    min_speech_frames: Optional[int] = None
 
 # --- LIPP Handlers ---
 
@@ -56,7 +46,7 @@ async def stt_config_handler(payload: LippConfigRequest):
     state = get_stt_runtime_state()
     stt_manager = state.stt_manager
     
-    logger.info(f"⚙️ [LIPP] Config: {payload.target_id} -> {payload.key}={payload.value}")
+    logger.info("STT provider config updated: %s -> %s", payload.target_id, payload.key)
     
     config = stt_manager.update_driver_config(payload.target_id, payload.key, payload.value)
 
@@ -90,37 +80,19 @@ router.include_router(lipp_router)
 
 # --- Domain Endpoints ---
 
-@router.get("/models/list")
+@router.get("/models/list", response_model=SttModelListResponse)
 async def get_models(stt_manager: Any = Depends(get_stt_service)):
     """List available STT models and their status"""
-    models = []
-    
-    # 1. Faster Whisper
-    models.append({
-        "id": "faster-whisper", 
-        "name": "Faster Whisper",
-        "type": "local",
-        "active": (stt_manager.engine_type == "faster_whisper")
-    })
-    
-    # 2. SenseVoice (Sherpa)
-    models.append({
-        "id": "sense-voice",
-        "name": "SenseVoice (Sherpa-ONNX)",
-        "type": "local",
-        "active": (stt_manager.engine_type == "sense_voice")
-    })
-    
-    # 3. Dynamic Drivers
-    for pid, drv in stt_manager.iter_drivers():
-         if pid in ["driver.stt.sensevoice", "driver.stt.whisper"]: continue
-         models.append({
-             "id": pid,
-             "name": drv.name,
-             "type": "provider",
-             "description": drv.description,
-             "active": stt_manager.is_driver_active(pid)
-         })
+    models = [
+        {
+            "id": provider_id,
+            "name": str(driver.name or provider_id),
+            "type": "provider",
+            "description": str(driver.description or ""),
+            "active": stt_manager.is_driver_active(provider_id),
+        }
+        for provider_id, driver in stt_manager.iter_drivers()
+    ]
 
     return {
         "current_model": stt_manager.current_model_name,
@@ -136,19 +108,16 @@ async def get_models(stt_manager: Any = Depends(get_stt_service)):
 
 @router.post("/models/switch")
 async def switch_model(
-    payload: SwitchModelRequest, 
+    payload: SttSwitchModelRequest,
     request: Request,
     background_tasks: BackgroundTasks,
     stt_manager: Any = Depends(get_stt_service)
 ):
     """Switch STT Model/Engine"""
     logger.info(f"Recursive Switch Request: {payload.model_name}")
-    valid = False
     target = payload.model_name
-    if stt_manager.has_driver(target): valid = True
-    elif target in ["faster-whisper", "sense-voice"]: valid = True
-        
-    if not valid: raise HTTPException(status_code=400, detail=f"Unknown model/driver: {target}")
+    if not stt_manager.has_driver(target):
+        raise HTTPException(status_code=400, detail=f"Unknown STT provider: {target}")
 
     state = get_stt_runtime_state()
     if state.audio_manager and state.audio_manager.is_running:
@@ -170,7 +139,7 @@ async def switch_model(
 
 # --- Audio Config ---
 
-@router.get("/audio/devices")
+@router.get("/audio/devices", response_model=AudioDeviceListResponse)
 async def list_audio_devices():
     from services.managers.audio_devices import AudioDeviceSelector
 
@@ -187,7 +156,8 @@ async def list_audio_devices():
             input_devices.append({
                 "index": device["index"],
                 "name": device["name"],
-                "host_api": device["host_api"]
+                "channels": device.get("channels"),
+                "host_api": str(device.get("host_api") or device.get("hostapi") or ""),
             })
         current_device = None
         if state.audio_manager:
@@ -208,8 +178,18 @@ async def update_audio_config(request: UnifiedAudioConfig):
          raise HTTPException(status_code=503, detail="Audio System not initialized")
 
     audio_config = app_settings.audio
-    changed_audio_config = False
-
+    voiceprint_filter = state.voiceprint_manager
+    if request.enable_voiceprint_filter:
+        if voiceprint_filter:
+            await voiceprint_filter.refresh_profiles(force=True)
+        if not voiceprint_filter or not voiceprint_filter._get_active_profiles():
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "voiceprint_profile_required",
+                    "message": "请先注册并启用至少一个声纹，再开启声纹过滤。",
+                },
+            )
     if request.device_name:
         state.audio_manager.switch_device(request.device_name)
 
@@ -234,13 +214,8 @@ async def update_audio_config(request: UnifiedAudioConfig):
         value = getattr(request, key)
         if value is not None:
             setattr(audio_config, key, value)
-            changed_audio_config = True
-
-    if changed_audio_config:
-        app_settings.save()
-        voiceprint_filter = state.voiceprint_manager
-        if voiceprint_filter:
-            await voiceprint_filter.refresh_profiles(force=True)
+    if voiceprint_filter:
+        await voiceprint_filter.refresh_profiles(force=True)
 
     return {
         "status": "updated",

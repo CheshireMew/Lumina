@@ -3,7 +3,7 @@ import logging
 from typing import Any
 
 from core.interfaces.driver import BaseMemoryDriver
-from provider_drivers.memory_postgres.drivers.memory.postgres_driver import PostgresDriver
+from provider_drivers.memory_sqlite.drivers.memory.sqlite_driver import SQLiteMemoryDriver
 
 logger = logging.getLogger("memory.factory")
 
@@ -14,8 +14,20 @@ class MemoryDriverFactory:
     """
 
     _drivers = {
-        "driver.memory.postgres": PostgresDriver,
+        "driver.memory.sqlite": SQLiteMemoryDriver,
+        "driver.memory.postgres": None,
     }
+
+    @staticmethod
+    def _postgres_driver():
+        try:
+            from provider_drivers.memory_postgres.drivers.memory.postgres_driver import PostgresDriver
+        except ModuleNotFoundError as exc:
+            raise ImportError(
+                "PostgreSQL memory support is optional. Install requirements-postgres.txt "
+                "and explicitly set LUMINA_MEMORY_PROVIDER=driver.memory.postgres."
+            ) from exc
+        return PostgresDriver
     
     @staticmethod
     def create_driver(provider_id: str, driver_config: dict[str, Any] | None = None) -> BaseMemoryDriver:
@@ -36,6 +48,8 @@ class MemoryDriverFactory:
             if not provider_id:
                 raise ValueError("Memory provider id is required.")
             factory = MemoryDriverFactory._drivers.get(provider_id)
+            if provider_id == "driver.memory.postgres" and factory is None:
+                factory = MemoryDriverFactory._postgres_driver()
             if factory is None:
                 available = ", ".join(sorted(MemoryDriverFactory._drivers))
                 raise ImportError(

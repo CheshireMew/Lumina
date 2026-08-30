@@ -10,6 +10,7 @@ interface CharacterTabProps {
     activeCharacter?: CharacterProfile;
     onSaveCharacter: (character: CharacterProfile) => Promise<boolean>;
     voiceData: VoiceManagerData;
+    onDirtyChange?: (dirty: boolean) => void;
 }
 
 const sectionStyle: React.CSSProperties = {
@@ -21,7 +22,7 @@ const sectionStyle: React.CSSProperties = {
 
 const rowStyle: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: "12px",
 };
 
@@ -30,14 +31,17 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
     activeCharacter,
     onSaveCharacter,
     voiceData,
+    onDirtyChange,
 }) => {
     const [draft, setDraft] = useState<CharacterProfile | null>(activeCharacter ?? null);
+    const [baseline, setBaseline] = useState<CharacterProfile | null>(activeCharacter ?? null);
     const [models, setModels] = useState<CharacterAvatarModel[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState("");
 
     useEffect(() => {
         setDraft(activeCharacter ?? null);
+        setBaseline(activeCharacter ?? null);
         setMessage("");
     }, [activeCharacter]);
 
@@ -60,16 +64,24 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
     }, [apiBaseUrl]);
 
     const voices = useMemo(() => {
-        if (draft?.voiceConfig?.service === "gpt-sovits") {
-            return voiceData.gptVoices;
-        }
-        return voiceData.edgeVoices;
-    }, [draft?.voiceConfig?.service, voiceData.edgeVoices, voiceData.gptVoices]);
+        const service = draft?.voiceConfig?.service || "";
+        return voiceData.voicesByEngine[service] || [];
+    }, [draft?.voiceConfig?.service, voiceData.voicesByEngine]);
+
+    const isDirty = useMemo(
+        () => JSON.stringify(draft) !== JSON.stringify(baseline),
+        [baseline, draft],
+    );
+
+    useEffect(() => {
+        onDirtyChange?.(isDirty);
+        return () => onDirtyChange?.(false);
+    }, [isDirty, onDirtyChange]);
 
     if (!draft) {
         return (
             <div style={{ padding: "20px", color: "#6b7280", fontSize: "13px" }}>
-                Character config is not loaded.
+                角色配置尚未加载。
             </div>
         );
     }
@@ -121,11 +133,15 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
         setIsSaving(true);
         setMessage("");
         try {
-            await onSaveCharacter(draft);
-            setMessage("Character settings saved");
+            const saved = await onSaveCharacter(draft);
+            if (!saved) {
+                throw new Error("角色设置未能保存。 ");
+            }
+            setBaseline(draft);
+            setMessage("角色设置已保存");
         } catch (error) {
             console.error("[CharacterTab] Failed to save character", error);
-            setMessage(error instanceof Error ? error.message : "Failed to save character");
+            setMessage(error instanceof Error ? error.message : "保存角色设置失败");
         } finally {
             setIsSaving(false);
         }
@@ -135,12 +151,13 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
         <div style={{ display: "flex", flexDirection: "column", gap: "15px", padding: "20px", overflowY: "auto" }}>
             <div>
                 <h3 style={{ fontSize: "14px", fontWeight: 600, color: "#374151", marginBottom: "10px" }}>
-                    角色基础设置 (Character)
+                    角色基础设置
                 </h3>
                 <div style={{ ...sectionStyle, display: "flex", flexDirection: "column", gap: "12px" }}>
                     <div>
-                        <label style={labelStyle}>Character ID</label>
+                        <label htmlFor="character-id" style={labelStyle}>角色 ID</label>
                         <input
+                            id="character-id"
                             value={draft.id}
                             readOnly
                             style={{ ...inputStyle, backgroundColor: "#f9fafb", color: "#6b7280", fontFamily: "monospace" }}
@@ -149,16 +166,18 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
 
                     <div style={rowStyle}>
                         <div>
-                            <label style={labelStyle}>Name</label>
+                            <label htmlFor="character-name" style={labelStyle}>名称</label>
                             <input
+                                id="character-name"
                                 value={draft.name}
                                 onChange={(event) => updateDraft({ name: event.target.value })}
                                 style={inputStyle}
                             />
                         </div>
                         <div>
-                            <label style={labelStyle}>Display Name</label>
+                            <label htmlFor="character-display-name" style={labelStyle}>显示名称</label>
                             <input
+                                id="character-display-name"
                                 value={draft.displayName ?? ""}
                                 onChange={(event) => updateDraft({ displayName: event.target.value })}
                                 style={inputStyle}
@@ -167,8 +186,9 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
                     </div>
 
                     <div>
-                        <label style={labelStyle}>Description</label>
+                        <label htmlFor="character-description" style={labelStyle}>角色描述</label>
                         <input
+                            id="character-description"
                             value={draft.description}
                             onChange={(event) => updateDraft({ description: event.target.value })}
                             style={inputStyle}
@@ -176,8 +196,9 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
                     </div>
 
                     <div>
-                        <label style={labelStyle}>System Prompt</label>
+                        <label htmlFor="character-prompt" style={labelStyle}>角色提示词</label>
                         <textarea
+                            id="character-prompt"
                             value={draft.systemPrompt ?? ""}
                             onChange={(event) => updateDraft({ systemPrompt: event.target.value })}
                             style={{ ...inputStyle, minHeight: "140px", resize: "vertical", lineHeight: 1.5 }}
@@ -188,12 +209,13 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
 
             <div>
                 <h3 style={{ fontSize: "14px", fontWeight: 600, color: "#374151", marginBottom: "10px" }}>
-                    角色表现 (Avatar & Voice)
+                    角色表现
                 </h3>
                 <div style={{ ...sectionStyle, display: "flex", flexDirection: "column", gap: "12px" }}>
                     <div>
-                        <label style={labelStyle}>Live2D Model</label>
+                        <label htmlFor="character-avatar" style={labelStyle}>Live2D 模型</label>
                         <select
+                            id="character-avatar"
                             value={draft.avatar.model}
                             onChange={(event) => updateAvatarModel(event.target.value)}
                             style={inputStyle}
@@ -210,19 +232,29 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
 
                     <div style={rowStyle}>
                         <div>
-                            <label style={labelStyle}>Voice Service</label>
+                            <label htmlFor="character-voice-service" style={labelStyle}>语音服务</label>
                             <select
+                                id="character-voice-service"
                                 value={draft.voiceConfig.service}
                                 onChange={(event) => updateVoiceConfig("service", event.target.value)}
                                 style={inputStyle}
                             >
-                                <option value="edge-tts">Edge TTS</option>
-                                <option value="gpt-sovits">GPT-SoVITS</option>
+                                {!voiceData.ttsEngines.some((engine) => engine.id === draft.voiceConfig.service) && (
+                                    <option value={draft.voiceConfig.service} disabled>
+                                        {draft.voiceConfig.service}（当前不可用）
+                                    </option>
+                                )}
+                                {voiceData.ttsEngines.map((engine) => (
+                                    <option key={engine.id} value={engine.id}>
+                                        {engine.name}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                         <div>
-                            <label style={labelStyle}>Voice</label>
+                            <label htmlFor="character-voice" style={labelStyle}>声音</label>
                             <select
+                                id="character-voice"
                                 value={draft.voiceConfig.voiceId}
                                 onChange={(event) => updateVoiceConfig("voiceId", event.target.value)}
                                 style={inputStyle}
@@ -230,7 +262,7 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
                             >
                                 {voices.length === 0 && (
                                     <option value={draft.voiceConfig.voiceId || ""}>
-                                        {draft.voiceConfig.voiceId || "No voices available"}
+                                        {draft.voiceConfig.voiceId || "没有可用声音"}
                                     </option>
                                 )}
                                 {voices.map((voice) => (
@@ -244,17 +276,19 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
 
                     <div style={rowStyle}>
                         <div>
-                            <label style={labelStyle}>Rate</label>
+                            <label htmlFor="character-rate" style={labelStyle}>语速</label>
                             <input
-                                value={draft.voiceConfig.rate ?? "+0%"}
+                                id="character-rate"
+                                value={draft.voiceConfig.rate}
                                 onChange={(event) => updateVoiceConfig("rate", event.target.value)}
                                 style={inputStyle}
                             />
                         </div>
                         <div>
-                            <label style={labelStyle}>Pitch</label>
+                            <label htmlFor="character-pitch" style={labelStyle}>音高</label>
                             <input
-                                value={draft.voiceConfig.pitch ?? "+0Hz"}
+                                id="character-pitch"
+                                value={draft.voiceConfig.pitch}
                                 onChange={(event) => updateVoiceConfig("pitch", event.target.value)}
                                 style={inputStyle}
                             />
@@ -265,7 +299,7 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
 
             <div>
                 <h3 style={{ fontSize: "14px", fontWeight: 600, color: "#374151", marginBottom: "10px" }}>
-                    交互行为 (Interaction)
+                    交互行为
                 </h3>
                 <div style={{ ...sectionStyle, display: "flex", flexDirection: "column", gap: "12px" }}>
                     <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", color: "#1f2937" }}>
@@ -275,7 +309,7 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
                             onChange={(event) => updateDraft({ heartbeatEnabled: event.target.checked })}
                             style={{ height: "16px", width: "16px" }}
                         />
-                        Heartbeat enabled
+                        启用定时状态检查
                     </label>
                     <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", color: "#1f2937" }}>
                         <input
@@ -284,7 +318,7 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
                             onChange={(event) => updateDraft({ proactiveChatEnabled: event.target.checked })}
                             style={{ height: "16px", width: "16px" }}
                         />
-                        Proactive chat enabled
+                        允许角色主动发起对话
                     </label>
                     <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", color: "#1f2937" }}>
                         <input
@@ -293,11 +327,12 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
                             onChange={(event) => updateDraft({ soulEvolutionEnabled: event.target.checked })}
                             style={{ height: "16px", width: "16px" }}
                         />
-                        Soul evolution enabled
+                        允许角色更新长期设定
                     </label>
                     <div style={{ maxWidth: "180px" }}>
-                        <label style={labelStyle}>Silence Threshold (minutes)</label>
+                        <label htmlFor="character-proactive-wait" style={labelStyle}>主动对话等待时间（分钟）</label>
                         <input
+                            id="character-proactive-wait"
                             type="number"
                             min={1}
                             max={120}
@@ -309,14 +344,14 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
                 </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", justifyContent: "flex-end" }}>
+            <div style={{ position: "sticky", bottom: -20, display: "flex", alignItems: "center", gap: "10px", justifyContent: "flex-end", padding: "14px 0", background: "rgba(255,255,255,.9)", backdropFilter: "blur(12px)" }}>
                 {message && (
                     <div
                         style={{
                             marginRight: "auto",
                             fontSize: "12px",
-                            color: message.endsWith("saved") ? "#065f46" : "#92400e",
-                            backgroundColor: message.endsWith("saved") ? "#d1fae5" : "#fef3c7",
+                            color: message.endsWith("已保存") ? "#065f46" : "#92400e",
+                            backgroundColor: message.endsWith("已保存") ? "#d1fae5" : "#fef3c7",
                             borderRadius: "6px",
                             padding: "8px",
                         }}
@@ -326,16 +361,17 @@ export const CharacterTab: React.FC<CharacterTabProps> = ({
                 )}
                 <button
                     type="button"
-                    disabled={isSaving}
+                    disabled={isSaving || !isDirty}
                     onClick={() => void handleSave()}
                     style={{
                         ...buttonStyle,
                         backgroundColor: "#4f46e5",
                         color: "#fff",
-                        opacity: isSaving ? 0.65 : 1,
+                        opacity: isSaving || !isDirty ? 0.55 : 1,
+                        cursor: isSaving || !isDirty ? "not-allowed" : "pointer",
                     }}
                 >
-                    {isSaving ? "Saving..." : "Save Character"}
+                    {isSaving ? "正在保存…" : "保存角色设置"}
                 </button>
             </div>
         </div>

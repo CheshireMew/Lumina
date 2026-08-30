@@ -60,3 +60,27 @@ async def test_voiceprint_chain():
     should_continue, reason = await chain.process(audio, 16000, {"audio_id": "after-disable"})
     assert should_continue is True
     assert reason is None
+
+
+@pytest.mark.anyio
+async def test_enabled_voiceprint_filter_rejects_when_no_profile_is_available():
+    from services.voiceprint_filter import VoiceprintFilter
+
+    config = SimpleNamespace(
+        audio=SimpleNamespace(
+            enable_voiceprint_filter=True,
+            voiceprint_threshold=0.6,
+            voiceprint_profile="",
+        )
+    )
+    module = VoiceprintFilter(config)
+    module.refresh_profiles = AsyncMock(side_effect=lambda *args, **kwargs: None)
+
+    should_continue, reason = await module.filter(
+        np.zeros(16000, dtype=np.float32),
+        16000,
+        {"audio_id": "missing-profile"},
+    )
+
+    assert should_continue is False
+    assert "没有可用" in reason

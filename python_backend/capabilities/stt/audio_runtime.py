@@ -91,7 +91,7 @@ class SttAudioRuntime:
 
             full_text = result.get("text", "")
             if self._should_drop_transcription(full_text, audio_data):
-                logger.info("Dropped likely STT filler hallucination: %s", full_text)
+                logger.info("Dropped likely STT filler hallucination chars=%s", len(full_text))
                 full_text = ""
 
             if full_text:
@@ -107,7 +107,11 @@ class SttAudioRuntime:
                 if emotion:
                     message["emotion"] = emotion
                 self._state.message_queue.put(message)
-                logger.info("STT: %s [%s]", full_text, emotion or "Neutral")
+                logger.info(
+                    "STT transcript ready chars=%s emotion=%s",
+                    len(full_text),
+                    emotion or "Neutral",
+                )
         except Exception as exc:
             logger.error("Transcribe Error: %s", exc)
 

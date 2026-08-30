@@ -16,11 +16,6 @@ sys.path.append(str(PROJECT_ROOT))
 class TestLifecycle(unittest.IsolatedAsyncioTestCase):
     """Test lifespan function without actually running FastAPI"""
 
-    def setUp(self):
-        """Reset container before each test"""
-        from services.container import ServiceContainer
-        ServiceContainer._instance = None
-
     async def test_bootstrap_manager_initialization(self):
         """Test that BootstrapManager is properly initialized"""
         from core.bootstrap.manager import BootstrapManager
@@ -50,10 +45,11 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         """Test ConfigBootstrapper initializes config"""
         from core.bootstrap.manager import BootstrapManager
         from core.bootstrap.infrastructure import ConfigBootstrapper
-        from services.container import services
+        from services.container import create_service_container
 
         manager = BootstrapManager()
         manager.add(ConfigBootstrapper())
+        services = create_service_container()
 
         # Mock temp directory for config
         with patch('app_config.DATA_ROOT', Path('/tmp/test')):
@@ -72,10 +68,11 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
         """Test EventBusBootstrapper initializes event bus"""
         from core.bootstrap.manager import BootstrapManager
         from core.bootstrap.infrastructure import EventBusBootstrapper
-        from services.container import services
+        from services.container import create_service_container
 
         manager = BootstrapManager()
         manager.add(EventBusBootstrapper())
+        services = create_service_container()
 
         await manager.start(services)
 
@@ -121,20 +118,20 @@ class TestLifecycle(unittest.IsolatedAsyncioTestCase):
 
         container = ServiceContainer()
         mock_config = MagicMock()
-        mock_config.network.memory_port = 8010
+        mock_config.network.core_port = 8010
         mock_config.network.stt_port = 8765
         mock_config.network.tts_port = 8766
 
         # Expected connection info structure
         expected_info = {
-            "memory": 8010,
+            "core": 8010,
             "stt": 8765,
             "tts": 8766,
             "updated_at": unittest.mock.ANY  # We don't care about exact timestamp
         }
 
         # Verify structure matches expected format
-        self.assertEqual(mock_config.network.memory_port, expected_info["memory"])
+        self.assertEqual(mock_config.network.core_port, expected_info["core"])
         self.assertEqual(mock_config.network.stt_port, expected_info["stt"])
         self.assertEqual(mock_config.network.tts_port, expected_info["tts"])
         print("✅ Connection info structure verified")

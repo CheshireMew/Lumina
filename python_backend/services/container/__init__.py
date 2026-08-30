@@ -1,5 +1,13 @@
 from .service_container import ServiceContainer, ServiceNotInitializedError
 
-services = ServiceContainer.get_instance()
 
-__all__ = ["ServiceContainer", "ServiceNotInitializedError", "services"]
+def create_service_container() -> ServiceContainer:
+    """Create one explicit service graph for an application runtime."""
+    return ServiceContainer()
+
+
+__all__ = [
+    "ServiceContainer",
+    "ServiceNotInitializedError",
+    "create_service_container",
+]

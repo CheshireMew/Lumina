@@ -1,21 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any
 from urllib.parse import quote_plus
 
 from services.http_client import get_http_client
+from core.interfaces.search import SearchProvider
 
 
-class SearchProvider(Protocol):
-    id: str
-    name: str
-    description: str
-
-    async def search(self, query: str) -> str:
-        ...
-
-
-class BraveSearchProvider:
+class BraveSearchProvider(SearchProvider):
     id = "driver.tool.search.brave"
     name = "Brave Search"
     description = "Web search provider backed by the Brave Search API."
@@ -57,7 +49,7 @@ class BraveSearchProvider:
         return "\n".join(lines)
 
 
-class DuckDuckGoSearchProvider:
+class DuckDuckGoSearchProvider(SearchProvider):
     id = "driver.tool.search.duckduckgo"
     name = "DuckDuckGo Search"
     description = "Web search provider backed by DuckDuckGo instant answers."

@@ -70,3 +70,43 @@ def test_explicit_selected_providers_are_not_backfilled():
     )
 
     assert bundle.capabilities.selected_providers == {}
+
+
+def test_old_postgres_default_migrates_to_local_sqlite():
+    bundle = hydrate_config(
+        {
+            "capabilities": {
+                "selected_providers": {"memory": "driver.memory.postgres"},
+            },
+        },
+        logging.getLogger("test"),
+    )
+
+    assert bundle.capabilities.selected_providers["memory"] == "driver.memory.sqlite"
+
+
+def test_legacy_pollinations_model_migrates_to_current_default():
+    bundle = hydrate_config(
+        {
+            "llm": {
+                "providers": {
+                    "free_tier": {
+                        "id": "free_tier",
+                        "type": "pollinations",
+                        "models": ["openai-fast"],
+                    },
+                },
+                "routes": {
+                    "chat": {
+                        "feature": "chat",
+                        "provider_id": "free_tier",
+                        "model": "openai-fast",
+                    },
+                },
+            },
+        },
+        logging.getLogger("test"),
+    )
+
+    assert bundle.llm.providers["free_tier"].models == [POLLINATIONS_DEFAULT_MODEL]
+    assert bundle.llm.routes["chat"].model == POLLINATIONS_DEFAULT_MODEL

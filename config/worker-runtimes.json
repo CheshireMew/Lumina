@@ -1,6 +1,149 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "hostVersion": "0.1.0",
+  "capabilityContracts": [
+    {
+      "capability": "stt",
+      "version": "1.0",
+      "runtimeId": "stt-runtime",
+      "runtimeTarget": "worker:stt",
+      "portKey": "stt_port",
+      "controlBasePath": "/capabilities/stt",
+      "providerBacked": true,
+      "workerRoutes": {
+        "models": "/models/list",
+        "switch": "/models/switch",
+        "audio_config": "/audio/config",
+        "audio_devices": "/audio/devices",
+        "voiceprint_status": "/voiceprint/status",
+        "audio_status": "/audio/status",
+        "health": "/health"
+      },
+      "streamRoutes": {
+        "audio": "/ws/stt"
+      },
+      "supportedOperations": [
+        "models.list",
+        "models.switch",
+        "transcription.transcribe",
+        "audio.config",
+        "health.check"
+      ]
+    },
+    {
+      "capability": "tts",
+      "version": "1.0",
+      "runtimeId": "tts-runtime",
+      "runtimeTarget": "worker:tts",
+      "portKey": "tts_port",
+      "controlBasePath": "/capabilities/tts",
+      "providerBacked": true,
+      "workerRoutes": {
+        "voices": "/voices",
+        "synthesize": "/synthesize",
+        "switch": "/models/switch",
+        "models": "/models/list",
+        "health": "/health"
+      },
+      "streamRoutes": {},
+      "supportedOperations": [
+        "voices.list",
+        "speech.synthesize",
+        "models.switch",
+        "config.update",
+        "health.check"
+      ]
+    },
+    {
+      "capability": "voiceprint",
+      "version": "1.0",
+      "runtimeId": "voiceprint-runtime",
+      "runtimeTarget": "main",
+      "portKey": "core_port",
+      "controlBasePath": "/capabilities/voiceprint",
+      "providerBacked": false,
+      "workerRoutes": {
+        "status": "/status",
+        "enroll": "/enroll",
+        "verify": "/verify",
+        "delete": "/profile/{profile_id}",
+        "health": "/health"
+      },
+      "streamRoutes": {},
+      "supportedOperations": [
+        "voiceprint.status",
+        "voiceprint.enroll",
+        "voiceprint.verify",
+        "voiceprint.delete",
+        "health.check"
+      ]
+    },
+    {
+      "capability": "vision",
+      "version": "1.0",
+      "runtimeId": "vision-runtime",
+      "runtimeTarget": "worker:vision",
+      "portKey": "vision_port",
+      "controlBasePath": "/capabilities/vision",
+      "providerBacked": true,
+      "workerRoutes": {
+        "analyze": "/analyze",
+        "load": "/load",
+        "unload": "/unload",
+        "health": "/health"
+      },
+      "streamRoutes": {},
+      "supportedOperations": [
+        "image.analyze",
+        "models.load",
+        "models.unload",
+        "health.check"
+      ]
+    },
+    {
+      "capability": "llm",
+      "version": "1.0",
+      "runtimeId": null,
+      "runtimeTarget": "main",
+      "portKey": "core_port",
+      "controlBasePath": "/settings/llm",
+      "providerBacked": true,
+      "workerRoutes": {
+        "chat": "/companion/message",
+        "models": "/settings/llm/models/list",
+        "health": "/health"
+      },
+      "streamRoutes": {},
+      "supportedOperations": [
+        "chat.generate",
+        "tools.call",
+        "models.list",
+        "health.check"
+      ]
+    },
+    {
+      "capability": "memory",
+      "version": "1.0",
+      "runtimeId": null,
+      "runtimeTarget": "main",
+      "portKey": "core_port",
+      "controlBasePath": "/memory",
+      "providerBacked": true,
+      "workerRoutes": {
+        "search": "/memory/search",
+        "write": "/memory/add",
+        "cleanup": "/memory/context/clear",
+        "health": "/health"
+      },
+      "streamRoutes": {},
+      "supportedOperations": [
+        "memory.search",
+        "memory.write",
+        "memory.cleanup",
+        "health.check"
+      ]
+    }
+  ],
   "runtimes": [
     {
       "id": "stt-runtime",
@@ -29,7 +172,7 @@
       "arch": [
         "x64"
       ],
-      "autoStart": true,
+      "autoStart": false,
       "optional": true,
       "displayName": "语音识别",
       "failureMode": "unavailable",
@@ -95,7 +238,7 @@
       "arch": [
         "x64"
       ],
-      "autoStart": true,
+      "autoStart": false,
       "optional": true,
       "displayName": "语音合成",
       "failureMode": "unavailable",
@@ -140,7 +283,7 @@
       "minHostVersion": "0.1.0",
       "minRuntimeVersion": "1.0.0",
       "installDir": "${data}/runtimes/voiceprint-runtime",
-      "type": "runtime",
+      "type": "resource",
       "entryExecutable": null,
       "entryArguments": [],
       "healthEndpoint": "/health",
@@ -184,14 +327,19 @@
       "minRuntimeVersion": "1.0.0",
       "installDir": "${data}/runtimes/vision-runtime",
       "type": "runtime",
-      "entryExecutable": null,
-      "entryArguments": [],
+      "entryExecutable": "runtime/lumina_backend.exe",
+      "entryArguments": [
+        "worker",
+        "--capability",
+        "vision"
+      ],
       "healthEndpoint": "/health",
       "requiredFiles": [
         "manifest.json",
         "version.json",
         "hashes.json",
-        "requirements-vision.txt"
+        "runtime/lumina_backend.exe",
+        "provider_drivers/vision_llm/drivers/vision/llm_vision_driver.py"
       ],
       "resourceDirs": {},
       "platform": [
@@ -205,18 +353,39 @@
       "displayName": "视觉与推理",
       "failureMode": "degraded",
       "capabilities": [
-        "vision",
-        "memory-embeddings"
+        "vision"
       ],
       "sources": [
         {
           "name": "bundled",
           "root": "${resources}/runtimes/vision-runtime",
+          "entryExecutable": "runtime/lumina_backend.exe",
+          "entryArguments": [
+            "worker",
+            "--capability",
+            "vision"
+          ],
           "requiredFiles": [
             "manifest.json",
             "version.json",
             "hashes.json",
-            "requirements-vision.txt"
+            "runtime/lumina_backend.exe",
+            "provider_drivers/vision_llm/drivers/vision/llm_vision_driver.py"
+          ]
+        },
+        {
+          "name": "development",
+          "root": "${project}/python_backend",
+          "entryExecutable": "backend_launcher.py",
+          "entryArguments": [
+            "worker",
+            "--capability",
+            "vision"
+          ],
+          "requiredFiles": [
+            "backend_launcher.py",
+            "capabilities/vision/__init__.py",
+            "provider_drivers/vision_llm/drivers/vision/llm_vision_driver.py"
           ]
         }
       ]

@@ -118,7 +118,7 @@ async def test_clear_session_deletes_file(session_repo: FileSessionRepository):
 
 
 async def test_add_turn_with_history_limit(session_repo: FileSessionRepository):
-    config = SimpleNamespace(memory=SimpleNamespace(history_limit=6, overflow_strategy="slide"))
+    config = SimpleNamespace(memory=SimpleNamespace(history_limit=3, overflow_strategy="slide"))
     manager = SessionManager(repo=session_repo, config=config)
     context = companion_context()
 

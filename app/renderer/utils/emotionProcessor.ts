@@ -24,7 +24,7 @@ export const processEmotions = (
         live2dRef,
     }: EmotionProcessorOptions,
 ) => {
-    console.log("[EmotionProcessor] Processing text:", text);
+    console.log("[EmotionProcessor] Processing text chars=", text.length);
 
     // Regex to find all [emotion] tags (and fallback to parens)
     // [Fix] Use Unicode Escapes for full-width brackets to avoid encoding issues
@@ -43,11 +43,6 @@ export const processEmotions = (
         const emotionContent = (match[1] || match[2] || "")
             .trim()
             .toLowerCase();
-        console.log(
-            "[EmotionProcessor] Processing emotion content:",
-            emotionContent,
-        );
-
         let emotionFound = false;
 
         if (activeCharacter && activeCharacter.soulEvolutionEnabled === false) {
@@ -59,7 +54,7 @@ export const processEmotions = (
         for (const [key, motion] of Object.entries(emotionMap)) {
             if (emotionContent.includes(key)) {
                 console.log(
-                    `[EmotionProcessor] ✅ Triggering emotion: "${key}" -> Motion: ${motion.group} index ${motion.index}`,
+                    `[EmotionProcessor] Triggering motion group=${motion.group} index=${motion.index}`,
                 );
                 if (live2dRef.current) {
                     live2dRef.current.motion?.(motion.group, motion.index);
@@ -73,9 +68,7 @@ export const processEmotions = (
             }
         }
         if (!emotionFound) {
-            console.log(
-                `[EmotionProcessor] ❌ No emotion mapping found for: "${emotionContent}"`,
-            );
+            console.log("[EmotionProcessor] No emotion mapping found");
         }
     }
 };

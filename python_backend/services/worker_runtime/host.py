@@ -1,4 +1,5 @@
 import asyncio
+import os
 import uuid
 from typing import Any, Optional
 
@@ -42,11 +43,45 @@ class WorkerRuntimeHost:
         @app.get("/health")
         async def health_check():
             capability_name = self.current_capability.name if self.current_capability else "none"
+            capability_status = (
+                self.current_capability.get_health_status()
+                if self.current_capability
+                else "starting"
+            )
+            capability_details = (
+                self.current_capability.get_health_details()
+                if self.current_capability
+                else {}
+            )
             return {
-                "status": "ok",
+                "status": capability_status,
                 "service": self.options.capability,
                 "capability": capability_name,
+                **capability_details,
+                "runtime": {
+                    "product": "lumina",
+                    "protocolVersion": 1,
+                    "target": self.runtime_target,
+                    "ownerId": os.environ.get("LUMINA_RUNTIME_OWNER", ""),
+                    "processId": os.getpid(),
+                },
             }
+
+        @app.post("/runtime/shutdown")
+        async def shutdown_runtime(request: Request):
+            expected_owner = os.environ.get("LUMINA_RUNTIME_OWNER", "")
+            supplied_owner = request.headers.get("X-Lumina-Runtime-Owner", "")
+            if expected_owner and supplied_owner != expected_owner:
+                from fastapi import HTTPException
+
+                raise HTTPException(status_code=403, detail="Runtime owner mismatch")
+            callback = getattr(request.app.state, "request_runtime_shutdown", None)
+            if not callable(callback):
+                from fastapi import HTTPException
+
+                raise HTTPException(status_code=503, detail="Runtime shutdown is unavailable")
+            asyncio.get_running_loop().call_later(0.05, callback)
+            return {"status": "shutting_down"}
 
         @app.on_event("startup")
         async def startup_event():
@@ -132,15 +167,15 @@ class WorkerRuntimeHost:
         self._initialize_container_services()
         app_settings.set_read_only(True)
         self.current_capability.register_routes(app)
-        app.state.container = self.container
+        app.state.services = self.container
         await self.current_capability.on_startup(app)
 
     def _initialize_container_services(self):
         from core.worker_runtimes import WorkerRuntimeRegistry
-        from core.events import init_event_bus
+        from core.events import EventBus
 
         self.container.set_config(app_settings)
-        self.container.set_event_bus(init_event_bus())
+        self.container.set_event_bus(EventBus())
         self.container.set_worker_runtime_registry(WorkerRuntimeRegistry())
 
     def _start_status_reporter(self, app: FastAPI):
@@ -175,7 +210,10 @@ class WorkerRuntimeHost:
     async def _start_config_watcher(self, app: FastAPI):
         from services.infra.config_watcher import ConfigWatcherService
 
-        watcher = ConfigWatcherService()
+        watcher = ConfigWatcherService(
+            config_manager=app_settings,
+            event_bus=self.container.get_event_bus(),
+        )
         self.container.set_config_watcher(watcher)
         app.state.config_watcher = watcher
         app.state.config_watcher_task = asyncio.create_task(watcher.start())
@@ -189,7 +227,7 @@ class WorkerRuntimeHost:
             worker_type=self.current_capability.name,
             runtime_target=self.runtime_target,
             main_host="127.0.0.1",
-            main_port=app_settings.network.memory_port,
+            main_port=app_settings.network.core_port,
             worker_port=self.listen_port,
             heartbeat_interval=15,
             status_provider=runtime_state_provider,

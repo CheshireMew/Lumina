@@ -2,7 +2,11 @@ from typing import Any, Dict, Optional
 
 from core.db.query_builder import QueryBuilder
 
-from .sql_utils import sanitize_column_name, sanitize_order_by, sanitize_table_name
+from core.db.sql_identifiers import (
+    sanitize_column_name,
+    sanitize_order_by,
+    sanitize_table_name,
+)
 
 
 class PostgresQueryBuilder(QueryBuilder):

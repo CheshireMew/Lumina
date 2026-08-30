@@ -1,5 +1,4 @@
 import { ChildProcess, spawn } from "child_process";
-import fs from "node:fs";
 import path from "path";
 import { app } from "electron";
 
@@ -15,6 +14,8 @@ interface LaunchSpec {
 }
 
 export class BackendServiceLauncher {
+    constructor(private readonly runtimeOwnerId: string) {}
+
     public launch(
         service: ServiceConfig,
         ports: BackendPorts,
@@ -39,7 +40,10 @@ export class BackendServiceLauncher {
                     : path.join(process.cwd(), "Lumina_Data"),
                 LUMINA_ENV: app.isPackaged ? "production" : "development",
                 LUMINA_ASSETS_DIR: spec.assetsDir,
-                LUMINA_MEMORY_PORT: ports.memory_port.toString(),
+                LUMINA_RUNTIME_OWNER: this.runtimeOwnerId,
+                LUMINA_RUNTIME_TARGET: service.name,
+                LUMINA_PARENT_PID: process.pid.toString(),
+                LUMINA_CORE_PORT: ports.core_port.toString(),
                 LUMINA_STT_PORT: ports.stt_port.toString(),
                 LUMINA_TTS_PORT: ports.tts_port.toString(),
                 LUMINA_VISION_PORT: ports.vision_port.toString(),
@@ -48,11 +52,11 @@ export class BackendServiceLauncher {
 
         if (verboseChildLogs) {
             child.stdout?.on("data", (data) => {
-                console.log(`[${service.name}] ${data.toString().trim()}`);
+                this.logChildOutput(service.name, data.toString(), false);
             });
 
             child.stderr?.on("data", (data) => {
-                console.error(`[${service.name}] ERR: ${data.toString().trim()}`);
+                this.logChildOutput(service.name, data.toString(), true);
             });
         }
 
@@ -68,45 +72,26 @@ export class BackendServiceLauncher {
         if (app.isPackaged) {
             return this.buildPackagedLaunchSpec(service);
         }
-        if (!process.env.VITE_DEV_SERVER_URL) {
-            const localBinarySpec = this.buildLocalBinaryLaunchSpec(service);
-            if (localBinarySpec) {
-                return localBinarySpec;
-            }
-        }
         return this.buildDevelopmentLaunchSpec(service);
     }
 
-    private buildLocalBinaryLaunchSpec(
-        service: ServiceConfig,
-    ): LaunchSpec | null {
-        const executable = path.join(
-            process.cwd(),
-            "dist_backend",
-            "lumina_backend",
-            "lumina_backend.exe",
-        );
+    private logChildOutput(
+        serviceName: string,
+        output: string,
+        isError: boolean,
+    ): void {
+        for (const line of output.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (!trimmed) {
+                continue;
+            }
 
-        if (!fs.existsSync(executable)) {
-            console.warn(
-                "[BackendManager] Local backend binary not found. Falling back to Python source startup:",
-                executable,
-            );
-            return null;
+            const prefix = isError
+                ? `[${serviceName}] ERR:`
+                : `[${serviceName}]`;
+            const writer = isError ? console.error : console.log;
+            writer(`${prefix} ${trimmed}`);
         }
-
-        console.log(
-            `[BackendManager] Launching local binary ${service.name}:`,
-            executable,
-        );
-        return {
-            executable,
-            args: [service.name],
-            cwd: path.dirname(executable),
-            appRoot: process.cwd(),
-            resourcesDir: path.join(process.cwd(), "dist_backend"),
-            assetsDir: path.join(path.dirname(executable), "_internal", "assets"),
-        };
     }
 
     private buildPackagedLaunchSpec(service: ServiceConfig): LaunchSpec {

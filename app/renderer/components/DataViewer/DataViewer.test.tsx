@@ -12,7 +12,7 @@ describe('DataViewer Component', () => {
     isOpen: true,
     onClose: vi.fn(),
     activeCharacterId: 'hiyori',
-    apiBaseUrl: `http://127.0.0.1:${configuredPorts.memory_port}`,
+    apiBaseUrl: `http://127.0.0.1:${configuredPorts.core_port}`,
   }
 
   beforeEach(() => {
@@ -25,7 +25,8 @@ describe('DataViewer Component', () => {
 
   it('renders correctly when open', async () => {
     render(<DataViewer {...defaultProps} />)
-    expect(screen.getByText('Memory Architecture')).toBeDefined()
+    expect(screen.getByText('记忆数据')).toBeDefined()
+    expect(screen.getByRole('dialog', { name: '记忆数据' })).toHaveAttribute('aria-modal', 'true')
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
   })
 
@@ -37,12 +38,14 @@ describe('DataViewer Component', () => {
   it('calls onClose when close button is clicked', async () => {
     render(<DataViewer {...defaultProps} />)
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    // The close button has the X icon, but we can find it by its parent or the X
-    // In our case, the button doesn't have an aria-label, so we might need to find it differently.
-    // Let's use the X icon's container or just look for the button.
-    const closeButtons = screen.getAllByRole('button')
-    // The X button is the first one in header
-    fireEvent.click(closeButtons[0])
+    fireEvent.click(screen.getByRole('button', { name: '关闭记忆数据' }))
+    expect(defaultProps.onClose).toHaveBeenCalled()
+  })
+
+  it('closes with Escape', async () => {
+    render(<DataViewer {...defaultProps} />)
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(defaultProps.onClose).toHaveBeenCalled()
   })
 })

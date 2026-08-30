@@ -6,12 +6,9 @@
 export class SentenceSplitter {
     private buffer: string = "";
     private onSentenceCallback: ((sentence: string) => void) | null = null;
-    // 优化：添加逗号等短停顿符，提前触发 TTS (包含换行)
-    // ⚡ '&' 为 LLM 控制的断句符，用于精确控制语音停顿
-    // [Fix] Use Unicode Escapes for robustness: 。！ ？ ， 、 ；
-    private sentenceEndRegex = /[\u3002\uff01\uff1f.!?,\uff0c\u3001\uff1b&\n]$/;
-    private minLength = 1; // 降低最小长度，避免丢失短句
-    // 优化：降低超时时间，减少等待延迟（从 1500ms -> 800ms）
+    private hardSentenceEndRegex = /[\u3002\uff01\uff1f.!?&\n]$/;
+    private softSentenceEndRegex = /[,\uff0c\u3001\uff1b;:]$/;
+    private softBoundaryMinLength = 12;
     private maxWaitMs = 800; // 最大等待时间（毫秒）
     private lastTokenTime = 0;
     private timeoutId: NodeJS.Timeout | null = null;
@@ -34,10 +31,14 @@ export class SentenceSplitter {
 
         // Check for sentence end
         const trimmedBuffer = this.buffer.trim();
-        if (this.sentenceEndRegex.test(trimmedBuffer)) {
+        const isHardBoundary = this.hardSentenceEndRegex.test(trimmedBuffer);
+        const isUsefulSoftBoundary =
+            this.softSentenceEndRegex.test(trimmedBuffer) &&
+            trimmedBuffer.length >= this.softBoundaryMinLength;
+        if (isHardBoundary || isUsefulSoftBoundary) {
             // Ensure non-empty and brackets are balanced (don't split inside [emotion, tag])
             if (
-                trimmedBuffer.length >= this.minLength &&
+                trimmedBuffer.length > 0 &&
                 this.isBalanced(trimmedBuffer)
             ) {
                 this.emit(trimmedBuffer);
@@ -88,7 +89,7 @@ export class SentenceSplitter {
 
     private emit(sentence: string) {
         if (this.onSentenceCallback) {
-            console.log(`[SentenceSplitter] Emitting sentence: "${sentence}"`);
+            console.log(`[SentenceSplitter] Emitting sentence chars=${sentence.length}`);
             this.onSentenceCallback(sentence);
         }
     }

@@ -104,7 +104,8 @@ class AudioManager:
         audio_config.speech_start_threshold = self.speech_start_threshold
         audio_config.speech_end_threshold = self.speech_end_threshold
         audio_config.min_speech_frames = self.min_speech_frames
-        app_config.save()
+        # The worker applies settings in memory. The main runtime persists them
+        # only after this worker confirms that the update succeeded.
 
     def update_params(
         self,

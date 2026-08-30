@@ -16,19 +16,22 @@ from unittest.mock import MagicMock
 PROJECT_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
-from services.container import ServiceContainer, ServiceNotInitializedError, services
+from services.container import ServiceContainer, ServiceNotInitializedError
 
 
 # ============================================================================
 # Basic Tests (compare with unittest version)
 # ============================================================================
 
-def test_singleton_pattern():
-    """Pytest test - no class setup needed"""
-    ServiceContainer._instance = None
-    instance1 = ServiceContainer.get_instance()
-    instance2 = ServiceContainer.get_instance()
-    assert instance1 is instance2
+def test_explicit_container_instances_are_isolated():
+    """Independent composition roots must not share registered services."""
+    instance1 = ServiceContainer()
+    instance2 = ServiceContainer()
+    instance1.set_config(MagicMock(name="first"))
+
+    assert instance1 is not instance2
+    with pytest.raises(ServiceNotInitializedError):
+        instance2.get_config()
 
 
 def test_service_registration():
@@ -256,26 +259,8 @@ def test_approximate_comparisons(value, expected, tolerance):
 """
 UNITTEST VS PYTEST COMPARISON:
 
-Unittest:
---------
-class TestServiceContainer(unittest.TestCase):
-    def setUp(self):
-        ServiceContainer._instance = None
-        self.container = ServiceContainer()
-
-    def test_singleton_pattern(self):
-        instance1 = ServiceContainer.get_instance()
-        instance2 = ServiceContainer.get_instance()
-        self.assertIs(instance1, instance2)
-        print("✅ Singleton pattern verified")
-
-Pytest:
--------
-def test_singleton_pattern():
-    ServiceContainer._instance = None
-    instance1 = ServiceContainer.get_instance()
-    instance2 = ServiceContainer.get_instance()
-    assert instance1 is instance2
+The container tests construct explicit, independent composition roots. They do not
+reset hidden class state or call a global singleton accessor.
 
 Advantages:
 1. No class inheritance needed

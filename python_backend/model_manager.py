@@ -210,7 +210,9 @@ class ModelManager:
             # Default to sentence-transformers/ + name if not full path
             hub_name = "sentence-transformers/" + model_name if "/" not in model_name else model_name
             
-            temp_model = SentenceTransformer(hub_name)
+            cache_dir = os.path.join(self.base_dir, ".download-cache")
+            os.makedirs(cache_dir, exist_ok=True)
+            temp_model = SentenceTransformer(hub_name, cache_folder=cache_dir)
             temp_model.save(target_path)
             logger.info(f"Model successfully saved to {target_path}")
             return target_path

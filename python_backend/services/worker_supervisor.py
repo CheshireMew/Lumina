@@ -52,6 +52,15 @@ class WorkerSupervisor:
         self._task = asyncio.create_task(self._supervisor_loop())
         logger.info("Supervisor activated.")
 
+    async def stop(self) -> None:
+        self.shutdown_event.set()
+        task = self._task
+        self._task = None
+        if task is None or task.done():
+            return
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
     async def _supervisor_loop(self) -> None:
         while not self.shutdown_event.is_set():
             try:

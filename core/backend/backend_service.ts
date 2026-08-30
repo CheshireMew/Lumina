@@ -1,4 +1,6 @@
 import axios from "axios";
+import { execFile } from "child_process";
+import { randomUUID } from "crypto";
 
 import { BackendHealthProbe } from "./backend_health";
 import { BackendServiceLauncher } from "./backend_launcher";
@@ -18,9 +20,10 @@ export class BackendService {
     private ports: BackendPorts = { ...CONFIGURED_BACKEND_PORTS };
     private readonly host = "127.0.0.1";
     private isShuttingDown = false;
+    private readonly runtimeOwnerId = randomUUID();
     private readonly portStore = new BackendPortConfigStore();
-    private readonly health = new BackendHealthProbe(this.host);
-    private readonly launcher = new BackendServiceLauncher();
+    private readonly health = new BackendHealthProbe(this.host, this.runtimeOwnerId);
+    private readonly launcher = new BackendServiceLauncher(this.runtimeOwnerId);
     private readonly wsLocator = new BackendWebSocketLocator(this.host);
 
     public async start(): Promise<void> {
@@ -45,6 +48,27 @@ export class BackendService {
         console.log("[BackendManager] All services started successfully.");
     }
 
+    public async retryStart(): Promise<void> {
+        this.isShuttingDown = true;
+        try {
+            for (const service of this.services) {
+                if (service.ready || !service.process) continue;
+                const child = service.process;
+                await this.health.requestShutdown(service);
+                const exited = await this.waitForExit(child, 3000);
+                if (!exited && child.pid) {
+                    await this.killProcessTree(child.pid);
+                }
+                service.process = null;
+                service.ready = false;
+                service.restartCount = 0;
+            }
+        } finally {
+            this.isShuttingDown = false;
+        }
+        await this.start();
+    }
+
     private async resolveLaunchPorts(): Promise<void> {
         for (const service of this.services) {
             if (await this.health.checkServiceHealth(service)) {
@@ -60,7 +84,7 @@ export class BackendService {
             service.port = nextPort;
 
             if (service.name === "core") {
-                this.ports.memory_port = nextPort;
+                this.ports.core_port = nextPort;
             }
 
             console.warn(
@@ -144,23 +168,46 @@ export class BackendService {
         }, delay);
     }
 
-    public stop(): void {
+    public async stop(): Promise<void> {
         this.isShuttingDown = true;
         console.log("[BackendManager] Stopping all services...");
-        this.services.forEach((service) => {
+        await Promise.all(this.services.map(async (service) => {
             if (!service.process) {
                 return;
             }
 
-            try {
-                if (service.process.pid) {
-                    process.kill(service.process.pid);
-                }
-            } catch {
-                /* ignore */
+            const child = service.process;
+            await this.health.requestShutdown(service);
+            const exited = await this.waitForExit(child, 7000);
+            if (!exited && child.pid) {
+                await this.killProcessTree(child.pid);
             }
             service.process = null;
             service.ready = false;
+        }));
+    }
+
+    private waitForExit(processHandle: NonNullable<ServiceConfig["process"]>, timeoutMs: number): Promise<boolean> {
+        if (processHandle.exitCode !== null) {
+            return Promise.resolve(true);
+        }
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => resolve(false), timeoutMs);
+            processHandle.once("exit", () => {
+                clearTimeout(timer);
+                resolve(true);
+            });
+        });
+    }
+
+    private killProcessTree(pid: number): Promise<void> {
+        return new Promise((resolve) => {
+            execFile(
+                "taskkill",
+                ["/PID", String(pid), "/T", "/F"],
+                { windowsHide: true },
+                () => resolve(),
+            );
         });
     }
 
@@ -174,8 +221,8 @@ export class BackendService {
             ports[service.name] = service.port;
         });
 
-        if (!ports.memory && this.ports.memory_port) {
-            ports.memory = this.ports.memory_port;
+        if (!ports.core && this.ports.core_port) {
+            ports.core = this.ports.core_port;
         }
         if (!ports.stt && this.ports.stt_port) {
             ports.stt = this.ports.stt_port;
@@ -189,7 +236,7 @@ export class BackendService {
 
     public async refreshPortsFromAPI(): Promise<boolean> {
         try {
-            const basePort = this.ports.memory_port;
+            const basePort = this.ports.core_port;
             const response = await axios.get(
                 `http://${this.host}:${basePort}/runtime/network`,
                 { timeout: 3000 },
@@ -199,14 +246,14 @@ export class BackendService {
                 const apiPorts = response.data;
                 this.ports = {
                     ...this.ports,
-                    memory_port: apiPorts.memory_port,
+                    core_port: apiPorts.core_port,
                     stt_port: apiPorts.stt_port,
                     tts_port: apiPorts.tts_port,
                 };
 
                 this.services.forEach((service) => {
                     if (service.name === "core") {
-                        service.port = apiPorts.memory_port;
+                        service.port = apiPorts.core_port;
                     }
                 });
 

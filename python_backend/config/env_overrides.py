@@ -40,8 +40,8 @@ def apply_env_overrides(bundle: Any) -> None:
     capabilities = bundle.capabilities
     postgres = bundle.memory.postgres
 
-    if os.environ.get("LUMINA_MEMORY_PORT"):
-        network.memory_port = int(os.environ["LUMINA_MEMORY_PORT"])
+    if os.environ.get("LUMINA_CORE_PORT"):
+        network.core_port = int(os.environ["LUMINA_CORE_PORT"])
     if os.environ.get("LUMINA_STT_PORT"):
         network.stt_port = int(os.environ["LUMINA_STT_PORT"])
     if os.environ.get("LUMINA_TTS_PORT"):
@@ -70,6 +70,9 @@ def apply_env_overrides(bundle: Any) -> None:
         postgres.password = os.environ["LUMINA_PG_PASSWORD"]
     if os.environ.get("LUMINA_PG_DATABASE"):
         postgres.database = os.environ["LUMINA_PG_DATABASE"]
+
+    if os.environ.get("LUMINA_MEMORY_PROVIDER"):
+        capabilities.selected_providers["memory"] = os.environ["LUMINA_MEMORY_PROVIDER"]
 
     if os.environ.get("SEARCH_PROVIDER"):
         capabilities.selected_providers["tool.search"] = os.environ["SEARCH_PROVIDER"]

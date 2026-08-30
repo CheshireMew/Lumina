@@ -10,14 +10,14 @@ PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
 SERVICES = {
-    "memory": "http://127.0.0.1:8010",
+    "core": "http://127.0.0.1:8010",
 }
 
 @pytest.mark.performance
 @pytest.mark.anyio
 async def test_extreme_long_context_performance():
     """验证超长上下文（约 100k tokens）下的性能和处理能力"""
-    url = f"{SERVICES['memory']}/companion/message"
+    url = f"{SERVICES['core']}/companion/message"
     
     # 构建约 100k tokens 的内容（粗略估算：1 字符约 0.25-0.5 token）
     # 我们生成一个约 200,000 字符的字符串
@@ -56,7 +56,7 @@ async def test_extreme_long_context_performance():
 async def test_context_truncation_boundary():
     """验证上下文超过 128k 时的物理截断或是后端溢出报错"""
     # 这个测试模拟发送一个非常巨大的 payload，检查 FastAPI/Uvicorn 的限制
-    url = f"{SERVICES['memory']}/companion/message"
+    url = f"{SERVICES['core']}/companion/message"
     
     huge_text = "Data " * 100000 # 约 500k 字符
     

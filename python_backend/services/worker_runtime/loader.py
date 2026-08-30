@@ -13,7 +13,9 @@ def resolve_worker_port(app_settings: Any, options: WorkerRuntimeOptions) -> int
 
     runtime_target = options.runtime_target or runtime_target_for_capability(options.capability)
     resolved = resolve_runtime_port(app_settings, runtime_target)
-    return resolved or 8000
+    if resolved is None:
+        raise ValueError(f"No port configured for runtime target '{runtime_target}'")
+    return resolved
 
 
 def load_capability(capability_name: str, logger: logging.Logger):

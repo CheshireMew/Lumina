@@ -1,17 +1,13 @@
 import { jsonRequestOptions, requestJson } from "./client";
+import type { components } from "../types/api-schema";
 
-export interface RuntimeLlmSettingsDto {
-    providerId: string;
-    apiKey: string;
-    baseUrl: string;
-    model: string;
-    temperature: number;
-    topP?: number;
-    presencePenalty?: number;
-    frequencyPenalty?: number;
-    historyLimit: number;
+type GeneratedRuntimeLlmSettings = components["schemas"]["RuntimeLlmSettings"];
+export type RuntimeLlmSettingsDto = Omit<
+    GeneratedRuntimeLlmSettings,
+    "overflowStrategy"
+> & {
     overflowStrategy: "slide" | "reset";
-}
+};
 
 export const fetchRuntimeLlmSettings = async (
     baseUrl: string,

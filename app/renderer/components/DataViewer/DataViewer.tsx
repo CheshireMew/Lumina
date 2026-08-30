@@ -5,9 +5,9 @@
 import React from "react";
 import { Database, X } from "lucide-react";
 
+import { useDialogAccessibility } from "../../hooks/useDialogAccessibility";
 import { Sidebar } from "./Sidebar";
 import { TableSection } from "./TableSection";
-import { RecordEditor } from "./RecordEditor";
 import { useDataViewerTables } from "./useDataViewerTables";
 import type { DataViewerProps } from "./types";
 
@@ -17,6 +17,7 @@ const DataViewer: React.FC<DataViewerProps> = ({
     activeCharacterId,
     apiBaseUrl,
 }) => {
+    const dialogRef = useDialogAccessibility<HTMLDivElement>(isOpen, onClose);
     const tables = useDataViewerTables({
         isOpen,
         activeCharacterId,
@@ -43,12 +44,17 @@ const DataViewer: React.FC<DataViewerProps> = ({
             }}
         >
             <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="memory-viewer-title"
+                tabIndex={-1}
                 style={{
                     background:
                         "linear-gradient(145deg, rgba(30, 20, 40, 0.95), rgba(45, 20, 60, 0.98))",
                     borderRadius: "24px",
-                    width: "900px",
-                    height: "650px",
+                    width: "min(900px, calc(100vw - 32px))",
+                    height: "min(650px, calc(100vh - 32px))",
                     boxShadow:
                         "0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255, 105, 180, 0.1)",
                     display: "flex",
@@ -91,7 +97,7 @@ const DataViewer: React.FC<DataViewerProps> = ({
                                     color: "#fff",
                                 }}
                             >
-                                Memory Architecture
+                                <span id="memory-viewer-title">记忆数据</span>
                             </span>
                             <div
                                 style={{
@@ -100,12 +106,13 @@ const DataViewer: React.FC<DataViewerProps> = ({
                                     marginTop: "2px",
                                 }}
                             >
-                                History &gt; Long-term Memory
+                                对话历史与长期记忆
                             </div>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
+                        aria-label="关闭记忆数据"
                         style={{
                             background: "none",
                             border: "none",
@@ -137,24 +144,9 @@ const DataViewer: React.FC<DataViewerProps> = ({
                             tableData={tables.tableData}
                             loading={tables.loading}
                             onRefreshTable={tables.refreshTable}
-                            onCreateRecord={tables.handleCreateRecord}
-                            onEditRecord={tables.handleEditRecord}
-                            onDeleteRecord={tables.handleDeleteRecord}
                         />
                     </div>
                 </div>
-
-                <RecordEditor
-                    selectedTable={tables.selectedTable}
-                    editingRecord={tables.editingRecord}
-                    isCreating={tables.isCreating}
-                    editorForm={tables.editorForm}
-                    setEditorForm={tables.setEditorForm}
-                    onCancel={tables.closeEditor}
-                    onSave={tables.handleSaveRecord}
-                    isSaving={tables.editorSaving}
-                />
-
             </div>
         </div>
     );

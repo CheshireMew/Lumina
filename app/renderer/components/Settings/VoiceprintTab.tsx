@@ -44,7 +44,7 @@ export const VoiceprintTab: React.FC<VoiceManagerData> = ({
         <div style={{ display: "flex", flexDirection: "column", gap: "15px", padding: "20px", overflowY: "auto" }}>
             <div>
                 <h3 style={{ fontSize: "14px", fontWeight: 600, color: "#374151", marginBottom: "10px" }}>
-                    声纹过滤 (Voiceprint Filter)
+                    声纹过滤
                 </h3>
                 <div
                     style={{
@@ -59,27 +59,31 @@ export const VoiceprintTab: React.FC<VoiceManagerData> = ({
                 >
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <input
+                            id="voiceprint-enabled"
                             type="checkbox"
                             checked={voiceprintEnabled}
                             onChange={(event) => void handleVoiceprintToggle(event.target.checked)}
+                            disabled={!voiceprintLoaded}
+                            aria-describedby="voiceprint-toggle-help"
                             style={{ height: "16px", width: "16px", cursor: "pointer" }}
                         />
                         <div>
-                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#1f2937" }}>
+                            <label htmlFor="voiceprint-enabled" style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#1f2937" }}>
                                 启用声纹验证
-                            </div>
-                            <div style={{ fontSize: "12px", color: "#6b7280" }}>
-                                只接受已启用 profile 的声音
+                            </label>
+                            <div id="voiceprint-toggle-help" style={{ fontSize: "12px", color: "#6b7280" }}>
+                                {voiceprintLoaded ? "只接受当前已启用声纹对应的声音" : "请先在下方注册、启用并选择一个声纹"}
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <label style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#6b7280", marginBottom: "6px" }}>
+                        <label htmlFor="voiceprint-threshold" style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#6b7280", marginBottom: "6px" }}>
                             <span>相似度阈值</span>
                             <strong style={{ color: "#1f2937" }}>{localThreshold.toFixed(2)}</strong>
                         </label>
                         <input
+                            id="voiceprint-threshold"
                             type="range"
                             min="0.1"
                             max="0.9"
@@ -99,10 +103,11 @@ export const VoiceprintTab: React.FC<VoiceManagerData> = ({
                     </div>
 
                     <div>
-                        <label style={{ display: "block", fontSize: "13px", color: "#6b7280", marginBottom: "4px" }}>
-                            当前 Profile
+                        <label htmlFor="voiceprint-profile" style={{ display: "block", fontSize: "13px", color: "#6b7280", marginBottom: "4px" }}>
+                            当前声纹
                         </label>
                         <input
+                            id="voiceprint-profile"
                             type="text"
                             value={localProfile}
                             onChange={(event) => setLocalProfile(event.target.value)}
@@ -141,7 +146,7 @@ export const VoiceprintTab: React.FC<VoiceManagerData> = ({
 
             <div>
                 <h3 style={{ fontSize: "14px", fontWeight: 600, color: "#374151", marginBottom: "10px" }}>
-                    声纹注册管理 (Voiceprint Profiles)
+                    声纹注册管理
                 </h3>
                 <div style={{ backgroundColor: "white", padding: "15px", borderRadius: "8px", border: "1px solid #e5e7eb" }}>
                     <VoiceprintProfileManager

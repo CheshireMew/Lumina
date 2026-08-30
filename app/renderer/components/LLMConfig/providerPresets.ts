@@ -2,26 +2,33 @@ import { FREE_LLM_PROVIDER_ID, LlmProviderId } from "./types";
 
 export interface ProviderPreset {
     baseUrl: string;
+    model: string;
 }
 
 export const PRESET_PROVIDERS: Record<string, ProviderPreset> = {
     deepseek: {
         baseUrl: "https://api.deepseek.com/v1",
+        model: "deepseek-chat",
     },
     openai: {
         baseUrl: "https://api.openai.com/v1",
+        model: "gpt-4o-mini",
     },
     anthropic: {
         baseUrl: "https://api.anthropic.com/v1",
+        model: "claude-3-5-sonnet-latest",
     },
     google: {
         baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+        model: "gemini-2.0-flash",
     },
     siliconflow: {
         baseUrl: "https://api.siliconflow.cn/v1",
+        model: "deepseek-ai/DeepSeek-V3",
     },
     custom: {
         baseUrl: "",
+        model: "",
     },
 };
 

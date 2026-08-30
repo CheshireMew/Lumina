@@ -13,9 +13,13 @@ export interface VoiceManagerData {
     loadingStatus: string;
     audioDevices: AudioDevice[];
     currentAudioDevice: string | null;
-    edgeVoices: { name: string; gender: string }[];
-    gptVoices: { name: string; gender: string }[];
+    sttLoadState: "loading" | "ready" | "error";
+    sttError: string;
     activeTtsEngines: string[];
+    ttsEngines: { id: string; name: string }[];
+    voicesByEngine: Record<string, { name: string; gender: string }[]>;
+    ttsLoadState: "loading" | "ready" | "error";
+    ttsError: string;
     voiceprintEnabled: boolean;
     voiceprintThreshold: number;
     voiceprintProfile: string;
@@ -64,9 +68,13 @@ export const useVoiceManager = (
         loadingStatus: stt.loadingStatus,
         audioDevices: stt.audioDevices,
         currentAudioDevice: stt.currentAudioDevice,
-        edgeVoices: tts.edgeVoices,
-        gptVoices: tts.gptVoices,
+        sttLoadState: stt.sttLoadState,
+        sttError: stt.sttError,
         activeTtsEngines: tts.activeTtsEngines,
+        ttsEngines: tts.ttsEngines,
+        voicesByEngine: tts.voicesByEngine,
+        ttsLoadState: tts.ttsLoadState,
+        ttsError: tts.ttsError,
         voiceprintEnabled: voiceprint.voiceprintEnabled,
         voiceprintThreshold: voiceprint.voiceprintThreshold,
         voiceprintProfile: voiceprint.voiceprintProfile,

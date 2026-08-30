@@ -49,6 +49,11 @@ class ISoulRepository(ABC):
         pass
 
     @abstractmethod
+    def update_config_fields(self, updates: Dict[str, Any]):
+        """Atomically merge selected fields into the character configuration."""
+        pass
+
+    @abstractmethod
     def load_module_data(self, module_id: str) -> Dict[str, Any]:
         """Load data for a specific module (e.g., 'memory', 'emotion')."""
         pass

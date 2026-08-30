@@ -69,6 +69,47 @@ class LLMManager:
     def save_config(self):
         self.app_settings.save()
 
+    def reload_config(self, config: LLMConfig | None = None) -> None:
+        """Adopt the latest validated LLM configuration and rebuild drivers lazily."""
+        self.config = config or self.app_settings.llm
+        self.drivers.clear()
+        self._drivers_loaded = False
+
+    def get_runtime_provider_state(
+        self,
+        feature: str,
+        selected_provider: str | None,
+    ) -> dict[str, Any]:
+        """Return the public readiness projection for one configured route."""
+        if not selected_provider:
+            return {"status": "error", "error": "No provider selected"}
+
+        route = self.get_route(feature)
+        if route is None or route.provider_id != selected_provider:
+            return {
+                "status": "error",
+                "error": "LLM capability selection and route are inconsistent",
+            }
+
+        provider = self.config.providers.get(selected_provider)
+        if provider is None or not provider.enabled:
+            return {
+                "status": "error",
+                "error": f"LLM provider is unavailable: {selected_provider}",
+            }
+
+        self._ensure_drivers_initialized()
+        if selected_provider not in self.drivers:
+            return {
+                "status": "error",
+                "error": f"LLM driver was not created: {selected_provider}",
+            }
+        return {
+            "id": selected_provider,
+            "status": "ready",
+            "active_in_group": True,
+        }
+
     def register_driver_type(
         self,
         type_id: str,
@@ -78,7 +119,7 @@ class LLMManager:
         self._driver_factories[type_id] = factory
         self._driver_descriptors[type_id] = dict(metadata or {})
         self._drivers_loaded = False
-        logger.info("Registered LLM driver type: %s", type_id)
+        logger.debug("Registered LLM driver type: %s", type_id)
 
     def unregister_driver_type(self, type_id: str):
         self._driver_factories.pop(type_id, None)
@@ -235,10 +276,15 @@ class LLMManager:
     def get_route(self, feature: str) -> Optional[FeatureRoute]:
         return self.config.routes.get(feature)
 
+    def get_provider_config(self, feature: str) -> ProviderConfig:
+        """Return the provider selected by a feature route."""
+        route = self._require_route(feature)
+        return self._require_provider_config(route.provider_id)
+
     def list_routes(self) -> List[FeatureRoute]:
         return list(self.config.routes.values())
 
-    def update_provider(self, provider_id: str, updates: Dict[str, Any]):
+    def update_provider(self, provider_id: str, updates: Dict[str, Any], *, persist: bool = True):
         current = self.config.providers.get(provider_id)
         merged = (current.model_dump() if current else {"id": provider_id, "enabled": True})
         merged.update(updates)
@@ -248,10 +294,11 @@ class LLMManager:
             raise ValueError(f"Unknown LLM provider type: {provider_type}")
 
         self.config.providers[provider_id] = ProviderConfig(**merged)
-        self.save_config()
+        if persist:
+            self.save_config()
         self._drivers_loaded = False
 
-    def update_route(self, feature: str, **kwargs):
+    def update_route(self, feature: str, *, persist: bool = True, **kwargs):
         if feature not in self.config.routes:
             raise KeyError(feature)
 
@@ -263,7 +310,8 @@ class LLMManager:
         payload = route.model_dump()
         payload.update(kwargs)
         self.config.routes[feature] = FeatureRoute(**payload)
-        self.save_config()
+        if persist:
+            self.save_config()
 
     def register_route(
         self,

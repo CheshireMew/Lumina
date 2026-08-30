@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -52,15 +53,10 @@ class MockPipelineStep(PipelineStep):
 
 class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        from services.container import ServiceContainer
-        from services.container import services
-        from services.container.provider_registry import ProviderRegistry
-        from services.container.service_definitions import LuminaContainer
+        self.llm_manager = MagicMock()
 
-        ServiceContainer._instance = None
-        services._container = LuminaContainer()
-        services._providers = ProviderRegistry()
-        self.container = services
+    def pipeline(self, resolve_tool=lambda _name: None):
+        return ChatPipeline(self.llm_manager, lambda: [], resolve_tool)
 
     async def test_pipeline_context_creation(self):
         pack = context_pack(identity=companion_context(user_id="u1", character_id="hiyori"))
@@ -69,14 +65,14 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
             companion_context=pack.identity,
             enable_tools=False,
             model_override=None,
-            temperature=0.7,
+            parameter_overrides={"temperature": 0.7},
             stream=True,
         )
 
         self.assertEqual(ctx.companion_context.user_id, "u1")
         self.assertEqual(ctx.companion_context.character_id, "hiyori")
         self.assertFalse(ctx.enable_tools)
-        self.assertEqual(ctx.temperature, 0.7)
+        self.assertEqual(ctx.parameter_overrides["temperature"], 0.7)
         self.assertEqual(ctx.context_pack.user_message, "Hello")
 
     async def test_context_builder_uses_context_pack_as_single_source(self):
@@ -94,11 +90,11 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
             companion_context=pack.identity,
             enable_tools=False,
             model_override=None,
-            temperature=0.7,
+            parameter_overrides={"temperature": 0.7},
             stream=True,
         )
 
-        await ContextBuilderStep(self.container).execute(ctx)
+        await ContextBuilderStep().execute(ctx)
 
         self.assertEqual(ctx.final_messages[0]["role"], "system")
         self.assertIn("System prompt", ctx.final_messages[0]["content"])
@@ -118,11 +114,11 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
             companion_context=pack.identity,
             enable_tools=False,
             model_override=None,
-            temperature=0.7,
+            parameter_overrides={"temperature": 0.7},
             stream=True,
         )
 
-        await ContextBuilderStep(self.container).execute(ctx)
+        await ContextBuilderStep().execute(ctx)
 
         system_messages = [m for m in ctx.final_messages if m["role"] == "system"]
         self.assertEqual(len(system_messages), 1)
@@ -135,7 +131,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
             companion_context=pack.identity,
             enable_tools=False,
             model_override=None,
-            temperature=0.7,
+            parameter_overrides={"temperature": 0.7},
             stream=True,
         )
         step1 = MockPipelineStep()
@@ -151,7 +147,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(step3.executed)
 
     async def test_pipeline_run_requires_context_pack(self):
-        pipeline = ChatPipeline(self.container)
+        pipeline = self.pipeline()
 
         with self.assertRaisesRegex(ValueError, "requires context_pack"):
             async for _ in pipeline.run(
@@ -160,9 +156,7 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
                 pass
 
     async def test_execute_tool_rejects_invalid_json_arguments(self):
-        container = MagicMock()
-        container.get_tool_provider.return_value = None
-        step = ChatPipeline(container).exec_step
+        step = self.pipeline().exec_step
         tool_call = {
             "function": {
                 "name": "known_tool",
@@ -170,13 +164,13 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
             }
         }
 
-        with self.assertRaises(ValueError):
-            await step._execute_tool(tool_call)
+        result = json.loads(await step._execute_tool(tool_call))
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["type"], "JSONDecodeError")
 
     async def test_execute_tool_rejects_unknown_tool(self):
-        container = MagicMock()
-        container.get_tool_provider.return_value = None
-        step = ChatPipeline(container).exec_step
+        step = self.pipeline().exec_step
         tool_call = {
             "function": {
                 "name": "missing_tool",
@@ -184,15 +178,15 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
             }
         }
 
-        with self.assertRaisesRegex(ValueError, "Unknown tool: missing_tool"):
-            await step._execute_tool(tool_call)
+        result = json.loads(await step._execute_tool(tool_call))
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["message"], "Unknown tool: missing_tool")
 
     async def test_execute_tool_provider_failure_propagates(self):
         provider = MagicMock()
         provider.execute = AsyncMock(side_effect=RuntimeError("tool provider failed"))
-        container = MagicMock()
-        container.get_tool_provider.return_value = provider
-        step = ChatPipeline(container).exec_step
+        step = self.pipeline(lambda _name: provider).exec_step
         tool_call = {
             "function": {
                 "name": "known_tool",
@@ -200,8 +194,13 @@ class TestChatPipeline(unittest.IsolatedAsyncioTestCase):
             }
         }
 
-        with self.assertRaisesRegex(RuntimeError, "tool provider failed"):
-            await step._execute_tool(tool_call)
+        result = json.loads(await step._execute_tool(tool_call))
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], {
+            "type": "RuntimeError",
+            "message": "tool provider failed",
+        })
 
 
 if __name__ == "__main__":

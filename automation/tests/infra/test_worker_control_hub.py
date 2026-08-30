@@ -13,13 +13,13 @@ sys.modules.setdefault("services.observability.structured_logger", structured_lo
 
 from core.protocols.worker_control import WsMessage, WsMessageType
 from services.infra.worker_control_hub import WorkerConnection, WorkerControlHub
+from services.infra.service_discovery import ServiceDiscovery
 
 pytestmark = pytest.mark.anyio
 
 
 def build_hub_with_worker() -> WorkerControlHub:
-    WorkerControlHub._instance = None
-    hub = WorkerControlHub()
+    hub = WorkerControlHub(ServiceDiscovery())
     hub._workers["worker:test"] = WorkerConnection(
         worker_id="worker:test",
         worker_type="test",

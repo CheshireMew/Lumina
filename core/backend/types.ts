@@ -14,7 +14,7 @@ export interface ServiceConfig {
 }
 
 export interface BackendPorts {
-    memory_port: number;
+    core_port: number;
     stt_port: number;
     tts_port: number;
     vision_port: number;

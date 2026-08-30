@@ -1,26 +1,15 @@
-import re
+"""Compatibility imports for the former Postgres-local validators."""
 
-from core.db.query_builder import SecurityException
+from core.db.sql_identifiers import (
+    sanitize_column_name,
+    sanitize_identifier,
+    sanitize_order_by,
+    sanitize_table_name,
+)
 
-_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_]+$")
-_ORDER_BY_RE = re.compile(r"^[A-Za-z0-9_ ]+(?:\s+(?:ASC|DESC))?$", re.IGNORECASE)
-
-
-def sanitize_identifier(value: str, kind: str = "identifier") -> str:
-    if not _IDENTIFIER_RE.fullmatch(value):
-        raise SecurityException(f"Invalid {kind}: {value}")
-    return value
-
-
-def sanitize_table_name(table_name: str) -> str:
-    return sanitize_identifier(table_name, "table name")
-
-
-def sanitize_column_name(column_name: str) -> str:
-    return sanitize_identifier(column_name, "column name")
-
-
-def sanitize_order_by(order_by: str) -> str:
-    if not _ORDER_BY_RE.fullmatch(order_by):
-        return "created_at DESC"
-    return order_by
+__all__ = [
+    "sanitize_column_name",
+    "sanitize_identifier",
+    "sanitize_order_by",
+    "sanitize_table_name",
+]

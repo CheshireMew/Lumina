@@ -65,15 +65,20 @@ def fake_client(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_pollinations_chat_requires_api_key():
+async def test_pollinations_chat_supports_anonymous_endpoint(fake_client):
     driver = PollinationsDriver()
     driver.load_config({"base_url": "https://gen.pollinations.ai/v1", "api_key": ""})
 
-    with pytest.raises(RuntimeError, match="API key is required"):
-        await driver.chat_completion(
-            [{"role": "user", "content": "hello"}],
-            model="openai",
-        )
+    response = await driver.chat_completion(
+        [{"role": "user", "content": "hello"}],
+        model="openai",
+    )
+
+    assert response == "OK"
+    method, url, kwargs = fake_client.requests[0]
+    assert method == "POST"
+    assert url == pollinations_driver.POLLINATIONS_ANONYMOUS_CHAT_URL
+    assert "Authorization" not in kwargs["headers"]
 
 
 @pytest.mark.anyio
@@ -100,7 +105,7 @@ async def test_pollinations_chat_uses_official_openai_compatible_endpoint(fake_c
 @pytest.mark.anyio
 async def test_pollinations_models_are_loaded_from_remote_model_index(fake_client):
     driver = PollinationsDriver()
-    driver.load_config({"base_url": "https://gen.pollinations.ai/v1"})
+    driver.load_config({"base_url": "https://gen.pollinations.ai/v1", "api_key": "sk_test"})
 
     models = await driver.list_models()
 

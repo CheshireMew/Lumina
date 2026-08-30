@@ -7,7 +7,7 @@ logger = logging.getLogger("WorkerReporter")
 
 class WorkerStatusReporter:
     """
-    Reports worker health to PostgreSQL via LifecycleBus.
+    Reports worker health to Lumina's local lifecycle store.
     """
     def __init__(self, 
                  worker_id: str, 

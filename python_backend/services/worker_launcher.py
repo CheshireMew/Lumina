@@ -98,6 +98,7 @@ class WorkerLauncher:
         }
 
     def _apply_runtime_environment(self, worker_id: str, env: Dict[str, str]) -> None:
+        env["LUMINA_PARENT_PID"] = str(os.getpid())
         if not worker_id.startswith("worker:"):
             return
 

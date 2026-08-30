@@ -46,6 +46,7 @@ export const useVoiceInputSession = ({
     const wsRef = useRef<WebSocket | null>(null);
     const onFinalTextRef = useRef(onFinalText);
     const onSpeechStartRef = useRef(onSpeechStart);
+    const voiceCapabilityAvailable = voiceCapabilityState === "ready";
 
     useEffect(() => {
         onFinalTextRef.current = onFinalText;
@@ -63,8 +64,14 @@ export const useVoiceInputSession = ({
             return;
         }
 
-        if (voiceCapabilityState !== "ready") {
-            setVoiceError("语音能力未安装");
+        if (!voiceCapabilityAvailable) {
+            setVoiceError(
+                voiceCapabilityState === "starting"
+                    ? "语音服务正在启动，请稍后再试"
+                    : voiceCapabilityState === "offline"
+                        ? "语音服务当前离线"
+                        : "语音能力不可用",
+            );
             setVadStatus("idle");
             return;
         }
@@ -74,6 +81,7 @@ export const useVoiceInputSession = ({
 
         const connect = async () => {
             try {
+                setVoiceError("正在启动语音服务…");
                 ws = await connectSttStream();
                 wsRef.current = ws;
 
@@ -114,18 +122,18 @@ export const useVoiceInputSession = ({
                         }
 
                         if (data.type === "error") {
-                            console.error("[VoiceInput] STT error message", data);
+                            console.error("[VoiceInput] STT returned an error");
                             setVoiceError(data.message);
                             setVadStatus("idle");
                         }
-                    } catch (error) {
-                        console.warn("WebSocket message parse error:", error);
+                    } catch {
+                        console.warn("[VoiceInput] Could not parse an STT message");
                     }
                 };
-                ws.onerror = (event) => {
+                ws.onerror = () => {
                     if (!isMounted) return;
-                    console.error("[VoiceInput] STT WebSocket error", event);
-                    setVoiceError("Connection Failed");
+                    console.error("[VoiceInput] STT WebSocket connection failed");
+                    setVoiceError("语音连接失败");
                 };
                 ws.onclose = () => {
                     if (!isMounted) return;
@@ -135,10 +143,10 @@ export const useVoiceInputSession = ({
                         wsRef.current = null;
                     }
                 };
-            } catch (error) {
-                console.error("[VoiceInput] STT init failed", error);
+            } catch {
+                console.error("[VoiceInput] STT initialization failed");
                 if (isMounted) {
-                    setVoiceError("Init Failed");
+                    setVoiceError("语音服务初始化失败");
                 }
             }
         };
@@ -151,7 +159,7 @@ export const useVoiceInputSession = ({
             }
             ws?.close();
         };
-    }, [chatMode, voiceCapabilityState]);
+    }, [chatMode, voiceCapabilityAvailable, voiceCapabilityState]);
 
     return {
         vadStatus,

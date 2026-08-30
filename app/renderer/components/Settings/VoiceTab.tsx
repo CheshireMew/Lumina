@@ -9,15 +9,37 @@ export const VoiceTab: React.FC<VoiceManagerData> = (props) => {
         handleSttModelChange,
         handleAudioDeviceChange,
         handleVadChange,
+        sttLoadState, sttError, ttsLoadState, ttsError,
+        ttsEngines, activeTtsEngines, refreshVoiceData,
     } = props;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px', overflowY: 'auto' }}>
+            {(sttLoadState !== 'ready' || ttsLoadState !== 'ready') && (
+                <div role={sttLoadState === 'error' || ttsLoadState === 'error' ? 'alert' : 'status'} style={{ padding: 12, borderRadius: 8, background: sttLoadState === 'error' || ttsLoadState === 'error' ? '#fef2f2' : '#eff6ff', color: sttLoadState === 'error' || ttsLoadState === 'error' ? '#991b1b' : '#1d4ed8', fontSize: 12 }}>
+                    <div>{sttError || ttsError || '正在读取语音服务状态…'}</div>
+                    {(sttLoadState === 'error' || ttsLoadState === 'error') && (
+                        <button type="button" onClick={() => void refreshVoiceData()} style={{ marginTop: 8, border: '1px solid currentColor', background: 'transparent', borderRadius: 6, padding: '5px 9px', color: 'inherit', cursor: 'pointer' }}>重新加载</button>
+                    )}
+                </div>
+            )}
+
             <div>
-                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>Audio Input Device</h3>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>回复语音</h3>
+                <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: 13, color: '#4b5563' }}>
+                    {ttsLoadState === 'ready'
+                        ? ttsEngines.length
+                            ? `可用服务：${ttsEngines.map((engine) => `${engine.name}${activeTtsEngines.includes(engine.id) ? '（当前）' : ''}`).join('、')}`
+                            : '没有可用的语音合成服务。'
+                        : '语音合成服务尚未就绪。'}
+                </div>
+            </div>
+            <div>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>音频输入设备</h3>
                 <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                    <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Microphone</label>
+                    <label htmlFor="voice-audio-device" style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>麦克风</label>
                     <select
+                        id="voice-audio-device"
                         value={currentAudioDevice || ''}
                         onChange={(e) => handleAudioDeviceChange(e.target.value)}
                         style={inputStyle}
@@ -29,33 +51,34 @@ export const VoiceTab: React.FC<VoiceManagerData> = (props) => {
                                 {dev.channels ? ` (${dev.channels} ch)` : ''}
                                 {!dev.channels && dev.host_api ? ` (${dev.host_api})` : ''}
                             </option>
-                        )) : <option>No devices found</option>}
+                        )) : <option>未找到音频输入设备</option>}
                     </select>
                     <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
-                        💡 Select your physical microphone to avoid system audio loopback
+                        请选择实际使用的麦克风，避免把系统播放声音再次录入。
                     </div>
                 </div>
             </div>
 
             <div>
-                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>Voice Recognition (STT)</h3>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>语音识别</h3>
                 <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                     <div style={{ marginBottom: '5px' }}>
-                        <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Model (模型)</label>
+                        <label htmlFor="voice-stt-model" style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>识别模型</label>
                         <select
+                            id="voice-stt-model"
                             value={currentWhisperModel}
                             onChange={(e) => handleSttModelChange(e.target.value)}
                             disabled={loadingStatus === 'loading' || whisperModels.length === 0}
                             style={inputStyle}
                         >
                             {whisperModels.length === 0 && (
-                                <option value="">No STT models available</option>
+                                <option value="">没有可用的语音识别模型</option>
                             )}
                             {whisperModels.map(m => (
                                 <option key={m.id} value={m.id}>
                                     {m.name}
                                     {m.description ? ` (${m.description})` : ''}
-                                    {m.download_status === 'downloading' ? ' [Downloading...]' : ''}
+                                    {m.download_status === 'downloading' ? ' [正在下载]' : ''}
                                 </option>
                             ))}
                         </select>
@@ -73,18 +96,19 @@ export const VoiceTab: React.FC<VoiceManagerData> = (props) => {
             </div>
 
             <div>
-                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>语音活动检测 (VAD Settings)</h3>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>语音活动检测</h3>
                 <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                            <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
-                                噪声过滤强度 (WebRTC VAD)
+                            <label htmlFor="voice-vad-aggressiveness" style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
+                                噪声过滤强度
                             </label>
                             <span style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace' }}>
                                 {vadAggressiveness}
                             </span>
                         </div>
                         <select
+                            id="voice-vad-aggressiveness"
                             value={vadAggressiveness}
                             onChange={(e) => handleVadChange('vad_aggressiveness', Number(e.target.value))}
                             style={inputStyle}
@@ -101,14 +125,15 @@ export const VoiceTab: React.FC<VoiceManagerData> = (props) => {
                     
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                            <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
-                                触发灵敏度 (Start Threshold)
+                            <label htmlFor="voice-vad-start" style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
+                                触发灵敏度
                             </label>
                             <span style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace' }}>
                                 {vadStartThreshold.toFixed(2)}
                             </span>
                         </div>
                         <input
+                            id="voice-vad-start"
                             type="range"
                             min="0.3"
                             max="0.95"
@@ -125,14 +150,15 @@ export const VoiceTab: React.FC<VoiceManagerData> = (props) => {
 
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                            <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
-                                断句延迟 (End Threshold)
+                            <label htmlFor="voice-vad-end" style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
+                                断句延迟
                             </label>
                             <span style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace' }}>
                                 {vadEndThreshold.toFixed(2)}
                             </span>
                         </div>
                         <input
+                            id="voice-vad-end"
                             type="range"
                             min="0.07"
                             max="0.3"
@@ -146,7 +172,7 @@ export const VoiceTab: React.FC<VoiceManagerData> = (props) => {
                             <span>快速切断 (0.3)</span>
                         </div>
                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
-                            ⚠️ 值越小，允许的停顿越长 (更不容易被打断)。建议 0.10 - 0.15。
+                            值越小，允许的停顿越长，也越不容易被打断。建议使用 0.10～0.15。
                         </div>
                     </div>
                 </div>

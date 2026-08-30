@@ -55,7 +55,7 @@ async def update(pool: asyncpg.Pool, table: str, record_id: str, data: Dict[str,
             return True
         except Exception as exc:
             logger.error("Postgres update failed for %s: %s", record_id, exc)
-            return False
+            raise
 
 
 async def delete(pool: asyncpg.Pool, table: str, record_id: str) -> bool:
@@ -68,7 +68,7 @@ async def delete(pool: asyncpg.Pool, table: str, record_id: str) -> bool:
             return True
         except Exception as exc:
             logger.error("Postgres delete failed for %s: %s", record_id, exc)
-            return False
+            raise
 
 
 async def query(pool: asyncpg.Pool, sql: str, params: Optional[Dict[str, Any]] = None) -> Any:

@@ -8,9 +8,10 @@ Voiceprint management APIs moved from STT Worker to Main Process.
 """
 import logging
 import httpx
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
 from app_config import config
 from core.runtime import resolve_capability_base_url
+from routers.deps import get_container
 from services.voiceprint_store import (
     delete_profile as delete_voiceprint_profile,
     list_profiles as list_voiceprint_profiles,
@@ -22,15 +23,13 @@ logger = logging.getLogger("VoiceprintRouter")
 router = APIRouter(prefix="/capabilities/voiceprint", tags=["Voiceprint"])
 
 
-def _voiceprint_runtime_status():
-    from services.container import services
-
-    registry = services.get_worker_runtime_registry()
+def _voiceprint_runtime_status(container):
+    registry = container.get_worker_runtime_registry()
     return registry.resolve("voiceprint-runtime")
 
 
-def _ensure_voiceprint_available():
-    snapshot = _voiceprint_runtime_status()
+def _ensure_voiceprint_available(container):
+    snapshot = _voiceprint_runtime_status(container)
     if snapshot is not None and snapshot.status != "ready":
         raise HTTPException(
             status_code=503,
@@ -42,9 +41,9 @@ def _ensure_voiceprint_available():
         )
 
 @router.get("/list")
-async def list_profiles():
+async def list_profiles(container=Depends(get_container)):
     """List all voiceprint profiles."""
-    _ensure_voiceprint_available()
+    _ensure_voiceprint_available(container)
     try:
         results = await list_voiceprint_profiles()
         profiles = []
@@ -62,9 +61,13 @@ async def list_profiles():
 
 
 @router.post("/toggle/{name}")
-async def toggle_profile(name: str, enabled: bool = Query(...)):
+async def toggle_profile(
+    name: str,
+    enabled: bool = Query(...),
+    container=Depends(get_container),
+):
     """Toggle a voiceprint profile's enabled status."""
-    _ensure_voiceprint_available()
+    _ensure_voiceprint_available(container)
     try:
         await set_profile_enabled(name, enabled)
         return {"status": "ok", "name": name, "enabled": enabled}
@@ -74,9 +77,9 @@ async def toggle_profile(name: str, enabled: bool = Query(...)):
 
 
 @router.delete("/{name}")
-async def delete_profile(name: str):
+async def delete_profile(name: str, container=Depends(get_container)):
     """Delete a voiceprint profile."""
-    _ensure_voiceprint_available()
+    _ensure_voiceprint_available(container)
     try:
         await delete_voiceprint_profile(name)
         return {"status": "ok", "name": name}
@@ -86,14 +89,18 @@ async def delete_profile(name: str):
 
 
 @router.post("/upload")
-async def upload_voiceprint(name: str, file: UploadFile = File(...)):
+async def upload_voiceprint(
+    name: str,
+    file: UploadFile = File(...),
+    container=Depends(get_container),
+):
     """
     Upload audio to register a new voiceprint.
     Proxies to STT Worker for embedding generation.
     """
     if ".." in name or "/" in name or "\\" in name:
         raise HTTPException(status_code=400, detail="Invalid profile name")
-    _ensure_voiceprint_available()
+    _ensure_voiceprint_available(container)
     
     try:
         # 1. Read audio file

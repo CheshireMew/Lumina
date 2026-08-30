@@ -118,6 +118,7 @@ class WorkerRuntimeRegistry:
         self._contract_path = contract_path or default_contract_path
         self._host_version = "0.0.0"
         self._definitions = self._load_definitions()
+        self._validate_capability_contracts()
 
     @property
     def host_version(self) -> str:
@@ -147,6 +148,40 @@ class WorkerRuntimeRegistry:
             return False
         snapshot = self._resolve_definition(definition)
         return snapshot.status == STATUS_READY and snapshot.entry_executable is not None
+
+    def list_worker_capabilities(self) -> tuple[str, ...]:
+        return tuple(
+            capability
+            for definition in self._definitions.values()
+            if definition.runtime_type == "runtime"
+            for capability in definition.capabilities
+        )
+
+    def list_auto_start_capabilities(self) -> tuple[str, ...]:
+        return tuple(
+            capability
+            for definition in self._definitions.values()
+            if definition.runtime_type == "runtime" and definition.auto_start
+            for capability in definition.capabilities
+        )
+
+    def _validate_capability_contracts(self) -> None:
+        from core.runtime import list_capability_contracts
+
+        for contract in list_capability_contracts():
+            runtime_id = contract["runtime_id"]
+            if not runtime_id:
+                continue
+            definition = self._definitions.get(runtime_id)
+            if definition is None:
+                raise ValueError(
+                    f"Capability '{contract['capability']}' references unknown runtime '{runtime_id}'"
+                )
+            if contract["capability"] not in definition.capabilities:
+                raise ValueError(
+                    f"Runtime '{runtime_id}' does not declare capability "
+                    f"'{contract['capability']}'"
+                )
 
     def _load_definitions(self) -> dict[str, WorkerRuntimeDefinition]:
         raw = json.loads(self._contract_path.read_text(encoding="utf-8"))
@@ -248,6 +283,10 @@ class WorkerRuntimeRegistry:
                 continue
 
             entry_relative = candidate.entry_executable or definition.entry_executable
+            if definition.runtime_type == "runtime" and not entry_relative:
+                if first_failure is None:
+                    first_failure = (candidate.name, ("<entryExecutable>",))
+                continue
             entry_executable = (root_dir / entry_relative).resolve() if entry_relative else None
             if entry_relative and entry_executable and not entry_executable.exists():
                 if first_failure is None:

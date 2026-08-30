@@ -99,6 +99,9 @@ async def test_chat_turn_service_includes_short_term_history():
         event
         async for event in service.stream_text_turn(
             TextTurnRequest(
+                turn_id="turn-1",
+                client_id="client-1",
+                generation=1,
                 text="new",
                 companion_context=companion_context(user_id="u", character_id="c"),
                 history_limit=5,
@@ -122,7 +125,13 @@ async def test_chat_turn_service_skips_empty_text_turns():
     events = [
         event
         async for event in service.stream_text_turn(
-            TextTurnRequest(text="   ", companion_context=companion_context(session_id=1))
+            TextTurnRequest(
+                turn_id="turn-empty",
+                client_id="client-1",
+                generation=1,
+                text="   ",
+                companion_context=companion_context(session_id=1),
+            )
         )
     ]
 

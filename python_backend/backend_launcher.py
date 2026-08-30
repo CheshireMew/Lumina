@@ -8,6 +8,8 @@ sys.path.append(_BACKEND_DIR)
 
 from app_config import config
 from core.runtime import resolve_runtime_port, runtime_target_for_capability
+from logger_setup import uvicorn_access_log_enabled, uvicorn_log_level
+from services.parent_process import start_parent_watchdog
 
 
 def run_core():
@@ -15,14 +17,25 @@ def run_core():
     import uvicorn
 
     host = "127.0.0.1" if config.network.bind_localhost_only else config.network.host
-    port = config.network.memory_port
+    port = config.network.core_port
     print(f"[Launcher] Starting Core System on {host}:{port}...", flush=True)
-    uvicorn.run(core_app.app, host=host, port=port, log_level="info", log_config=None)
+    runtime_config = uvicorn.Config(
+        core_app.app,
+        host=host,
+        port=port,
+        log_level=uvicorn_log_level(),
+        log_config=None,
+        access_log=uvicorn_access_log_enabled(),
+    )
+    server = uvicorn.Server(runtime_config)
+    core_app.app.state.request_runtime_shutdown = lambda: setattr(server, "should_exit", True)
+    start_parent_watchdog(core_app.app.state.request_runtime_shutdown)
+    server.run()
 
 
 def run_worker(capability: str):
     import uvicorn
-    from services.container import services
+    from services.container import create_service_container
     from services.worker_runtime import WorkerRuntimeHost, WorkerRuntimeOptions
 
     runtime_target = runtime_target_for_capability(capability)
@@ -36,11 +49,22 @@ def run_worker(capability: str):
         port=port,
         runtime_target=runtime_target,
     )
-    runtime_host = WorkerRuntimeHost(runtime_options, services)
+    runtime_host = WorkerRuntimeHost(runtime_options, create_service_container())
     app = runtime_host.build_app()
 
     print(f"[Launcher] Starting Worker Host [{capability}] on {config.network.host}:{port}...", flush=True)
-    uvicorn.run(app, host=config.network.host, port=runtime_host.listen_port, log_level="info", log_config=None)
+    runtime_config = uvicorn.Config(
+        app,
+        host=config.network.host,
+        port=runtime_host.listen_port,
+        log_level=uvicorn_log_level(),
+        log_config=None,
+        access_log=uvicorn_access_log_enabled(),
+    )
+    server = uvicorn.Server(runtime_config)
+    app.state.request_runtime_shutdown = lambda: setattr(server, "should_exit", True)
+    start_parent_watchdog(app.state.request_runtime_shutdown, logger=runtime_host.logger)
+    server.run()
 
 
 def _resolve_launcher_mode(name: str) -> tuple[str, str | None]:
@@ -76,7 +100,7 @@ if __name__ == "__main__":
 
         traceback.print_exc()
         try:
-            log_path = os.path.join(os.path.expanduser("~"), "lumina_backend_crash.log")
+            log_path = os.path.join(str(config.data_root), "logs", "backend_crash.log")
             with open(log_path, "a", encoding="utf-8") as handle:
                 handle.write(f"\n--- Crash Report [{cli_args.mode}] ---\n")
                 handle.write(traceback.format_exc())

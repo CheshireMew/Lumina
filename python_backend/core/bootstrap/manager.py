@@ -22,9 +22,14 @@ class BootstrapManager:
                 logger.debug(f">> Bootstrapping: {step.name}")
                 await step.bootstrap(container)
                 elapsed = time.perf_counter() - started_at
-                logger.info(f"✅ Bootstrap Step: {step.name} ({elapsed:.2f}s)")
+                logger.debug(f"Bootstrap Step: {step.name} ({elapsed:.2f}s)")
             except Exception as e:
                 logger.critical(f"❌ Bootstrap Step '{step.name}' Failed: {e}")
-                # We assume critical failure for now, unless step handles it internally
-                raise e
+                from services.utilities.shutdown import ShutdownManager
+
+                try:
+                    await ShutdownManager().shutdown(container)
+                except Exception as rollback_error:
+                    logger.error("Startup rollback failed: %s", rollback_error, exc_info=True)
+                raise
         logger.info("✨ Bootstrap Sequence Complete.")

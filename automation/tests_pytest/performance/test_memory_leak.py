@@ -3,6 +3,7 @@ import httpx
 import asyncio
 import tracemalloc
 import time
+import socket
 from pathlib import Path
 import sys
 
@@ -11,8 +12,17 @@ PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
 SERVICES = {
-    "memory": "http://127.0.0.1:8010",
+    "core": "http://127.0.0.1:8010",
 }
+
+
+def require_core_service() -> None:
+    """Skip live runtime probes when the local backend is not running."""
+    try:
+        with socket.create_connection(("127.0.0.1", 8010), timeout=0.5):
+            return
+    except OSError as exc:
+        pytest.skip(f"Core service not available: {exc}")
 
 @pytest.mark.performance
 @pytest.mark.anyio
@@ -22,7 +32,8 @@ async def test_memory_leak_detection():
     # 所以这个测试主要监控客户端内存泄露；服务端内存监控应走明确的 runtime/metrics 接口。
     # 鉴于无法修改服务端，我们将重点放在服务端对压力请求的响应稳定性和耗时增长上。
     
-    url = f"{SERVICES['memory']}/companion/message"
+    require_core_service()
+    url = f"{SERVICES['core']}/companion/message"
     payload = {"model": "gpt-4o-mini", "text": "Ping"}
 
     print("\n[Test] Starting 50 repeated requests to check for response degradation...")
@@ -60,12 +71,13 @@ async def test_memory_leak_detection():
 @pytest.mark.anyio
 async def test_client_side_memory_leak():
     """简单检测 client 进程在大量 async 请求下的内存占用"""
+    require_core_service()
     tracemalloc.start()
     snapshot1 = tracemalloc.take_snapshot()
     
-    url = f"{SERVICES['memory']}/companion/message"
+    url = f"{SERVICES['core']}/companion/message"
     async with httpx.AsyncClient() as client:
-        tasks = [client.get(f"{SERVICES['memory']}/health") for _ in range(100)]
+        tasks = [client.get(f"{SERVICES['core']}/health") for _ in range(100)]
         await asyncio.gather(*tasks)
     
     snapshot2 = tracemalloc.take_snapshot()

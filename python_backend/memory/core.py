@@ -1,5 +1,7 @@
 import asyncio
+import inspect
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -18,11 +20,14 @@ class MemoryService:
             raise ValueError("MemoryService requires an explicit memory driver.")
 
         self._driver = driver
+        self._connected = False
         self.memory_items = MemoryItemStore(self._driver)
         self.encoder = None
+        self.encoder_name = "memory_encoder"
 
-    def set_encoder(self, encoder_fn):
+    def set_encoder(self, encoder_fn, *, model_name: str = "memory_encoder"):
         self.encoder = encoder_fn
+        self.encoder_name = model_name
 
     @property
     def driver(self):
@@ -36,6 +41,29 @@ class MemoryService:
     def is_driver_active(self, driver_id: str) -> bool:
         return self.driver_id == driver_id
 
+    def get_runtime_provider_state(self, selected_provider: str | None) -> dict[str, Any]:
+        """Return the public readiness projection for the active memory driver."""
+        if not selected_provider:
+            return {"status": "error", "error": "No provider selected"}
+        if self.driver_id != selected_provider:
+            return {
+                "status": "error",
+                "error": (
+                    f"Memory provider mismatch: configured={selected_provider}, "
+                    f"active={self.driver_id}"
+                ),
+            }
+        if not self._connected:
+            return {
+                "status": "error",
+                "error": f"Memory provider is not connected: {selected_provider}",
+            }
+        return {
+            "id": selected_provider,
+            "status": "ready",
+            "active_in_group": True,
+        }
+
     async def replace_driver(self, driver, *, close_existing: bool = True):
         current = self._driver
         if current is driver:
@@ -45,15 +73,18 @@ class MemoryService:
             await current.close()
 
         self._driver = driver
+        self._connected = False
         self.memory_items.replace_driver(driver)
 
     async def connect(self):
         if self._driver:
             await self._driver.connect()
+            self._connected = True
 
     async def close(self):
         if self._driver:
             await self._driver.close()
+        self._connected = False
 
     @property
     def db(self):
@@ -88,7 +119,7 @@ class MemoryService:
                 try:
                     parsed.append(dict(row))
                 except (TypeError, ValueError):
-                    logger.warning("Skipping unparseable memory row: %r", row)
+                    logger.warning("Skipping unparseable memory row type=%s", type(row).__name__)
         return parsed
 
     async def record_turn(
@@ -99,6 +130,7 @@ class MemoryService:
         assistant_message: str,
         user_name: Optional[str] = None,
         companion_name: Optional[str] = None,
+        turn_id: Optional[str] = None,
     ) -> str:
         """Append one raw interaction event. This is not long-term memory."""
         label = user_name or context.user_id
@@ -108,6 +140,7 @@ class MemoryService:
             f"{companion_label}: {assistant_message}"
         )
         data = {
+            "id": turn_id or str(uuid.uuid4()),
             "session_id": context.session_id,
             "user_id": context.user_id,
             "character_id": self._character_id(context),
@@ -118,18 +151,15 @@ class MemoryService:
             "metadata": {},
         }
 
-        if self.encoder:
-            try:
-                vec = self.encoder(narrative)
-                if hasattr(vec, "tolist"):
-                    vec = vec.tolist()
-                data["embedding"] = vec
-            except Exception as exc:
-                logger.warning("Failed to embed conversation turn: %s", exc)
-
         try:
-            turn_id = await self.driver.create("conversation_turns", data)
-            return str(turn_id)
+            existing = await self.driver.query(
+                "SELECT id FROM conversation_turns WHERE id = $turn_id LIMIT 1;",
+                {"turn_id": data["id"]},
+            )
+            if existing:
+                return str(data["id"])
+            created_turn_id = await self.driver.create("conversation_turns", data)
+            return str(created_turn_id)
         except Exception as exc:
             logger.error("Error recording conversation turn: %s", exc)
             raise
@@ -147,11 +177,20 @@ class MemoryService:
         confidence: float = 1.0,
         importance: float = 1.0,
         metadata: Optional[dict] = None,
+        memory_id: Optional[str] = None,
     ) -> str:
         embedding = None
         if self.encoder:
-            vec = self.encoder(content)
+            vec = await asyncio.to_thread(self.encoder, content)
             embedding = vec.tolist() if hasattr(vec, "tolist") else vec
+
+        if memory_id:
+            existing = await self.driver.query(
+                "SELECT id FROM memory_items WHERE id = $memory_id LIMIT 1;",
+                {"memory_id": memory_id},
+            )
+            if existing:
+                return memory_id
 
         return await self.memory_items.create_memory_item(
             character_id=self._character_id(context),
@@ -165,6 +204,7 @@ class MemoryService:
             confidence=confidence,
             importance=importance,
             metadata=metadata,
+            memory_id=memory_id,
         )
 
     async def search_memory_items(
@@ -257,14 +297,20 @@ class MemoryService:
         if not turn_ids:
             return
 
-        await self.driver.query(
-            """
-            UPDATE conversation_turns
-            SET processed_at = NOW()
-            WHERE id = ANY($ids::uuid[])
-            """,
-            {"ids": turn_ids},
-        )
+        processed_at = datetime.now(timezone.utc)
+        updates = [
+            self.driver.update(
+                "conversation_turns",
+                str(turn_id),
+                {"processed_at": processed_at},
+            )
+            for turn_id in turn_ids
+        ]
+        awaitables = [result for result in updates if inspect.isawaitable(result)]
+        if awaitables:
+            results = await asyncio.gather(*awaitables)
+            if any(result is False for result in results):
+                raise RuntimeError("One or more conversation turns could not be marked processed")
         logger.debug("Marked %s conversation turns as processed", len(turn_ids))
 
     async def get_all_turns(self, context: CompanionContext) -> List[Dict]:
@@ -314,7 +360,7 @@ class MemoryService:
                 from services.embedding_cache import get_embedding_cache
 
                 cache = get_embedding_cache()
-                cached = cache.get(query, model_name="memory_encoder")
+                cached = cache.get(query, model_name=self.encoder_name)
                 if cached is not None:
                     vector = cached
                 else:
@@ -325,7 +371,7 @@ class MemoryService:
                         return vec
 
                     vector = await asyncio.to_thread(_encode)
-                    cache.put(query, vector, model_name="memory_encoder")
+                    cache.put(query, vector, model_name=self.encoder_name)
             except Exception as exc:
                 logger.warning("Failed to generate memory query embedding: %s", exc)
 

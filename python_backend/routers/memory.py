@@ -108,7 +108,7 @@ async def search_memory(
             context,
             limit=request.limit,
         )
-        logger.info("Memory search '%s' -> %s hits", request.query, len(results))
+        logger.info("Memory search chars=%s hits=%s", len(request.query), len(results))
         return serialize_memory_rows(results, "score")
     except HTTPException:
         raise
@@ -134,7 +134,7 @@ async def search_memory_hybrid(
             context=context,
             limit=request.limit,
         )
-        logger.info("Memory hybrid search '%s' -> %s hits", request.query, len(results))
+        logger.info("Memory hybrid search chars=%s hits=%s", len(request.query), len(results))
         return serialize_memory_rows(results, "hybrid_score")
     except HTTPException:
         raise
@@ -290,10 +290,6 @@ class InspectionQueryRequest(BaseModel):
     query: str
 
 
-class InspectionRecordRequest(BaseModel):
-    data: dict[str, Any]
-
-
 @router.post("/inspection/query")
 async def inspect_query(
     request: InspectionQueryRequest,
@@ -309,62 +305,3 @@ async def inspect_query(
     except Exception as exc:
         logger.error("Memory inspection query failed: %s", exc, exc_info=True)
         return {"status": "error", "detail": str(exc)}
-
-
-@router.delete("/inspection/record/{table_name}/{record_safe_id}")
-async def delete_inspection_record(
-    table_name: str,
-    record_safe_id: str,
-    memory_service=Depends(get_memory_service),
-    context_resolver=Depends(get_companion_context_resolver),
-):
-    try:
-        return await _inspection_service(memory_service, context_resolver).delete_record(table_name, record_safe_id)
-    except PermissionError as exc:
-        raise HTTPException(403, str(exc))
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    except Exception as exc:
-        logger.error("Memory inspection delete failed: %s", exc, exc_info=True)
-        raise HTTPException(500, str(exc))
-
-
-@router.post("/inspection/record/{table_name}/new")
-async def create_inspection_record(
-    table_name: str,
-    request: InspectionRecordRequest,
-    memory_service=Depends(get_memory_service),
-    context_resolver=Depends(get_companion_context_resolver),
-):
-    try:
-        return await _inspection_service(memory_service, context_resolver).create_record(table_name, request.data)
-    except PermissionError as exc:
-        raise HTTPException(403, str(exc))
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    except Exception as exc:
-        logger.error("Memory inspection create failed: %s", exc, exc_info=True)
-        raise HTTPException(500, str(exc))
-
-
-@router.put("/inspection/record/{table_name}/{record_safe_id}")
-async def update_inspection_record(
-    table_name: str,
-    record_safe_id: str,
-    request: InspectionRecordRequest,
-    memory_service=Depends(get_memory_service),
-    context_resolver=Depends(get_companion_context_resolver),
-):
-    try:
-        return await _inspection_service(memory_service, context_resolver).update_record(
-            table_name,
-            record_safe_id,
-            request.data,
-        )
-    except PermissionError as exc:
-        raise HTTPException(403, str(exc))
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    except Exception as exc:
-        logger.error("Memory inspection update failed: %s", exc, exc_info=True)
-        raise HTTPException(500, str(exc))

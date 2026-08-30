@@ -74,7 +74,7 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
             setMessage("");
         } catch (error) {
             console.error("[Voiceprint] Failed to load profiles", error);
-            setMessage(error instanceof Error ? error.message : "Failed to load voiceprints");
+            setMessage(error instanceof Error ? error.message : "读取声纹列表失败");
         } finally {
             setLoading(false);
         }
@@ -98,10 +98,10 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
             await refreshProfiles();
             await onProfileSelect(profileName);
             await onRefreshStatus();
-            setMessage(`Registered ${profileName}`);
+            setMessage(`已注册声纹：${profileName}`);
         } catch (error) {
             console.error("[Voiceprint] Failed to register profile", error);
-            setMessage(error instanceof Error ? error.message : "Failed to register voiceprint");
+            setMessage(error instanceof Error ? error.message : "注册声纹失败");
         } finally {
             setLoading(false);
         }
@@ -115,14 +115,14 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
             await onRefreshStatus();
         } catch (error) {
             console.error("[Voiceprint] Failed to toggle profile", error);
-            setMessage(error instanceof Error ? error.message : "Failed to update voiceprint");
+            setMessage(error instanceof Error ? error.message : "更新声纹状态失败");
         } finally {
             setLoading(false);
         }
     };
 
     const handleDelete = async (profileName: string) => {
-        if (!confirm(`Delete voiceprint '${profileName}'?`)) {
+        if (!confirm(`确定删除声纹“${profileName}”吗？`)) {
             return;
         }
 
@@ -136,7 +136,7 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
             await onRefreshStatus();
         } catch (error) {
             console.error("[Voiceprint] Failed to delete profile", error);
-            setMessage(error instanceof Error ? error.message : "Failed to delete voiceprint");
+            setMessage(error instanceof Error ? error.message : "删除声纹失败");
         } finally {
             setLoading(false);
         }
@@ -154,10 +154,10 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
             >
                 <div>
                     <div style={{ fontSize: "13px", fontWeight: 600, color: "#1f2937" }}>
-                        Active Voiceprints
+                        已注册声纹
                     </div>
                     <div style={{ fontSize: "12px", color: "#6b7280" }}>
-                        {profiles.length ? `${profiles.length} registered` : "No registered voiceprints"}
+                        {profiles.length ? `共 ${profiles.length} 个` : "尚未注册声纹"}
                     </div>
                 </div>
                 <button
@@ -165,7 +165,8 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                     onClick={() => void refreshProfiles()}
                     disabled={loading}
                     style={secondaryButtonStyle}
-                    title="Refresh profiles"
+                    title="刷新声纹列表"
+                    aria-label="刷新声纹列表"
                 >
                     <RefreshCw size={15} />
                 </button>
@@ -181,7 +182,7 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
             >
                 {profiles.length === 0 ? (
                     <div style={{ padding: "12px", color: "#6b7280", fontSize: "12px" }}>
-                        {loading ? "Loading profiles..." : "Upload a WAV sample to register your first profile."}
+                        {loading ? "正在读取声纹列表…" : "上传一段 WAV 录音即可注册第一个声纹。"}
                     </div>
                 ) : (
                     profiles.map((profile) => {
@@ -212,7 +213,7 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                                         minWidth: 0,
                                         opacity: profile.enabled ? 1 : 0.55,
                                     }}
-                                    title={`Use ${profile.name}`}
+                                    title={`使用声纹 ${profile.name}`}
                                 >
                                     <div
                                         style={{
@@ -227,7 +228,7 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                                         {profile.name}
                                     </div>
                                     <div style={{ fontSize: "11px", color: "#6b7280" }}>
-                                        {profile.enabled ? "Enabled" : "Disabled"}
+                                        {profile.enabled ? "已启用" : "已停用"}
                                         {createdAt ? ` · ${createdAt}` : ""}
                                     </div>
                                 </button>
@@ -239,7 +240,8 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                                         ...iconButtonStyle,
                                         color: profile.enabled ? "#059669" : "#9ca3af",
                                     }}
-                                    title={profile.enabled ? "Disable profile" : "Enable profile"}
+                                    title={profile.enabled ? "停用声纹" : "启用声纹"}
+                                    aria-label={profile.enabled ? `停用声纹 ${profile.name}` : `启用声纹 ${profile.name}`}
                                 >
                                     {profile.enabled ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
                                 </button>
@@ -248,7 +250,8 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                                     onClick={() => void handleDelete(profile.name)}
                                     disabled={loading}
                                     style={{ ...iconButtonStyle, color: "#dc2626" }}
-                                    title="Delete profile"
+                                    title="删除声纹"
+                                    aria-label={`删除声纹 ${profile.name}`}
                                 >
                                     <Trash2 size={16} />
                                 </button>
@@ -268,12 +271,12 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                         padding: "8px",
                     }}
                 >
-                    Current profile "{selectedProfile}" is not registered.
+                    当前选择的声纹“{selectedProfile}”尚未注册。
                 </div>
             )}
 
             <div style={{ fontSize: "13px", fontWeight: 600, color: "#1f2937" }}>
-                Register New Voice
+                注册新声纹
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "8px" }}>
                 <input
@@ -281,7 +284,7 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                     value={newProfileName}
                     onChange={(event) => setNewProfileName(event.target.value)}
                     style={inputStyle}
-                    placeholder="New profile name"
+                    placeholder="声纹名称"
                     disabled={loading}
                 />
                 <div style={{ display: "flex", gap: "8px" }}>
@@ -294,11 +297,11 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
                         }}
-                        title={selectedFile?.name ?? "Select WAV file"}
+                        title={selectedFile?.name ?? "选择 WAV 录音"}
                     >
                         <FolderOpen size={15} />
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {selectedFile?.name ?? "Select WAV"}
+                            {selectedFile?.name ?? "选择 WAV 录音"}
                         </span>
                         <input
                             type="file"
@@ -319,7 +322,7 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                             opacity: loading || !newProfileName.trim() || !selectedFile ? 0.55 : 1,
                         }}
                     >
-                        {loading ? "Working..." : "Register"}
+                        {loading ? "正在处理…" : "注册"}
                     </button>
                 </div>
             </div>
@@ -328,8 +331,8 @@ export const VoiceprintProfileManager: React.FC<VoiceprintProfileManagerProps> =
                 <div
                     style={{
                         fontSize: "12px",
-                        color: message.startsWith("Registered") ? "#065f46" : "#92400e",
-                        backgroundColor: message.startsWith("Registered") ? "#d1fae5" : "#fef3c7",
+                        color: message.startsWith("已注册") ? "#065f46" : "#92400e",
+                        backgroundColor: message.startsWith("已注册") ? "#d1fae5" : "#fef3c7",
                         borderRadius: "6px",
                         padding: "8px",
                     }}

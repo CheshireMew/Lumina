@@ -4,6 +4,7 @@ import { Fingerprint, Mic, Settings, UserRound, X } from "lucide-react";
 
 import { VoiceManagerData } from "../hooks/useVoiceManager";
 import { GeneralSettingsInput, GeneralSettingsPatch } from "../hooks/useSettings";
+import { useDialogAccessibility } from "../hooks/useDialogAccessibility";
 import { CharacterTab } from "./Settings/CharacterTab";
 import { GeneralSettingsPanel } from "./Settings/GeneralSettingsPanel";
 import { VoiceTab } from "./Settings/VoiceTab";
@@ -36,19 +37,42 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onChange,
 }) => {
     const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+    const [characterDirty, setCharacterDirty] = useState(false);
     const {
         userName,
         setUserName,
         highDpiEnabled,
         setHighDpiEnabled,
+        ttsEnabled,
+        setTtsEnabled,
         backgroundImage,
         setBackgroundImage,
         fileInputRef,
         handleBackgroundFileSelect,
+        isDirty: generalDirty,
+        save: saveGeneral,
+        reset: resetGeneral,
+        saveStatus,
+        saveMessage,
     } = useSettingsModalState({
         currentSettings,
         onChange,
     });
+
+    const hasUnsavedChanges = generalDirty || characterDirty;
+    const confirmDiscard = () => !hasUnsavedChanges || window.confirm("有尚未保存的更改，确定放弃这些更改吗？");
+    const requestClose = () => {
+        if (confirmDiscard()) onClose();
+    };
+    const handleTabChange = (nextTab: SettingsTab) => {
+        if (nextTab === activeTab) return;
+        const currentTabDirty = activeTab === "general" ? generalDirty : activeTab === "character" ? characterDirty : false;
+        if (currentTabDirty && !window.confirm("当前页面有尚未保存的更改，确定放弃并切换吗？")) return;
+        if (activeTab === "general" && generalDirty) resetGeneral();
+        setCharacterDirty(false);
+        setActiveTab(nextTab);
+    };
+    const dialogRef = useDialogAccessibility<HTMLDivElement>(isOpen, requestClose);
 
     useEffect(() => {
         if (isOpen) {
@@ -66,8 +90,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         borderRadius: "24px",
         border: "1px solid rgba(255, 255, 255, 0.6)",
         boxShadow: "0 20px 50px rgba(0,0,0,0.1), inset 0 0 20px rgba(255,255,255,0.5)",
-        width: "900px",
-        height: "700px",
+        width: "min(900px, calc(100vw - 32px))",
+        height: "min(700px, calc(100vh - 32px))",
         display: "flex",
         overflow: "hidden",
         color: "#4B5563",
@@ -89,7 +113,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         alignItems: "center",
         gap: "8px",
         marginBottom: "8px",
+        width: "100%",
+        border: "none",
+        textAlign: "left",
     });
+
+    const tabLabels: Record<SettingsTab, string> = {
+        general: "常规",
+        character: "角色",
+        voice: "语音",
+        voiceprint: "声纹",
+    };
 
     return (
         <div
@@ -107,8 +141,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 backdropFilter: "blur(5px)",
             }}
         >
-            <div style={glassPanelStyle}>
+            <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="lumina-settings-title"
+                tabIndex={-1}
+                className="lumina-settings-panel"
+                style={glassPanelStyle}
+            >
                 <div
+                    className="lumina-settings-sidebar"
                     style={{
                         width: "240px",
                         background: "rgba(255,255,255,0.4)",
@@ -119,6 +162,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     }}
                 >
                     <h2
+                        id="lumina-settings-title"
                         style={{
                             fontSize: "24px",
                             fontWeight: 800,
@@ -138,39 +182,47 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 fontWeight: 500,
                             }}
                         >
-                            Settings
+                            设置
                         </span>
                     </h2>
 
                     <div style={{ flex: 1 }}>
-                        <div
-                            onClick={() => setActiveTab("general")}
+                        <button
+                            type="button"
+                            onClick={() => handleTabChange("general")}
                             style={tabStyle(activeTab === "general")}
+                            aria-pressed={activeTab === "general"}
                         >
-                            <Settings size={18} /> <span>General</span>
-                        </div>
-                        <div
-                            onClick={() => setActiveTab("character")}
+                            <Settings size={18} /> <span>常规</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleTabChange("character")}
                             style={tabStyle(activeTab === "character")}
+                            aria-pressed={activeTab === "character"}
                         >
-                            <UserRound size={18} /> <span>Character</span>
-                        </div>
-                        <div
-                            onClick={() => setActiveTab("voice")}
+                            <UserRound size={18} /> <span>角色</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleTabChange("voice")}
                             style={tabStyle(activeTab === "voice")}
+                            aria-pressed={activeTab === "voice"}
                         >
-                            <Mic size={18} /> <span>Voice</span>
-                        </div>
-                        <div
-                            onClick={() => setActiveTab("voiceprint")}
+                            <Mic size={18} /> <span>语音</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleTabChange("voiceprint")}
                             style={tabStyle(activeTab === "voiceprint")}
+                            aria-pressed={activeTab === "voiceprint"}
                         >
-                            <Fingerprint size={18} /> <span>Voiceprint</span>
-                        </div>
+                            <Fingerprint size={18} /> <span>声纹</span>
+                        </button>
                     </div>
 
                     <button
-                        onClick={onClose}
+                        onClick={requestClose}
                         style={{
                             padding: "12px",
                             marginTop: "20px",
@@ -187,11 +239,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             gap: "8px",
                         }}
                     >
-                        <X size={18} /> Close
+                        <X size={18} /> 关闭
                     </button>
                 </div>
 
-                <div style={{ flex: 1, padding: "40px", overflowY: "auto" }}>
+                <div
+                    className="lumina-settings-content"
+                    style={{ flex: 1, padding: "40px", overflowY: "auto" }}
+                >
                     <h2
                         style={{
                             fontSize: "20px",
@@ -202,7 +257,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             borderBottom: "2px solid rgba(0,0,0,0.05)",
                         }}
                     >
-                        {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Settings
+                        {tabLabels[activeTab]}设置
                     </h2>
 
                     {activeTab === "general" && (
@@ -213,8 +268,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             setBackgroundImage={setBackgroundImage}
                             highDpiEnabled={highDpiEnabled}
                             setHighDpiEnabled={setHighDpiEnabled}
+                            ttsEnabled={ttsEnabled}
+                            setTtsEnabled={setTtsEnabled}
                             fileInputRef={fileInputRef}
                             onBackgroundFileSelect={handleBackgroundFileSelect}
+                            isDirty={generalDirty}
+                            saveStatus={saveStatus}
+                            saveMessage={saveMessage}
+                            onSave={saveGeneral}
                         />
                     )}
                     {activeTab === "character" && (
@@ -223,10 +284,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             activeCharacter={activeCharacter}
                             onSaveCharacter={onSaveCharacter}
                             voiceData={voiceManagerData}
+                            onDirtyChange={setCharacterDirty}
                         />
                     )}
-                    {activeTab === "voice" && <VoiceTab {...voiceManagerData} />}
-                    {activeTab === "voiceprint" && <VoiceprintTab {...voiceManagerData} />}
+                    {activeTab === "voice" && (
+                        <div>
+                            <div style={{ margin: "-14px 0 10px", fontSize: 12, color: "#64748b" }}>此页更改会立即保存。</div>
+                            <VoiceTab {...voiceManagerData} />
+                        </div>
+                    )}
+                    {activeTab === "voiceprint" && (
+                        <div>
+                            <div style={{ margin: "-14px 0 10px", fontSize: 12, color: "#64748b" }}>此页更改会立即保存。</div>
+                            <VoiceprintTab {...voiceManagerData} />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -239,6 +311,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ::-webkit-scrollbar-track { background: transparent; }
                 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
                 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+                @media (max-width: 680px) {
+                    .lumina-settings-panel { flex-direction: column; }
+                    .lumina-settings-sidebar {
+                        width: auto !important;
+                        padding: 18px 18px 10px !important;
+                        border-right: none !important;
+                        border-bottom: 1px solid rgba(255,255,255,0.5);
+                    }
+                    .lumina-settings-sidebar h2 { margin-bottom: 14px !important; }
+                    .lumina-settings-sidebar > div {
+                        display: grid;
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                        gap: 6px;
+                    }
+                    .lumina-settings-sidebar > button { margin-top: 8px !important; }
+                    .lumina-settings-content { padding: 22px !important; }
+                }
             `}</style>
         </div>
     );

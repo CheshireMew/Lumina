@@ -79,8 +79,12 @@ class LippProtocol:
                      
                 await lifecycle_handler(payload)
                 return LippResponse(status="ok", message=f"Action {payload.action} executed on {payload.target_id}")
-            except Exception as e:
-                return LippResponse(status="error", message=str(e))
+            except HTTPException:
+                raise
+            except (KeyError, ValueError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
                 
         @router.post("/config", response_model=LippResponse)
         async def on_config(payload: LippConfigRequest, request: Request):
@@ -91,7 +95,11 @@ class LippProtocol:
                      
                 result = await config_handler(payload)
                 return LippResponse(status="ok", data=result)
-            except Exception as e:
-                return LippResponse(status="error", message=str(e))
+            except HTTPException:
+                raise
+            except (KeyError, ValueError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
                 
         return router

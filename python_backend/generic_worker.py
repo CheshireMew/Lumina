@@ -11,7 +11,9 @@ import sys
 
 import uvicorn
 
-from services.container import services
+from logger_setup import uvicorn_access_log_enabled, uvicorn_log_level
+from services.container import create_service_container
+from services.parent_process import start_parent_watchdog
 from services.worker_runtime import WorkerRuntimeHost, WorkerRuntimeOptions
 
 if os.name == "nt":
@@ -38,7 +40,7 @@ def parse_args() -> WorkerRuntimeOptions:
 
 if __name__ == "__main__":
     runtime_options = parse_args()
-    runtime_host = WorkerRuntimeHost(runtime_options, services)
+    runtime_host = WorkerRuntimeHost(runtime_options, create_service_container())
     app = runtime_host.build_app()
 
     runtime_host.logger.info(
@@ -46,4 +48,14 @@ if __name__ == "__main__":
         runtime_options.capability,
         runtime_host.listen_port,
     )
-    uvicorn.run(app, host=runtime_options.host, port=runtime_host.listen_port)
+    runtime_config = uvicorn.Config(
+        app,
+        host=runtime_options.host,
+        port=runtime_host.listen_port,
+        log_level=uvicorn_log_level(),
+        access_log=uvicorn_access_log_enabled(),
+    )
+    server = uvicorn.Server(runtime_config)
+    app.state.request_runtime_shutdown = lambda: setattr(server, "should_exit", True)
+    start_parent_watchdog(app.state.request_runtime_shutdown, logger=runtime_host.logger)
+    server.run()

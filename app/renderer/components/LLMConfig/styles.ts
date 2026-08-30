@@ -61,8 +61,8 @@ export const modalStyles = {
         padding: "20px",
     } satisfies CSSProperties,
     container: {
-        width: "520px",
-        maxHeight: "85vh",
+        width: "min(520px, calc(100vw - 32px))",
+        maxHeight: "calc(100vh - 32px)",
         display: "flex",
         flexDirection: "column",
         ...glassStyle,

@@ -132,29 +132,6 @@ class MemoryInspectionService:
         rows = await self._memory.driver.query(query)
         return {"status": "success", "result": serialize_rows(rows)}
 
-    async def delete_record(self, table_name: str, record_id: str) -> dict[str, Any]:
-        self._ensure_content_table(table_name)
-        await self._memory.driver.delete(table_name, record_id)
-        return {"status": "success", "id": record_id}
-
-    async def create_record(self, table_name: str, data: dict[str, Any]) -> dict[str, Any]:
-        self._ensure_content_table(table_name)
-        new_id = await self._memory.driver.create(table_name, data)
-        return {"status": "success", "id": new_id}
-
-    async def update_record(
-        self,
-        table_name: str,
-        record_id: str,
-        data: dict[str, Any],
-    ) -> dict[str, Any]:
-        self._ensure_content_table(table_name)
-        safe_data = data.copy()
-        for key in ["id", "created_at", "uuid"]:
-            safe_data.pop(key, None)
-        await self._memory.driver.update(table_name, record_id, safe_data)
-        return {"status": "success"}
-
     async def _query(self, sql: str, params: dict | None = None) -> list[dict[str, Any]]:
         rows = await self._memory.driver.query(sql, params or {})
         return serialize_rows(rows)
@@ -180,10 +157,3 @@ class MemoryInspectionService:
 
         if not normalized_query.startswith("SELECT"):
             raise ValueError("Query must start with SELECT.")
-
-    @staticmethod
-    def _ensure_content_table(table_name: str) -> None:
-        if not table_name.replace("_", "").isalnum():
-            raise ValueError("Invalid table name")
-        if table_name not in INSPECTION_TABLES:
-            raise PermissionError(f"Inspection writes are not allowed for table '{table_name}'")

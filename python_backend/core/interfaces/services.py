@@ -1,31 +1,8 @@
-from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Dict
+"""Retired legacy service ABC boundary.
 
-class IMemoryService(ABC):
-    """Abstract Interface for Memory Service"""
-    @abstractmethod
-    async def add_message(self, *args, **kwargs): pass
-    
-    @abstractmethod
-    async def get_history(self, *args, **kwargs): pass
-    
-    @abstractmethod
-    async def search_vectors(self, *args, **kwargs): pass
+Service orchestration now receives explicit dependencies at construction time. Domain
+driver contracts live in ``core.interfaces.driver`` and concrete service types are
+only referenced by the composition container for static typing.
+"""
 
-class ILLMManager(ABC):
-    """Abstract Interface for LLM Manager"""
-    @abstractmethod
-    async def chat_completion(self, *args, **kwargs): pass
-    
-    @abstractmethod
-    def get_client(self, *args, **kwargs): pass
-
-class ISTTManager(ABC):
-    """Abstract Interface for STT Manager / Drivers"""
-    @abstractmethod
-    async def transcribe(self, audio_data: Any, **kwargs) -> str: pass
-
-class ITTSManager(ABC):
-    """Abstract Interface for TTS Manager"""
-    @abstractmethod
-    async def synthesize(self, text: str, **kwargs) -> Any: pass
+__all__: list[str] = []

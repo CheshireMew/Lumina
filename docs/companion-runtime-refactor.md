@@ -76,7 +76,7 @@ Worker Runtime
   - TTS worker
   - Vision worker
 
-PostgreSQL + pgvector
+Local SQLite (default) / PostgreSQL + pgvector (optional)
   - session history
   - conversation log
   - episodic memory
@@ -443,7 +443,7 @@ companion:
 
 capabilities:
   selected_providers:
-    memory: driver.memory.postgres
+    memory: driver.memory.sqlite
     llm.chat: driver.llm.pollinations
     stt: driver.stt.sensevoice
     tts: driver.tts.edge
@@ -456,11 +456,12 @@ capabilities:
 runtime:
   network:
     host: 127.0.0.1
-    memory_port: 8010
+    core_port: 8010
     stt_port: 8765
     tts_port: 8766
 
 memory:
+  sqlite_file: database/lumina.sqlite3
   postgres: {}
   history_limit: 20
   overflow_strategy: slide

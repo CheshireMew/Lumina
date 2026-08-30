@@ -18,7 +18,7 @@ const providerModes: Array<{
     label: string;
 }> = [
     { id: FREE_LLM_PROVIDER_ID, icon: Wand2, label: "Pollinations" },
-    { id: CUSTOM_LLM_PROVIDER_ID, icon: Cpu, label: "Custom (Pro)" },
+    { id: CUSTOM_LLM_PROVIDER_ID, icon: Cpu, label: "自定义服务" },
 ];
 
 const ProviderModeToggle: FC<ProviderModeToggleProps> = ({
@@ -31,8 +31,10 @@ const ProviderModeToggle: FC<ProviderModeToggleProps> = ({
 
             return (
                 <button
+                    type="button"
                     key={type.id}
                     onClick={() => onChange(type.id)}
+                    aria-pressed={providerId === type.id}
                     style={providerToggleStyles.button(providerId === type.id)}
                 >
                     <Icon size={16} strokeWidth={2.5} /> {type.label}

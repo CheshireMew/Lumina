@@ -11,38 +11,36 @@ sys.path.append(str(PROJECT_ROOT))
 from core.security.audit import AuditLogger
 
 
-class PoolStub:
+class StoreStub:
     def __init__(self):
-        self.execute = AsyncMock()
-
-
-class BusStub:
-    def __init__(self):
-        self.pool = PoolStub()
-
-    async def get_pool(self):
-        return self.pool
+        self.write_audit_event = AsyncMock()
 
 
 @pytest.mark.anyio
-async def test_audit_logger_uses_lifecycle_bus_pool_contract():
-    bus = BusStub()
-    with patch("services.infra.bus_factory.get_lifecycle_bus", return_value=bus):
+async def test_audit_logger_uses_local_state_store_contract():
+    store = StoreStub()
+    with patch("services.infra.local_state_store.get_local_state_store", return_value=store):
         await AuditLogger.log_event(
             actor_id="module.test",
             action="permission_request",
             target="filesystem.read_assets",
         )
 
-    bus.pool.execute.assert_awaited_once()
+    store.write_audit_event.assert_awaited_once_with(
+        actor_id="module.test",
+        action="permission_request",
+        target="filesystem.read_assets",
+        status="granted",
+        metadata=None,
+    )
 
 
 @pytest.mark.anyio
 async def test_audit_logger_reliable_write_propagates_failure():
-    bus = BusStub()
-    bus.pool.execute = AsyncMock(side_effect=RuntimeError("audit db failed"))
+    store = StoreStub()
+    store.write_audit_event = AsyncMock(side_effect=RuntimeError("audit db failed"))
 
-    with patch("services.infra.bus_factory.get_lifecycle_bus", return_value=bus):
+    with patch("services.infra.local_state_store.get_local_state_store", return_value=store):
         with pytest.raises(RuntimeError, match="audit db failed"):
             await AuditLogger.log_event(
                 actor_id="module.test",

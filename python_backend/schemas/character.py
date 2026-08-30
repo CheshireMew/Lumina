@@ -3,20 +3,60 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Any
 
+from config.defaults import (
+    DEFAULT_LIVE2D_FIT_SCALE,
+    DEFAULT_LIVE2D_IDLE_MOTION_GROUP,
+    DEFAULT_LIVE2D_IDLE_THRESHOLD_MS,
+    DEFAULT_LIVE2D_PARAMETER_IDS,
+    DEFAULT_LIVE2D_TAP_HIT_AREA,
+    DEFAULT_LIVE2D_TAP_MOTION_GROUP,
+    DEFAULT_LIVE2D_TIME_SCALE,
+    DEFAULT_LIVE2D_VERTICAL_POSITION_RATIO,
+    DEFAULT_TTS_PITCH,
+    DEFAULT_TTS_PROVIDER_ID,
+    DEFAULT_TTS_RATE,
+)
+
 
 class CharacterVoiceConfig(BaseModel):
-    service: str = "edge-tts"
+    service: str = DEFAULT_TTS_PROVIDER_ID
     voiceId: str = ""
-    rate: str = "+0%"
-    pitch: str = "+0Hz"
+    rate: str = DEFAULT_TTS_RATE
+    pitch: str = DEFAULT_TTS_PITCH
+
+
+class Live2DParameterBindings(BaseModel):
+    eyeBlinkLeft: str = DEFAULT_LIVE2D_PARAMETER_IDS["eyeBlinkLeft"]
+    eyeBlinkRight: str = DEFAULT_LIVE2D_PARAMETER_IDS["eyeBlinkRight"]
+    mouthOpen: str = DEFAULT_LIVE2D_PARAMETER_IDS["mouthOpen"]
+    headPan: str = DEFAULT_LIVE2D_PARAMETER_IDS["headPan"]
+    headTilt: str = DEFAULT_LIVE2D_PARAMETER_IDS["headTilt"]
+    headRoll: str = DEFAULT_LIVE2D_PARAMETER_IDS["headRoll"]
+    bodyPan: str = DEFAULT_LIVE2D_PARAMETER_IDS["bodyPan"]
+
+
+class Live2DBehaviorConfig(BaseModel):
+    idleMotionGroup: str = DEFAULT_LIVE2D_IDLE_MOTION_GROUP
+    tapMotionGroup: str = DEFAULT_LIVE2D_TAP_MOTION_GROUP
+    tapHitArea: str = DEFAULT_LIVE2D_TAP_HIT_AREA
+    idleThresholdMs: int = Field(default=DEFAULT_LIVE2D_IDLE_THRESHOLD_MS, ge=1_000)
+    fitScale: float = Field(default=DEFAULT_LIVE2D_FIT_SCALE, gt=0)
+    verticalPositionRatio: float = Field(
+        default=DEFAULT_LIVE2D_VERTICAL_POSITION_RATIO,
+        ge=0,
+        le=1,
+    )
+    timeScale: float = Field(default=DEFAULT_LIVE2D_TIME_SCALE, gt=0)
+    parameters: Live2DParameterBindings = Field(default_factory=Live2DParameterBindings)
 
 
 class CharacterAvatarConfig(BaseModel):
     type: str = "live2d"
-    model: str = "Hiyori"
+    model: str = ""
     modelUrl: str = ""
     cubismCoreUrl: str = ""
     rendererRuntimeUrl: str = ""
+    behavior: Live2DBehaviorConfig = Field(default_factory=Live2DBehaviorConfig)
 
 
 class CharacterConfig(BaseModel):
@@ -38,6 +78,9 @@ class CharacterConfig(BaseModel):
         raw = dict(payload or {})
         voice_config = raw.get("voice_config") if isinstance(raw.get("voice_config"), dict) else {}
         avatar = raw.get("avatar") if isinstance(raw.get("avatar"), dict) else {}
+        service = str(voice_config.get("service") or DEFAULT_TTS_PROVIDER_ID)
+        if service == "edge-tts":
+            service = DEFAULT_TTS_PROVIDER_ID
         return cls(
             id=raw.get("character_id") or raw.get("id") or character_id,
             name=raw.get("name") or character_id,
@@ -46,13 +89,14 @@ class CharacterConfig(BaseModel):
             systemPrompt=raw.get("system_prompt") or raw.get("systemPrompt", ""),
             avatar=CharacterAvatarConfig(
                 type=avatar.get("type", "live2d"),
-                model=avatar.get("model", "Hiyori"),
+                model=avatar.get("model", ""),
+                behavior=avatar.get("behavior") or {},
             ),
             voiceConfig=CharacterVoiceConfig(
-                service=voice_config.get("service", "edge-tts"),
+                service=service,
                 voiceId=voice_config.get("voiceId") or voice_config.get("voice_id", ""),
-                rate=voice_config.get("rate", "+0%"),
-                pitch=voice_config.get("pitch", "+0Hz"),
+                rate=voice_config.get("rate", DEFAULT_TTS_RATE),
+                pitch=voice_config.get("pitch", DEFAULT_TTS_PITCH),
             ),
             heartbeatEnabled=raw.get("heartbeat_enabled", raw.get("heartbeatEnabled", True)) is not False,
             proactiveChatEnabled=raw.get("proactive_chat_enabled", raw.get("proactiveChatEnabled", True)) is not False,
@@ -71,6 +115,7 @@ class CharacterConfig(BaseModel):
             "avatar": {
                 "type": self.avatar.type,
                 "model": self.avatar.model,
+                "behavior": self.avatar.behavior.model_dump(),
             },
             "voice_config": self.voiceConfig.model_dump(),
             "heartbeat_enabled": self.heartbeatEnabled,

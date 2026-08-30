@@ -1,44 +1,50 @@
 
-import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from core.protocol import EventPacket, EventType
-from core.events.bus import get_event_bus, Event
+import asyncio
 import json
+import logging
+import uuid
+from dataclasses import dataclass, field
+
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+
+from core.events.bus import Event
+from core.events.bus import EventBusError
+from core.protocol import EventPacket, EventType
+from routers.deps import get_gateway_service
 
 logger = logging.getLogger("Gateway")
 router = APIRouter(prefix="/lumina/gateway", tags=["Gateway"])
+
+@dataclass
+class GatewayConnection:
+    websocket: WebSocket
+    client_id: str
+    session_id: int
+    generation: int
+    sequence_number: int = 0
+    send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    def next_sequence(self) -> int:
+        self.sequence_number += 1
+        return self.sequence_number
+
 
 class GatewayService:
     """
     EventBus-driven Gateway.
     Acts as a bridge between WebSocket clients and the internal EventBus.
     """
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(GatewayService, cls).__new__(cls)
-            cls._instance.initialized = False
-        return cls._instance
-
-    def __init__(self):
-        if self.initialized:
-            return
-        self.initialized = True
-        
-        self.active_connections: list[WebSocket] = []
-        self._session_id = 0 
-        self._sequences: dict[int, int] = {} # [Architecture 4.2] Per-session sequence tracker
-        self.bus = get_event_bus()
+    def __init__(self, bus):
+        self._connections: dict[str, GatewayConnection] = {}
+        self._session_snapshots: dict[str, tuple[int, int]] = {}
+        self.bus = bus
+        self._subscription_ids: list[int] = []
         self._subscribe_all()
-        logger.info("✅ GatewayService Initialized (Singleton)")
+        logger.info("GatewayService initialized")
 
-    def _get_next_sequence(self, session_id: int) -> int:
-        """Increment and return the next sequence number for a session."""
-        current = self._sequences.get(session_id, 0)
-        next_seq = current + 1
-        self._sequences[session_id] = next_seq
-        return next_seq
+    @property
+    def active_connections(self) -> list[WebSocket]:
+        return [state.websocket for state in self._connections.values()]
 
     def _subscribe_all(self):
         """Subscribe to all outbound events."""
@@ -46,6 +52,7 @@ class GatewayService:
         outbound_events = [
             EventType.BRAIN_THINKING,
             EventType.BRAIN_RESPONSE,
+            EventType.BRAIN_REASONING,
             EventType.BRAIN_RESPONSE_END,
             EventType.COGNITIVE_STATE,
             EventType.SYSTEM_STATUS,
@@ -53,79 +60,136 @@ class GatewayService:
             EventType.EMOTION_CHANGED,
         ]
         
-        for evt in outbound_events:
-            self.bus.subscribe(evt, self.handle_outbound_event)
+        for event_type in outbound_events:
+            self._subscription_ids.append(
+                self.bus.subscribe(event_type, self.handle_outbound_event)
+            )
 
-    async def publish_session_reset(self, source="system"):
-        """Start a new frontend interaction session after context reset."""
-        self._session_id += 1
-        pkt = EventPacket(
-            session_id=self._session_id,
-            type=EventType.CONTROL_SESSION,
-            source=source,
-            payload={"session_id": self._session_id, "action": "start"}
+    def bind_bus(self, bus) -> None:
+        for subscription_id in self._subscription_ids:
+            self.bus.unsubscribe(subscription_id)
+        self._subscription_ids = []
+        self.bus = bus
+        self._subscribe_all()
+
+    async def publish_session_reset(
+        self,
+        client_id: str,
+        *,
+        source: str = "system",
+        turn_id: str | None = None,
+    ) -> int:
+        """Advance exactly one connected client's session generation."""
+        state = self._connections.get(client_id)
+        if state is None:
+            raise KeyError(f"Gateway client is not connected: {client_id}")
+
+        state.session_id += 1
+        state.generation += 1
+        state.sequence_number = 0
+        self._session_snapshots[client_id] = (state.session_id, state.generation)
+        await self._send_packet(
+            state,
+            EventPacket(
+                client_id=client_id,
+                turn_id=turn_id,
+                session_id=state.session_id,
+                generation=state.generation,
+                type=EventType.CONTROL_SESSION,
+                source="core.gateway",
+                payload={
+                    "session_id": state.session_id,
+                    "generation": state.generation,
+                    "client_id": client_id,
+                    "action": "reset",
+                    "requested_by": source,
+                },
+            ),
         )
-        await self.bus.emit(pkt.type, pkt, source=source)
-        return self._session_id
+        return state.session_id
 
     async def handle_outbound_event(self, event: Event):
         """
         Forward internal events to WebSocket.
         Expects event.data to be an EventPacket or a dict we can wrap.
         """
-        if not self.active_connections:
+        if not self._connections:
             return
 
-        payload_to_send = None
-        
-        # 1. If data is already EventPacket, send as is
+        packet: EventPacket
         if isinstance(event.data, EventPacket):
-            payload_to_send = event.data.dict()
-        # 2. If data is dict, wrap it
+            packet = event.data
         elif isinstance(event.data, dict):
-            # Try to extract session_id from the dict data
-            sid = event.data.get("session_id", 0)
-            payload_to_send = EventPacket(
-                session_id=sid,
+            packet = EventPacket(
+                client_id=str(event.data.get("client_id") or ""),
+                turn_id=event.data.get("turn_id"),
+                session_id=int(event.data.get("session_id") or 0),
+                generation=int(event.data.get("generation") or 0),
                 type=event.type,
                 source=event.source,
                 payload=event.data,
-                timestamp=event.timestamp
-            ).dict()
+            )
         else:
-            # Fallback for other types (e.g. strings)
-            # Create a generic packet
-            payload_to_send = EventPacket(
+            packet = EventPacket(
                 session_id=0,
                 type=event.type,
                 source=event.source,
                 payload={"data": str(event.data)},
-                timestamp=event.timestamp
-            ).dict()
+            )
 
-        # [Architecture 4.2] Tier C: Sequence Injection
-        sid = payload_to_send.get("session_id", 0)
-        payload_to_send["sequence_number"] = self._get_next_sequence(sid)
+        if packet.client_id:
+            state = self._connections.get(packet.client_id)
+            if state is not None:
+                await self._send_packet(state, packet)
+            return
 
-        # Broadcast
-        # logger.debug(f"Broadcasting {event.type} (# {payload_to_send['sequence_number']}) to {len(self.active_connections)} clients")
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(payload_to_send)
-            except Exception as e:
-                logger.error(f"Failed to send to WS: {e}")
-                # Cleanup handled in 'connect' loop usually, but good to be safe
+        if packet.type not in {EventType.SYSTEM_STATUS, EventType.EMOTION_CHANGED}:
+            logger.warning("Dropping unrouted gateway event type=%s", packet.type)
+            return
+
+        for state in list(self._connections.values()):
+            await self._send_packet(state, packet)
 
     async def connect(self, websocket: WebSocket):
-        # [Security] Connection Limit
-        if len(self.active_connections) > 100:
-             logger.warning("🚨 Gateway Connection Limit Reached (100). Rejecting.")
-             await websocket.close(code=1013) # Try Again Later
-             return
+        if len(self._connections) >= 100:
+            logger.warning("Gateway connection limit reached")
+            await websocket.close(code=1013)
+            return
+
+        requested_client_id = str(websocket.query_params.get("client_id") or "").strip()
+        client_id = requested_client_id or str(uuid.uuid4())
+        session_id, generation = self._session_snapshots.get(client_id, (1, 1))
 
         await websocket.accept()
-        self.active_connections.append(websocket)
-        logger.info(f"Client Connected [Session: {self._session_id}]")
+        previous = self._connections.pop(client_id, None)
+        if previous is not None:
+            await previous.websocket.close(code=1012)
+
+        state = GatewayConnection(
+            websocket=websocket,
+            client_id=client_id,
+            session_id=session_id,
+            generation=generation,
+        )
+        self._connections[client_id] = state
+        self._session_snapshots[client_id] = (session_id, generation)
+        logger.info("Gateway client connected client_id=%s session=%s", client_id, session_id)
+        await self._send_packet(
+            state,
+            EventPacket(
+                client_id=client_id,
+                session_id=session_id,
+                generation=generation,
+                type=EventType.CONTROL_SESSION,
+                source="core.gateway",
+                payload={
+                    "action": "ready",
+                    "client_id": client_id,
+                    "session_id": session_id,
+                    "generation": generation,
+                },
+            ),
+        )
         
         # ... (init status)
 
@@ -134,67 +198,168 @@ class GatewayService:
                 try:
                     data = await websocket.receive_text()
                     
-                    # [Security] Message Size Limit (5MB)
-                    # Prevents memory exhaustion attacks
-                    if len(data) > 5 * 1024 * 1024:
-                         logger.warning("🚨 WS Message too large. Dropping.")
-                         continue
-                    
-                    # ... (rest of loop)
+                    if len(data.encode("utf-8")) > 1024 * 1024:
+                        await self._send_ack(
+                            state,
+                            request_id="unknown",
+                            action="unknown",
+                            status="rejected",
+                            details="message_too_large",
+                        )
+                        continue
                     
                     # Handle raw ping first
                     if data == "ping":
                         await websocket.send_text("pong")
                         continue
 
-                    # Log raw data for debugging (Masked)
-                    preview = data[:50] + "..." if len(data) > 50 else data
-                    logger.debug(f"RAW WS RECV: {preview}")
-                    
+                    json_data = {}
                     try:
                         json_data = json.loads(data)
-                    except json.JSONDecodeError:
-                        logger.warning(f"Gateway received invalid JSON: {data[:50]}...")
+                        packet = EventPacket(**json_data)
+                    except (json.JSONDecodeError, ValueError) as exc:
+                        logger.warning("Gateway rejected invalid packet bytes=%s: %s", len(data), exc)
+                        await self._send_ack(
+                            state,
+                            request_id=str(json_data.get("trace_id") or "unknown"),
+                            action=str(json_data.get("type") or "unknown"),
+                            status="rejected",
+                            details="invalid_packet",
+                        )
                         continue
                     
-                    logger.info(f"GATEWAY INPUT: {json_data.get('type')} from {json_data.get('source')}")
-                    
-                    # Parse Packet
-                    packet = EventPacket(**json_data)
-                    
-                    # Routing
-                    if packet.type == EventType.CONTROL_SESSION:
-                         # Forward to system (e.g. for clearing context)
-                         await self.bus.emit(EventType.CONTROL_SESSION, packet, source="frontend") 
-                    elif packet.type == EventType.INPUT_TEXT:
-                        logger.debug("Gateway Emitting INPUT_TEXT")
-                        packet.type = EventType.INPUT_TEXT
-                        await self.bus.emit(EventType.INPUT_TEXT, packet, source="frontend")
-                    elif packet.type == EventType.INPUT_AUDIO:
-                        await self.bus.emit(EventType.INPUT_AUDIO, packet, source="frontend")
-                    else:
-                        await self.bus.emit(packet.type, packet, source="frontend")
+                    logger.info(
+                        "Gateway input type=%s source=%s bytes=%s",
+                        packet.type,
+                        packet.source,
+                        len(data.encode("utf-8")),
+                    )
+
+                    request_id = packet.trace_id
+                    packet.client_id = client_id
+                    packet.session_id = state.session_id
+                    packet.generation = state.generation
+                    if packet.type == EventType.INPUT_TEXT:
+                        packet.turn_id = packet.turn_id or request_id
+
+                    try:
+                        handlers = await self.bus.emit(
+                            packet.type,
+                            packet,
+                            source="frontend",
+                        )
+                    except EventBusError as exc:
+                        logger.warning("Gateway request dispatch failed: %s", exc)
+                        await self._send_ack(
+                            state,
+                            request_id=request_id,
+                            action=packet.type,
+                            status="rejected",
+                            details="dispatch_failed",
+                            turn_id=packet.turn_id,
+                        )
+                        continue
+                    if handlers <= 0:
+                        await self._send_ack(
+                            state,
+                            request_id=request_id,
+                            action=packet.type,
+                            status="rejected",
+                            details="no_handler",
+                            turn_id=packet.turn_id,
+                        )
+                        continue
+
+                    await self._send_ack(
+                        state,
+                        request_id=request_id,
+                        action=packet.type,
+                        status="accepted",
+                        turn_id=packet.turn_id,
+                    )
 
                 except (WebSocketDisconnect, RuntimeError) as e:
                     logger.info(f"Client Disconnected ({type(e).__name__}): {e}")
                     break
-                except json.JSONDecodeError:
-                    logger.warning("Gateway received invalid JSON")
-                    continue
                 except Exception as e:
-                    logger.error(f"Error processing message: {e}")
+                    logger.exception("Gateway connection failed: %s", e)
                     break
                     
         finally:
-            logger.info("Cleaning up connection...")
-            if websocket in self.active_connections:
-                self.active_connections.remove(websocket)
+            current = self._connections.get(client_id)
+            if current is state:
+                self._connections.pop(client_id, None)
+            logger.info("Gateway client disconnected client_id=%s", client_id)
 
-# Singleton
-gateway_service = GatewayService()
+    async def _send_ack(
+        self,
+        state: GatewayConnection,
+        *,
+        request_id: str,
+        action: str,
+        status: str,
+        details: str = "",
+        turn_id: str | None = None,
+    ) -> None:
+        await self._send_packet(
+            state,
+            EventPacket(
+                client_id=state.client_id,
+                turn_id=turn_id,
+                session_id=state.session_id,
+                generation=state.generation,
+                type=EventType.CONTROL_ACK,
+                source="core.gateway",
+                payload={
+                    "request_id": request_id,
+                    "status": status,
+                    "action": action,
+                    "details": details,
+                },
+            ),
+        )
+
+    async def _send_packet(
+        self,
+        state: GatewayConnection,
+        packet: EventPacket,
+    ) -> None:
+        if packet.session_id not in {0, state.session_id}:
+            return
+        if packet.generation not in {0, state.generation}:
+            return
+
+        payload = packet.model_copy(
+            update={
+                "client_id": state.client_id,
+                "session_id": state.session_id,
+                "generation": state.generation,
+                "sequence_number": state.next_sequence(),
+            }
+        ).model_dump()
+        try:
+            async with state.send_lock:
+                await state.websocket.send_json(payload)
+        except Exception as exc:
+            logger.warning("Gateway send failed client_id=%s: %s", state.client_id, exc)
+
+    async def close(self) -> None:
+        for subscription_id in self._subscription_ids:
+            self.bus.unsubscribe(subscription_id)
+        self._subscription_ids = []
+        connections = list(self._connections.values())
+        self._connections.clear()
+        for state in connections:
+            try:
+                await state.websocket.close(code=1001)
+            except Exception:
+                logger.debug("Gateway socket already closed client_id=%s", state.client_id)
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    gateway_service: GatewayService = Depends(get_gateway_service),
+):
     # [Security] Origin Check
     # Prevent CSWSH (Cross-Site WebSocket Hijacking)
     allowed_origins = ["http://localhost", "http://127.0.0.1", "app://", "file://"]

@@ -17,4 +17,4 @@ def mount_builtin_assets(app: FastAPI, logger) -> None:
 
         route_name = route.strip("/").replace("/", ".")
         app.mount(route, StaticFiles(directory=str(directory)), name=route_name)
-        logger.info("Mounted builtin assets %s from %s", route, directory)
+        logger.debug("Mounted builtin assets %s from %s", route, directory)

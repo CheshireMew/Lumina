@@ -40,21 +40,10 @@ class WorkerConnection:
 class WorkerControlHub:
     """
     Central hub for managing Worker WebSocket connections.
-    Singleton pattern for Main Process.
+    Main-process control channel for worker runtimes.
     """
-    _instance: Optional["WorkerControlHub"] = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
-    
-    def __init__(self):
-        if self._initialized:
-            return
-        self._initialized = True
-        
+    def __init__(self, discovery):
+        self.discovery = discovery
         self._workers: Dict[str, WorkerConnection] = {}
         self._message_handlers: Dict[WsMessageType, List[Callable]] = {}
         self._cleanup_task: Optional[asyncio.Task] = None
@@ -110,8 +99,7 @@ class WorkerControlHub:
             )
 
             try:
-                from services.infra.service_discovery import discovery
-                discovery.register(
+                self.discovery.register(
                     worker_id=worker_id,
                     host=reg.host,
                     port=reg.port,
@@ -211,8 +199,7 @@ class WorkerControlHub:
                 update_worker_status(worker_id, worker.worker_type, payload.load)
 
             try:
-                from services.infra.service_discovery import discovery
-                discovery.register(
+                self.discovery.register(
                     worker_id=worker_id,
                     host="127.0.0.1",
                     port=worker.port,
@@ -341,8 +328,3 @@ class WorkerControlHub:
                 logger.debug(f"Error closing websocket for {wid}: {e}")
         self._workers.clear()
         logger.info("🛑 WorkerControlHub shutdown complete")
-
-
-# Singleton accessor
-def get_worker_control_hub() -> WorkerControlHub:
-    return WorkerControlHub()

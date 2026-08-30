@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 
 import asyncpg
 
-from .sql_utils import sanitize_column_name, sanitize_table_name
+from core.db.sql_identifiers import sanitize_column_name, sanitize_table_name
 
 logger = logging.getLogger("PostgresDriver.Search")
 

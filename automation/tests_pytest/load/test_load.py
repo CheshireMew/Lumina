@@ -245,7 +245,7 @@ def test_concurrent_users_load():
 @pytest.mark.load
 @pytest.mark.slow
 def test_memory_service_under_load():
-    """Test memory service under load"""
+    """Test memory endpoint under load"""
     import asyncio
     import httpx
     require_core_service()
@@ -275,7 +275,7 @@ def test_memory_service_under_load():
     try:
         asyncio.run(stress_memory_service())
     except Exception as e:
-        pytest.skip(f"Memory service not available: {e}")
+        pytest.skip(f"Memory endpoint not available: {e}")
 
 
 @pytest.mark.load

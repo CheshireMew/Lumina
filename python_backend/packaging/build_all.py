@@ -152,23 +152,11 @@ def stage_voiceprint_runtime(project_root: Path, dist_dir: Path, contract: dict)
     write_hashes(target_dir)
 
 
-def stage_vision_runtime(project_root: Path, dist_dir: Path, contract: dict):
-    definition = runtime_def(contract, "vision-runtime")
-    target_dir = reset_runtime_dir(dist_dir, "vision-runtime")
-    write_runtime_metadata(target_dir, definition)
-    shutil.copy2(
-        project_root / "python_backend" / "requirements-vision.txt",
-        target_dir / "requirements-vision.txt",
-    )
-    (target_dir / "data" / "models").mkdir(parents=True, exist_ok=True)
-    write_hashes(target_dir)
-
-
 def stage_worker_runtimes(project_root: Path, dist_dir: Path, build_dir: Path, contract: dict):
     stage_runtime_copy(project_root, dist_dir, build_dir, contract, "stt-runtime", ["stt_sensevoice"])
     stage_runtime_copy(project_root, dist_dir, build_dir, contract, "tts-runtime", ["tts_edge"])
     stage_voiceprint_runtime(project_root, dist_dir, contract)
-    stage_vision_runtime(project_root, dist_dir, contract)
+    stage_runtime_copy(project_root, dist_dir, build_dir, contract, "vision-runtime", ["vision_llm"])
     runtime_build = dist_dir / "_runtime_build"
     if runtime_build.exists():
         shutil.rmtree(runtime_build)

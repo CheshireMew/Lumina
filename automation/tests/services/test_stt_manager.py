@@ -94,6 +94,20 @@ def test_stt_provider_snapshot_keeps_intent_and_runtime_state_separate():
     assert state["active_status"] == "stopped"
 
 
+def test_provider_snapshot_keeps_failed_driver_error_after_active_id_is_cleared():
+    manager = make_manager()
+    driver = FakeSTTDriver()
+    manager.register_driver(driver)
+    manager.begin_transition(driver.id)
+    manager.mark_error("模型加载失败")
+    manager.active_driver_id = "none"
+
+    state = manager.snapshot_provider_state(driver.id)
+
+    assert state["active_status"] == "error"
+    assert state["error"] == "模型加载失败"
+
+
 @pytest.mark.anyio
 async def test_stt_startup_requires_selected_provider():
     manager = make_manager()

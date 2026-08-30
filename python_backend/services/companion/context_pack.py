@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -83,19 +84,23 @@ class CompanionContextPackBuilder:
         if not isinstance(companion_context, CompanionContext):
             raise ValueError("CompanionContextPackBuilder requires CompanionContext")
 
-        history = await self._recent_session_history(companion_context, history_limit)
-        memories = ""
-        if enable_memory and history:
-            memories = await self._relevant_memories(
+        memory_request = (
+            self._relevant_memories(
                 companion_context,
                 user_message,
             )
-
-        system_prompt = await self.soul_service.get_system_prompt(
-            {
-                "companion_context": companion_context,
-                "context_pack": "companion_turn",
-            }
+            if enable_memory
+            else asyncio.sleep(0, result="")
+        )
+        history, memories, system_prompt = await asyncio.gather(
+            self._recent_session_history(companion_context, history_limit),
+            memory_request,
+            self.soul_service.get_system_prompt(
+                {
+                    "companion_context": companion_context,
+                    "context_pack": "companion_turn",
+                }
+            ),
         )
 
         return CompanionContextPack(
@@ -118,7 +123,7 @@ class CompanionContextPackBuilder:
         history = getattr(state, "short_term_history", []) or []
         return [
             {"role": item["role"], "content": item["content"]}
-            for item in history[-history_limit:]
+            for item in history[-(history_limit * 2):]
             if item.get("role") and item.get("content")
         ]
 

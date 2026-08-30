@@ -1,3 +1,4 @@
+import subprocess
 import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -22,6 +23,8 @@ class FakeProcess:
         self.terminated = True
 
     def wait(self, timeout=None):
+        if self.returncode is None and not self.terminated:
+            raise subprocess.TimeoutExpired(str(self.pid), timeout)
         return self.returncode or 0
 
     def kill(self):
@@ -122,12 +125,13 @@ def test_is_running_detects_live_and_dead_processes():
     assert "dead" not in manager.workers
 
 
-def test_stop_worker_terminates_managed_process_and_removes_record():
+@pytest.mark.anyio
+async def test_stop_worker_terminates_managed_process_and_removes_record():
     manager = build_process_manager()
     process = FakeProcess()
     manager.workers["worker:test"] = WorkerProcess(process, time.time())
 
-    manager.stop_worker("worker:test")
+    await manager.stop_worker("worker:test")
 
     assert process.terminated is True
     assert "worker:test" not in manager.workers

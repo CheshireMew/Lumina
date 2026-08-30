@@ -25,7 +25,7 @@ class Capability(IWorkerCapability):
     async def on_startup(self, app: FastAPI):
         state = get_tts_runtime_state()
         state.reset()
-        container = app.state.container
+        container = app.state.services
         manager = TTSProviderManager(config=app_settings)
         await manager.register_drivers()
         

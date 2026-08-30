@@ -1,3 +1,4 @@
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -93,13 +94,16 @@ async def test_add_memory_uses_soul_character_and_updates_interaction():
         interaction_recorder=interaction_recorder,
     )
 
-    assert response == {"status": "success", "id": "turn-1", "storage": "test-memory"}
+    turn_id = response["id"]
+    assert response == {"status": "success", "id": turn_id, "storage": "test-memory"}
+    assert str(uuid.UUID(turn_id)) == turn_id
     memory_service.record_turn.assert_awaited_once_with(
         CompanionContext(session_id=0, user_id=DEFAULT_USER_ID, character_id="sakura"),
         user_message="hello",
         assistant_message="hi",
         user_name="Ada",
         companion_name="Lumina",
+        turn_id=turn_id,
     )
     soul_service.update_last_interaction.assert_called_once_with()
     soul_service.on_interaction.assert_not_awaited()

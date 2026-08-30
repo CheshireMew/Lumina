@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 import subprocess
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +23,7 @@ class ProcessManager:
         self._shutdown_event = asyncio.Event()
         self._managed_scripts: Dict[str, Optional[str]] = {}
         self.worker_runtime_registry = worker_runtime_registry
+        self._workers_lock = threading.RLock()
         self.health_probe = HealthProbe()
         self.launcher = WorkerLauncher(worker_runtime_registry)
         self.supervisor = WorkerSupervisor(
@@ -108,13 +111,14 @@ class ProcessManager:
             logger.info(f"Spawning Worker: {worker_id} ({display_name})...")
             proc = self.launcher.launch(worker_id, launch_config)
 
-            self.workers[worker_id] = WorkerProcess(
-                process=proc,
-                start_time=time.time(),
-                policy=policy,
-                launch_config=launch_config,
-            )
-            self._managed_scripts[worker_id] = target_script
+            with self._workers_lock:
+                self.workers[worker_id] = WorkerProcess(
+                    process=proc,
+                    start_time=time.time(),
+                    policy=policy,
+                    launch_config=launch_config,
+                )
+                self._managed_scripts[worker_id] = target_script
 
             logger.info(f"Worker {worker_id} started (PID: {proc.pid})")
             return True
@@ -143,40 +147,38 @@ class ProcessManager:
         is_alive, probe_kind = self.health_probe.is_service_reachable(
             port,
             health_path,
+            expected_target=worker_id,
+            owner_id=os.environ.get("LUMINA_RUNTIME_OWNER"),
         )
         if not is_alive:
             return False
 
-        if probe_kind == "http":
-            logger.info(
-                f"Service {worker_id} detected via HTTP Probe ({port}{health_path})."
-            )
-        else:
-            logger.info(
-                f"Service {worker_id} detected via TCP Port {port} (HTTP failed)."
-            )
+        logger.debug(
+            f"Service {worker_id} detected via verified HTTP probe ({port}{health_path})."
+        )
 
         worker = WorkerProcess(None, time.time())
         worker.is_external = True
         self.workers[worker_id] = worker
         return True
 
-    def stop_worker(self, worker_id: str):
-        if worker_id not in self.workers:
+    async def stop_worker(self, worker_id: str):
+        with self._workers_lock:
+            worker = self.workers.get(worker_id)
+        if worker is None:
             return
 
         logger.info(f"Stopping worker {worker_id}...")
-        worker = self.workers[worker_id]
 
-        if hasattr(worker, "stop") and asyncio.iscoroutinefunction(worker.stop):
+        stop = getattr(worker, "stop", None)
+        if callable(stop):
             try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(worker.stop())
-                logger.info(f"Scheduled async stop for {worker_id}")
-            except RuntimeError:
-                pass
+                result = stop()
+                if asyncio.iscoroutine(result):
+                    await result
             finally:
-                del self.workers[worker_id]
+                with self._workers_lock:
+                    self.workers.pop(worker_id, None)
             return
 
         try:
@@ -185,19 +187,38 @@ class ProcessManager:
                     f"Worker {worker_id} is external. Cannot stop it via ProcessManager."
                 )
             elif hasattr(worker, "process") and worker.process:
-                worker.process.terminate()
+                port, _ = self._resolve_health_target(worker_id)
+                if port:
+                    await asyncio.to_thread(
+                        self.health_probe.request_shutdown,
+                        port,
+                        owner_id=os.environ.get("LUMINA_RUNTIME_OWNER"),
+                    )
                 try:
-                    worker.process.wait(timeout=5)
+                    await asyncio.to_thread(worker.process.wait, timeout=5)
                 except subprocess.TimeoutExpired:
-                    logger.warning(f"Worker {worker_id} ignored terminate, killing...")
-                    worker.process.kill()
+                    logger.warning("Worker %s ignored graceful shutdown; terminating", worker_id)
+                    worker.process.terminate()
+                    try:
+                        await asyncio.to_thread(worker.process.wait, timeout=2)
+                    except subprocess.TimeoutExpired:
+                        logger.warning("Worker %s ignored terminate; killing process tree", worker_id)
+                        if os.name == "nt" and worker.process.pid:
+                            await asyncio.to_thread(
+                                subprocess.run,
+                                ["taskkill", "/PID", str(worker.process.pid), "/T", "/F"],
+                                check=False,
+                                capture_output=True,
+                            )
+                        else:
+                            worker.process.kill()
             else:
                 logger.warning(f"Worker {worker_id} has no process handle.")
         except Exception as e:
             logger.error(f"Error stopping worker {worker_id}: {e}")
         finally:
-            if worker_id in self.workers:
-                del self.workers[worker_id]
+            with self._workers_lock:
+                self.workers.pop(worker_id, None)
             logger.info(f"Worker {worker_id} stopped.")
 
     def is_running(self, worker_id: str) -> bool:
@@ -228,7 +249,12 @@ class ProcessManager:
         if not port:
             return True
 
-        is_alive, _ = self.health_probe.is_service_reachable(port, health_path)
+        is_alive, _ = self.health_probe.is_service_reachable(
+            port,
+            health_path,
+            expected_target=worker_id,
+            owner_id=os.environ.get("LUMINA_RUNTIME_OWNER"),
+        )
         if is_alive:
             return True
 
@@ -262,5 +288,8 @@ class ProcessManager:
     async def shutdown_all(self):
         logger.info("ProcessManager shutting down all workers...")
         self._shutdown_event.set()
-        for worker_id in list(self.workers.keys()):
+        await self.supervisor.stop()
+        await asyncio.gather(*(
             self.stop_worker(worker_id)
+            for worker_id in list(self.workers.keys())
+        ))

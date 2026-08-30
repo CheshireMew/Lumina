@@ -112,7 +112,6 @@ async def all_mock_servers(mock_llm_server, mock_memory_server):
 def mock_container():
     """Provide a mocked ServiceContainer"""
     from services.container import ServiceContainer
-    ServiceContainer._instance = None
     container = ServiceContainer()
 
     # Add common mocks
@@ -132,12 +131,8 @@ def services(mock_container):
 
 @pytest.fixture(scope="function")
 def reset_container():
-    """Reset ServiceContainer singleton before/after test"""
-    from services.container import ServiceContainer
-    original = ServiceContainer._instance
-    ServiceContainer._instance = None
+    """Compatibility fixture for tests that need a clean local container."""
     yield
-    ServiceContainer._instance = original
 
 
 # ============================================================================
@@ -225,7 +220,7 @@ async def async_http_client():
 def service_urls():
     """Provide service endpoint URLs"""
     return {
-        "memory": "http://127.0.0.1:8010",
+        "core": "http://127.0.0.1:8010",
         "stt": "http://127.0.0.1:8765",
         "tts": "http://127.0.0.1:8766"
     }
@@ -300,12 +295,8 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def reset_singletons():
-    """Automatically reset singletons before each test"""
-    from services.container import ServiceContainer
-    original = ServiceContainer._instance
-    ServiceContainer._instance = None
+    """Keep the legacy fixture name without mutating production classes."""
     yield
-    ServiceContainer._instance = original
 
 
 # ============================================================================

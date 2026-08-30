@@ -102,10 +102,11 @@ class SoulService:
         if driver_id not in self._drivers:
             raise ValueError(f"Unknown Soul driver: {driver_id}")
 
+        update_fields = getattr(self.repo, "update_config_fields", None)
+        if not callable(update_fields):
+            raise RuntimeError("Soul repository does not support atomic config updates")
+        update_fields({SOUL_DRIVER_CONFIG_KEY: driver_id})
         self._active_driver = self._drivers[driver_id]
-        config = self.load_character_config()
-        config[SOUL_DRIVER_CONFIG_KEY] = driver_id
-        self.save_character_config(config)
         logger.info(f"Active Soul switched to: {driver_id}")
 
     async def get_system_prompt(self, context: Dict[str, Any] = None) -> str:

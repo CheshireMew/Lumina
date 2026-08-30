@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, List
 
-from core.db.interface import VectorDBInterface
+from core.interfaces.driver import BaseMemoryDriver
 
 logger = logging.getLogger("memory.store")
 
@@ -12,14 +12,14 @@ class MemoryItemStore:
 
     table_name = "memory_items"
 
-    def __init__(self, driver: VectorDBInterface):
+    def __init__(self, driver: BaseMemoryDriver):
         self._driver = driver
 
     @property
-    def driver(self) -> VectorDBInterface:
+    def driver(self) -> BaseMemoryDriver:
         return self._driver
 
-    def replace_driver(self, driver: VectorDBInterface):
+    def replace_driver(self, driver: BaseMemoryDriver):
         self._driver = driver
 
     async def create_memory_item(
@@ -36,8 +36,10 @@ class MemoryItemStore:
         confidence: float = 1.0,
         importance: float = 1.0,
         metadata: Dict | None = None,
+        memory_id: str | None = None,
     ) -> str:
         data = {
+            "id": memory_id,
             "character_id": character_id.lower(),
             "scope": scope,
             "memory_type": memory_type,
@@ -53,6 +55,8 @@ class MemoryItemStore:
             "updated_at": datetime.now(timezone.utc),
             "metadata": metadata or {},
         }
+        if memory_id is None:
+            data.pop("id")
         return await self.driver.create(self.table_name, data)
 
     async def search_vector(
@@ -112,23 +116,15 @@ class MemoryItemStore:
     ) -> List[Dict]:
         try:
             filters = self._filters(character_id, memory_types)
-            results = []
-            current_threshold = initial_threshold
-
-            for _ in range(3):
-                results = await self.driver.search_hybrid(
-                    query=query,
-                    vector=query_vector,
-                    table=self.table_name,
-                    limit=limit,
-                    threshold=current_threshold,
-                    vector_weight=vector_weight,
-                    filter_criteria=filters,
-                )
-
-                if len(results) >= min_results or current_threshold <= 0.25:
-                    break
-                current_threshold -= 0.1
+            results = await self.driver.search_hybrid(
+                query=query,
+                vector=query_vector,
+                table=self.table_name,
+                limit=limit,
+                threshold=min(initial_threshold, 0.25 if min_results else initial_threshold),
+                vector_weight=vector_weight,
+                filter_criteria=filters,
+            )
 
             memory_ids = [str(item.get("id")) for item in results if item.get("id")]
             if memory_ids:

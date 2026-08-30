@@ -1,12 +1,11 @@
 import Store from 'electron-store';
+import { DEFAULT_USER_NAME } from '../shared/productDefaults';
 
 interface UserSettings {
     backgroundImage?: string;
-    contextWindow?: number;
     isTTSEnabled?: boolean;
     live2d_high_dpi?: boolean;
     live2d_view_state?: Record<string, unknown>;
-    thinking_enabled?: boolean;
     userName?: string;
 }
 
@@ -14,10 +13,6 @@ const schema = {
     backgroundImage: {
         type: 'string',
         default: '',
-    },
-    contextWindow: {
-        type: 'number',
-        default: 50,
     },
     isTTSEnabled: {
         type: 'boolean',
@@ -34,13 +29,9 @@ const schema = {
             type: 'object',
         },
     },
-    thinking_enabled: {
-        type: 'boolean',
-        default: false,
-    },
     userName: {
         type: 'string',
-        default: 'Master',
+        default: DEFAULT_USER_NAME,
     }
 } as const;
 

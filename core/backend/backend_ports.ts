@@ -18,7 +18,7 @@ export class BackendPortConfigStore {
                 try {
                     const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
                     console.log("[BackendManager] Loaded ports from:", configPath);
-                    return { ...CONFIGURED_BACKEND_PORTS, ...data };
+                    return this.normalizePorts(data);
                 } catch (e) {
                     console.error("[BackendManager] Failed to parse ports.json:", e);
                 }
@@ -35,8 +35,21 @@ export class BackendPortConfigStore {
         return { ...CONFIGURED_BACKEND_PORTS };
     }
 
+    private normalizePorts(data: Partial<BackendPorts>): BackendPorts {
+        const ports = { ...CONFIGURED_BACKEND_PORTS };
+
+        for (const key of Object.keys(ports) as Array<keyof BackendPorts>) {
+            const value = data[key];
+            if (typeof value === "number") {
+                ports[key] = value;
+            }
+        }
+
+        return ports;
+    }
+
     public applyToServices(services: ServiceConfig[], ports: BackendPorts): void {
-        this.updatePort(services, "core", ports.memory_port);
+        this.updatePort(services, "core", ports.core_port);
         this.updatePort(services, "stt", ports.stt_port);
         this.updatePort(services, "tts", ports.tts_port);
 

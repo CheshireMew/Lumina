@@ -31,6 +31,14 @@ class IWorkerCapability(ABC):
         """Configuration key in default.yaml, e.g. 'stt' matches config.stt"""
         return self.name
 
+    def get_health_status(self) -> str:
+        """Report process health without claiming that a provider is ready."""
+        return "ok"
+
+    def get_health_details(self) -> Dict[str, Any]:
+        """Return optional capability-specific health metadata."""
+        return {}
+
     @abstractmethod
     def register_routes(self, app: FastAPI):
         """

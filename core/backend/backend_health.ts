@@ -4,7 +4,10 @@ import net from "net";
 import type { ServiceConfig } from "./types";
 
 export class BackendHealthProbe {
-    constructor(private readonly host: string = "127.0.0.1") {}
+    constructor(
+        private readonly host: string = "127.0.0.1",
+        private readonly ownerId: string,
+    ) {}
 
     public async checkServiceHealth(service: ServiceConfig): Promise<boolean> {
         try {
@@ -13,6 +16,28 @@ export class BackendHealthProbe {
                 timeout: 3000,
                 validateStatus: () => true,
             });
+            const runtime = response.data?.runtime;
+            return response.status === 200
+                && runtime?.product === "lumina"
+                && runtime?.protocolVersion === 1
+                && runtime?.target === service.name
+                && runtime?.ownerId === this.ownerId;
+        } catch {
+            return false;
+        }
+    }
+
+    public async requestShutdown(service: ServiceConfig): Promise<boolean> {
+        try {
+            const response = await axios.post(
+                `http://${this.host}:${service.port}/runtime/shutdown`,
+                {},
+                {
+                    timeout: 3000,
+                    headers: { "X-Lumina-Runtime-Owner": this.ownerId },
+                    validateStatus: () => true,
+                },
+            );
             return response.status === 200;
         } catch {
             return false;

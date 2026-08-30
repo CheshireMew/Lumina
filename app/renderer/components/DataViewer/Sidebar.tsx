@@ -21,7 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
         <div
             style={{
-                width: "240px",
+                width: "clamp(150px, 26vw, 240px)",
                 backgroundColor: "rgba(20, 10, 30, 0.3)",
                 borderRight: "1px solid rgba(255, 105, 180, 0.1)",
                 display: "flex",
@@ -39,7 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     letterSpacing: "1px",
                 }}
             >
-                Memory Flow
+                记忆流程
             </div>
 
             {tableItems.map(({ table, icon: Icon }) => {
@@ -47,7 +47,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 const meta = getTableViewMeta(table);
 
                 return (
-                    <div
+                    <button
+                        type="button"
                         key={table}
                         onClick={() => {
                             onTableSelect(table);
@@ -66,6 +67,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 ? "3px solid #ec4899"
                                 : "3px solid transparent",
                             transition: "all 0.2s",
+                            width: "100%",
+                            borderTop: "none",
+                            borderRight: "none",
+                            borderBottom: "none",
+                            textAlign: "left",
                         }}
                     >
                         <Icon size={18} style={{ flexShrink: 0 }} />
@@ -96,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 {meta.sidebarHint}
                             </div>
                         </div>
-                    </div>
+                    </button>
                 );
             })}
         </div>

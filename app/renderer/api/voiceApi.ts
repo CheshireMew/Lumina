@@ -1,4 +1,14 @@
 import { jsonRequestOptions, requestJson } from "./client";
+import type { components } from "../types/api-schema";
+
+type SttModelListResponse = components["schemas"]["SttModelListResponse"];
+type AudioDeviceListResponse = components["schemas"]["AudioDeviceListResponse"];
+type OperationStatusResponse = components["schemas"]["OperationStatusResponse"];
+type UnifiedAudioConfig = components["schemas"]["UnifiedAudioConfig"];
+type VoiceprintStatusResponse = components["schemas"]["VoiceprintStatusResponse"];
+type AudioStatusResponse = components["schemas"]["AudioStatusResponse"];
+type TtsModelListResponse = components["schemas"]["TtsModelListResponse"];
+type TtsVoiceInfo = components["schemas"]["TtsVoiceInfo"];
 
 export interface VoiceprintProfile {
     name: string;
@@ -7,31 +17,31 @@ export interface VoiceprintProfile {
 }
 
 export const listSttModels = (sttBaseUrl: string) =>
-    requestJson<any>(`${sttBaseUrl}/models/list`);
+    requestJson<SttModelListResponse>(`${sttBaseUrl}/models/list`);
 
 export const listAudioDevices = (sttBaseUrl: string) =>
-    requestJson<any>(`${sttBaseUrl}/audio/devices`);
+    requestJson<AudioDeviceListResponse>(`${sttBaseUrl}/audio/devices`);
 
 export const switchSttModel = (sttBaseUrl: string, modelName: string) =>
-    requestJson<any>(
+    requestJson<OperationStatusResponse>(
         `${sttBaseUrl}/models/switch`,
         jsonRequestOptions("POST", { model_name: modelName }),
     );
 
 export const updateSttAudioConfig = (
     sttBaseUrl: string,
-    payload: Record<string, unknown>,
+    payload: UnifiedAudioConfig,
 ) =>
-    requestJson<any>(
+    requestJson<OperationStatusResponse>(
         `${sttBaseUrl}/audio/config`,
         jsonRequestOptions("POST", payload),
     );
 
 export const getVoiceprintStatus = (sttBaseUrl: string) =>
-    requestJson<any>(`${sttBaseUrl}/voiceprint/status`);
+    requestJson<VoiceprintStatusResponse>(`${sttBaseUrl}/voiceprint/status`);
 
 export const getAudioStatus = (sttBaseUrl: string) =>
-    requestJson<any>(`${sttBaseUrl}/audio/status`);
+    requestJson<AudioStatusResponse>(`${sttBaseUrl}/audio/status`);
 
 export const listVoiceprintProfiles = (apiBaseUrl: string) =>
     requestJson<{ profiles: VoiceprintProfile[] }>(
@@ -43,7 +53,7 @@ export const toggleVoiceprintProfile = (
     profileName: string,
     enabled: boolean,
 ) =>
-    requestJson<any>(
+    requestJson<OperationStatusResponse>(
         `${apiBaseUrl}/capabilities/voiceprint/toggle/${encodeURIComponent(profileName)}?enabled=${enabled}`,
         jsonRequestOptions("POST"),
     );
@@ -52,7 +62,7 @@ export const deleteVoiceprintProfile = (
     apiBaseUrl: string,
     profileName: string,
 ) =>
-    requestJson<any>(
+    requestJson<OperationStatusResponse>(
         `${apiBaseUrl}/capabilities/voiceprint/${encodeURIComponent(profileName)}`,
         jsonRequestOptions("DELETE"),
     );
@@ -65,7 +75,7 @@ export const uploadVoiceprintProfile = (
     const formData = new FormData();
     formData.append("file", file);
 
-    return requestJson<any>(
+    return requestJson<OperationStatusResponse>(
         `${apiBaseUrl}/capabilities/voiceprint/upload?name=${encodeURIComponent(profileName)}`,
         {
             method: "POST",
@@ -75,7 +85,9 @@ export const uploadVoiceprintProfile = (
 };
 
 export const listTtsModels = (ttsBaseUrl: string) =>
-    requestJson<any>(`${ttsBaseUrl}/models/list`);
+    requestJson<TtsModelListResponse>(`${ttsBaseUrl}/models/list`);
 
-export const listTtsVoices = (ttsBaseUrl: string) =>
-    requestJson<any[]>(`${ttsBaseUrl}/voices`);
+export const listTtsVoices = (ttsBaseUrl: string, engine: string) =>
+    requestJson<TtsVoiceInfo[]>(
+        `${ttsBaseUrl}/voices?engine=${encodeURIComponent(engine)}`,
+    );

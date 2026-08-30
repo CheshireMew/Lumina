@@ -12,5 +12,6 @@ class RuntimeLlmSettings(BaseModel):
     topP: float = 1.0
     presencePenalty: float = 0.0
     frequencyPenalty: float = 0.0
+    thinkingEnabled: bool = False
     historyLimit: int = Field(default=20, ge=0, le=50)
     overflowStrategy: str = Field(default="slide", pattern="^(slide|reset)$")

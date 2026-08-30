@@ -54,15 +54,27 @@ class OpenAIDriver(BaseLLMDriver):
                         if not chunk.choices: continue
                         delta = chunk.choices[0].delta
                         
-                        # 1. Extract Main Content
                         content = delta.content or ""
-                        
-                        # 2. Extract Reasoning (DeepSeek-R1 style)
                         reasoning = getattr(delta, "reasoning_content", "") or ""
-                        
-                        # Yield structured data so Pipeline can decide what to log vs stream
-                        if content or reasoning:
-                            yield {"content": content, "reasoning": reasoning}
+                        tool_calls = []
+                        for call in delta.tool_calls or []:
+                            function = call.function
+                            tool_calls.append({
+                                "index": call.index,
+                                "id": call.id,
+                                "type": call.type,
+                                "function": {
+                                    "name": function.name if function else None,
+                                    "arguments": function.arguments if function else None,
+                                },
+                            })
+
+                        if content or reasoning or tool_calls:
+                            yield {
+                                "content": content,
+                                "reasoning": reasoning,
+                                "tool_calls": tool_calls,
+                            }
                 return stream_generator()
             else:
                 # Return content string

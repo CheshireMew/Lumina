@@ -10,18 +10,20 @@ class ConfigBootstrapper(Bootstrapper):
     def name(self) -> str: return "Configuration"
 
     async def bootstrap(self, container):
-        from app_config import BASE_DIR, config
+        from app_config import BASE_DIR, DATA_ROOT, config
         container.set_config(config)
         
         character_id = str(config.memory.character_id or "").strip()
         if not character_id:
             raise ValueError("memory.character_id must be configured")
 
-        base_char_dir = Path(BASE_DIR) / "characters"
-        target_dir = base_char_dir / character_id
-
-        if not target_dir.exists():
-            raise FileNotFoundError(f"Configured character not found: {target_dir}")
+        character_roots = (
+            Path(DATA_ROOT) / "characters",
+            Path(BASE_DIR) / "characters",
+        )
+        if not any((root / character_id).exists() for root in character_roots):
+            searched = ", ".join(str(root / character_id) for root in character_roots)
+            raise FileNotFoundError(f"Configured character not found. Searched: {searched}")
 
         logger.info(f"✅ Config Loaded for: {character_id}")
 
@@ -42,9 +44,13 @@ class DatabaseBootstrapper(Bootstrapper):
     def name(self) -> str: return "Memory Backend"
 
     async def bootstrap(self, container):
+        from app_config import DATA_ROOT
         from memory.core import MemoryService
         from memory.factory import MemoryDriverFactory
-        from model_manager import model_manager
+        from services.local_embedding import (
+            DEFAULT_EMBEDDING_MODEL,
+            create_semantic_encoder,
+        )
         
         config = container.get_config()
         provider_id = config.get_selected_provider("memory")
@@ -53,17 +59,24 @@ class DatabaseBootstrapper(Bootstrapper):
         
         driver = MemoryDriverFactory.create_driver(
             provider_id,
-            driver_config=config.memory.model_dump(),
+            driver_config={
+                **config.memory.model_dump(),
+                "data_root": str(getattr(config, "data_root", DATA_ROOT)),
+            },
         )
         memory_svc = MemoryService(driver=driver)
-        runtime_registry = container.get_worker_runtime_registry()
-        vision_snapshot = runtime_registry.resolve("vision-runtime")
-        if vision_snapshot and vision_snapshot.status == "ready":
-            memory_svc.set_encoder(
-                model_manager.create_lazy_embedding_encoder("all-MiniLM-L6-v2")
+        embedding_model_name = config.models.embedding_model_name
+        if embedding_model_name.lower().startswith("text-embedding-"):
+            logger.warning(
+                "Configured embedding model %s is a remote API model name; using local model %s",
+                embedding_model_name,
+                DEFAULT_EMBEDDING_MODEL,
             )
-        else:
-            logger.info("Vision runtime unavailable. Memory retrieval will use full-text fallback.")
+            embedding_model_name = DEFAULT_EMBEDDING_MODEL
+        memory_svc.set_encoder(
+            create_semantic_encoder(embedding_model_name),
+            model_name=embedding_model_name,
+        )
 
         await memory_svc.connect()
         logger.info("✅ Memory System Connected")
@@ -75,23 +88,22 @@ class EventBusBootstrapper(Bootstrapper):
     def name(self) -> str: return "EventBus"
 
     async def bootstrap(self, container):
-        from core.events import init_event_bus
-        from routers.gateway import gateway_service
+        from core.events import EventBus
+        from routers.gateway import GatewayService
         from core.events.definitions import (
             SystemReadyPayload,
             SystemShutdownPayload,
         )
         from core.events.bus import EventSchema
         
-        bus = init_event_bus()
+        bus = EventBus()
         container.set_event_bus(bus)
         logger.info("✅ EventBus Initialized")
         
         # Bind Gateway
         # [FIX] Do NOT call _subscribe_all() again - it's already called in GatewayService.__init__()
         # Calling it twice causes duplicate subscriptions and double WebSocket broadcasts!
-        gateway_service.bus = bus
-        # gateway_service._subscribe_all()  # REMOVED: Causes duplicate event handlers
+        gateway_service = GatewayService(bus)
         container.set_gateway(gateway_service)
         
         # Schemas

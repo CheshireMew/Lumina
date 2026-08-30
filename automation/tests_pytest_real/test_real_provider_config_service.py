@@ -1,8 +1,6 @@
 import sys
-import types
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -10,38 +8,49 @@ PROJECT_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
 from services.provider_config_service import ProviderConfigService
+from services.config_service import ConfigService
+from config.models import CapabilitiesConfig
 
 
 class ConfigStub:
     def __init__(self):
-        self.capabilities = SimpleNamespace(settings={})
+        self.capabilities = CapabilitiesConfig(settings={})
         self.saved = 0
 
-    def save(self):
-        self.saved += 1
+    def replace_sections(self, *, persist=True, **sections):
+        for key, value in sections.items():
+            setattr(self, key, value)
+        if persist:
+            self.saved += 1
 
 
-@pytest.fixture
-def container():
-    return MagicMock()
+def build_service(config=None, process_manager=None, hub=None):
+    config = config or ConfigStub()
+    process_manager = process_manager or MagicMock()
+    hub = hub or MagicMock()
+    return ProviderConfigService(
+        config=config,
+        process_manager=process_manager,
+        worker_control_hub=hub,
+        config_service=ConfigService(config, MagicMock()),
+    )
 
 
 @pytest.mark.anyio
-async def test_provider_config_service_ensure_worker_running_skips_main(container):
-    service = ProviderConfigService(container)
+async def test_provider_config_service_ensure_worker_running_skips_main():
+    process_manager = MagicMock()
+    service = build_service(process_manager=process_manager)
 
     assert await service.ensure_worker_running("main") is True
-    container.get_process_manager.assert_not_called()
+    process_manager.is_running.assert_not_called()
 
 
 @pytest.mark.anyio
-async def test_provider_config_service_ensure_worker_running_uses_process_manager(container):
+async def test_provider_config_service_ensure_worker_running_uses_process_manager():
     process_manager = MagicMock()
     process_manager.is_running.return_value = False
     process_manager.start_worker.return_value = True
-    container.get_process_manager.return_value = process_manager
-
-    service = ProviderConfigService(container)
+    service = build_service(process_manager=process_manager)
 
     assert await service.ensure_worker_running("worker:stt") is True
     process_manager.is_running.assert_called_once_with("worker:stt")
@@ -49,12 +58,10 @@ async def test_provider_config_service_ensure_worker_running_uses_process_manage
 
 
 @pytest.mark.anyio
-async def test_provider_config_service_update_config_for_main_runtime(container):
+async def test_provider_config_service_update_config_for_main_runtime():
     config = ConfigStub()
 
-    container.get_config.return_value = config
-
-    service = ProviderConfigService(container)
+    service = build_service(config=config)
 
     result = await service.update_config("provider.main", "api_key", "secret")
 
@@ -64,24 +71,17 @@ async def test_provider_config_service_update_config_for_main_runtime(container)
 
 
 @pytest.mark.anyio
-async def test_provider_config_service_update_config_for_worker_runtime(container):
+async def test_provider_config_service_update_config_for_worker_runtime():
     config = ConfigStub()
 
     process_manager = MagicMock()
     process_manager.is_running.return_value = True
 
-    container.get_config.return_value = config
-    container.get_process_manager.return_value = process_manager
-
     hub = MagicMock()
     hub.broadcast_config_update = AsyncMock()
-    fake_worker_control_hub = types.ModuleType("services.infra.worker_control_hub")
-    fake_worker_control_hub.get_worker_control_hub = MagicMock(return_value=hub)
+    service = build_service(config=config, process_manager=process_manager, hub=hub)
 
-    service = ProviderConfigService(container)
-
-    with patch.dict(sys.modules, {"services.infra.worker_control_hub": fake_worker_control_hub}):
-        result = await service.update_config("driver.tts.edge", "voice", "test-voice")
+    result = await service.update_config("driver.tts.edge", "voice", "test-voice")
 
     assert result == {"success": True}
     hub.broadcast_config_update.assert_awaited_once()

@@ -72,7 +72,7 @@ class VoiceprintFilter(IAudioFilter):
         await self.refresh_profiles()
         active_profiles = self._get_active_profiles()
         if not active_profiles:
-            return True, None
+            return False, "声纹过滤已开启，但没有可用的已启用声纹"
         await self.ensure_driver_loaded()
 
         threshold = getattr(audio_config, "voiceprint_threshold", self.default_threshold) if audio_config else self.default_threshold

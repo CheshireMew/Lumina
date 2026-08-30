@@ -9,7 +9,7 @@ export interface RuntimeConfig {
 }
 
 export const buildRuntimeConfig = (backendState: BackendState): RuntimeConfig => {
-    const apiPort = backendState.ports.memory || configuredPorts.memory_port;
+    const apiPort = backendState.ports.core || configuredPorts.core_port;
     const apiBaseUrl = `http://127.0.0.1:${apiPort}`;
 
     return {

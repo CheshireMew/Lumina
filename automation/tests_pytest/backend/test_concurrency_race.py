@@ -10,18 +10,18 @@ PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
 SERVICES = {
-    "memory": "http://127.0.0.1:8010",
+    "core": "http://127.0.0.1:8010",
 }
 
 @pytest.mark.backend
 @pytest.mark.anyio
 async def test_character_config_file_race():
     """验证并发更新 Character 配置时是否存在文件损坏或覆盖竞争"""
-    url = f"{SERVICES['memory']}/settings/character/config"
+    url = f"{SERVICES['core']}/settings/character/config"
 
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
-            health = await client.get(f"{SERVICES['memory']}/runtime/health")
+            health = await client.get(f"{SERVICES['core']}/runtime/health")
             if health.status_code != 200:
                 pytest.skip("Lumina backend is not running")
         except Exception:

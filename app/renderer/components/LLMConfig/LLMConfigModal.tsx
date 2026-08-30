@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { FC } from "react";
 import { clearLlmSessionContext } from "../../api/llmConfigApi";
 import ContextPolicySection from "./ContextPolicySection";
@@ -32,7 +33,7 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
     activeCharacterId,
     apiBaseUrl,
 }) => {
-    const { form, isSaving, updateField, selectPlatform, setDeepSeekThinking, save } =
+    const { form, isSaving, saveError, validationError, updateField, selectPlatform, selectProviderMode, setDeepSeekThinking, save } =
         useLlmConfigForm({
             isOpen,
             currentLlmSettings,
@@ -46,16 +47,22 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
         apiBaseUrl,
     );
 
+    useEffect(() => {
+        if (form.providerId === FREE_LLM_PROVIDER_ID && !form.modelName && availableModels.length > 0) {
+            updateField("modelName", availableModels[0]);
+        }
+    }, [availableModels, form.modelName, form.providerId, updateField]);
+
     const handleResetContext = async () => {
-        if (!confirm("Clear short-term memory (Context) for this session?")) {
+        if (!confirm("确定清除本次会话的短期上下文吗？")) {
             return;
         }
 
         try {
             await clearLlmSessionContext(apiBaseUrl, activeCharacterId);
-            alert("Session Context Cleared!");
+            alert("本次会话的上下文已清除");
         } catch {
-            alert("Failed to clear context");
+            alert("清除上下文失败");
         }
     };
 
@@ -64,21 +71,21 @@ const LLMConfigModal: FC<LLMConfigModalProps> = ({
     }
 
     return (
-        <ModalFrame onClose={onClose} onSave={save} isSaving={isSaving}>
+        <ModalFrame onClose={onClose} onSave={save} isSaving={isSaving} saveError={saveError || validationError} saveDisabled={Boolean(validationError)}>
             <ProviderModeToggle
                 providerId={form.providerId}
-                onChange={(providerId) =>
-                    updateField("providerId", providerId)
-                }
+                onChange={selectProviderMode}
             />
 
             <div style={modalStyles.formBody}>
                 {form.providerId === FREE_LLM_PROVIDER_ID ? (
                     <FreeProviderSection
+                        apiKey={form.apiKey}
                         modelName={form.modelName}
                         availableModels={availableModels}
                         isLoadingModels={isLoadingModels}
                         modelLoadError={modelLoadError}
+                        onApiKeyChange={(apiKey) => updateField("apiKey", apiKey)}
                         onModelNameChange={(modelName) =>
                             updateField("modelName", modelName)
                         }

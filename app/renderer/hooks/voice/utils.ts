@@ -1,13 +1,25 @@
 import { VoiceOption } from "./types";
 
-export const normalizeVoices = (payload: any): VoiceOption[] => {
+const isVoiceOption = (value: unknown): value is VoiceOption => (
+    typeof value === "object"
+    && value !== null
+    && "name" in value
+    && typeof value.name === "string"
+);
+
+export const normalizeVoices = (payload: unknown): VoiceOption[] => {
     if (Array.isArray(payload)) {
-        return payload;
+        return payload.filter(isVoiceOption);
     }
 
-    if (Array.isArray(payload?.voices)) {
-        return payload.voices;
+    if (!payload || typeof payload !== "object") return [];
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.voices)) {
+        return record.voices.filter(isVoiceOption);
     }
 
-    return [...(payload?.chinese || []), ...(payload?.english || [])];
+    return [
+        ...(Array.isArray(record.chinese) ? record.chinese : []),
+        ...(Array.isArray(record.english) ? record.english : []),
+    ].filter(isVoiceOption);
 };

@@ -60,8 +60,7 @@ class TestInfraBoundaries(unittest.TestCase):
 
         # It should rely on defaults and NOT crash
         self.assertIsNotNone(cm.network)
-        # Note: Default memory port is 8010 (updated from 8000)
-        self.assertEqual(cm.network.memory_port, 8010) # Default
+        self.assertEqual(cm.network.core_port, 8010) # Default
         print("✅ Missing Config Test Passed (Loaded Defaults)")
 
     def test_port_occupancy_check(self):

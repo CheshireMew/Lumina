@@ -1,20 +1,7 @@
-export interface WhisperModelInfo {
-    id: string;
-    name: string;
-    description?: string;
-    type?: string;
-    active?: boolean;
-    download_status?: "idle" | "downloading" | "completed" | "failed";
-}
+import type { components } from "../../types/api-schema";
 
-export interface VoiceOption {
-    name: string;
-    gender: string;
-}
+export type WhisperModelInfo = components["schemas"]["SttModelInfo"];
 
-export interface AudioDevice {
-    index: number;
-    name: string;
-    channels?: number;
-    host_api?: string;
-}
+export type VoiceOption = components["schemas"]["TtsVoiceInfo"];
+
+export type AudioDevice = components["schemas"]["AudioDeviceInfo"];

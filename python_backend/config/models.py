@@ -7,6 +7,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from config.defaults import DEFAULT_TTS_PROVIDER_ID, DEFAULT_TTS_VOICE
+
 
 def _load_configured_ports() -> Dict[str, int]:
     candidates = []
@@ -23,7 +25,7 @@ def _load_configured_ports() -> Dict[str, int]:
     with open(path, "r", encoding="utf-8-sig") as handle:
         data = json.load(handle)
     return {
-        "memory_port": int(data["memory_port"]),
+        "core_port": int(data["core_port"]),
         "stt_port": int(data["stt_port"]),
         "tts_port": int(data["tts_port"]),
         "vision_port": int(data["vision_port"]),
@@ -32,21 +34,21 @@ def _load_configured_ports() -> Dict[str, int]:
 
 CONFIGURED_PORTS = _load_configured_ports()
 
-
-DEFAULT_SELECTED_PROVIDERS: Dict[str, str] = {
-    "memory": "driver.memory.postgres",
-    "stt": "driver.stt.sensevoice",
-    "tts": "driver.tts.edge",
-    "tool.search": "driver.tool.search.brave",
-    "vision": "driver.vision.moondream",
-}
-
 FREE_LLM_PROVIDER_ID = "free_tier"
 CUSTOM_LLM_PROVIDER_ID = "custom_provider"
 POLLINATIONS_BASE_URL = "https://gen.pollinations.ai/v1"
 POLLINATIONS_ANONYMOUS_CHAT_URL = "https://text.pollinations.ai/openai"
 POLLINATIONS_ANONYMOUS_MODELS_URL = "https://text.pollinations.ai/models"
-POLLINATIONS_DEFAULT_MODEL = "openai-fast"
+POLLINATIONS_DEFAULT_MODEL = "openai"
+
+DEFAULT_SELECTED_PROVIDERS: Dict[str, str] = {
+    "llm": FREE_LLM_PROVIDER_ID,
+    "memory": "driver.memory.sqlite",
+    "stt": "driver.stt.sensevoice",
+    "tts": DEFAULT_TTS_PROVIDER_ID,
+    "tool.search": "driver.tool.search.brave",
+    "vision": "driver.vision.multimodal",
+}
 
 
 class PostgresConfig(BaseModel):
@@ -59,6 +61,7 @@ class PostgresConfig(BaseModel):
 
 class MemoryConfig(BaseModel):
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
+    sqlite_file: str = Field(default="database/lumina.sqlite3")
     namespace: str = Field(default="lumina")
     database: str = Field(default="memory")
     character_id: str = Field(default="hiyori")
@@ -83,6 +86,7 @@ class LLMFeatureRoute(BaseModel):
     top_p: float = 1.0
     presence_penalty: float = 0.0
     frequency_penalty: float = 0.0
+    include_reasoning: bool = False
 
 
 DEFAULT_LLM_PROVIDER_DATA: Dict[str, Dict[str, Any]] = {
@@ -142,7 +146,7 @@ class STTConfig(BaseModel):
 
 
 class TTSConfig(BaseModel):
-    voice: str = "zh-CN-XiaoxiaoNeural"
+    voice: str = DEFAULT_TTS_VOICE
 
 
 class AudioConfig(BaseModel):
@@ -151,9 +155,9 @@ class AudioConfig(BaseModel):
     speech_start_threshold: float = 0.6
     speech_end_threshold: float = 0.15
     min_speech_frames: int = 15
-    enable_voiceprint_filter: bool = True
+    enable_voiceprint_filter: bool = False
     voiceprint_threshold: float = 0.45
-    voiceprint_profile: str = "default"
+    voiceprint_profile: str = ""
 
 
 class SearchConfig(BaseModel):
@@ -163,7 +167,7 @@ class SearchConfig(BaseModel):
 class CapabilitiesConfig(BaseModel):
     desired_state: Dict[str, bool] = Field(default_factory=dict)
     selected_providers: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_SELECTED_PROVIDERS))
-    prewarm_core: bool = Field(default=True)
+    prewarm_core: bool = Field(default=False)
     supervise_workers: bool = Field(default=False)
     settings: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
@@ -187,7 +191,7 @@ class WorkerNodeConfig(BaseModel):
 
 class NetworkConfig(BaseModel):
     host: str = "127.0.0.1"
-    memory_port: int = Field(default_factory=lambda: CONFIGURED_PORTS["memory_port"])
+    core_port: int = Field(default_factory=lambda: CONFIGURED_PORTS["core_port"])
     stt_port: int = Field(default_factory=lambda: CONFIGURED_PORTS["stt_port"])
     tts_port: int = Field(default_factory=lambda: CONFIGURED_PORTS["tts_port"])
     vision_port: int = Field(default_factory=lambda: CONFIGURED_PORTS["vision_port"])
@@ -203,8 +207,8 @@ class NetworkConfig(BaseModel):
         return f"http://{self.host}:{self.tts_port}"
 
     @property
-    def memory_url(self) -> str:
-        return f"http://{self.host}:{self.memory_port}"
+    def core_url(self) -> str:
+        return f"http://{self.host}:{self.core_port}"
 
     def runtime_host(self, runtime_target: str) -> str:
         from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target
@@ -216,19 +220,12 @@ class NetworkConfig(BaseModel):
         return worker.host if worker else self.host
 
     def runtime_port(self, runtime_target: str) -> Optional[int]:
-        from core.runtime import MAIN_RUNTIME_TARGET, normalize_runtime_target, runtime_target_to_capability
+        from core.runtime import normalize_runtime_target, port_key_for_runtime_target
 
         normalized = normalize_runtime_target(runtime_target)
-        if normalized == MAIN_RUNTIME_TARGET:
-            return self.memory_port
-
-        capability = runtime_target_to_capability(normalized)
-        if capability == "stt":
-            return self.stt_port
-        if capability == "tts":
-            return self.tts_port
-        if capability == "vision":
-            return self.vision_port
+        port_key = port_key_for_runtime_target(normalized)
+        if port_key:
+            return int(getattr(self, port_key))
 
         worker = self.workers.get(normalized)
         if worker:
@@ -251,4 +248,4 @@ class NetworkConfig(BaseModel):
 class ModelsConfig(BaseModel):
     stt_model_path: Optional[str] = None
     tts_model_path: Optional[str] = None
-    embedding_model_name: str = "text-embedding-3-small"
+    embedding_model_name: str = "paraphrase-multilingual-MiniLM-L12-v2"

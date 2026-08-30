@@ -1,8 +1,14 @@
-import { app, BrowserWindow, dialog, ipcMain, protocol } from "electron";
+import { app, BrowserWindow, ipcMain, protocol, shell } from "electron";
 import path from "node:path";
 import store from "./config_store";
 import { backendService } from "../../core/backend/backend_service";
 import { isChildOf } from "./safe_fs";
+import type {
+    BackendState,
+    BackendStatus,
+    BootstrapState,
+} from "../shared/electronBridge";
+import { DEFAULT_USER_NAME } from "../shared/productDefaults";
 
 // Runtime initialization moved to app.whenReady so ports and local protocols are ready first.
 
@@ -24,26 +30,9 @@ if (!app.isPackaged) {
 }
 
 let win: BrowserWindow | null;
-
-type BackendStatus = "starting" | "ready" | "error";
-
-interface BackendState {
-    status: BackendStatus;
-    ports: Record<string, number>;
-    errorMessage?: string;
-}
-
-interface BootstrapState {
-    backend: BackendState;
-    localSettings: {
-        backgroundImage: string;
-        contextWindow: number;
-        isTTSEnabled: boolean;
-        live2dHighDpi: boolean;
-        thinkingEnabled: boolean;
-        userName: string;
-    };
-}
+let shutdownComplete = false;
+let shutdownStarted = false;
+let backendStartPromise: Promise<void> | null = null;
 
 let backendState: BackendState = {
     status: "starting",
@@ -57,11 +46,9 @@ function getBootstrapState(): BootstrapState {
         backend: backendState,
         localSettings: {
             backgroundImage: store.get("backgroundImage") || "",
-            contextWindow: store.get("contextWindow") || 50,
             isTTSEnabled: store.get("isTTSEnabled") ?? true,
             live2dHighDpi: store.get("live2d_high_dpi") ?? false,
-            thinkingEnabled: store.get("thinking_enabled") ?? false,
-            userName: store.get("userName") || "Master",
+            userName: store.get("userName") || DEFAULT_USER_NAME,
         },
     };
 }
@@ -116,6 +103,32 @@ function registerIpcHandlers() {
             console.error("Failed to upload background:", e);
             throw e;
         }
+    });
+
+    ipcMain.removeHandler("app:retry-backend");
+    ipcMain.handle("app:retry-backend", async () => {
+        await startBackend(true);
+        return backendState;
+    });
+
+    ipcMain.removeHandler("app:open-logs");
+    ipcMain.handle("app:open-logs", async () => {
+        const dataRoot = app.isPackaged
+            ? app.getPath("userData")
+            : path.join(process.cwd(), "Lumina_Data");
+        const logsPath = path.join(dataRoot, "logs");
+        const error = await shell.openPath(logsPath);
+        if (error) throw new Error(error);
+        return logsPath;
+    });
+
+    ipcMain.removeHandler("app:open-external");
+    ipcMain.handle("app:open-external", async (_event, rawUrl) => {
+        const url = new URL(String(rawUrl));
+        if (!["http:", "https:"].includes(url.protocol)) {
+            throw new Error("Unsupported link protocol");
+        }
+        await shell.openExternal(url.toString());
     });
 }
 
@@ -242,12 +255,6 @@ function createWindow() {
     };
 
     const loadRenderer = async () => {
-        try {
-            await win?.webContents.session.clearCache();
-        } catch (error) {
-            console.warn("[Window] Failed to clear renderer cache:", error);
-        }
-
         if (!win || win.isDestroyed()) {
             return;
         }
@@ -255,9 +262,7 @@ function createWindow() {
         if (VITE_DEV_SERVER_URL) {
             await win.loadURL(VITE_DEV_SERVER_URL);
         } else {
-            await win.loadFile(path.join(process.env.DIST || "", "index.html"), {
-                query: { v: String(Date.now()) },
-            });
+            await win.loadFile(path.join(process.env.DIST || "", "index.html"));
         }
     };
 
@@ -270,20 +275,26 @@ function createWindow() {
     openDetachedDevTools(win);
 }
 
-async function startBackend() {
-    syncBackendState("starting");
-
+async function startBackend(forceRetry = false) {
+    if (backendStartPromise) return backendStartPromise;
+    backendStartPromise = (async () => {
+        syncBackendState("starting");
+        try {
+            console.log("Starting backend runtime...");
+            if (forceRetry) await backendService.retryStart();
+            else await backendService.start();
+            console.log("Backend runtime started.");
+            syncBackendState("ready");
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error("Failed to start backend runtime:", error);
+            syncBackendState("error", errorMessage);
+        }
+    })();
     try {
-        console.log("Starting backend runtime...");
-        await backendService.start();
-        console.log("Backend runtime started.");
-        syncBackendState("ready");
-    } catch (error) {
-        const errorMessage =
-            error instanceof Error ? error.message : String(error);
-        console.error("Failed to start backend runtime:", error);
-        syncBackendState("error", errorMessage);
-        dialog.showErrorBox("Lumina backend failed to start", errorMessage);
+        await backendStartPromise;
+    } finally {
+        backendStartPromise = null;
     }
 }
 
@@ -300,8 +311,19 @@ app.on("activate", () => {
     }
 });
 
-app.on("will-quit", () => {
-    backendService.stop();
+app.on("before-quit", (event) => {
+    if (shutdownComplete) {
+        return;
+    }
+    event.preventDefault();
+    if (shutdownStarted) {
+        return;
+    }
+    shutdownStarted = true;
+    void backendService.stop().finally(() => {
+        shutdownComplete = true;
+        app.quit();
+    });
 });
 
 app.whenReady().then(async () => {

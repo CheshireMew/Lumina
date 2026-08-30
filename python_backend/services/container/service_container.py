@@ -1,10 +1,13 @@
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from .provider_registry import ProviderRegistry
 from .service_definitions import LuminaContainer, ServiceSlot
 
 if TYPE_CHECKING:
-    from core.interfaces.services import ILLMManager, IMemoryService, ISTTManager, ITTSManager
+    from llm.manager import LLMManager
+    from memory.core import MemoryService
+    from services.managers.stt import STTProviderManager
+    from services.managers.tts import TTSProviderManager
 
 
 class ServiceNotInitializedError(Exception):
@@ -12,8 +15,6 @@ class ServiceNotInitializedError(Exception):
 
 
 class ServiceContainer:
-    _instance: Optional["ServiceContainer"] = None
-
     def __init__(self):
         self._container = LuminaContainer()
         self._providers = ProviderRegistry()
@@ -42,19 +43,25 @@ class ServiceContainer:
     def get_config(self) -> Any:
         return self._require(self._container.config, "Config")
 
-    def get_memory(self) -> "IMemoryService":
+    def get_memory(self) -> "MemoryService":
         return self._require(self._container.memory_service, "MemoryService")
 
-    def get_llm_manager(self) -> "ILLMManager":
+    def get_memory_consolidation_service(self) -> Any:
+        return self._value("memory_consolidation_service")
+
+    def get_post_turn_journal(self) -> Any:
+        return self._value("post_turn_journal")
+
+    def get_llm_manager(self) -> "LLMManager":
         return self._require(self._container.llm_manager, "LLMManager")
 
-    def get_tts(self) -> "ITTSManager":
+    def get_tts(self) -> "TTSProviderManager":
         return self._require(self._container.tts, "TTSManager")
 
     def get_vision(self) -> Any:
         return self._require(self._container.vision, "VisionManager")
 
-    def get_stt(self) -> "ISTTManager":
+    def get_stt(self) -> "STTProviderManager":
         return self._require(self._container.stt, "STTManager")
 
     def get_provider_config_service(self) -> Any:
@@ -87,9 +94,6 @@ class ServiceContainer:
     def get_chat_pipeline(self) -> Any:
         return self._value("chat_pipeline")
 
-    def get_automation_service(self) -> Any:
-        return self._value("automation_service")
-
     def get_prewarm_task(self) -> Any:
         return self._value("prewarm_task")
 
@@ -101,6 +105,12 @@ class ServiceContainer:
             self._container.worker_runtime_registry,
             "WorkerRuntimeRegistry",
         )
+
+    def get_worker_control_hub(self) -> Any:
+        return self._require(self._container.worker_control_hub, "WorkerControlHub")
+
+    def get_worker_discovery(self) -> Any:
+        return self._require(self._container.worker_discovery, "WorkerDiscovery")
 
     def get_config_watcher(self) -> Any:
         return self._value("config_watcher")
@@ -140,6 +150,12 @@ class ServiceContainer:
 
     def set_memory(self, instance: Any):
         self._override("memory_service", instance)
+
+    def set_memory_consolidation_service(self, instance: Any):
+        self._override("memory_consolidation_service", instance)
+
+    def set_post_turn_journal(self, instance: Any):
+        self._override("post_turn_journal", instance)
 
     def set_llm_manager(self, instance: Any):
         self._override("llm_manager", instance)
@@ -183,6 +199,12 @@ class ServiceContainer:
     def set_worker_runtime_registry(self, instance: Any):
         self._override("worker_runtime_registry", instance)
 
+    def set_worker_control_hub(self, instance: Any):
+        self._override("worker_control_hub", instance)
+
+    def set_worker_discovery(self, instance: Any):
+        self._override("worker_discovery", instance)
+
     def set_config_watcher(self, instance: Any):
         self._override("config_watcher", instance)
 
@@ -207,9 +229,6 @@ class ServiceContainer:
     def set_companion_interaction_recorder(self, instance: Any):
         self._override("companion_interaction_recorder", instance)
 
-    def set_automation_service(self, instance: Any):
-        self._override("automation_service", instance)
-
     def set_prewarm_task(self, instance: Any):
         self._override("prewarm_task", instance)
 
@@ -227,9 +246,3 @@ class ServiceContainer:
 
     def get_search_provider(self, provider_id: str):
         return self._providers.get_search_provider(provider_id)
-
-    @classmethod
-    def get_instance(cls) -> "ServiceContainer":
-        if cls._instance is None:
-            cls._instance = ServiceContainer()
-        return cls._instance

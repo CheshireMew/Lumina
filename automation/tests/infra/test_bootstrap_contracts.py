@@ -21,7 +21,19 @@ async def test_provider_config_service_bootstrap_failure_propagates(monkeypatch)
         def set_provider_config_service(self, provider_config_service):
             self.provider_config_service = provider_config_service
 
-    def fail_init(self, container):
+        def get_config(self):
+            return MagicMock()
+
+        def get_llm_manager(self):
+            return MagicMock()
+
+        def get_process_manager(self):
+            return MagicMock()
+
+        def get_worker_control_hub(self):
+            return MagicMock()
+
+    def fail_init(self, **_dependencies):
         raise RuntimeError("provider config service init failed")
 
     monkeypatch.setattr(ProviderConfigService, "__init__", fail_init)
@@ -46,6 +58,7 @@ async def test_memory_bootstrap_connection_failure_propagates(monkeypatch):
             return SimpleNamespace(
                 get_selected_provider=lambda capability: "driver.memory.test",
                 memory=SimpleNamespace(model_dump=lambda: {}),
+                models=SimpleNamespace(embedding_model_name="test-embedding"),
             )
 
         def get_worker_runtime_registry(self):
@@ -94,6 +107,12 @@ async def test_middleware_registers_context_tools_search_and_emotion_broker():
 
         def get_event_bus(self):
             return self.event_bus
+
+        def get_search_provider(self, provider_id):
+            return next(
+                (provider for provider in self.search_providers if provider.id == provider_id),
+                None,
+            )
 
         def set_emotion_broker(self, broker):
             self.emotion_broker = broker

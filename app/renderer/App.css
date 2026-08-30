@@ -14,6 +14,32 @@ html {
     height: 100%;
 }
 
+.companion-chat-panel textarea:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, 0.38) !important;
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.companion-chat-panel button:focus-visible,
+.app-toolbar button:focus-visible {
+  outline: 3px solid rgba(79, 70, 229, 0.34);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px), (max-height: 700px) {
+  .companion-chat-panel {
+    left: 24px !important;
+    right: auto !important;
+    bottom: 24px !important;
+    width: min(390px, calc(100vw - 48px)) !important;
+    transform: none !important;
+  }
+
+  .companion-chat-panel [aria-label="对话记录"] {
+    max-height: 42vh !important;
+  }
+}
+
 /* App Container */
 .lumina-app-container {
   width: 100vw;

@@ -4,48 +4,6 @@ param(
 
 $OutputEncoding = [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-function Test-TcpPort {
-    param(
-        [string]$Address,
-        [int]$Port
-    )
-
-    try {
-        $client = [System.Net.Sockets.TcpClient]::new()
-        $task = $client.ConnectAsync($Address, $Port)
-        $connected = $task.Wait(500)
-        if ($connected -and $client.Connected) {
-            $client.Dispose()
-            return $true
-        }
-        $client.Dispose()
-    }
-    catch {
-    }
-
-    return $false
-}
-
-function Wait-TcpPort {
-    param(
-        [string]$Address,
-        [int]$Port,
-        [int]$TimeoutSeconds,
-        [string]$Name
-    )
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        if (Test-TcpPort -Address $Address -Port $Port) {
-            Write-Host "✅ $Name is ready on $Address`:$Port" -ForegroundColor Green
-            return
-        }
-        Start-Sleep -Milliseconds 250
-    }
-
-    throw "$Name did not become ready on $Address`:$Port within $TimeoutSeconds seconds."
-}
-
 function Test-BuiltFilesFresh {
     param(
         [string]$DistIndex,
@@ -80,68 +38,22 @@ function Test-BuiltFilesFresh {
     return $oldestBuild -ge $latestSource
 }
 
-function Get-LuminaRuntimeConfig {
-    $rootPath = $PSScriptRoot.Replace('\', '\\')
-    $script = @"
-import json
-from pathlib import Path
-
-try:
-    import yaml
-except ImportError:
-    yaml = None
-
-root = Path(r"$rootPath")
-config = {
-    "pg_host": "127.0.0.1",
-    "pg_port": 5432,
-    "pg_user": "lumina_user",
-    "pg_password": "lumina_password",
-    "pg_database": "lumina_db",
-}
-
-config_path = root / "Lumina_Data" / "config.yaml"
-if yaml and config_path.exists():
-    data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    pg = ((data.get("memory") or {}).get("postgres") or {})
-    config["pg_host"] = pg.get("host", config["pg_host"])
-    config["pg_port"] = int(pg.get("port", config["pg_port"]))
-    config["pg_user"] = pg.get("user", config["pg_user"])
-    config["pg_password"] = pg.get("password", config["pg_password"])
-    config["pg_database"] = pg.get("database", config["pg_database"])
-
-print(json.dumps(config))
-"@
-
-    return ($script | python - | ConvertFrom-Json)
-}
-
 Set-Location $PSScriptRoot
 $env:LUMINA_DATA_PATH = Join-Path $PSScriptRoot "Lumina_Data"
 
-Write-Host "🚀 Starting Lumina..." -ForegroundColor Cyan
+Write-Host "正在启动 Lumina…" -ForegroundColor Cyan
 
-$runtime = Get-LuminaRuntimeConfig
-$env:LUMINA_PG_PORT = "$($runtime.pg_port)"
-$env:LUMINA_PG_USER = "$($runtime.pg_user)"
-$env:LUMINA_PG_PASSWORD = "$($runtime.pg_password)"
-$env:LUMINA_PG_DATABASE = "$($runtime.pg_database)"
-
-if (-not (Test-TcpPort -Address $runtime.pg_host -Port $runtime.pg_port)) {
-    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        throw "PostgreSQL is not running on $($runtime.pg_host):$($runtime.pg_port), and docker is not available to start it automatically."
-    }
-    Write-Host "🗄️ Starting PostgreSQL container..." -ForegroundColor Green
-    docker compose up -d db | Out-Host
-    Wait-TcpPort -Address $runtime.pg_host -Port $runtime.pg_port -TimeoutSeconds 60 -Name "PostgreSQL"
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+    throw "未找到 npm。请先安装 Node.js 20 或更高版本。"
 }
-else {
-    Write-Host "✅ PostgreSQL already running on $($runtime.pg_host):$($runtime.pg_port)" -ForegroundColor Green
+
+if (-not (Test-Path (Join-Path $PSScriptRoot "node_modules"))) {
+    throw "前端依赖尚未安装。请先在项目目录运行 npm install。"
 }
 
 function Start-LuminaDesktop {
     if ($Dev) {
-        Write-Host "🖥️ Starting Electron + Vite (dev mode)..." -ForegroundColor Cyan
+        Write-Host "正在启动 Electron 与 Vite 开发环境…" -ForegroundColor Cyan
         npm run dev
         return
     }
@@ -151,13 +63,12 @@ function Start-LuminaDesktop {
     $electronCmd = Join-Path $PSScriptRoot "node_modules\.bin\electron.cmd"
 
     if ((Test-BuiltFilesFresh -DistIndex $distIndex -MainBundle $mainBundle) -and (Test-Path $electronCmd)) {
-        Write-Host "🖥️ Starting Electron from built files..." -ForegroundColor Cyan
+        Write-Host "正在使用现有构建文件启动 Electron…" -ForegroundColor Cyan
         & $electronCmd .
         return
     }
 
-    Write-Host "⚠️ Built files are missing or older than source. Falling back to dev mode." -ForegroundColor Yellow
-    Write-Host "   Run npm run build after closing old backend processes to enable faster normal startup." -ForegroundColor Yellow
+    Write-Host "构建文件不存在或早于源码，改用开发模式启动。" -ForegroundColor Yellow
     npm run dev
 }
 

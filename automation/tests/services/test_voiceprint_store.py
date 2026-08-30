@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -8,64 +8,19 @@ PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.append(str(PROJECT_ROOT / "python_backend"))
 
 
-class AcquireContext:
-    def __init__(self, conn):
-        self.conn = conn
-
-    async def __aenter__(self):
-        return self.conn
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-
-class Conn:
+class LocalStoreStub:
     def __init__(self):
-        self.executed = []
-        self.rows = []
-
-    async def execute(self, sql, *args):
-        self.executed.append((sql, args))
-
-    async def fetch(self, sql, *args):
-        self.executed.append((sql, args))
-        return self.rows
-
-
-class PostgresOnlyPool:
-    def __init__(self, conn):
-        self.conn = conn
-
-    def acquire(self):
-        return AcquireContext(self.conn)
-
-    async def select(self, *_args):
-        raise AssertionError("legacy select API must not be used")
-
-    async def query(self, *_args):
-        raise AssertionError("legacy query API must not be used")
-
-    async def delete(self, *_args):
-        raise AssertionError("legacy delete API must not be used")
-
-
-class Bus:
-    def __init__(self, pool=None, error=None):
-        self.pool = pool
-        self.error = error
-
-    async def get_pool(self):
-        if self.error:
-            raise self.error
-        return self.pool
+        self.list_voiceprint_profiles = AsyncMock(return_value=[])
+        self.set_voiceprint_enabled = AsyncMock()
+        self.delete_voiceprint_profile = AsyncMock()
+        self.upsert_voiceprint_profile = AsyncMock()
 
 
 @pytest.mark.anyio
-async def test_voiceprint_list_profiles_uses_postgres_pool_only():
+async def test_voiceprint_list_profiles_uses_local_store_boundary():
     from services import voiceprint_store
 
-    conn = Conn()
-    conn.rows = [
+    rows = [
         {
             "id": "voiceprint_profiles:alice",
             "name": "alice",
@@ -75,41 +30,40 @@ async def test_voiceprint_list_profiles_uses_postgres_pool_only():
             "updated_at": "updated",
         }
     ]
-    bus = Bus(PostgresOnlyPool(conn))
+    store = LocalStoreStub()
+    store.list_voiceprint_profiles.return_value = rows
 
-    with patch("services.voiceprint_store.get_lifecycle_bus", return_value=bus):
+    with patch("services.voiceprint_store.get_local_state_store", return_value=store):
         profiles = await voiceprint_store.list_profiles()
 
-    assert profiles == conn.rows
-    assert any("CREATE TABLE IF NOT EXISTS voiceprint_profiles" in sql for sql, _ in conn.executed)
-    assert any("SELECT id, name, enabled, embedding" in sql for sql, _ in conn.executed)
+    assert profiles == rows
+    store.list_voiceprint_profiles.assert_awaited_once_with()
 
 
 @pytest.mark.anyio
-async def test_voiceprint_mutations_use_postgres_pool_only():
+async def test_voiceprint_mutations_use_local_store_boundary():
     from services import voiceprint_store
 
-    conn = Conn()
-    bus = Bus(PostgresOnlyPool(conn))
+    store = LocalStoreStub()
 
-    with patch("services.voiceprint_store.get_lifecycle_bus", return_value=bus):
+    with patch("services.voiceprint_store.get_local_state_store", return_value=store):
         await voiceprint_store.set_profile_enabled("alice", False)
         await voiceprint_store.delete_profile("alice")
         await voiceprint_store.upsert_profile("alice", "embedding", enabled=True)
 
-    statements = [sql for sql, _ in conn.executed]
-    assert any("UPDATE voiceprint_profiles" in sql for sql in statements)
-    assert any("DELETE FROM voiceprint_profiles" in sql for sql in statements)
-    assert any("INSERT INTO voiceprint_profiles" in sql for sql in statements)
+    store.set_voiceprint_enabled.assert_awaited_once_with("alice", False)
+    store.delete_voiceprint_profile.assert_awaited_once_with("alice")
+    store.upsert_voiceprint_profile.assert_awaited_once_with("alice", "embedding", True)
 
 
 @pytest.mark.anyio
-async def test_voiceprint_pool_failure_raises_domain_error():
+async def test_voiceprint_store_failure_raises_domain_error():
     from services import voiceprint_store
 
-    bus = Bus(error=RuntimeError("postgres unavailable"))
+    store = LocalStoreStub()
+    store.list_voiceprint_profiles.side_effect = RuntimeError("sqlite unavailable")
 
-    with patch("services.voiceprint_store.get_lifecycle_bus", return_value=bus):
+    with patch("services.voiceprint_store.get_local_state_store", return_value=store):
         with pytest.raises(voiceprint_store.VoiceprintStoreUnavailable) as exc_info:
             await voiceprint_store.list_profiles()
 

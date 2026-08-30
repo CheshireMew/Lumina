@@ -34,9 +34,7 @@ class TestProcessManager(unittest.TestCase):
     """Test Process Manager functionality"""
 
     def setUp(self):
-        """Reset services before each test"""
         from services.container import ServiceContainer
-        ServiceContainer._instance = None
         self.container = ServiceContainer()
 
     def test_process_manager_initialization(self):
@@ -129,7 +127,7 @@ class TestProcessManager(unittest.TestCase):
         manager = build_process_manager()
 
         # Should not crash
-        manager.stop_worker("nonexistent_worker")
+        asyncio.run(manager.stop_worker("nonexistent_worker"))
 
         self.assertNotIn("nonexistent_worker", manager.workers)
         print("✅ ProcessManager stop worker not found verified")
@@ -146,7 +144,7 @@ class TestProcessManager(unittest.TestCase):
         manager.workers["external_service"] = external_worker
 
         # Stop should only remove from tracking, not try to kill
-        manager.stop_worker("external_service")
+        asyncio.run(manager.stop_worker("external_service"))
 
         self.assertNotIn("external_service", manager.workers)
         print("✅ ProcessManager stop external worker verified")
@@ -248,7 +246,7 @@ class TestProcessManager(unittest.TestCase):
         print("✅ ProcessManager external service detection verified")
 
     def test_process_manager_terminate_timeout(self):
-        """Test process kill after terminate timeout"""
+        """Test process-tree kill after graceful shutdown timeout"""
         from services.process_manager import WorkerProcess
         import subprocess
 
@@ -256,6 +254,7 @@ class TestProcessManager(unittest.TestCase):
 
         # Mock process that times out on terminate
         mock_proc = MagicMock()
+        mock_proc.pid = 12345
         mock_proc.terminate = MagicMock()
         mock_proc.wait = MagicMock(side_effect=subprocess.TimeoutExpired("cmd", 5))
         mock_proc.kill = MagicMock()
@@ -263,11 +262,16 @@ class TestProcessManager(unittest.TestCase):
         worker = WorkerProcess(mock_proc, time.time())
         manager.workers["timeout_worker"] = worker
 
-        manager.stop_worker("timeout_worker")
+        with patch("services.process_manager.subprocess.run") as taskkill:
+            asyncio.run(manager.stop_worker("timeout_worker"))
 
-        # Should have called both terminate and kill
-        mock_proc.terminate.assert_called_once()
-        mock_proc.kill.assert_called_once()
+        mock_proc.terminate.assert_called_once_with()
+        mock_proc.kill.assert_not_called()
+        taskkill.assert_called_once_with(
+            ["taskkill", "/PID", "12345", "/T", "/F"],
+            check=False,
+            capture_output=True,
+        )
         print("✅ ProcessManager terminate timeout verified")
 
 

@@ -28,13 +28,13 @@ const GenerationParamsSection: FC<GenerationParamsSectionProps> = ({
 }) => (
     <div>
         <div style={sectionTitleStyle}>
-            <Brain size={14} /> Cognitive Parameters
+            <Brain size={14} /> 生成参数
         </div>
 
         <div style={parameterStyles.card}>
             <div style={parameterStyles.row}>
                 <span style={parameterStyles.mainLabel}>
-                    Creativity (Temperature)
+                    随机性（Temperature）
                 </span>
                 <span style={parameterStyles.primaryValue}>{temperature}</span>
             </div>
@@ -71,7 +71,7 @@ const GenerationParamsSection: FC<GenerationParamsSectionProps> = ({
                 <div>
                     <div style={parameterStyles.row}>
                         <span style={parameterStyles.smallLabel}>
-                            Frequency Pen
+                            重复惩罚
                         </span>
                         <span style={parameterStyles.secondaryValue}>
                             {frequencyPenalty}
@@ -94,7 +94,7 @@ const GenerationParamsSection: FC<GenerationParamsSectionProps> = ({
                 <div style={parameterStyles.fullWidth}>
                     <div style={parameterStyles.row}>
                         <span style={parameterStyles.smallLabel}>
-                            Presence Penalty (Topic Freshness)
+                            话题新鲜度
                         </span>
                         <span style={parameterStyles.secondaryValue}>
                             {presencePenalty}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     identifyPresetProvider,
     normalizeModelForSave,
@@ -42,6 +42,7 @@ export const useLlmConfigForm = ({
 }: UseLlmConfigFormArgs) => {
     const [form, setForm] = useState<LlmConfigFormState>(initialFormState);
     const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState("");
 
     useEffect(() => {
         if (!isOpen) {
@@ -64,7 +65,9 @@ export const useLlmConfigForm = ({
             presencePenalty: currentLlmSettings.presencePenalty ?? 0.0,
             frequencyPenalty: currentLlmSettings.frequencyPenalty ?? 0.0,
             thinkingEnabled: currentLlmSettings.thinkingEnabled,
-            historyLimit: currentLlmSettings.historyLimit ?? 20,
+            historyLimit: providerId === FREE_LLM_PROVIDER_ID
+                ? 5
+                : currentLlmSettings.historyLimit ?? 20,
             overflowStrategy: normalizeOverflowStrategy(
                 currentLlmSettings.overflowStrategy,
             ),
@@ -94,27 +97,77 @@ export const useLlmConfigForm = ({
                 ...current,
                 selectedPlatform: platform,
                 baseUrl: PRESET_PROVIDERS[platform]?.baseUrl ?? "",
+                modelName: PRESET_PROVIDERS[platform]?.model ?? current.modelName,
             };
         });
+    };
+
+    const selectProviderMode = (providerId: LlmConfigFormState["providerId"]) => {
+        setSaveError("");
+        setForm((current) => providerId === FREE_LLM_PROVIDER_ID
+            ? {
+                ...current,
+                providerId,
+                selectedPlatform: "custom",
+                apiKey: current.providerId === FREE_LLM_PROVIDER_ID ? current.apiKey : "",
+                baseUrl: "",
+                modelName: "openai",
+                historyLimit: 5,
+                thinkingEnabled: false,
+            }
+            : {
+                ...current,
+                providerId,
+                selectedPlatform: "deepseek",
+                apiKey: "",
+                baseUrl: PRESET_PROVIDERS.deepseek.baseUrl,
+                modelName: PRESET_PROVIDERS.deepseek.model,
+                historyLimit: Math.max(current.historyLimit, 5),
+            });
     };
 
     const setDeepSeekThinking = (thinkingEnabled: boolean) => {
         setForm((current) => ({
             ...current,
             thinkingEnabled,
+            modelName: thinkingEnabled ? "deepseek-reasoner" : "deepseek-chat",
         }));
     };
 
+    const validationError = useMemo(() => {
+        if (!form.modelName.trim()) return "请选择或填写一个模型。";
+        if (form.providerId === FREE_LLM_PROVIDER_ID) {
+            return form.apiKey.trim() ? "" : "Pollinations 需要填写 API 密钥。";
+        }
+        let url: URL;
+        try {
+            url = new URL(form.baseUrl);
+        } catch {
+            return "API 地址必须是有效的 HTTP 或 HTTPS 地址。";
+        }
+        if (!["http:", "https:"].includes(url.protocol)) {
+            return "API 地址必须使用 HTTP 或 HTTPS。";
+        }
+        const isLocal = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+        if (!isLocal && !form.apiKey.trim()) return "远程自定义服务需要填写 API 密钥。";
+        return "";
+    }, [form.apiKey, form.baseUrl, form.modelName, form.providerId]);
+
     const save = async () => {
+        if (validationError) {
+            setSaveError(validationError);
+            return;
+        }
         const finalModel = normalizeModelForSave(
             form.providerId,
             form.modelName,
         );
 
         setIsSaving(true);
+        setSaveError("");
         try {
             await onSettingsChange(
-                form.providerId === FREE_LLM_PROVIDER_ID ? "" : form.apiKey,
+                form.apiKey,
                 form.baseUrl,
                 finalModel,
                 form.temperature,
@@ -129,7 +182,7 @@ export const useLlmConfigForm = ({
             onClose();
         } catch (error) {
             console.error("[LLMConfig] Failed to save settings", error);
-            alert("Failed to save LLM settings.");
+            setSaveError(error instanceof Error ? error.message : "模型设置保存失败。 ");
         } finally {
             setIsSaving(false);
         }
@@ -138,8 +191,11 @@ export const useLlmConfigForm = ({
     return {
         form,
         isSaving,
+        saveError,
+        validationError,
         updateField,
         selectPlatform,
+        selectProviderMode,
         setDeepSeekThinking,
         save,
     };

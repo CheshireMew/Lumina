@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "python_backend"))
 
 SERVICES = {
-    "memory": "http://127.0.0.1:8010",
+    "core": "http://127.0.0.1:8010",
 }
 
 @pytest.mark.e2e
@@ -21,7 +21,7 @@ async def test_multi_turn_tool_loop_failure():
     如果 LLM 第一轮调用了工具，在获取结果后需要再次调用工具才能完成任务，
     当前的架构（pipeline.py）会强制进入 Final Pass 并禁用工具，导致多轮逻辑中断。
     """
-    url = f"{SERVICES['memory']}/companion/message"
+    url = f"{SERVICES['core']}/companion/message"
     
     # 构造一个需要两步搜索的任务：
     # 1. 搜索 A 的最新成员 (假设是个虚构或实时变化的)
@@ -56,7 +56,7 @@ async def test_multi_turn_tool_loop_failure():
 @pytest.mark.anyio
 async def test_tool_output_injection_consistency():
     """验证工具返回的结果是否被正确注入到上下文中"""
-    url = f"{SERVICES['memory']}/companion/message"
+    url = f"{SERVICES['core']}/companion/message"
     
     # 强制让 LLM 调用工具并验证它是否看到了结果
     prompt = "Use web_search to find the 'Secret Code of Lumina 2026'. (It's just for testing, tell me whatever you find)"

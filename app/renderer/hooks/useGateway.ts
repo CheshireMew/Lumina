@@ -1,14 +1,17 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { gatewayClient, GatewaySubscriber } from "../runtime/gatewayClient";
+import type { GatewaySystemStatus } from "../runtime/gatewayProtocol";
 
 interface GatewayProps {
-    onChatStart?: (mode: string) => void;
-    onChatStream?: (content: string) => void;
-    onChatEnd?: () => void;
+    onReady?: (clientId: string, sessionId: number, generation: number) => void;
+    onChatStart?: (turnId: string, mode: string) => void;
+    onChatStream?: (turnId: string, content: string) => void;
+    onChatReasoning?: (turnId: string, content: string) => void;
+    onChatEnd?: (turnId: string, status: string) => void;
     onEmotion?: (emotion: string) => void;
-    onSessionReset?: (sessionId: number) => void;
-    onSystemStatus?: (status: string, details: string) => void;
+    onSessionReset?: (sessionId: number, generation: number) => void;
+    onSystemStatus?: (status: GatewaySystemStatus) => void;
     baseUrl: string;
     enabled?: boolean;
 }
@@ -17,6 +20,8 @@ export const useGateway = ({
     onChatStart,
     onChatStream,
     onChatEnd,
+    onChatReasoning,
+    onReady,
     onEmotion,
     onSessionReset,
     onSystemStatus,
@@ -24,11 +29,16 @@ export const useGateway = ({
     enabled = true,
 }: GatewayProps) => {
     const isConnected = useChatStore((state) => state.isConnected);
+    const setConnection = useChatStore((state) => state.setConnection);
+    const setSession = useChatStore((state) => state.setSession);
+    const setEmotion = useChatStore((state) => state.setEmotion);
 
     const callbacksRef = useRef({
         onChatStart,
         onChatStream,
         onChatEnd,
+        onChatReasoning,
+        onReady,
         onEmotion,
         onSessionReset,
         onSystemStatus,
@@ -39,38 +49,57 @@ export const useGateway = ({
             onChatStart,
             onChatStream,
             onChatEnd,
+            onChatReasoning,
+            onReady,
             onEmotion,
             onSessionReset,
             onSystemStatus,
         };
-    }, [onChatStart, onChatStream, onChatEnd, onEmotion, onSessionReset, onSystemStatus]);
+    }, [onChatStart, onChatStream, onChatEnd, onChatReasoning, onReady, onEmotion, onSessionReset, onSystemStatus]);
 
     useEffect(() => {
         if (!enabled) {
             gatewayClient.disconnect();
+            setConnection(false);
             return;
         }
 
         gatewayClient.connect(baseUrl);
         const unsubscribe = gatewayClient.subscribe({
-            onChatStart: (mode) => callbacksRef.current.onChatStart?.(mode),
-            onChatStream: (content) =>
-                callbacksRef.current.onChatStream?.(content),
-            onChatEnd: () => callbacksRef.current.onChatEnd?.(),
-            onEmotion: (emotion) => callbacksRef.current.onEmotion?.(emotion),
-            onSessionReset: (sessionId) =>
-                callbacksRef.current.onSessionReset?.(sessionId),
-            onSystemStatus: (status, details) =>
-                callbacksRef.current.onSystemStatus?.(status, details),
+            onConnection: setConnection,
+            onReady: (clientId, sessionId, generation) => {
+                setSession(sessionId, generation);
+                callbacksRef.current.onReady?.(clientId, sessionId, generation);
+            },
+            onChatStart: (turnId, mode) =>
+                callbacksRef.current.onChatStart?.(turnId, mode),
+            onChatStream: (turnId, content) =>
+                callbacksRef.current.onChatStream?.(turnId, content),
+            onChatReasoning: (turnId, content) =>
+                callbacksRef.current.onChatReasoning?.(turnId, content),
+            onChatEnd: (turnId, status) =>
+                callbacksRef.current.onChatEnd?.(turnId, status),
+            onEmotion: (emotion) => {
+                setEmotion(emotion);
+                callbacksRef.current.onEmotion?.(emotion);
+            },
+            onSessionReset: (sessionId, generation) =>
+                callbacksRef.current.onSessionReset?.(sessionId, generation),
+            onSystemStatus: (status) =>
+                callbacksRef.current.onSystemStatus?.(status),
         } satisfies GatewaySubscriber);
 
         return () => {
             unsubscribe();
         };
-    }, [baseUrl, enabled]);
+    }, [baseUrl, enabled, setConnection, setEmotion, setSession]);
 
-    const send = useCallback((type: string, payload: any) => {
-        gatewayClient.send(type, payload);
+    const send = useCallback((
+        type: string,
+        payload: Record<string, unknown>,
+        turnId?: string,
+    ) => {
+        return gatewayClient.send(type, payload, turnId);
     }, []);
 
     return { isConnected, send };

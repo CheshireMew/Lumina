@@ -23,24 +23,16 @@ class PrewarmBootstrapper(Bootstrapper):
     def name(self) -> str:
         return "Prewarm"
 
-    async def _prewarm_workers(self, process_manager):
+    async def _prewarm_workers(self, process_manager, capabilities):
         try:
             await asyncio.sleep(4)
-            warm_targets = []
-            registry = process_manager.worker_runtime_registry
-            for capability in ("tts", "stt"):
-                if not registry.should_auto_start(capability):
-                    continue
-                warm_targets.append(
-                    asyncio.to_thread(
-                        process_manager.start_worker,
-                        runtime_target_for_capability(capability),
-                    )
+            warm_targets = [
+                asyncio.to_thread(
+                    process_manager.start_worker,
+                    runtime_target_for_capability(capability),
                 )
-
-            if not warm_targets:
-                logger.info("Prewarm skipped: no worker runtime marked for auto start")
-                return
+                for capability in capabilities
+            ]
 
             await asyncio.gather(*warm_targets)
             logger.info("🔥 Core worker prewarm dispatched")
@@ -55,10 +47,19 @@ class PrewarmBootstrapper(Bootstrapper):
             return
 
         pm = container.get_process_manager()
+        registry = pm.worker_runtime_registry
+        capabilities = [
+            capability
+            for capability in registry.list_auto_start_capabilities()
+            if registry.should_auto_start(capability)
+        ]
+        if not capabilities:
+            logger.debug("Prewarm skipped: no worker runtime marked for auto start")
+            return
 
         logger.info("🔥 Scheduling Core Service Prewarm (TTS/STT)...")
         container.set_prewarm_task(asyncio.create_task(
-            self._prewarm_workers(pm)
+            self._prewarm_workers(pm, capabilities)
         ))
 
 
@@ -78,7 +79,11 @@ class ConfigWatcherBootstrapper(Bootstrapper):
     async def bootstrap(self, container: Any):
         from services.infra.config_watcher import ConfigWatcherService
 
-        watcher = ConfigWatcherService()
+        watcher = ConfigWatcherService(
+            config_manager=container.get_config(),
+            event_bus=container.get_event_bus(),
+            worker_control_hub=container.get_worker_control_hub(),
+        )
         container.set_config_watcher(watcher)
 
         # Register callback for physical config changes
@@ -108,9 +113,13 @@ class WorkerControlHubBootstrapper(Bootstrapper):
         return "WorkerControlHub"
     
     async def bootstrap(self, container: Any):
-        from services.infra.worker_control_hub import get_worker_control_hub
+        from services.infra.service_discovery import ServiceDiscovery
+        from services.infra.worker_control_hub import WorkerControlHub
 
-        hub = get_worker_control_hub()
+        discovery = ServiceDiscovery()
+        hub = WorkerControlHub(discovery)
+        container.set_worker_discovery(discovery)
+        container.set_worker_control_hub(hub)
         hub.start_cleanup_task()
 
         logger.info("🎛️ WorkerControlHub Ready")
@@ -134,19 +143,3 @@ class ProcessSupervisorBootstrapper(Bootstrapper):
         pm = container.get_process_manager()
         await pm.start_supervisor()
         logger.info("🛡️ Process Supervisor Auto-Healing Enabled")
-
-
-class AutomationBootstrapper(Bootstrapper):
-    """
-    Start Automation Service (ECA Engine).
-    Phase: Core.
-    """
-    @property
-    def name(self) -> str: return "AutomationService"
-
-    async def bootstrap(self, container: Any):
-        from services.automation.service import AutomationService
-
-        auto_service = AutomationService(container)
-        container.set_automation_service(auto_service)
-        auto_service.start()

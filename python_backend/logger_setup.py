@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import sys
 import re
@@ -47,6 +48,21 @@ class RequestIdFilter(logging.Filter):
 
 # ANSI 颜色去除正则
 ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+SENSITIVE_VALUE = re.compile(
+    r"(?i)(api[_-]?key|authorization|access[_-]?token|password)"
+    r"(\s*[\"']?\s*[:=]\s*[\"']?)([^\s\"',}]+)"
+)
+
+
+def redact_log_text(value: str) -> str:
+    return SENSITIVE_VALUE.sub(r"\1\2[REDACTED]", str(value))
+
+
+class RedactingFilter(logging.Filter):
+    def filter(self, record):
+        record.msg = redact_log_text(record.getMessage())
+        record.args = ()
+        return True
 
 class TeeOutput:
     """
@@ -96,12 +112,11 @@ def setup_logger(log_filename="server.log"):
     """
     配置全局日志和标准输出重定向。
     """
-    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
+    from app_config import DATA_ROOT
+
+    log_dir = os.path.join(str(DATA_ROOT), "logs")
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(log_dir, log_filename)
-
-    # 打开日志文件 (追加模式)
-    log_file = open(log_path, 'a', encoding='utf-8')
 
     # Force Windows stdout to UTF-8
     if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
@@ -110,10 +125,6 @@ def setup_logger(log_filename="server.log"):
             sys.stderr.reconfigure(encoding='utf-8')
         except Exception as e:
             print(f"Warning: Failed to set utf-8 encoding: {e}")
-
-    # 重定向 stdout 和 stderr
-    sys.stdout = TeeOutput(sys.stdout, log_file)
-    sys.stderr = TeeOutput(sys.stderr, log_file)
 
     # 配置 logging 模块
     # Check for ENV var or Config (Lazy load config to avoid circular import)
@@ -130,18 +141,30 @@ def setup_logger(log_filename="server.log"):
     log_level = os.environ.get("LUMINA_LOG_LEVEL", "INFO").upper()
     root_logger.setLevel(getattr(logging, log_level, logging.INFO))
     
-    if root_logger.hasHandlers():
-        root_logger.handlers.clear()
-        
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(formatter)
+    for existing_handler in list(root_logger.handlers):
+        root_logger.removeHandler(existing_handler)
+        existing_handler.close()
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    console_handler.addFilter(RedactingFilter())
+
+    file_handler = RotatingFileHandler(
+        log_path,
+        maxBytes=int(os.environ.get("LUMINA_LOG_MAX_BYTES", 5 * 1024 * 1024)),
+        backupCount=int(os.environ.get("LUMINA_LOG_BACKUP_COUNT", 5)),
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.addFilter(RedactingFilter())
     
     # [FIX] Global factory is now set at module load level
     # No need to reset here unless we want to wrap again (not recommended)
     
     # handler.addFilter(RequestIdFilter()) # Not needed if factory is used
     
-    root_logger.addHandler(handler)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
     
     logger = logging.getLogger("LuminaCore")
     # logger.info(f"Logger initialized. Writing to {log_path}") # Avoid noise in JSON mode?
@@ -158,6 +181,48 @@ def setup_logger(log_filename="server.log"):
     logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
     return logger
+
+
+def model_diagnostics_enabled() -> bool:
+    return os.environ.get("LUMINA_DIAGNOSTIC_MODEL_CONTENT", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def get_model_diagnostics_logger() -> logging.Logger | None:
+    if not model_diagnostics_enabled():
+        return None
+
+    from app_config import DATA_ROOT
+
+    diagnostic_logger = logging.getLogger("LuminaModelDiagnostics")
+    diagnostic_logger.setLevel(logging.INFO)
+    diagnostic_logger.propagate = False
+    if diagnostic_logger.handlers:
+        return diagnostic_logger
+
+    handler = RotatingFileHandler(
+        DATA_ROOT / "logs" / "model-diagnostics.log",
+        maxBytes=int(os.environ.get("LUMINA_DIAGNOSTIC_LOG_MAX_BYTES", 10 * 1024 * 1024)),
+        backupCount=int(os.environ.get("LUMINA_DIAGNOSTIC_LOG_BACKUP_COUNT", 3)),
+        encoding="utf-8",
+    )
+    handler.setFormatter(JSONFormatter())
+    handler.addFilter(RedactingFilter())
+    diagnostic_logger.addHandler(handler)
+    return diagnostic_logger
+
+
+def uvicorn_log_level() -> str:
+    return os.environ.get("LUMINA_UVICORN_LOG_LEVEL", "warning").lower()
+
+
+def uvicorn_access_log_enabled() -> bool:
+    value = os.environ.get("LUMINA_UVICORN_ACCESS_LOG", "")
+    return value.lower() in {"1", "true", "yes", "on"}
 
 class SafeFormatter(logging.Formatter):
     """

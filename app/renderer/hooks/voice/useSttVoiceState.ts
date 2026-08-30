@@ -26,10 +26,13 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
     const [loadingStatus, setLoadingStatus] = useState("idle");
     const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
     const [currentAudioDevice, setCurrentAudioDevice] = useState<string | null>(null);
+    const [sttLoadState, setSttLoadState] = useState<"loading" | "ready" | "error">("loading");
+    const [sttError, setSttError] = useState("");
 
     const hasWarnedStt = useRef(false);
 
     const refreshModels = useCallback(async () => {
+        setSttLoadState((current) => current === "ready" ? current : "loading");
         try {
             const data = await listSttModels(sttBaseUrl);
             const models: WhisperModelInfo[] = Array.isArray(data.models)
@@ -45,8 +48,12 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
                 activeModel?.id || data.active_model || data.current_model || "",
             );
             setLoadingStatus(data.loading_status || "idle");
+            setSttLoadState("ready");
+            setSttError("");
         } catch (error) {
             console.error("Failed to fetch STT models", error);
+            setSttLoadState("error");
+            setSttError("语音识别服务暂时不可用，请稍后重试。 ");
         }
     }, [sttBaseUrl]);
 
@@ -61,6 +68,8 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
                 console.warn("[VoiceManager] STT service unavailable", error);
                 hasWarnedStt.current = true;
             }
+            setSttLoadState("error");
+            setSttError("麦克风列表读取失败，请确认语音服务已启动。 ");
         }
     }, [sttBaseUrl]);
 
@@ -76,7 +85,7 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
                 await refreshModels();
             } catch (error) {
                 console.error("[VoiceManager] Failed to switch STT model", error);
-                alert("Failed to confirm model switch");
+                setSttError("语音识别模型切换失败，请重试。 ");
                 await refreshModels();
             }
         },
@@ -90,7 +99,7 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
             await refreshAudioDevices();
         } catch (error) {
             console.error("[VoiceManager] Failed to switch audio device", error);
-            alert("Failed to connect to STT server");
+            setSttError("麦克风切换失败，请重试。 ");
         }
     }, [refreshAudioDevices, sttBaseUrl]);
 
@@ -99,13 +108,25 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
             return;
         }
 
-        void refreshModels();
+        let cancelled = false;
+        let nextRefresh: number | null = null;
+
+        const pollModels = async () => {
+            await refreshModels();
+            if (!cancelled) {
+                nextRefresh = window.setTimeout(() => void pollModels(), 2000);
+            }
+        };
+
+        void pollModels();
         void refreshAudioDevices();
 
-        const interval = setInterval(() => {
-            void refreshModels();
-        }, 2000);
-        return () => clearInterval(interval);
+        return () => {
+            cancelled = true;
+            if (nextRefresh !== null) {
+                window.clearTimeout(nextRefresh);
+            }
+        };
     }, [isActive, refreshAudioDevices, refreshModels]);
 
     return {
@@ -114,6 +135,8 @@ export const useSttVoiceState = (isActive: boolean, sttBaseUrl: string) => {
         loadingStatus,
         audioDevices,
         currentAudioDevice,
+        sttLoadState,
+        sttError,
         handleSttModelChange,
         handleAudioDeviceChange,
         refreshModels,

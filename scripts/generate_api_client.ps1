@@ -1,5 +1,5 @@
 
-Write-Host "🚀 Generating API Client Types..."
+Write-Host "Generating API client types..."
 
 # Path relative to Project Root (CWD will be set to Root)
 $OUTPUT_FILE = "app/renderer/api-schema.d.ts" 
@@ -20,33 +20,28 @@ elseif (Test-Path "../package.json") {
     Set-Location ..
 }
 
-$PORTS = Get-Content "config/ports.json" | ConvertFrom-Json
-$BACKEND_URL = "http://127.0.0.1:$($PORTS.memory_port)/openapi.json"
-
-# Check if Backend is up
-try {
-    Invoke-WebRequest -Uri $BACKEND_URL -UseBasicParsing -Method Head -ErrorAction Stop | Out-Null
-    Write-Host "✅ Backend is online."
-}
-catch {
-    Write-Error "❌ Backend not reachable at $BACKEND_URL. Please start the backend first."
+$SCHEMA_FILE = "Lumina_Data/cache/openapi.json"
+python scripts/export_openapi.py $SCHEMA_FILE
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "OpenAPI export failed."
     exit 1
 }
 
 # Run npx openapi-typescript
 # Requires: npm install -D openapi-typescript
-Write-Host "📦 Running openapi-typescript..."
+Write-Host "Running openapi-typescript..."
 if (Test-Path "./node_modules/.bin/openapi-typescript") {
-    & ./node_modules/.bin/openapi-typescript $BACKEND_URL -o $OUTPUT_FILE
+    & ./node_modules/.bin/openapi-typescript $SCHEMA_FILE -o $OUTPUT_FILE
 }
 else {
-    # Try global or npx
-    npx openapi-typescript $BACKEND_URL -o $OUTPUT_FILE
+    Write-Error "openapi-typescript is not installed. Run npm install first."
+    exit 1
 }
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "✅ Types generated at $OUTPUT_FILE"
+    Write-Host "Types generated at $OUTPUT_FILE"
 }
 else {
-    Write-Error "❌ Generation failed."
+    Write-Error "Generation failed."
+    exit 1
 }

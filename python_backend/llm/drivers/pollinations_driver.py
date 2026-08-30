@@ -74,7 +74,7 @@ class PollinationsDriver(BaseLLMDriver):
         url: str,
         payload: Dict[str, Any],
         headers: Dict[str, str],
-    ) -> AsyncGenerator[Dict[str, str], None]:
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         client = await get_http_client()
         try:
             async with client.stream(
@@ -84,7 +84,11 @@ class PollinationsDriver(BaseLLMDriver):
                 headers=headers,
                 timeout=120.0,
             ) as response:
-                response.raise_for_status()
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    detail = self._response_error_detail(response, body)
+                    logger.error("Pollinations stream failed: %s", detail)
+                    raise RuntimeError(detail)
                 async for line in response.aiter_lines():
                     if not line.startswith("data:"):
                         continue
@@ -96,19 +100,23 @@ class PollinationsDriver(BaseLLMDriver):
                     try:
                         data = json.loads(event)
                     except json.JSONDecodeError:
-                        logger.debug("Skipping malformed Pollinations SSE event: %s", event)
+                        logger.debug(
+                            "Skipping malformed Pollinations SSE event (%d chars)",
+                            len(event),
+                        )
                         continue
 
                     for choice in data.get("choices", []):
                         delta = choice.get("delta") or {}
                         content = delta.get("content") or ""
                         reasoning = delta.get("reasoning_content") or ""
-                        if content or reasoning:
-                            yield {"content": content, "reasoning": reasoning}
-        except httpx.HTTPStatusError as exc:
-            detail = self._response_error_detail(exc.response)
-            logger.error("Pollinations stream failed: %s", detail)
-            raise RuntimeError(detail) from exc
+                        tool_calls = delta.get("tool_calls") or []
+                        if content or reasoning or tool_calls:
+                            yield {
+                                "content": content,
+                                "reasoning": reasoning,
+                                "tool_calls": tool_calls,
+                            }
         except Exception as exc:
             logger.error("Pollinations stream failed: %s", exc)
             raise
@@ -212,10 +220,17 @@ class PollinationsDriver(BaseLLMDriver):
         api_key = str(self.config.get("api_key") or "").strip()
         return "" if api_key.lower() in {"none", "null"} else api_key
 
-    def _response_error_detail(self, response: httpx.Response) -> str:
+    def _response_error_detail(
+        self,
+        response: httpx.Response,
+        body: bytes | None = None,
+    ) -> str:
         try:
-            payload = response.json()
+            payload = json.loads(body) if body is not None else response.json()
             detail = payload.get("error") or payload.get("detail") or payload
         except Exception:
-            detail = response.text
+            if body is not None:
+                detail = body.decode("utf-8", errors="replace")
+            else:
+                detail = response.text
         return f"Pollinations Error {response.status_code}: {detail}"

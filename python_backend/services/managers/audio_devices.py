@@ -37,7 +37,8 @@ class AudioDeviceSelector:
                         "channels": device["max_input_channels"],
                         "sample_rate": int(device["default_samplerate"]),
                         "hostapi": hostapi_name,
-                        "host_api": device["hostapi"],
+                        "host_api": hostapi_name,
+                        "host_api_index": int(device["hostapi"]),
                     }
                 )
 

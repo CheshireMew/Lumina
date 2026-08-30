@@ -1,5 +1,4 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_submodules
 import sys
 import os
 
@@ -29,9 +28,6 @@ hiddenimports = [
 # Collect Sherpa ONNX (via hook, but also ensuring here if needed)
 # tmp_ret = collect_all('sherpa_onnx')
 # datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-
-# Collect Langchain
-hiddenimports += collect_submodules('langchain')
 
 # Config Files to Bundle
 # (Source, Dest)

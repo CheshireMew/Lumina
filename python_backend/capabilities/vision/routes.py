@@ -27,7 +27,10 @@ async def analyze_image(
     """
     try:
         # DI: vision_service is injected
-        provider = vision_service.get_active_provider()
+        try:
+            provider = vision_service.get_active_provider()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         
         image_data = None
         

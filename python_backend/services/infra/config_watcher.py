@@ -17,8 +17,18 @@ class ConfigWatcherService:
     
     Can be used in Main or Worker processes.
     """
-    def __init__(self, interval: float = 2.0):
+    def __init__(
+        self,
+        interval: float = 2.0,
+        *,
+        config_manager=None,
+        event_bus=None,
+        worker_control_hub=None,
+    ):
         self.interval = interval
+        self.config = config_manager or config
+        self.event_bus = event_bus
+        self.worker_control_hub = worker_control_hub
         self.config_path = CONFIG_ROOT / "config.yaml"
         self._last_mtime: Optional[float] = None
         self._running = False
@@ -74,8 +84,8 @@ class ConfigWatcherService:
             logger.info("🔄 Config file change detected! Reloading units...")
             self._last_mtime = current_mtime
             
-            # 1. Reload Config Singleton
-            config.reload()
+            # 1. Reload the injected configuration boundary.
+            self.config.reload()
             
             # 2. Trigger Callbacks
             for cb in self._callbacks:
@@ -88,7 +98,7 @@ class ConfigWatcherService:
                     logger.error(f"Error in ConfigWatcher callback: {e}")
             
             # 2.5 Notify IConfigurables
-            config_dump = config.capabilities.model_dump()
+            config_dump = self.config.capabilities.model_dump()
             # Ideally pass the whole config context or let them pull
             # IConfigurable.on_config_update(data)
             # For now, we trigger them. They can pull from 'config' singleton or we pass data.
@@ -97,10 +107,10 @@ class ConfigWatcherService:
             
             # Construct a safe dict to pass
             full_config_data = {
-                "llm": config.llm.model_dump(),
-                "stt": config.stt.model_dump(),
-                "tts": config.tts.model_dump(),
-                "capabilities": config.capabilities.model_dump()
+                "llm": self.config.llm.model_dump(),
+                "stt": self.config.stt.model_dump(),
+                "tts": self.config.tts.model_dump(),
+                "capabilities": self.config.capabilities.model_dump()
             }
             
             for conf in self._configurables:
@@ -109,22 +119,19 @@ class ConfigWatcherService:
                 except Exception as e:
                     logger.error(f"Error updating configurable {conf}: {e}")
             
-            # 3. Emit Global Event (if bus exists)
-            try:
-                from core.events.bus import bus
-                await bus.emit("system.config_reloaded", {"path": str(self.config_path)})
-            except ImportError:
-                pass
-            except Exception as e:
-                logger.debug(f"Could not emit global config event: {e}")
+            # 3. Notify the event bus owned by this runtime.
+            if self.event_bus is not None:
+                await self.event_bus.emit(
+                    "system.config_reloaded",
+                    {"path": str(self.config_path)},
+                )
             
             # 4. Broadcast to Workers via WebSocket (Main Process only)
             try:
-                from services.infra.worker_control_hub import get_worker_control_hub
-                hub = get_worker_control_hub()
+                hub = self.worker_control_hub
                 
                 # Only broadcast if we have connected workers
-                workers = hub.get_all_workers()
+                workers = hub.get_all_workers() if hub is not None else {}
                 if workers:
                     await hub.broadcast_config_update(data={"reload": True}, section=None)
                     logger.info(f"📢 Config update broadcasted to {len(workers)} workers via WebSocket")

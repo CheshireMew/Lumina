@@ -30,17 +30,9 @@ class ServiceDiscovery:
     [Architecture 5.2] Dynamic Service Registry.
     Tracks distributed worker locations and capabilities.
     """
-    _instance = None
-
     def __init__(self):
         self.nodes: Dict[str, WorkerNode] = {}
         self.ttl = 30 # Seconds until a node is considered stale
-
-    @classmethod
-    def get_instance(cls):
-        if cls._instance is None:
-            cls._instance = ServiceDiscovery()
-        return cls._instance
 
     def register(self, worker_id: str, host: str, port: int, capabilities: List[str] = None, runtime_target: str = None):
         """Register or update a worker node."""
@@ -93,6 +85,3 @@ class ServiceDiscovery:
             if capability in node.capabilities:
                 matches.append(node)
         return matches
-
-# Global singleton
-discovery = ServiceDiscovery.get_instance()

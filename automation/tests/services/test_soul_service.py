@@ -25,6 +25,10 @@ class InMemorySoulRepository:
     def save_config(self, data: dict):
         self.config = dict(data)
 
+    def update_config_fields(self, updates: dict):
+        self.config = {**self.config, **updates}
+        return dict(self.config)
+
     def load_module_data(self, module_id: str) -> dict:
         return dict(self.modules.get(module_id, {}))
 
@@ -123,12 +127,15 @@ async def test_get_system_prompt_renders_template_from_repository_config(tmp_pat
     service = SoulService(repo=repo)
     template_path = tmp_path / "prompts" / "chat" / "system.yaml"
     template_path.parent.mkdir(parents=True)
-    template_path.write_text("line: |\n  {{ companion_name }} {{ custom_prompt }}", encoding="utf-8")
+    template_path.write_text(
+        "line: |\n  {{ companion_name }} {{ description }} {{ custom_prompt }}",
+        encoding="utf-8",
+    )
 
     with patch("app_config.BASE_DIR", tmp_path):
         prompt = await service.get_system_prompt()
 
-    assert prompt == "TestChar Custom instructions"
+    assert prompt == "TestChar A test character Custom instructions"
 
 
 async def test_get_system_prompt_missing_template_propagates(tmp_path: Path):

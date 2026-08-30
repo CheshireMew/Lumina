@@ -36,8 +36,3 @@ class AbstractLifecycleBus(ABC):
         Retrieve list of workers that have pulsed within timeout.
         """
         pass
-
-    @abstractmethod
-    async def get_pool(self) -> Any:
-        """Return the lifecycle store connection pool."""
-        pass

@@ -12,22 +12,26 @@ PROJECT_ROOT = Path(__file__).parents[3]
 sys.path.append(str(PROJECT_ROOT / "python_backend"))
 sys.path.append(str(PROJECT_ROOT))
 
-from services.container import ServiceContainer, ServiceNotInitializedError, services
+from services.container import (
+    ServiceContainer,
+    ServiceNotInitializedError,
+    create_service_container,
+)
 
 
 class TestServiceContainer(unittest.TestCase):
     def setUp(self):
-        """Reset the singleton before each test"""
-        # Clear the singleton instance
-        ServiceContainer._instance = None
         self.container = ServiceContainer()
 
-    def test_singleton_pattern(self):
-        """Verify that ServiceContainer follows singleton pattern"""
-        instance1 = ServiceContainer.get_instance()
-        instance2 = ServiceContainer.get_instance()
-        self.assertIs(instance1, instance2)
-        print("✅ Singleton pattern verified: same instance returned")
+    def test_container_instances_are_explicit_and_isolated(self):
+        """Verify that independent composition roots do not share state."""
+        instance1 = ServiceContainer()
+        instance2 = ServiceContainer()
+        instance1.set_config(MagicMock(name="FirstConfig"))
+
+        self.assertIsNot(instance1, instance2)
+        with self.assertRaises(ServiceNotInitializedError):
+            instance2.get_config()
 
     def test_service_registration_and_retrieval(self):
         """Test basic service registration and retrieval"""
@@ -129,13 +133,13 @@ class TestServiceContainer(unittest.TestCase):
         self.assertIsNone(result)
         print("✅ Optional service handling verified")
 
-    def test_global_services_singleton(self):
-        """Test that the global 'services' instance works correctly"""
+    def test_container_factory_creates_explicit_composition_roots(self):
         mock_config = MagicMock(name="GlobalConfig")
-        services.set_config(mock_config)
+        composition_root = create_service_container()
+        composition_root.set_config(mock_config)
 
-        self.assertIs(services.get_config(), mock_config)
-        print("✅ Global services singleton verified")
+        self.assertIs(composition_root.get_config(), mock_config)
+        self.assertIsNot(composition_root, self.container)
 
     def test_setter_and_getter_consistency(self):
         """Test that setter and getter methods are consistent"""

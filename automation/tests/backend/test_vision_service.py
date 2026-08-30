@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,6 +10,7 @@ sys.path.append(str(PROJECT_ROOT / "python_backend"))
 
 from capabilities.vision.manager import VisionProviderManager
 from core.interfaces.driver import BaseVisionDriver
+from provider_drivers.vision_llm.drivers.vision import MultimodalLLMVisionDriver
 
 
 class ConfigStub:
@@ -39,6 +41,33 @@ class FakeVisionDriver(BaseVisionDriver):
 
     async def analyze(self, image, prompt: str = "Describe this image.") -> str:
         return f"{self.id}:{prompt}"
+
+
+class BrokenVisionDriver(FakeVisionDriver):
+    async def load(self):
+        raise RuntimeError("视觉路线缺少配置")
+
+
+class LLMManagerStub:
+    def __init__(self, *, provider_type="pollinations", api_key="", base_url="https://example.test/v1"):
+        self.route = SimpleNamespace(model="vision-model")
+        self.provider = SimpleNamespace(
+            enabled=True,
+            type=provider_type,
+            api_key=api_key,
+            base_url=base_url,
+        )
+        self.driver_requested = False
+
+    def get_route(self, _feature):
+        return self.route
+
+    def get_provider_config(self, _feature):
+        return self.provider
+
+    async def get_driver(self, _feature):
+        self.driver_requested = True
+        return object()
 
 
 def test_screen_capture_packet():
@@ -107,3 +136,38 @@ async def test_vision_startup_activates_selected_provider():
     assert service.active_driver is driver
     assert service.active_driver_id == driver.id
     assert driver.loaded is True
+
+
+@pytest.mark.anyio
+async def test_vision_startup_stays_degraded_when_selected_provider_is_not_configured():
+    driver = BrokenVisionDriver("driver.vision.broken")
+    service = VisionProviderManager(config=ConfigStub(selected_provider=driver.id))
+    service.register_driver(driver)
+
+    await service.register_drivers()
+
+    state = service.snapshot_provider_state(driver.id)
+    assert service.active_driver is None
+    assert state["active_status"] == "error"
+    assert state["error"] == "视觉路线缺少配置"
+
+
+@pytest.mark.anyio
+async def test_multimodal_vision_rejects_pollinations_anonymous_route():
+    llm_manager = LLMManagerStub()
+    driver = MultimodalLLMVisionDriver(llm_manager)
+
+    with pytest.raises(RuntimeError, match="匿名接口不支持图片输入"):
+        await driver.load()
+
+    assert llm_manager.driver_requested is False
+
+
+@pytest.mark.anyio
+async def test_multimodal_vision_accepts_explicit_multimodal_service_configuration():
+    llm_manager = LLMManagerStub(provider_type="openai", api_key="local-key")
+    driver = MultimodalLLMVisionDriver(llm_manager)
+
+    await driver.load()
+
+    assert llm_manager.driver_requested is True

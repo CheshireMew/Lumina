@@ -4,28 +4,15 @@ import re
 from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from routers.deps import get_tts_service
 from app_config import config as app_settings
 from core.protocols.lipp import LippProtocol, LippLifecycleRequest, LippConfigRequest
+from schemas.api_contracts import TtsModelListResponse, TtsSynthesisRequest, TtsSwitchRequest
 from .runtime_state import get_tts_runtime_state
 
 logger = logging.getLogger("TTS_API")
 router = APIRouter()
-
-# --- Models (Domain Specific) ---
-class TTSRequest(BaseModel):
-    text: str
-    voice: str = "zh-CN-XiaoxiaoNeural"
-    emotion: Optional[str] = None
-    engine: str = "driver.tts.edge"
-    rate: str = "+0%"
-    pitch: str = "+0Hz"
-
-class SwitchRequest(BaseModel):
-    driver_id: Optional[str] = None
-    model_name: Optional[str] = None
 
 # --- LIPP Handlers ---
 
@@ -53,7 +40,7 @@ async def tts_config_handler(payload: LippConfigRequest):
     """LIPP Config Implementation"""
     manager = get_tts_runtime_state().tts_manager
     
-    logger.info(f"⚙️ [LIPP] Config: {payload.target_id} -> {payload.key}={payload.value}")
+    logger.info("TTS provider config updated: %s -> %s", payload.target_id, payload.key)
     
     config = manager.update_driver_config(payload.target_id, payload.key, payload.value)
     return {"config": config}
@@ -76,7 +63,7 @@ router.include_router(lipp_router)
 # --- Domain Endpoints ---
 
 @router.post("/generate")
-async def generate_tts(request: TTSRequest, manager: Any = Depends(get_tts_service)):
+async def generate_tts(request: TtsSynthesisRequest, manager: Any = Depends(get_tts_service)):
     """Unified Endpoint delegating to active driver."""
     if not manager.active_driver:
         raise HTTPException(status_code=503, detail="No active TTS driver")
@@ -115,10 +102,10 @@ async def generate_tts(request: TTSRequest, manager: Any = Depends(get_tts_servi
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/synthesize")
-async def synthesize_proxy(request: TTSRequest, manager: Any = Depends(get_tts_service)):
+async def synthesize_proxy(request: TtsSynthesisRequest, manager: Any = Depends(get_tts_service)):
     return await generate_tts(request, manager)
 
-@router.get("/models/list")
+@router.get("/models/list", response_model=TtsModelListResponse)
 async def list_models(manager: Any = Depends(get_tts_service)):
     """List available drivers and their status."""
     return {
@@ -126,11 +113,11 @@ async def list_models(manager: Any = Depends(get_tts_service)):
         "engines": [
             {
                 "id": metadata["id"],
-                "name": metadata["name"],
-                "desc": metadata["description"],
+                "name": str(metadata.get("name") or metadata["id"]),
+                "desc": str(metadata.get("description") or ""),
                 "enabled": True,
                 "type": "provider",
-                "config_schema": metadata["config_schema"]
+                "config_schema": metadata.get("config_schema") or {}
             }
             for _, driver in manager.iter_drivers()
             for metadata in [manager.get_driver_metadata(driver.id)]
@@ -138,7 +125,7 @@ async def list_models(manager: Any = Depends(get_tts_service)):
     }
 
 @router.post("/models/switch")
-async def switch_model(req: SwitchRequest, request: Request, manager: Any = Depends(get_tts_service)):
+async def switch_model(req: TtsSwitchRequest, request: Request, manager: Any = Depends(get_tts_service)):
     driver_id = req.driver_id or req.model_name
     if not driver_id:
          raise HTTPException(status_code=400, detail="Missing driver_id or model_name")

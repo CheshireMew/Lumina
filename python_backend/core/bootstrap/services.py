@@ -31,6 +31,7 @@ class CoreServicesBootstrapper(Bootstrapper):
     def name(self) -> str: return "Core Services"
 
     async def bootstrap(self, container):
+        from app_config import BASE_DIR, DATA_ROOT
         from services.process_manager import ProcessManager
         from services.character_service import CharacterService
         # from app_config import config # Global import removed
@@ -39,9 +40,16 @@ class CoreServicesBootstrapper(Bootstrapper):
         
         # [Architecture 5.0] Register Core Services
         config = container.get_config()
-        _register_worker_service(pm, config, runtime_registry, "stt-runtime", "stt")
-        _register_worker_service(pm, config, runtime_registry, "tts-runtime", "tts")
-        _register_worker_service(pm, config, runtime_registry, "vision-runtime", "vision")
+        for capability in runtime_registry.list_worker_capabilities():
+            definition = runtime_registry.runtime_for_capability(capability)
+            if definition:
+                _register_worker_service(
+                    pm,
+                    config,
+                    runtime_registry,
+                    definition.id,
+                    capability,
+                )
         
         container.set_process_manager(pm)
         container.set_worker_runtime_registry(runtime_registry)
@@ -58,20 +66,42 @@ class CoreServicesBootstrapper(Bootstrapper):
             raise ValueError("memory.character_id must be configured")
 
         container.set_soul(SoulService(
-            repo=FileSoulRepository(character_id=character_id),
+            repo=FileSoulRepository(
+                character_id=character_id,
+                characters_root=DATA_ROOT / "characters",
+                seed_characters_root=BASE_DIR / "characters",
+            ),
         ))
 
         container.set_character_service(CharacterService(
             soul_service=container.get_soul(),
+            characters_root=DATA_ROOT / "characters",
+            seed_characters_root=BASE_DIR / "characters",
         ))
         
         # 3. Session
         from services.orchestrators.session import SessionManager
-        container.set_session_manager(SessionManager(config=container.get_config()))
+        from services.repositories.file_session_repository import FileSessionRepository
+        container.set_session_manager(SessionManager(
+            repo=FileSessionRepository(DATA_ROOT / "sessions"),
+            config=container.get_config(),
+        ))
 
         from services.companion.context import CompanionContextResolver
         from services.companion.context_pack import CompanionContextPackBuilder
         from services.companion.interaction import CompanionInteractionRecorder
+        from services.companion.post_turn_journal import PostTurnJournal
+        from memory.consolidation import MemoryConsolidationService
+
+        container.set_memory_consolidation_service(
+            MemoryConsolidationService(
+                memory_service=container.get_memory(),
+                llm_manager=container.get_llm_manager(),
+            )
+        )
+        container.set_post_turn_journal(
+            PostTurnJournal(DATA_ROOT / "operations" / "post_turn")
+        )
 
         container.set_companion_context_resolver(
             CompanionContextResolver(container.get_soul())
@@ -81,6 +111,8 @@ class CoreServicesBootstrapper(Bootstrapper):
                 memory_service=container.get_memory(),
                 session_manager=container.get_session_manager(),
                 soul_service=container.get_soul(),
+                journal=container.get_post_turn_journal(),
+                consolidation_service=container.get_memory_consolidation_service(),
             )
         )
         container.set_companion_context_pack_builder(
@@ -96,7 +128,11 @@ class CoreServicesBootstrapper(Bootstrapper):
         from services.chat.service import ChatTurnService
         from services.companion.runtime import CompanionRuntime
 
-        chat_pipeline = ChatPipeline(container)
+        chat_pipeline = ChatPipeline(
+            container.get_llm_manager(),
+            container.get_all_tools,
+            container.get_tool_provider,
+        )
         container.set_chat_pipeline(chat_pipeline)
         container.set_chat_turn_service(
             ChatTurnService(
@@ -113,6 +149,11 @@ class CoreServicesBootstrapper(Bootstrapper):
                 context_resolver=container.get_companion_context_resolver(),
                 session_manager=container.get_session_manager(),
             )
+        )
+
+        await container.get_companion_interaction_recorder().recover_pending()
+        await container.get_memory_consolidation_service().schedule(
+            container.get_companion_context_resolver().resolve()
         )
         
         # 4. Skills (Framework)
@@ -136,7 +177,18 @@ class ProviderConfigBootstrapper(Bootstrapper):
     async def bootstrap(self, container):
         from services.provider_config_service import ProviderConfigService
 
-        service = ProviderConfigService(container)
+        from services.config_service import ConfigService
+
+        config_service = ConfigService(
+            container.get_config(),
+            container.get_llm_manager(),
+        )
+        service = ProviderConfigService(
+            config=container.get_config(),
+            process_manager=container.get_process_manager(),
+            worker_control_hub=container.get_worker_control_hub(),
+            config_service=config_service,
+        )
         container.set_provider_config_service(service)
         logger.info("✅ Provider Config Service Initialized")
 
@@ -153,7 +205,9 @@ class MiddlewareBootstrapper(Bootstrapper):
         from services.chat.search_providers import BraveSearchProvider, DuckDuckGoSearchProvider
         container.register_search_provider(BraveSearchProvider(container.get_config()))
         container.register_search_provider(DuckDuckGoSearchProvider(container.get_config()))
-        container.register_tool_provider(WebSearchTool(container))
+        container.register_tool_provider(
+            WebSearchTool(container.get_config(), container.get_search_provider)
+        )
 
         emotion_broker = EmotionBroker(container.get_event_bus(), container.get_config())
         emotion_broker.start()

@@ -46,16 +46,28 @@ async def test_records_complete_companion_interaction():
             companion_context=context,
             user_message="ping",
             assistant_message="ok",
+            turn_id="turn-1",
             user_name="Ada",
         )
     )
 
-    session_manager.add_turn.assert_awaited_once_with(context, "ping", "ok")
+    session_manager.add_turn.assert_awaited_once_with(
+        context,
+        "ping",
+        "ok",
+        turn_id="turn-1",
+        assistant_reasoning="",
+    )
     soul.update_last_interaction.assert_called_once_with()
     soul.on_interaction.assert_awaited_once_with(
         "ping",
         "ok",
-        {"session_id": 7, "user_id": "u", "character_id": "hiyori"},
+        {
+            "turn_id": "turn-1",
+            "session_id": 7,
+            "user_id": "u",
+            "character_id": "hiyori",
+        },
     )
     memory.record_turn.assert_awaited_once_with(
         context,
@@ -63,6 +75,7 @@ async def test_records_complete_companion_interaction():
         assistant_message="ok",
         user_name="Ada",
         companion_name=None,
+        turn_id="turn-1",
     )
     assert result == CompanionInteractionResult(turn_id="turn-1")
 
@@ -117,6 +130,7 @@ async def test_manual_memory_recording_can_skip_soul_driver_notification():
             companion_context=context,
             user_message="",
             assistant_message="noticed something",
+            turn_id="turn-2",
             user_name="Ada",
             companion_name="Lumina",
             save_history=False,
@@ -135,6 +149,7 @@ async def test_manual_memory_recording_can_skip_soul_driver_notification():
         assistant_message="noticed something",
         user_name="Ada",
         companion_name="Lumina",
+        turn_id="turn-2",
     )
 
 

@@ -13,7 +13,7 @@ Key differences from teaching examples:
 import sys
 from pathlib import Path
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch, Mock
+from unittest.mock import MagicMock, AsyncMock, Mock
 import asyncio
 
 # Add python_backend to path
@@ -25,25 +25,20 @@ from services.container import ServiceContainer, ServiceNotInitializedError
 
 
 # ============================================================================
-# Test 1: ServiceContainer Singleton (REAL TEST)
+# Test 1: Explicit ServiceContainer ownership (REAL TEST)
 # ============================================================================
 
-def test_service_container_singleton_real():
+def test_service_container_instances_are_isolated_real():
     """
-    Test that ServiceContainer is a true singleton.
-
-    This tests REAL behavior: if singleton pattern breaks,
-    multiple instances will be created and cause bugs.
+    Test that independently constructed containers do not share state.
     """
-    # Reset singleton state
-    ServiceContainer._instance = None
+    instance1 = ServiceContainer()
+    instance2 = ServiceContainer()
+    instance1.set_config(MagicMock(name="first"))
 
-    # Get two instances
-    instance1 = ServiceContainer.get_instance()
-    instance2 = ServiceContainer.get_instance()
-
-    # They MUST be the same object (singleton pattern)
-    assert instance1 is instance2, "ServiceContainer must be a singleton"
+    assert instance1 is not instance2
+    with pytest.raises(ServiceNotInitializedError):
+        instance2.get_config()
 
 
 # ============================================================================
@@ -80,31 +75,27 @@ def test_service_container_uninitialized_error():
 
 
 # ============================================================================
-# Test 3: Service Container Thread Safety (REAL TEST)
+# Test 3: Concurrent explicit container construction (REAL TEST)
 # ============================================================================
 
-def test_service_container_thread_safety():
+def test_service_container_concurrent_construction():
     """
-    Test that ServiceContainer is thread-safe.
-
-    This catches REAL concurrency bugs that occur when
-    multiple threads access the singleton simultaneously.
+    Test that concurrent construction succeeds without shared state.
     """
     import threading
 
-    ServiceContainer._instance = None
     instances = []
     errors = []
 
-    def get_instance():
+    def create_container():
         try:
-            instance = ServiceContainer.get_instance()
+            instance = ServiceContainer()
             instances.append(instance)
         except Exception as e:
             errors.append(e)
 
     # Create multiple threads
-    threads = [threading.Thread(target=get_instance) for _ in range(10)]
+    threads = [threading.Thread(target=create_container) for _ in range(10)]
 
     # Start all threads
     for t in threads:
@@ -117,9 +108,9 @@ def test_service_container_thread_safety():
     # Verify: no errors occurred
     assert len(errors) == 0, f"Thread safety errors: {errors}"
 
-    # Verify: all threads got the same instance
+    # Every caller owns a distinct composition root.
     assert len(instances) == 10
-    assert len(set(id(i) for i in instances)) == 1, "All threads must get same instance"
+    assert len(set(id(i) for i in instances)) == 10
 
 
 # ============================================================================
@@ -218,16 +209,12 @@ def test_service_container_services_independent():
 # Test 7: Service Container with Real Dependencies (REAL TEST)
 # ============================================================================
 
-@patch('services.container.services')
-def test_service_container_with_real_dependencies(mock_services):
+def test_service_container_with_real_dependencies():
     """
-    Test ServiceContainer integration with global services singleton.
-
-    This catches REAL bugs in the global services integration.
+    Test that a composition root owns only its explicitly registered services.
     """
     container = ServiceContainer()
 
-    # The container should work independently of global services
     local_service = MagicMock(name="local")
     container.set_config(local_service)
 

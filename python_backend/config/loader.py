@@ -2,6 +2,8 @@
 
 import json
 import logging
+import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -20,6 +22,9 @@ from .models import (
     STTConfig,
     TTSConfig,
 )
+
+LEGACY_DEFAULT_MEMORY_PROVIDER = "driver.memory.postgres"
+LOCAL_MEMORY_PROVIDER = "driver.memory.sqlite"
 
 try:
     import yaml
@@ -92,13 +97,30 @@ def load_config(config_root: Path, base_dir: Path, logger: logging.Logger) -> Co
 
 def save_config(bundle: ConfigBundle, config_root: Path, logger: logging.Logger) -> None:
     if not yaml:
-        logger.error("Cannot save config: PyYAML not installed.")
-        return
+        raise RuntimeError("Cannot save config: PyYAML not installed")
 
     yaml_path = config_root / "config.yaml"
     yaml_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(yaml_path, "w", encoding="utf-8") as file:
-        yaml.dump(bundle.to_dict(), file, allow_unicode=True, default_flow_style=False)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=yaml_path.parent,
+        prefix=f".{yaml_path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as file:
+        yaml.safe_dump(
+            bundle.to_dict(),
+            file,
+            allow_unicode=True,
+            default_flow_style=False,
+            sort_keys=False,
+        )
+        file.flush()
+        os.fsync(file.fileno())
+        temporary_path = Path(file.name)
+
+    os.replace(temporary_path, yaml_path)
 
     logger.info(f"Configuration saved to {yaml_path}")
 
@@ -146,7 +168,7 @@ def hydrate_config(data: Dict[str, Any], logger: logging.Logger) -> ConfigBundle
         try:
             setattr(bundle, section, constructor(**normalized[section]))
         except Exception as exc:
-            logger.error(f"Hydration error in section '{section}': {exc}")
+            raise ValueError(f"Invalid configuration section '{section}': {exc}") from exc
 
     return bundle
 
@@ -162,6 +184,8 @@ def normalize_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
             capabilities_data["desired_state"] = dict(capabilities_data.get("desired_state") or {})
         if "selected_providers" in capabilities_data:
             capabilities_data["selected_providers"] = dict(capabilities_data.get("selected_providers") or {})
+            if capabilities_data["selected_providers"].get("memory") == LEGACY_DEFAULT_MEMORY_PROVIDER:
+                capabilities_data["selected_providers"]["memory"] = LOCAL_MEMORY_PROVIDER
         normalized["capabilities"] = capabilities_data
 
     if "llm" in normalized:
@@ -172,14 +196,14 @@ def normalize_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
             free_provider["base_url"] = free_provider.get("base_url") or POLLINATIONS_BASE_URL
             if str(free_provider.get("api_key", "")).strip().lower() == "none":
                 free_provider["api_key"] = ""
-            legacy_pollinations_models = {"gpt-4o-mini", "gpt-4o", "claude-3-haiku", "openai"}
+            legacy_pollinations_models = {"gpt-4o-mini", "gpt-4o", "claude-3-haiku", "openai-fast"}
             provider_models = free_provider.get("models") or []
             if any(model in legacy_pollinations_models for model in provider_models):
                 free_provider["models"] = [POLLINATIONS_DEFAULT_MODEL]
             providers[FREE_LLM_PROVIDER_ID] = free_provider
             llm_data["providers"] = providers
 
-        legacy_pollinations_models = {"gpt-4o-mini", "gpt-4o", "claude-3-haiku", "openai"}
+        legacy_pollinations_models = {"gpt-4o-mini", "gpt-4o", "claude-3-haiku", "openai-fast"}
         routes = dict(llm_data.get("routes") or {})
         for route_id, route_data in list(routes.items()):
             route = dict(route_data or {})
@@ -194,20 +218,25 @@ def normalize_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
         normalized["llm"] = llm_data
 
+        capabilities_data = dict(normalized.get("capabilities") or {})
+        selected = dict(capabilities_data.get("selected_providers") or {})
+        chat_route = routes.get("chat") if isinstance(routes.get("chat"), dict) else {}
+        selected.setdefault("llm", chat_route.get("provider_id") or FREE_LLM_PROVIDER_ID)
+        capabilities_data["selected_providers"] = selected
+        normalized["capabilities"] = capabilities_data
+
     return normalized
 
 
 def _read_yaml(path: Path, logger: logging.Logger) -> Dict[str, Any]:
     if not yaml:
-        logger.error("YAML config exists but PyYAML is not installed. Using defaults.")
-        return {}
+        raise RuntimeError("PyYAML is required to read config.yaml")
 
     try:
         with open(path, "r", encoding="utf-8") as file:
             return yaml.safe_load(file) or {}
     except Exception as exc:
-        logger.error(f"Failed to load config.yaml: {exc}")
-        return {}
+        raise RuntimeError(f"Failed to load config.yaml: {exc}") from exc
 
 
 def _read_json(path: Path) -> Dict[str, Any]:

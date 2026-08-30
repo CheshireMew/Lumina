@@ -12,41 +12,41 @@ export interface TableViewMeta {
 }
 
 const fallbackTableMeta: TableViewMeta = {
-    title: "Data Records",
-    sidebarLabel: "Data Records",
-    sidebarHint: "Stored rows",
-    singular: "Record",
-    subtitle: "Inspectable storage rows.",
-    countLabel: "records",
+    title: "数据记录",
+    sidebarLabel: "数据记录",
+    sidebarHint: "已保存的数据行",
+    singular: "记录",
+    subtitle: "可检查的本地数据记录。",
+    countLabel: "条",
     technicalName: "table",
 };
 
 export const tableViewMeta: Record<string, TableViewMeta> = {
     conversation_turns: {
-        title: "History Log",
-        sidebarLabel: "History Log",
-        sidebarHint: "Raw conversations",
-        singular: "History Turn",
-        subtitle: "Complete conversation turns before memory extraction.",
-        countLabel: "turns",
+        title: "对话历史",
+        sidebarLabel: "对话历史",
+        sidebarHint: "原始对话内容",
+        singular: "对话轮次",
+        subtitle: "提炼为长期记忆前保存的完整对话。",
+        countLabel: "轮",
         technicalName: "conversation_turns",
     },
     memory_items: {
-        title: "Long-term Memory",
-        sidebarLabel: "Long-term Memory",
-        sidebarHint: "AI recall source",
-        singular: "Memory Item",
-        subtitle: "Durable facts and preferences available for AI recall.",
-        countLabel: "items",
+        title: "长期记忆",
+        sidebarLabel: "长期记忆",
+        sidebarHint: "对话时可回忆的内容",
+        singular: "记忆项",
+        subtitle: "对话时可供角色回忆的事实与偏好。",
+        countLabel: "条",
         technicalName: "memory_items",
     },
     memory_consolidation_jobs: {
-        title: "Consolidation Queue",
-        sidebarLabel: "Consolidation",
-        sidebarHint: "History to memory",
-        singular: "Consolidation Job",
-        subtitle: "Extraction work that turns history into memory items.",
-        countLabel: "jobs",
+        title: "记忆整理队列",
+        sidebarLabel: "记忆整理",
+        sidebarHint: "从历史提炼记忆",
+        singular: "整理任务",
+        subtitle: "把对话历史提炼为长期记忆的后台任务。",
+        countLabel: "项",
         technicalName: "memory_consolidation_jobs",
     },
 };
@@ -90,28 +90,28 @@ const tableColumnOrder: Record<string, string[]> = {
 
 const columnLabels: Record<string, string> = {
     id: "ID",
-    narrative: "Conversation",
-    user_message: "User Said",
-    assistant_message: "Assistant Said",
-    processed_at: "Memory Status",
-    created_at: "Created",
-    updated_at: "Updated",
-    last_used_at: "Last Used",
-    session_id: "Session",
-    user_id: "User",
-    character_id: "Character",
-    content: "Memory",
-    summary: "Summary",
-    memory_type: "Type",
-    scope: "Scope",
-    status: "Status",
-    importance: "Importance",
-    confidence: "Confidence",
-    source_turn_ids: "Source Turns",
-    turn_ids: "Turns",
-    error: "Error",
-    name: "Name",
-    type: "Type",
+    narrative: "对话",
+    user_message: "用户内容",
+    assistant_message: "角色回复",
+    processed_at: "记忆状态",
+    created_at: "创建时间",
+    updated_at: "更新时间",
+    last_used_at: "最后使用",
+    session_id: "会话",
+    user_id: "用户",
+    character_id: "角色",
+    content: "记忆内容",
+    summary: "摘要",
+    memory_type: "类型",
+    scope: "范围",
+    status: "状态",
+    importance: "重要程度",
+    confidence: "可信度",
+    source_turn_ids: "来源对话",
+    turn_ids: "对话轮次",
+    error: "错误",
+    name: "名称",
+    type: "类型",
 };
 
 const hiddenColumns = new Set(["id", "embedding", "vector", "metadata"]);
@@ -180,10 +180,10 @@ export const formatCellValue = (key: string, value: any) => {
     if (key === "processed_at") {
         return value ?
             <span style={{color:"#a7f3d0", background:"rgba(5, 150, 105, 0.2)", padding:"2px 6px", borderRadius:"12px", fontSize:"11px", display:"flex", alignItems:"center", gap:"4px", width:"fit-content", border:"1px solid rgba(5, 150, 105, 0.4)", whiteSpace: "nowrap"}}>
-                <CheckCircle size={10} /> Extracted
+                <CheckCircle size={10} /> 已提炼
             </span> :
             <span style={{color:"#fde68a", background:"rgba(180, 83, 9, 0.2)", padding:"2px 6px", borderRadius:"12px", fontSize:"11px", display:"flex", alignItems:"center", gap:"4px", width:"fit-content", border:"1px solid rgba(180, 83, 9, 0.4)", whiteSpace: "nowrap"}}>
-                <Clock size={10} /> Raw
+                <Clock size={10} /> 未提炼
             </span>;
     }
 
