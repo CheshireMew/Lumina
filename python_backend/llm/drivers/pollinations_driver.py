@@ -5,8 +5,6 @@ from typing import Any, AsyncGenerator, Dict, List
 import httpx
 
 from config.models import (
-    POLLINATIONS_ANONYMOUS_CHAT_URL,
-    POLLINATIONS_ANONYMOUS_MODELS_URL,
     POLLINATIONS_BASE_URL,
 )
 from core.interfaces.driver import BaseLLMDriver
@@ -35,6 +33,8 @@ class PollinationsDriver(BaseLLMDriver):
         stream: bool = False,
         **kwargs,
     ) -> Any:
+        if not self._api_key():
+            raise RuntimeError("Pollinations API key is required")
         url = self._chat_completion_url()
         headers = self._auth_headers()
         payload = self._completion_payload(
@@ -123,9 +123,6 @@ class PollinationsDriver(BaseLLMDriver):
 
     async def list_models(self) -> List[str]:
         client = await get_http_client()
-        if not self._api_key():
-            return await self._list_anonymous_models(client)
-
         url = f"{self._base_url()}/models"
         try:
             response = await client.get(url, headers=self._optional_auth_headers(), timeout=30.0)
@@ -152,33 +149,6 @@ class PollinationsDriver(BaseLLMDriver):
 
         return models
 
-    async def _list_anonymous_models(self, client: httpx.AsyncClient) -> List[str]:
-        try:
-            response = await client.get(POLLINATIONS_ANONYMOUS_MODELS_URL, timeout=30.0)
-            response.raise_for_status()
-            data = response.json()
-        except Exception as exc:
-            logger.warning("Failed to list anonymous Pollinations models: %s", exc)
-            return list(self.config.get("models") or [])
-
-        models = []
-        for item in data:
-            model_name = item.get("name") if isinstance(item, dict) else None
-            if not model_name:
-                continue
-            if item.get("tier") != "anonymous":
-                continue
-            if "text" not in (item.get("input_modalities") or []):
-                continue
-            if "text" not in (item.get("output_modalities") or []):
-                continue
-            if item.get("audio"):
-                continue
-
-            models.append(model_name)
-
-        return models or list(self.config.get("models") or [])
-
     def _completion_payload(
         self,
         *,
@@ -201,8 +171,6 @@ class PollinationsDriver(BaseLLMDriver):
         return (self.config.get("base_url") or POLLINATIONS_BASE_URL).rstrip("/")
 
     def _chat_completion_url(self) -> str:
-        if not self._api_key():
-            return POLLINATIONS_ANONYMOUS_CHAT_URL
         return f"{self._base_url()}/chat/completions"
 
     def _auth_headers(self) -> Dict[str, str]:

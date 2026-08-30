@@ -354,6 +354,19 @@ class MemoryService:
 
     async def retrieve_context(self, query: str, context: CompanionContext, limit: int = 3) -> str:
         """Retrieve long-term facts for the model without prescribing behavior."""
+        if self.driver_id == "driver.memory.sqlite":
+            active = await self.driver.query(
+                """
+                SELECT 1 AS present
+                FROM memory_items
+                WHERE character_id = $cid AND status = 'active'
+                LIMIT 1;
+                """,
+                {"cid": self._character_id(context)},
+            )
+            if not active:
+                return ""
+
         vector = None
         if self.encoder:
             try:
